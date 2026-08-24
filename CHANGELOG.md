@@ -16,11 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.41` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.42` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
 ### Changed
+- **Operational guidance can evolve independently from frozen retirement evidence.**
+  The active catalog keeps the exact admitted retirement ID boundary, while the
+  manifest-protected legacy snapshot remains historical proof instead of becoming
+  the source of current instructions.
+- **Four user-journey practices now use current Forge interfaces.** Start, practice
+  selection, lifecycle routing, and adversarial challenge no longer direct agents
+  to retired hand-authored state or sprint files. Their roles are distinct, detail
+  stays progressive, and brainstorming or challenge notes remain ephemeral until
+  the human accepts a durable result.
 - **Existing projects now enter a chat through one continuity read.** `start`
   routes an existing workflow ledger directly to `workflow resume`; initialization,
   release, and profile checks remain setup-only. The historical projection moved

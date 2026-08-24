@@ -499,7 +499,7 @@ mod tests {
     }
 
     #[test]
-    fn operational_catalog_is_exact_frozen_subset_after_retirement() {
+    fn operational_catalog_preserves_the_exact_retired_id_set() {
         use std::collections::BTreeSet;
 
         let operational = load_embedded_catalog();
@@ -538,17 +538,9 @@ mod tests {
             .collect::<BTreeSet<_>>();
         assert_eq!(removed_ids, admitted_workflow_ids);
 
-        let frozen_documents = load_embedded_frozen_legacy_workflow_documents();
-        for operational_workflow in load_embedded_workflow_documents().workflows {
-            let frozen_workflow = frozen_documents
-                .workflows
-                .iter()
-                .find(|candidate| {
-                    candidate.document.workflow.id == operational_workflow.document.workflow.id
-                })
-                .expect("every operational workflow remains byte-semantically frozen");
-            assert_eq!(&operational_workflow, frozen_workflow);
-        }
+        // The snapshot is immutable retirement evidence, while surviving operational
+        // workflows are allowed to evolve. Snapshot bytes and canonical meaning are
+        // protected independently by the retirement manifest and kernel verification.
     }
 
     #[test]

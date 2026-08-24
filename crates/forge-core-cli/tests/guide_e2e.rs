@@ -191,6 +191,74 @@ fn e2e_real_binary_supports_progressive_status_then_detail() {
 }
 
 #[test]
+fn operational_routing_guidance_uses_current_forge_sources_and_distinct_roles() {
+    let status = run_status(Some(&catalog_dir()), "1-discovery");
+    let status = status.data.expect("discovery status");
+    let summaries = ["guidance-engine", "guide-route", "grill-gate"].map(|id| {
+        status
+            .eligible_workflows
+            .iter()
+            .find(|workflow| workflow.id == id)
+            .unwrap_or_else(|| panic!("missing operational workflow {id}"))
+            .summary
+            .clone()
+    });
+    assert_ne!(summaries[0], summaries[1]);
+    assert_ne!(summaries[0], summaries[2]);
+    assert_ne!(summaries[1], summaries[2]);
+
+    let start = run_detail(Some(&catalog_dir()), "start-runtime")
+        .data
+        .expect("start-runtime detail");
+    let guidance = run_detail(Some(&catalog_dir()), "guidance-engine")
+        .data
+        .expect("guidance-engine detail");
+    let route = run_detail(Some(&catalog_dir()), "guide-route")
+        .data
+        .expect("guide-route detail");
+    let grill = run_detail(Some(&catalog_dir()), "grill-gate")
+        .data
+        .expect("grill-gate detail");
+
+    for detail in [&start, &guidance, &route, &grill] {
+        let text = serde_json::to_string(detail).expect("serialize capability detail");
+        for forbidden in [
+            ".forge-method/state.yaml",
+            ".forge-method/sprint.yaml",
+            ".forge-method/projects.yaml",
+            "preflight result",
+        ] {
+            assert!(
+                !text.contains(forbidden),
+                "{} still exposes retired source {forbidden}",
+                detail.id
+            );
+        }
+    }
+
+    assert!(start
+        .activities
+        .iter()
+        .any(|item| item.contains("forge-core start")));
+    assert!(guidance
+        .activities
+        .iter()
+        .any(|item| item.contains("eligible practice")));
+    assert!(route
+        .activities
+        .iter()
+        .any(|item| item.contains("Current Work")));
+    assert!(grill
+        .activities
+        .iter()
+        .any(|item| item.contains("keep the exchange ephemeral")));
+    assert!(grill
+        .activities
+        .iter()
+        .all(|item| !item.contains("write a compact grill artifact")));
+}
+
+#[test]
 fn legacy_0_1_routing_consumer_rejects_the_0_2_68_route_payload() {
     fn legacy_consume(schema_version: &str, workflow_count: usize) -> Result<usize, String> {
         if schema_version != "0.1" {

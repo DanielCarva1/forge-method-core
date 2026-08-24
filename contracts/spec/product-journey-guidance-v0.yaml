@@ -634,6 +634,15 @@ current_work_continuity:
         - "one bounded-overflow case preserves the fifth reason through a single supersession without synthetic closeouts"
         - "an isolated replacement host recovers compact and expanded work, following exact predecessor detail only when published"
         - "timings, payloads, WAL events, staging, backups, temporary files, and build-cache effects are audited"
+    - id: "PJ-009A"
+      name: "Live operational guidance separated from frozen retirement evidence"
+      depends_on: ["PJ-008C"]
+      done_when:
+        - "surviving operational workflows may evolve while their IDs remain the exact complement of the admitted retired set"
+        - "the frozen legacy catalog remains immutable retirement evidence protected by its manifest hashes"
+        - "start, practice selection, lifecycle routing, and adversarial challenge use current public Forge sources with distinct roles"
+        - "operational guidance does not reference retired hand-authored state or sprint files"
+        - "guide status and detail remain bounded read-only catalog operations without a second store or catalog layer"
     - id: "PJ-007A"
       name: "Bounded collaboration plan contract"
       depends_on: ["PJ-005D"]
