@@ -384,6 +384,46 @@ fn execute_cooperative_packet(packet: &Value, input_path: &Path) -> Output {
     execute_structured_argv(&argv)
 }
 
+fn advance_to_promotion_evidence_packet(
+    consumer: &Consumer,
+    mut next: Value,
+    fixture: &str,
+) -> Value {
+    for _ in 0..80 {
+        let status = next["data"]["status"].as_str().expect("guidance status");
+        let packet = next["data"]["cooperative_evidence_action_packet"].clone();
+        if status == "applicability_required" {
+            assert_eq!(packet["route"]["target"], "policy_applicability");
+            let mut offer = packet["offer_template"].clone();
+            offer["offer_id"] =
+                serde_json::json!(format!("offer.promotion-{fixture}-e2e.applicability"));
+            offer["attestation"]["applicability_assessment"] = serde_json::json!({
+                "outcome": "applicable",
+                "summary": "The selected policy applies to this promotion fixture",
+                "basis_paths": ["README.md"],
+                "limitations": ["same-owner applicability assessment"]
+            });
+            let input_name = format!("promotion {fixture} applicability.json");
+            let input = consumer.write_json(&input_name, &offer);
+            assert_ok(&execute_cooperative_packet(&packet, &input));
+        } else if packet["input_file_token"].is_string() {
+            assert_ne!(packet["route"]["target"], "policy_applicability");
+            return next;
+        } else {
+            assert_eq!(
+                status, "ready_to_complete",
+                "promotion fixture expected completion, applicability, or evidence: {next}"
+            );
+            let snapshot = next["data"]["snapshot_digest"]
+                .as_str()
+                .expect("completion snapshot");
+            assert_ok(&consumer.run(&["complete", "--if-snapshot", snapshot]));
+        }
+        next = assert_ok(&consumer.run(&["next"]));
+    }
+    panic!("promotion fixture did not reach cooperative evidence");
+}
+
 fn append_test_phase(consumer: &Consumer) {
     let mut ledger =
         lock_workflow_governance_ledger_tcb(&consumer.state).expect("lock concurrent ledger");
@@ -5682,11 +5722,20 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
 
     // Admit freshness-bound cooperative evidence immediately before preview;
     // claim/Git/isolation fixture setup must not consume its short live window.
-    let next = assert_ok(&consumer.run(&["next"]));
-    let mut offer = next["data"]["cooperative_evidence_action_packet"]["offer_template"].clone();
+    let next = advance_to_promotion_evidence_packet(
+        &consumer,
+        assert_ok(&consumer.run(&["next"])),
+        "apply",
+    );
+    let packet = next["data"]["cooperative_evidence_action_packet"].clone();
+    assert!(
+        packet["input_file_token"].is_string(),
+        "promotion apply requires an executable cooperative evidence packet: {next}"
+    );
+    let mut offer = packet["offer_template"].clone();
     offer["offer_id"] = serde_json::json!("offer.promotion-apply-e2e.pass");
     let offer_file = consumer.write_json("promotion apply evidence.json", &offer);
-    assert_ok(&run_cooperative_evidence(&consumer, &offer_file));
+    assert_ok(&execute_cooperative_packet(&packet, &offer_file));
 
     let preview = assert_ok(
         &bin()
@@ -6131,12 +6180,16 @@ impl PromotionRecoveryFixture {
                 .output()
                 .expect("activate recovery isolation"),
         );
-        let next = assert_ok(&consumer.run(&["next"]));
-        let mut offer =
-            next["data"]["cooperative_evidence_action_packet"]["offer_template"].clone();
+        let next = advance_to_promotion_evidence_packet(
+            &consumer,
+            assert_ok(&consumer.run(&["next"])),
+            "recovery",
+        );
+        let packet = next["data"]["cooperative_evidence_action_packet"].clone();
+        let mut offer = packet["offer_template"].clone();
         offer["offer_id"] = serde_json::json!("offer.promotion-recovery-e2e.pass");
         let offer_file = consumer.write_json("promotion recovery evidence.json", &offer);
-        assert_ok(&run_cooperative_evidence(&consumer, &offer_file));
+        assert_ok(&execute_cooperative_packet(&packet, &offer_file));
         let preview = assert_ok(
             &bin()
                 .args([
