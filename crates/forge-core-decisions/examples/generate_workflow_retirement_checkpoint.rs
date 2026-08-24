@@ -586,13 +586,19 @@ fn retirement_bindings(
         return Err("operational catalog is not the exact 68-workflow retained set".into());
     }
     retirements.sort_by(|left, right| left.workflow_id.0.cmp(&right.workflow_id.0));
-    let operational_digest = canonical_digest(
-        &operational
-            .workflows
-            .iter()
-            .map(|loaded| &loaded.document)
-            .collect::<Vec<_>>(),
-    )?;
+    // The signature records the catalog observed when retirement was approved.
+    // Live documents still prove the exact retained ID set above, but their
+    // contents may evolve without rewriting that historical authorization.
+    let frozen_retained = snapshot
+        .workflows
+        .iter()
+        .filter(|loaded| expected_retained.contains(loaded.document.workflow.id.0.as_str()))
+        .map(|loaded| &loaded.document)
+        .collect::<Vec<_>>();
+    if frozen_retained.len() != 68 {
+        return Err("frozen snapshot is missing retained workflow evidence".into());
+    }
+    let operational_digest = canonical_digest(&frozen_retained)?;
     Ok((retirements, operational_digest))
 }
 
