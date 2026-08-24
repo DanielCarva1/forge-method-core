@@ -143,7 +143,7 @@ pub use conflict_detection::{
 };
 pub use isolation::{
     branch_name_for, detect_isolation_conflict, is_live as isolation_is_live, propose_merge,
-    transition_status, validate_isolation_contract,
+    transition_status, validate_isolation_contract, validate_isolation_worktree_path,
 };
 pub use obligation_engine::{
     derive_assurance_case, CapabilityAvailability, CapabilityObservation, DecisionNeed,

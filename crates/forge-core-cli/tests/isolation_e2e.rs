@@ -421,6 +421,28 @@ fn duplicate_worktree_path_is_blocked() {
 }
 
 #[test]
+fn promotion_ineligible_worktree_path_is_rejected_before_persistence() {
+    let d = dir("promotion-ineligible");
+    let response = propose(&d, "alice", "alice/s5", "worktrees/alice/s5");
+
+    assert!(!response.ok, "promotion-ineligible path must be blocked");
+    assert!(response
+        .error
+        .as_ref()
+        .is_some_and(|error| error.message.contains("illegal_worktree_path")));
+    assert_eq!(
+        yaml_file_count(&d),
+        0,
+        "invalid proposal must not persist YAML"
+    );
+    assert_eq!(
+        fs::read_dir(&d).expect("read isolation dir").count(),
+        0,
+        "invalid proposal must not leave lock or temporary files"
+    );
+}
+
+#[test]
 fn propose_returns_suggested_git_commands() {
     let d = dir("suggest");
     let a = propose(&d, "alice", "alice/s5", "../wt/a");

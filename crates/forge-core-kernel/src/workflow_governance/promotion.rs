@@ -36,9 +36,9 @@ use forge_core_contracts::{
 use forge_core_decisions::{
     check_write_against_claims, derive_promotion_diff, detect_isolation_conflict,
     evaluate_promotion_readiness, is_live, promotion_domain_digest, rfc3339_to_unix,
-    validate_isolation_contract, PromotionDiffProjection, PromotionInventoryDirectory,
-    PromotionInventoryFile, PromotionPlanningError, PromotionReadinessInput,
-    WorkflowClaimResultStatus, WriteCheck,
+    validate_isolation_contract, validate_isolation_worktree_path, PromotionDiffProjection,
+    PromotionInventoryDirectory, PromotionInventoryFile, PromotionPlanningError,
+    PromotionReadinessInput, WorkflowClaimResultStatus, WriteCheck,
 };
 use forge_core_store::claim_wal::{
     project_existing_claim_wal, ClaimWalProjection, ClaimWalProjectionOptions,
@@ -4834,26 +4834,9 @@ fn declared_worktree_candidate(
     project_root: &Path,
     declared: &RepoPath,
 ) -> Result<PathBuf, PromotionPreviewError> {
-    let path = Path::new(&declared.0);
-    if path.is_absolute() {
-        return Err(PromotionPreviewError::GitWorktree(
-            "worktree_path must be project-relative".to_owned(),
-        ));
-    }
-    let components = path.components().collect::<Vec<_>>();
-    if components.first() != Some(&std::path::Component::ParentDir)
-        || components.len() < 3
-        || components
-            .iter()
-            .skip(1)
-            .any(|component| !matches!(component, std::path::Component::Normal(_)))
-    {
-        return Err(PromotionPreviewError::GitWorktree(
-            "worktree_path must contain exactly one leading '..' followed by normal components"
-                .to_owned(),
-        ));
-    }
-    Ok(project_root.join(path))
+    validate_isolation_worktree_path(declared)
+        .map_err(|error| PromotionPreviewError::GitWorktree(error.to_string()))?;
+    Ok(project_root.join(Path::new(&declared.0)))
 }
 
 fn observe_git_worktree(

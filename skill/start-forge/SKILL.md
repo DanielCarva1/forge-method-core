@@ -129,6 +129,15 @@ expansion history are actually needed. Detail may publish one exact
 `predecessor_detail_argv`; follow it only to recover that direct prior Work Focus,
 never to list or reconstruct deeper history.
 
+When `focus.collaboration` is present, use its bounded counts and
+`next_ready_lane` first. Execute `focus.detail_argv` only when exact lane,
+dependency, owner, claim, isolation, or promotion information is needed.
+Parallelize only independent lanes. Before active work begins, run
+`forge-core isolation propose` with a promotion-safe path shaped as
+`../.forge-worktrees/<agent>/<task>`. Never run `git worktree add` first: Forge
+must reject an incompatible path before it persists a contract or the agent
+starts work.
+
 Keep signal scope and priority clear. `data.current_work.focus.blocker_count`
 and its blocker references are focus-bound: they describe only blockers
 explicitly attached to that Work Focus. Top-level `data.blockers` and evaluation

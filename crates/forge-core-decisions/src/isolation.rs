@@ -10,7 +10,7 @@
 //! replayable.
 
 use crate::rfc3339_to_unix;
-use forge_core_contracts::common::StableId;
+use forge_core_contracts::common::{RepoPath, StableId};
 use forge_core_contracts::isolation::{
     GitAction, IsolationContract, IsolationError, IsolationStatus, MergePlan, MergePolicy,
     MergeStep,
@@ -48,7 +48,7 @@ pub fn validate_isolation_contract(c: &IsolationContract) -> Result<(), Isolatio
         return Err(IsolationError::EmptyAgentId);
     }
     validate_branch_name(&c.branch_name)?;
-    validate_worktree_path(&c.worktree_path.0)?;
+    validate_isolation_worktree_path(&c.worktree_path)?;
     if c.base_ref.trim().is_empty() {
         return Err(IsolationError::EmptyBaseRef);
     }
@@ -320,10 +320,19 @@ fn validate_branch_name(name: &str) -> Result<(), IsolationError> {
     Ok(())
 }
 
-/// Reject empty or traversal-prone worktree paths. Lexical only (DD29): we do
-/// not resolve symlinks or realpath. Repo-root escape (`/abs` or `..` that
-/// climbs past root) is left to git to refuse; we only block the obvious traps.
-fn validate_worktree_path(path: &str) -> Result<(), IsolationError> {
+/// Validate the lexical worktree shape shared by isolation admission and
+/// promotion. The path must point to a sibling tree: exactly one leading `..`
+/// followed by at least two ordinary components.
+///
+/// This is lexical only: it does not touch the filesystem, resolve symlinks, or
+/// execute Git.
+///
+/// # Errors
+///
+/// Returns [`IsolationError::IllegalWorktreePath`] when the path is unsafe for
+/// command emission or cannot later be consumed by governed promotion.
+pub fn validate_isolation_worktree_path(path: &RepoPath) -> Result<(), IsolationError> {
+    let path = &path.0;
     if path.trim().is_empty() {
         return Err(illegal_path("empty", path));
     }
@@ -337,6 +346,20 @@ fn validate_worktree_path(path: &str) -> Result<(), IsolationError> {
     // add ... <path>` and `cd <path>` — reject shell metacharacters.
     if let Some(reason) = shell_metachar_check(path) {
         return Err(illegal_path(reason, path));
+    }
+
+    let components = std::path::Path::new(path).components().collect::<Vec<_>>();
+    if components.first() != Some(&std::path::Component::ParentDir)
+        || components.len() < 3
+        || components
+            .iter()
+            .skip(1)
+            .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err(illegal_path(
+            "must contain exactly one leading '..' followed by at least two normal components",
+            path,
+        ));
     }
     Ok(())
 }
@@ -404,8 +427,6 @@ mod tests {
             claim_id: None,
         }
     }
-
-    use forge_core_contracts::common::RepoPath;
 
     // --- validate_isolation_contract ------------------------------------
 
@@ -516,6 +537,20 @@ mod tests {
             validate_isolation_contract(&c),
             Err(IsolationError::IllegalWorktreePath { .. })
         ));
+    }
+
+    #[test]
+    fn promotion_ineligible_worktree_paths_are_rejected() {
+        for bad in ["wt/a", "../../wt/a", "../wt", "../wt/a/../b"] {
+            let c = ok_contract("i1", "alice", "alice/s5", bad);
+            assert!(
+                matches!(
+                    validate_isolation_contract(&c),
+                    Err(IsolationError::IllegalWorktreePath { .. })
+                ),
+                "promotion-ineligible path '{bad}' must be rejected"
+            );
+        }
     }
 
     // --- detect_isolation_conflict --------------------------------------

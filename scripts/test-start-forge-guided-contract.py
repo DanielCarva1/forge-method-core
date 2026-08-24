@@ -160,6 +160,17 @@ class GuidedActivationContractTests(unittest.TestCase):
             "one primary next step",
         )
 
+    def test_collaboration_uses_progressive_detail_and_safe_worktrees(self) -> None:
+        self.assert_contract_contains(
+            "focus.collaboration",
+            "next_ready_lane",
+            "parallelize only independent lanes",
+            "../.forge-worktrees/<agent>/<task>",
+            "isolation propose",
+            "before active work begins",
+            "Never run `git worktree add` first",
+        )
+
     def test_all_primary_activation_journeys_have_closed_behavior(self) -> None:
         matrix = marked_section(self.contract, "guided-activation-journeys")
         rows: dict[str, tuple[str, str, str]] = {}
