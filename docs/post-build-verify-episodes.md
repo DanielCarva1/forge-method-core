@@ -98,6 +98,7 @@ Host agents apply one closed candidate through:
 
 ```text
 forge-core workflow episode prepare --root <project>
+forge-core workflow episode finalize --input-file <episode-candidate.json>
 forge-core workflow episode apply --root <project> --input-file <episode-apply.json>
 ```
 
@@ -112,7 +113,13 @@ command never manufactures deployment or operational evidence.
 `episode prepare` is read-only. It fills current release, phase, snapshot, ledger, state,
 lineage, rollback snapshot, and the five canonical policy references. Host-owned facts
 remain visible replacement markers. Preparation creates no file, appends no event, and
-does not run from `start` or `resume`; `episode apply` remains the only mutation.
+does not run from `start` or `resume`.
+
+After the host replaces those markers with real observations, `episode finalize`
+calculates the canonical digest through the existing episode contract and validates the
+same apply-input shape. It does not accept a project root, read Forge state, or write a
+file. Its output is only a valid candidate; `episode apply` remains the only mutation and
+rechecks the current project bindings before admission.
 
 ## Durable coordination lifecycle
 

@@ -20,6 +20,11 @@ fn workflow_help_exposes_guarded_episode_apply() {
         "help must expose read-only episode preparation:\n{stdout}"
     );
     assert!(
+        stdout
+            .contains("forge-core workflow episode finalize --input-file <episode-candidate.json>"),
+        "help must expose read-only episode finalization:\n{stdout}"
+    );
+    assert!(
         stdout.contains(
             "forge-core workflow episode apply --root <path> --input-file <episode-apply.json>"
         ),
@@ -61,7 +66,6 @@ fn episode_prepare_is_bounded_and_does_not_write_project_state() {
         .output()
         .expect("episode prepare");
     let after = state_tree(&state);
-    let _ = fs::remove_dir_all(&root);
 
     assert!(
         output.status.success(),
@@ -128,14 +132,48 @@ fn episode_prepare_is_bounded_and_does_not_write_project_state() {
         "next_action_ref": "action.prepared"
     });
     episode["episode_digest"] = serde_json::json!(digest('0'));
-    let mut document: PostBuildVerifyEpisodeDocument =
-        serde_json::from_value(template["document"].clone()).expect("typed prepared document");
-    document.post_build_verify_episode.episode_digest =
-        document.episode_digest().expect("canonical episode digest");
+    let candidate = root.join("episode candidate.json");
+    fs::write(
+        &candidate,
+        serde_json::to_vec_pretty(template).expect("serialize candidate"),
+    )
+    .expect("write candidate");
+    let finalized = Command::cargo_bin("forge-core")
+        .expect("forge-core binary")
+        .args(["workflow", "episode", "finalize", "--input-file"])
+        .arg(&candidate)
+        .arg("--json")
+        .output()
+        .expect("episode finalize");
+    assert!(
+        finalized.status.success(),
+        "finalize failed: {}",
+        String::from_utf8_lossy(&finalized.stdout)
+    );
+    assert!(
+        finalized.stdout.len() < 32 * 1024,
+        "finalized input is unexpectedly large"
+    );
+    let finalized: Value =
+        serde_json::from_slice(&finalized.stdout).expect("JSON finalize envelope");
+    assert_eq!(finalized["command"], "workflow.episode.finalize");
+    let document: PostBuildVerifyEpisodeDocument =
+        serde_json::from_value(finalized["data"]["apply_input"]["document"].clone())
+            .expect("typed finalized document");
     assert!(
         document.validate().is_empty(),
-        "filled preparation template must satisfy the existing episode contract"
+        "finalized preparation must satisfy the existing episode contract"
     );
+    assert_ne!(
+        document.post_build_verify_episode.episode_digest,
+        digest('0')
+    );
+    assert_eq!(
+        before,
+        state_tree(&state),
+        "read-only finalization changed Forge state"
+    );
+    let _ = fs::remove_dir_all(&root);
 }
 
 #[test]

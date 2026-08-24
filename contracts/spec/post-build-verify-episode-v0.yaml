@@ -89,7 +89,12 @@ pure_decision_composition:
 c5_2_runtime_admission:
   api: "WorkflowGovernanceProjectAdapter::apply_post_build_verify_episode"
   preparation_cli: "forge-core workflow episode prepare --root <path>"
+  finalization_cli: "forge-core workflow episode finalize --input-file <episode-candidate.json>"
   public_cli: "forge-core workflow episode apply --root <path> --input-file <episode-apply.json>"
+  finalization_boundary: >-
+    Finalization reuses the candidate contract to calculate its canonical digest
+    and validate the same apply-input shape. It has no project root, state read,
+    ledger path, or mutation authority.
   public_cli_boundary: >-
     The host agent supplies one bounded closed JSON wrapper containing the
     candidate document and exact snapshot, ledger-head, and state-version CAS
