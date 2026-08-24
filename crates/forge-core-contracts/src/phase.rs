@@ -52,6 +52,14 @@ impl Phase {
         Phase::Evolve,
     ];
 
+    /// Whether this phase is one of the five stages completed by a product
+    /// lifecycle pass. `Route` only initializes the journey and `Evolve`
+    /// starts the next pass.
+    #[must_use]
+    pub const fn is_product_lifecycle_stage(self) -> bool {
+        !matches!(self, Phase::Route | Phase::Evolve)
+    }
+
     /// Ordinal (0..=6) used for funnel-density comparisons.
     #[must_use]
     pub fn rank(self) -> u8 {

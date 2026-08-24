@@ -566,14 +566,16 @@ current_work_continuity:
       name: "Quick Cycle typed contract and wire compatibility"
       depends_on: ["PJ-008A"]
       done_when:
-        - "typed Work Focus start, update, completion, and supersession inputs and event snapshots remain bounded and deny unknown fields"
-        - "the typed supersession input can atomically carry the new Quick Cycle snapshot and final top-level blocker and evidence sets"
+        - "the internal Work Focus event snapshot is typed, bounded, denies unknown fields, and creates no second state owner"
+        - "public current-work command inputs remain unchanged until the kernel can persist every accepted field atomically"
         - "old ledger bytes and hashes remain unchanged and old events project Quick Cycle as not recorded"
         - "the first Quick Cycle-bearing Work Focus selects the next ledger wire after 0.16"
     - id: "PJ-008B2"
       name: "Quick Cycle kernel persistence"
       depends_on: ["PJ-008B1"]
       done_when:
+        - "typed Work Focus start, update, completion, and supersession inputs remain bounded and deny unknown fields"
+        - "the typed supersession input can atomically carry the new Quick Cycle snapshot and final top-level blocker and evidence sets"
         - "a normal compact task uses accept plus one atomic terminal closeout and final-reference write"
         - "same-focus updates preserve expansion-history prefix under exact expected state"
         - "a new focus_id starts a new cycle and objective replacement leaves the prior focus stale"

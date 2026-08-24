@@ -93,6 +93,9 @@ pub const WORKFLOW_GOVERNANCE_CURRENT_WORK_LEDGER_SCHEMA_VERSION: &str = "0.15";
 /// Work Focus records with explicit canonical blocker/evidence bindings require
 /// a new wire so older readers fail closed instead of ignoring the relation.
 pub const WORKFLOW_GOVERNANCE_WORK_FOCUS_BINDINGS_LEDGER_SCHEMA_VERSION: &str = "0.16";
+/// Work Focus records carrying a bounded Quick Cycle snapshot require a new
+/// wire so older readers fail closed instead of ignoring lifecycle continuity.
+pub const WORKFLOW_GOVERNANCE_QUICK_CYCLE_LEDGER_SCHEMA_VERSION: &str = "0.17";
 
 /// Maximum encoded UTF-8 JSON input accepted by the cooperative objective
 /// command. The action packet publishes this same bound so a host never needs

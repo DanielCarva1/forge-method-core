@@ -18,6 +18,11 @@ pub const MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS: usize = 4;
 pub const MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES: usize = 256;
 pub const MAX_CURRENT_WORK_ARGV_ITEMS: usize = 16;
 pub const MAX_CURRENT_WORK_ARG_BYTES: usize = 1_024;
+pub const MAX_QUICK_CYCLE_COMPACTNESS_REASON_BYTES: usize = 512;
+pub const MAX_QUICK_CYCLE_CLOSEOUT_SUMMARY_BYTES: usize = 768;
+pub const MAX_QUICK_CYCLE_EXPANSION_REASON_BYTES: usize = 512;
+pub const MAX_QUICK_CYCLE_EXPANSION_ITEMS: usize = 4;
+pub const MAX_QUICK_CYCLE_EVIDENCE_ITEMS: usize = 2;
 
 /// Exact objective revision to which one Work Focus belongs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -37,6 +42,56 @@ pub enum WorkflowWorkFocusState {
     Active,
     Completed,
     Abandoned,
+}
+
+/// One accepted lifecycle-stage conclusion. Evidence remains owned by the
+/// enclosing Work Focus and is referenced here only by canonical digest.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowQuickCycleCloseout {
+    pub summary: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evidence_record_digests: Vec<String>,
+}
+
+/// Fixed lifecycle shape for proportional work. Missing entries are honest
+/// partial progress, not silently inferred closeouts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowQuickCycleStageCloseouts {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub analysis_discovery: Option<WorkflowQuickCycleCloseout>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub product_planning: Option<WorkflowQuickCycleCloseout>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub solution_definition: Option<WorkflowQuickCycleCloseout>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub implementation: Option<WorkflowQuickCycleCloseout>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub validation_delivery: Option<WorkflowQuickCycleCloseout>,
+}
+
+/// One accepted reason why proportional work had to expand. The canonical
+/// Phase identifies where the extra treatment belongs without a second phase
+/// model.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowQuickCycleExpansion {
+    pub phase: Phase,
+    pub reason: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evidence_record_digests: Vec<String>,
+}
+
+/// Optional bounded continuity snapshot embedded in the existing Work Focus
+/// event. Absence means not recorded and must never be reconstructed from prose.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowQuickCycleSnapshot {
+    pub compactness_reason: String,
+    pub stage_closeouts: WorkflowQuickCycleStageCloseouts,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub expansion_history: Vec<WorkflowQuickCycleExpansion>,
 }
 
 /// Exact Work Focus state observed by the host before proposing a change.
@@ -161,6 +216,8 @@ pub struct WorkflowWorkFocusRecordedEvent {
     /// evidence for this focus. Evidence bytes remain owned by the ledger.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub evidence_record_digests: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quick_cycle: Option<WorkflowQuickCycleSnapshot>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous_work_focus_record_digest: Option<String>,
     pub admission_ledger_head_digest: String,

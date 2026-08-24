@@ -2,10 +2,11 @@ use forge_core_contracts::{
     Phase, PrincipalId, RepoPath, StableId, WorkflowCooperativeHostProvenance,
     WorkflowCurrentWorkAuthority, WorkflowCurrentWorkContext, WorkflowCurrentWorkDetail,
     WorkflowCurrentWorkDetailFocus, WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary,
-    WorkflowCurrentWorkValidationError, WorkflowWorkFocusObjectiveBinding,
-    WorkflowWorkFocusRecordedEvent, WorkflowWorkFocusState, CURRENT_WORK_CONTEXT_SCHEMA_VERSION,
-    CURRENT_WORK_DETAIL_SCHEMA_VERSION, MAX_CURRENT_WORK_DETAIL_BYTES,
-    MAX_CURRENT_WORK_SUMMARY_BYTES, MAX_WORK_FOCUS_TEXT_BYTES,
+    WorkflowCurrentWorkValidationError, WorkflowQuickCycleCloseout, WorkflowQuickCycleExpansion,
+    WorkflowQuickCycleSnapshot, WorkflowQuickCycleStageCloseouts,
+    WorkflowWorkFocusObjectiveBinding, WorkflowWorkFocusRecordedEvent, WorkflowWorkFocusState,
+    CURRENT_WORK_CONTEXT_SCHEMA_VERSION, CURRENT_WORK_DETAIL_SCHEMA_VERSION,
+    MAX_CURRENT_WORK_DETAIL_BYTES, MAX_CURRENT_WORK_SUMMARY_BYTES, MAX_WORK_FOCUS_TEXT_BYTES,
 };
 
 fn sample_event() -> WorkflowWorkFocusRecordedEvent {
@@ -38,6 +39,7 @@ fn sample_event() -> WorkflowWorkFocusRecordedEvent {
         next_step: "Add the bounded event and compatibility tests.".into(),
         blocker_record_digests: Vec::new(),
         evidence_record_digests: Vec::new(),
+        quick_cycle: None,
         previous_work_focus_record_digest: None,
         admission_ledger_head_digest:
             "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc".into(),
@@ -57,6 +59,32 @@ fn sample_event() -> WorkflowWorkFocusRecordedEvent {
     }
 }
 
+fn sample_quick_cycle() -> WorkflowQuickCycleSnapshot {
+    WorkflowQuickCycleSnapshot {
+        compactness_reason: "The task is bounded, reversible, and has one clear outcome.".into(),
+        stage_closeouts: WorkflowQuickCycleStageCloseouts {
+            analysis_discovery: Some(WorkflowQuickCycleCloseout {
+                summary: "The missing durable closeout was reproduced in isolated recovery.".into(),
+                evidence_record_digests: vec![
+                    "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+                        .into(),
+                ],
+            }),
+            product_planning: None,
+            solution_definition: None,
+            implementation: None,
+            validation_delivery: None,
+        },
+        expansion_history: vec![WorkflowQuickCycleExpansion {
+            phase: Phase::Discovery,
+            reason: "The first review found a wire-compatibility question.".into(),
+            evidence_record_digests: vec![
+                "sha256:1111111111111111111111111111111111111111111111111111111111111111".into(),
+            ],
+        }],
+    }
+}
+
 #[test]
 fn work_focus_event_round_trips_without_gaining_authority() {
     let event = sample_event();
@@ -68,6 +96,42 @@ fn work_focus_event_round_trips_without_gaining_authority() {
     let decoded: WorkflowWorkFocusRecordedEvent =
         serde_json::from_value(encoded).expect("event deserializes");
     assert_eq!(decoded, event);
+}
+
+#[test]
+fn quick_cycle_snapshot_is_optional_closed_and_round_trips() {
+    let old_event = serde_json::to_value(sample_event()).expect("old event serializes");
+    assert!(old_event.get("quick_cycle").is_none());
+
+    let mut event = sample_event();
+    event.evidence_record_digests =
+        vec!["sha256:1111111111111111111111111111111111111111111111111111111111111111".into()];
+    event.quick_cycle = Some(sample_quick_cycle());
+    let encoded = serde_json::to_value(&event).expect("Quick Cycle event serializes");
+    assert_eq!(
+        encoded["quick_cycle"]["stage_closeouts"]["analysis_discovery"]["summary"],
+        "The missing durable closeout was reproduced in isolated recovery."
+    );
+    assert_eq!(
+        encoded["quick_cycle"]["expansion_history"][0]["phase"],
+        "1-discovery"
+    );
+
+    let decoded: WorkflowWorkFocusRecordedEvent =
+        serde_json::from_value(encoded.clone()).expect("Quick Cycle event deserializes");
+    assert_eq!(decoded, event);
+
+    let mut unknown = encoded;
+    unknown["quick_cycle"]
+        .as_object_mut()
+        .expect("Quick Cycle object")
+        .insert("second_authority".into(), serde_json::json!(true));
+    assert!(
+        serde_json::from_value::<WorkflowWorkFocusRecordedEvent>(unknown)
+            .expect_err("unknown Quick Cycle fields fail closed")
+            .to_string()
+            .contains("unknown field")
+    );
 }
 
 #[test]

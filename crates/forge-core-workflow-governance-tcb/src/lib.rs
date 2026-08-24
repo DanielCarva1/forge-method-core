@@ -20,6 +20,7 @@ use forge_core_contracts::workflow_governance::{
     WORKFLOW_GOVERNANCE_INTENT_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_LEGACY_SOLO_ADOPTION_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_PRIOR_EVIDENCE_LEDGER_SCHEMA_VERSION,
+    WORKFLOW_GOVERNANCE_QUICK_CYCLE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_READINESS_PROFILE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_STRICT_REPLAY_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_WORK_FOCUS_BINDINGS_LEDGER_SCHEMA_VERSION,
@@ -33,10 +34,12 @@ use forge_core_contracts::{
     WorkflowEffectiveBundleIdentity, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
     WorkflowGovernanceReceiptDocument, WorkflowGovernanceReleaseIdentity, WorkflowReceiptCarryover,
     WorkflowRuntimeBundleIdentity, WorkflowWorkFocusRecordedEvent, WorkflowWorkFocusState,
-    MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES, MAX_WORKFLOW_INTENT_ITEM_BYTES,
-    MAX_WORKFLOW_INTENT_LIST_ITEMS, MAX_WORKFLOW_INTENT_TOTAL_BYTES, MAX_WORK_FOCUS_EVENT_BYTES,
-    MAX_WORK_FOCUS_LIST_ITEMS, MAX_WORK_FOCUS_TEXT_BYTES,
-    WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
+    MAX_QUICK_CYCLE_CLOSEOUT_SUMMARY_BYTES, MAX_QUICK_CYCLE_COMPACTNESS_REASON_BYTES,
+    MAX_QUICK_CYCLE_EVIDENCE_ITEMS, MAX_QUICK_CYCLE_EXPANSION_ITEMS,
+    MAX_QUICK_CYCLE_EXPANSION_REASON_BYTES, MAX_WORKFLOW_INTENT_DESIRED_OUTCOME_BYTES,
+    MAX_WORKFLOW_INTENT_ITEM_BYTES, MAX_WORKFLOW_INTENT_LIST_ITEMS,
+    MAX_WORKFLOW_INTENT_TOTAL_BYTES, MAX_WORK_FOCUS_EVENT_BYTES, MAX_WORK_FOCUS_LIST_ITEMS,
+    MAX_WORK_FOCUS_TEXT_BYTES, WORKFLOW_GOVERNANCE_EFFECTIVE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_HOST_ORIGIN_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_POST_BUILD_VERIFY_LEDGER_SCHEMA_VERSION,
@@ -269,21 +272,12 @@ impl WorkflowGovernanceLedgerProjection {
             })
     }
 
-    fn contains_work_focus(&self) -> bool {
+    fn work_focus_wire_level(&self) -> u8 {
         self.records
             .iter()
-            .any(|record| matches!(record.event, WorkflowGovernanceEvent::WorkFocusRecorded(_)))
-    }
-
-    fn contains_work_focus_bindings(&self) -> bool {
-        self.records.iter().any(|record| {
-            matches!(
-                &record.event,
-                WorkflowGovernanceEvent::WorkFocusRecorded(event)
-                    if !event.blocker_record_digests.is_empty()
-                        || !event.evidence_record_digests.is_empty()
-            )
-        })
+            .map(|record| work_focus_wire_level(&record.event))
+            .max()
+            .unwrap_or_default()
     }
 
     /// Latest Work Focus event after the ledger has passed full recovery
@@ -2039,6 +2033,7 @@ fn recover_from_reader(
             && document.schema_version != WORKFLOW_GOVERNANCE_CURRENT_WORK_LEDGER_SCHEMA_VERSION
             && document.schema_version
                 != WORKFLOW_GOVERNANCE_WORK_FOCUS_BINDINGS_LEDGER_SCHEMA_VERSION
+            && document.schema_version != WORKFLOW_GOVERNANCE_QUICK_CYCLE_LEDGER_SCHEMA_VERSION
         {
             return Err(WorkflowGovernanceLedgerError::UnsupportedSchema {
                 line: line_number,
@@ -2085,13 +2080,10 @@ fn recover_from_reader(
         );
         let is_prior_cooperative_evidence =
             event_contains_prior_cooperative_evidence(&record.event);
-        let is_work_focus = matches!(&record.event, WorkflowGovernanceEvent::WorkFocusRecorded(_));
-        let is_work_focus_bindings = matches!(
-            &record.event,
-            WorkflowGovernanceEvent::WorkFocusRecorded(event)
-                if !event.blocker_record_digests.is_empty()
-                    || !event.evidence_record_digests.is_empty()
-        );
+        let work_focus_wire_level = work_focus_wire_level(&record.event);
+        let is_work_focus = work_focus_wire_level >= 1;
+        let is_work_focus_bindings = work_focus_wire_level >= 2;
+        let is_quick_cycle = work_focus_wire_level == 3;
         let is_native_host_origin = matches!(
             &record.event,
             WorkflowGovernanceEvent::BrokerOriginApplied(event)
@@ -2120,7 +2112,9 @@ fn recover_from_reader(
         let intent_wire_required = is_intent_revision || identity_state.intent_revision_seen;
         let effective_wire_required =
             is_domain_transition || identity_state.active_effective.is_some();
-        let expected_schema = if is_work_focus_bindings || identity_state.work_focus_bindings_seen {
+        let expected_schema = if is_quick_cycle || identity_state.quick_cycle_seen {
+            WORKFLOW_GOVERNANCE_QUICK_CYCLE_LEDGER_SCHEMA_VERSION
+        } else if is_work_focus_bindings || identity_state.work_focus_bindings_seen {
             WORKFLOW_GOVERNANCE_WORK_FOCUS_BINDINGS_LEDGER_SCHEMA_VERSION
         } else if is_work_focus || identity_state.work_focus_seen {
             WORKFLOW_GOVERNANCE_CURRENT_WORK_LEDGER_SCHEMA_VERSION
@@ -2256,6 +2250,7 @@ struct RecoveredIdentityState {
     prior_cooperative_evidence_seen: bool,
     work_focus_seen: bool,
     work_focus_bindings_seen: bool,
+    quick_cycle_seen: bool,
     latest_cooperative_objective: Option<forge_core_contracts::CooperativeObjectiveAcceptedEvent>,
     latest_cooperative_objective_record_digest: Option<String>,
     latest_cooperative_objective_record_sequence: Option<u64>,
@@ -2494,6 +2489,7 @@ fn validate_recovered_semantics(
         identity.work_focus_seen = true;
         identity.work_focus_bindings_seen |=
             !event.blocker_record_digests.is_empty() || !event.evidence_record_digests.is_empty();
+        identity.quick_cycle_seen |= event.quick_cycle.is_some();
         identity.latest_work_focus = Some(event.clone());
         identity.latest_work_focus_record_digest = Some(record.record_digest.clone());
     }
@@ -2925,23 +2921,31 @@ fn event_contains_prior_cooperative_evidence(event: &WorkflowGovernanceEvent) ->
     )
 }
 
+fn work_focus_wire_level(event: &WorkflowGovernanceEvent) -> u8 {
+    match event {
+        WorkflowGovernanceEvent::WorkFocusRecorded(focus) if focus.quick_cycle.is_some() => 3,
+        WorkflowGovernanceEvent::WorkFocusRecorded(focus)
+            if !focus.blocker_record_digests.is_empty()
+                || !focus.evidence_record_digests.is_empty() =>
+        {
+            2
+        }
+        WorkflowGovernanceEvent::WorkFocusRecorded(_) => 1,
+        _ => 0,
+    }
+}
+
 fn ledger_wire_schema(
     projection: &WorkflowGovernanceLedgerProjection,
     event: &WorkflowGovernanceEvent,
 ) -> &'static str {
-    if matches!(
-        event,
-        WorkflowGovernanceEvent::WorkFocusRecorded(focus)
-            if !focus.blocker_record_digests.is_empty()
-                || !focus.evidence_record_digests.is_empty()
-    ) || projection.contains_work_focus_bindings()
-    {
-        WORKFLOW_GOVERNANCE_WORK_FOCUS_BINDINGS_LEDGER_SCHEMA_VERSION
-    } else if matches!(event, WorkflowGovernanceEvent::WorkFocusRecorded(_))
-        || projection.contains_work_focus()
-    {
-        WORKFLOW_GOVERNANCE_CURRENT_WORK_LEDGER_SCHEMA_VERSION
-    } else if event_contains_prior_cooperative_evidence(event)
+    match work_focus_wire_level(event).max(projection.work_focus_wire_level()) {
+        3 => return WORKFLOW_GOVERNANCE_QUICK_CYCLE_LEDGER_SCHEMA_VERSION,
+        2 => return WORKFLOW_GOVERNANCE_WORK_FOCUS_BINDINGS_LEDGER_SCHEMA_VERSION,
+        1 => return WORKFLOW_GOVERNANCE_CURRENT_WORK_LEDGER_SCHEMA_VERSION,
+        _ => {}
+    }
+    if event_contains_prior_cooperative_evidence(event)
         || projection.contains_prior_cooperative_evidence()
     {
         WORKFLOW_GOVERNANCE_PRIOR_EVIDENCE_LEDGER_SCHEMA_VERSION
@@ -4340,6 +4344,7 @@ fn validate_work_focus_shape(
             reason: "Work Focus record bindings must be unique canonical digests",
         });
     }
+    validate_quick_cycle_shape(event, line)?;
     for digest in [
         event.objective.objective_digest.as_str(),
         event.objective.accepted_objective_record_digest.as_str(),
@@ -4389,6 +4394,66 @@ fn validate_work_focus_shape(
         return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
             line,
             reason: "Work Focus event exceeds its total byte bound",
+        });
+    }
+    Ok(())
+}
+
+fn validate_quick_cycle_shape(
+    event: &WorkflowWorkFocusRecordedEvent,
+    line: Option<usize>,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    let Some(quick_cycle) = event.quick_cycle.as_ref() else {
+        return Ok(());
+    };
+    if quick_cycle.compactness_reason.trim().is_empty()
+        || quick_cycle.compactness_reason.as_bytes().len()
+            > MAX_QUICK_CYCLE_COMPACTNESS_REASON_BYTES
+        || quick_cycle.expansion_history.len() > MAX_QUICK_CYCLE_EXPANSION_ITEMS
+    {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line,
+            reason: "Quick Cycle compactness or expansion count exceeds its bound",
+        });
+    }
+
+    let references_are_valid = |references: &[String]| {
+        references.len() <= MAX_QUICK_CYCLE_EVIDENCE_ITEMS
+            && references.iter().collect::<BTreeSet<_>>().len() == references.len()
+            && references.iter().all(|digest| {
+                is_lower_sha256(digest)
+                    && event
+                        .evidence_record_digests
+                        .iter()
+                        .any(|owned| owned == digest)
+            })
+    };
+    let closeouts = [
+        quick_cycle.stage_closeouts.analysis_discovery.as_ref(),
+        quick_cycle.stage_closeouts.product_planning.as_ref(),
+        quick_cycle.stage_closeouts.solution_definition.as_ref(),
+        quick_cycle.stage_closeouts.implementation.as_ref(),
+        quick_cycle.stage_closeouts.validation_delivery.as_ref(),
+    ];
+    if closeouts.iter().flatten().any(|closeout| {
+        closeout.summary.trim().is_empty()
+            || closeout.summary.as_bytes().len() > MAX_QUICK_CYCLE_CLOSEOUT_SUMMARY_BYTES
+            || !references_are_valid(&closeout.evidence_record_digests)
+    }) {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line,
+            reason: "Quick Cycle closeout exceeds its text, evidence, or ownership bound",
+        });
+    }
+    if quick_cycle.expansion_history.iter().any(|expansion| {
+        !expansion.phase.is_product_lifecycle_stage()
+            || expansion.reason.trim().is_empty()
+            || expansion.reason.as_bytes().len() > MAX_QUICK_CYCLE_EXPANSION_REASON_BYTES
+            || !references_are_valid(&expansion.evidence_record_digests)
+    }) {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line,
+            reason: "Quick Cycle expansion exceeds its text, evidence, or ownership bound",
         });
     }
     Ok(())
@@ -6806,6 +6871,51 @@ mod replacement_protocol_tests {
         event
     }
 
+    fn initialize_quick_cycle_focus(
+        root: &Path,
+        objective_id: &str,
+    ) -> (
+        WorkflowGovernanceLedgerProjection,
+        WorkflowGovernanceLedgerRecord,
+    ) {
+        let (projection, genesis, _) =
+            initialize_solo_profile_at(root, StableId("1-discovery".to_owned()));
+        let objective = cooperative_objective_event(
+            &genesis.record_digest,
+            objective_id.to_owned(),
+            "principal.same-owner".to_owned(),
+            90,
+            100,
+        );
+        let objective_record = lock_workflow_governance_ledger_tcb(root)
+            .expect("objective ledger")
+            .accept_cooperative_objective_unchecked_tcb(
+                &genesis.record_digest,
+                &test_identity(),
+                projection.current_state_version().unwrap_or_default(),
+                objective,
+            )
+            .expect("accept objective");
+        (
+            recover_under_lock(root).expect("recover objective"),
+            objective_record,
+        )
+    }
+
+    fn quick_cycle_snapshot() -> forge_core_contracts::WorkflowQuickCycleSnapshot {
+        forge_core_contracts::WorkflowQuickCycleSnapshot {
+            compactness_reason: "The change is bounded and reversible".to_owned(),
+            stage_closeouts: forge_core_contracts::WorkflowQuickCycleStageCloseouts {
+                analysis_discovery: None,
+                product_planning: None,
+                solution_definition: None,
+                implementation: None,
+                validation_delivery: None,
+            },
+            expansion_history: Vec::new(),
+        }
+    }
+
     fn work_focus_event(
         projection: &WorkflowGovernanceLedgerProjection,
         objective_record: &WorkflowGovernanceLedgerRecord,
@@ -6844,6 +6954,7 @@ mod replacement_protocol_tests {
             next_step: "Project the focus through resume".to_owned(),
             blocker_record_digests: Vec::new(),
             evidence_record_digests: Vec::new(),
+            quick_cycle: None,
             previous_work_focus_record_digest: None,
             admission_ledger_head_digest: projection.head_digest.clone().expect("objective head"),
             admission_state_version: projection.current_state_version().expect("objective state"),
@@ -7043,6 +7154,207 @@ mod replacement_protocol_tests {
                 .expect("WAL after wrong kind"),
             before_wrong_kind
         );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn quick_cycle_advances_to_0_17_without_rewriting_history() {
+        let root = test_root("quick-cycle-wire");
+        let (projection, objective_record) =
+            initialize_quick_cycle_focus(&root, "objective.workflow.quick-cycle-wire-test");
+        let historical =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("historical WAL");
+        let mut event = work_focus_event(&projection, &objective_record);
+        event.quick_cycle = Some(quick_cycle_snapshot());
+        let quick_cycle_record = lock_workflow_governance_ledger_tcb(&root)
+            .expect("Quick Cycle ledger")
+            .record_work_focus_unchecked_tcb(
+                projection.head_digest.as_deref().expect("objective head"),
+                &test_identity(),
+                projection.current_state_version().expect("objective state"),
+                event,
+            )
+            .expect("record Quick Cycle");
+
+        let quick_cycle_wal =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("0.17 WAL");
+        assert_eq!(&quick_cycle_wal[..historical.len()], historical.as_slice());
+        let quick_cycle_line = quick_cycle_wal
+            .split_inclusive(|byte| *byte == b'\n')
+            .last()
+            .expect("0.17 record");
+        assert_eq!(
+            schema_from_line(quick_cycle_line),
+            WORKFLOW_GOVERNANCE_QUICK_CYCLE_LEDGER_SCHEMA_VERSION
+        );
+        let projection = recover_under_lock(&root).expect("recover 0.17");
+        assert_eq!(
+            projection.head_digest,
+            Some(quick_cycle_record.record_digest.clone())
+        );
+
+        lock_workflow_governance_ledger_tcb(&root)
+            .expect("successor ledger")
+            .append_unchecked_tcb_event(
+                &quick_cycle_record.record_digest,
+                &test_identity(),
+                projection
+                    .current_state_version()
+                    .expect("Quick Cycle state"),
+                WorkflowGovernanceEvent::DecisionNeedRaised(
+                    forge_core_contracts::DecisionNeedRaisedEvent {
+                        policy_ref: StableId("policy.workflow.quick-cycle-wire-test".to_owned()),
+                        decision_ref: StableId(
+                            "decision.workflow.quick-cycle-wire-test".to_owned(),
+                        ),
+                        authority_scope: StableId("workflow.decision.resolve".to_owned()),
+                        question_digest: sha256_digest(b"Quick Cycle wire question"),
+                    },
+                ),
+            )
+            .expect("record successor");
+        let successor_wal =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("successor WAL");
+        let successor_line = successor_wal
+            .split_inclusive(|byte| *byte == b'\n')
+            .last()
+            .expect("successor record");
+        assert_eq!(
+            schema_from_line(successor_line),
+            WORKFLOW_GOVERNANCE_QUICK_CYCLE_LEDGER_SCHEMA_VERSION
+        );
+
+        let downgraded = String::from_utf8(quick_cycle_line.to_vec())
+            .expect("0.17 UTF-8")
+            .replacen(
+                &format!(
+                    "\"schema_version\":\"{WORKFLOW_GOVERNANCE_QUICK_CYCLE_LEDGER_SCHEMA_VERSION}\""
+                ),
+                &format!(
+                    "\"schema_version\":\"{WORKFLOW_GOVERNANCE_WORK_FOCUS_BINDINGS_LEDGER_SCHEMA_VERSION}\""
+                ),
+                1,
+            );
+        let mut downgraded_wal = historical;
+        downgraded_wal.extend_from_slice(downgraded.as_bytes());
+        fs::write(
+            root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH),
+            downgraded_wal,
+        )
+        .expect("install downgraded Quick Cycle");
+        assert!(matches!(
+            recover_under_lock(&root),
+            Err(WorkflowGovernanceLedgerError::UnsupportedSchema { line: 3, .. })
+        ));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn quick_cycle_rejects_unbounded_or_unowned_data_before_append() {
+        let root = test_root("quick-cycle-bounds");
+        let (projection, objective_record) =
+            initialize_quick_cycle_focus(&root, "objective.workflow.quick-cycle-bounds-test");
+        let mut base = work_focus_event(&projection, &objective_record);
+        base.quick_cycle = Some(quick_cycle_snapshot());
+
+        let mut oversized_compactness = base.clone();
+        oversized_compactness
+            .quick_cycle
+            .as_mut()
+            .expect("Quick Cycle")
+            .compactness_reason =
+            "x".repeat(forge_core_contracts::MAX_QUICK_CYCLE_COMPACTNESS_REASON_BYTES + 1);
+
+        let mut oversized_closeout = base.clone();
+        oversized_closeout
+            .quick_cycle
+            .as_mut()
+            .expect("Quick Cycle")
+            .stage_closeouts
+            .analysis_discovery = Some(forge_core_contracts::WorkflowQuickCycleCloseout {
+            summary: "x".repeat(forge_core_contracts::MAX_QUICK_CYCLE_CLOSEOUT_SUMMARY_BYTES + 1),
+            evidence_record_digests: Vec::new(),
+        });
+
+        let mut too_many_expansions = base.clone();
+        too_many_expansions
+            .quick_cycle
+            .as_mut()
+            .expect("Quick Cycle")
+            .expansion_history = (0..=forge_core_contracts::MAX_QUICK_CYCLE_EXPANSION_ITEMS)
+            .map(|index| forge_core_contracts::WorkflowQuickCycleExpansion {
+                phase: Phase::Discovery,
+                reason: format!("accepted expansion {index}"),
+                evidence_record_digests: Vec::new(),
+            })
+            .collect();
+
+        let invalid_expansion = |phase| {
+            let mut event = base.clone();
+            event
+                .quick_cycle
+                .as_mut()
+                .expect("Quick Cycle")
+                .expansion_history = vec![forge_core_contracts::WorkflowQuickCycleExpansion {
+                phase,
+                reason: "This is not a lifecycle stage".to_owned(),
+                evidence_record_digests: Vec::new(),
+            }];
+            event
+        };
+        let route_expansion = invalid_expansion(Phase::Route);
+        let evolve_expansion = invalid_expansion(Phase::Evolve);
+
+        let mut oversized_expansion_reason = base.clone();
+        oversized_expansion_reason
+            .quick_cycle
+            .as_mut()
+            .expect("Quick Cycle")
+            .expansion_history = vec![forge_core_contracts::WorkflowQuickCycleExpansion {
+            phase: Phase::Discovery,
+            reason: "x".repeat(forge_core_contracts::MAX_QUICK_CYCLE_EXPANSION_REASON_BYTES + 1),
+            evidence_record_digests: Vec::new(),
+        }];
+
+        let mut unowned_evidence = base;
+        unowned_evidence
+            .quick_cycle
+            .as_mut()
+            .expect("Quick Cycle")
+            .stage_closeouts
+            .analysis_discovery = Some(forge_core_contracts::WorkflowQuickCycleCloseout {
+            summary: "The investigation is closed".to_owned(),
+            evidence_record_digests: vec![sha256_digest(b"not in the Work Focus evidence set")],
+        });
+
+        let before =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("WAL before rejects");
+        for invalid in [
+            oversized_compactness,
+            oversized_closeout,
+            too_many_expansions,
+            route_expansion,
+            evolve_expansion,
+            oversized_expansion_reason,
+            unowned_evidence,
+        ] {
+            assert!(matches!(
+                lock_workflow_governance_ledger_tcb(&root)
+                    .expect("invalid Quick Cycle ledger")
+                    .record_work_focus_unchecked_tcb(
+                        projection.head_digest.as_deref().expect("objective head"),
+                        &test_identity(),
+                        projection.current_state_version().expect("objective state"),
+                        invalid,
+                    ),
+                Err(WorkflowGovernanceLedgerError::WorkFocusInvalid { .. })
+            ));
+            assert_eq!(
+                fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH))
+                    .expect("WAL after reject"),
+                before
+            );
+        }
         fs::remove_dir_all(root).expect("cleanup");
     }
 

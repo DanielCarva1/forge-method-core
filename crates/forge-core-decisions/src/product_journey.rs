@@ -243,7 +243,7 @@ fn validate_stage(stage: &ProductStageDescriptor, issues: &mut Vec<ProductJourne
             format!("stage {} contains blank or oversized text", stage.phase),
         );
     }
-    let expected_lifecycle_stage = !matches!(stage.phase, Phase::Route | Phase::Evolve);
+    let expected_lifecycle_stage = stage.phase.is_product_lifecycle_stage();
     if stage.transition_only != (stage.phase == Phase::Evolve)
         || stage.lifecycle_stage != expected_lifecycle_stage
     {
