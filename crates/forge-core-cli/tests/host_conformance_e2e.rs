@@ -103,6 +103,7 @@ fn verify(bundle: &Path) -> assert_cmd::assert::Assert {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // One end-to-end scenario keeps its ordered evidence assertions together.
 fn codex_adapter_preserves_partial_observations_and_typed_gaps() {
     let observation_path = temp_dir("codex-observation.json");
     let bundle = temp_dir("codex-bundle");

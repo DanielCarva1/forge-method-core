@@ -77,6 +77,12 @@ enum Args {
     },
 }
 
+/// Runs the host-conformance command selected by `args`.
+///
+/// # Errors
+///
+/// Returns an error when arguments, bounded input, adapter execution, evidence
+/// verification, or output emission fail.
 pub fn run_host_conformance_command(args: &[String]) -> Result<(), ExitError> {
     if args
         .iter()
@@ -565,7 +571,7 @@ fn read_regular_bounded(path: &Path, max: usize) -> Result<Vec<u8>, String> {
     let (mut file, metadata) = open_regular_once(path, max as u64, true)?;
     let capacity = usize::try_from(metadata.len()).unwrap_or(max).min(max);
     let mut bytes = Vec::with_capacity(capacity);
-    let mut buffer = [0_u8; 64 * 1024];
+    let mut buffer = vec![0_u8; 64 * 1024];
     loop {
         let read = file
             .read(&mut buffer)
@@ -587,7 +593,7 @@ fn file_identity(path: &Path, max: u64) -> Result<SoloHostFileIdentity, String> 
     // hard links because those files must be self-contained.
     let (mut file, metadata) = open_regular_once(path, max, false)?;
     let mut hasher = Sha256::new();
-    let mut buffer = [0_u8; 64 * 1024];
+    let mut buffer = vec![0_u8; 64 * 1024];
     let mut total = 0_u64;
     loop {
         let read = file
@@ -661,6 +667,7 @@ fn reject_hardlink(metadata: &fs::Metadata) -> Result<(), String> {
 }
 
 #[cfg(not(unix))]
+#[allow(clippy::unnecessary_wraps)] // Keep one fallible cross-platform interface with Unix.
 fn reject_hardlink(_metadata: &fs::Metadata) -> Result<(), String> {
     // Rust's portable Metadata API does not expose link count on every target.
     Ok(())

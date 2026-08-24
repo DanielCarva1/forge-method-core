@@ -369,6 +369,7 @@ fn state_one_no_link_bootstraps_the_project_in_one_command() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // One start-to-resume journey keeps its ordered user-visible assertions together.
 fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
     let skill_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skill/start-forge/SKILL.md");
     let skill = fs::read_to_string(&skill_path).expect("read canonical Start Forge skill");

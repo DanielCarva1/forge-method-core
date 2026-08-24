@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_lines)] // End-to-end journeys keep their ordered user-visible assertions together.
+
 //! Real-consumer P5c proof: trusted initialization, automatic selection,
 //! replacement-agent resume, read-only shadow, and authority bypass rejection.
 
@@ -150,7 +152,7 @@ impl Consumer {
             .expect("prepare workflow episode")
     }
 
-    fn finalize_episode(&self, input: &Path) -> Output {
+    fn finalize_episode(input: &Path) -> Output {
         bin()
             .args(["workflow", "episode", "finalize", "--input-file"])
             .arg(input)
@@ -1602,10 +1604,10 @@ fn cooperative_objective_cli_commits_once_and_fresh_next_reads_the_ledger() {
     let decision =
         consumer.write_json("decision after accepted.json", &cooperative_decision_json());
     let before_decision = state_tree_snapshot(&consumer.state);
-    let consumed = run_cooperative_input(&consumer, &packet_digest, &decision);
-    assert_eq!(consumed.status.code(), Some(4));
+    let rejected = run_cooperative_input(&consumer, &packet_digest, &decision);
+    assert_eq!(rejected.status.code(), Some(4));
     assert_eq!(
-        json(&consumed)["command"],
+        json(&rejected)["command"],
         "workflow.intent.accept_cooperative"
     );
     assert_eq!(state_tree_snapshot(&consumer.state), before_decision);
@@ -4167,7 +4169,7 @@ fn public_episode_apply_routes_evolve_changes_and_resume_context() {
             "episode candidate.json",
             &prepared_episode_candidate(&prepared),
         );
-        let finalized_output = consumer.finalize_episode(&candidate);
+        let finalized_output = Consumer::finalize_episode(&candidate);
         assert!(
             finalized_output.stdout.len() < 32 * 1024,
             "finalized episode input is unexpectedly large"

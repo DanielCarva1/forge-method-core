@@ -33,6 +33,7 @@ fn workflow_help_exposes_guarded_episode_apply() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // One end-to-end journey keeps its ordered user-visible assertions together.
 fn episode_prepare_is_bounded_and_does_not_write_project_state() {
     let root = temporary_root("forge-episode-prepare");
     let project = root.join("app");
@@ -227,7 +228,7 @@ fn state_tree(root: &Path) -> Vec<(String, Vec<u8>)> {
             .expect("read state directory")
             .map(|entry| entry.expect("state entry"))
             .collect::<Vec<_>>();
-        entries.sort_by_key(|entry| entry.file_name());
+        entries.sort_by_key(std::fs::DirEntry::file_name);
         for entry in entries {
             let path = entry.path();
             let kind = entry.file_type().expect("state entry type");

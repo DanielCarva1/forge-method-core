@@ -951,7 +951,7 @@ pub fn run_status(catalog_dir: Option<&Path>, phase: &str) -> CliEnvelope<Status
             ),
         );
         if let Some(error) = envelope.error.as_mut() {
-            error.code.0 = "workflow_catalog_too_large".to_owned();
+            "workflow_catalog_too_large".clone_into(&mut error.code.0);
         }
         return envelope;
     }
@@ -1007,7 +1007,7 @@ pub fn run_detail(
             format!("workflow '{}' is retired", retired.workflow_id),
         );
         if let Some(error) = envelope.error.as_mut() {
-            error.code.0 = "workflow_retired".to_owned();
+            "workflow_retired".clone_into(&mut error.code.0);
         }
         return envelope;
     }
@@ -1034,7 +1034,7 @@ pub fn run_detail(
             format!("unknown operational workflow '{workflow_id}'"),
         );
         if let Some(error) = envelope.error.as_mut() {
-            error.code.0 = "workflow_unknown".to_owned();
+            "workflow_unknown".clone_into(&mut error.code.0);
         }
         return envelope;
     };
@@ -1364,6 +1364,11 @@ pub fn run_guide_status(args: &[String]) -> Result<(), ExitError> {
 }
 
 /// Runs the read-only `forge-core guide detail` subcommand.
+///
+/// # Errors
+///
+/// Returns an error when the arguments are invalid or the response cannot be
+/// emitted.
 pub fn run_guide_detail(args: &[String]) -> Result<(), ExitError> {
     let mut workflow_id = None;
     let mut catalog_dir = None;

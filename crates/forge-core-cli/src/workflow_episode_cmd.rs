@@ -255,8 +255,7 @@ fn read_input(path: &PathBuf) -> Result<EpisodeApplyInput, String> {
     )
     .map_err(|error| {
         format!(
-            "invalid episode input: {error}; maximum {} bytes",
-            MAX_POST_BUILD_VERIFY_EPISODE_APPLY_INPUT_BYTES
+            "invalid episode input: {error}; maximum {MAX_POST_BUILD_VERIFY_EPISODE_APPLY_INPUT_BYTES} bytes"
         )
     })?;
     serde_json::from_slice(&bytes)

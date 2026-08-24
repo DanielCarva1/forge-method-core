@@ -137,7 +137,7 @@ pub(crate) fn run(args: &[String]) -> Result<(), ExitError> {
             return crate::workflow_cmd::emit_failure(
                 "workflow.evidence.admit_cooperative",
                 ExitReason::EnvConfig,
-                error.to_string(),
+                error.clone(),
                 want_json,
             )
         }

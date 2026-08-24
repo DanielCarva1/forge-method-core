@@ -1630,14 +1630,12 @@ fn storage_observation(
     }
     if generation_directory_entries != inventoried_generation_count {
         diagnostics.push(format!(
-            "generation_directory_inventory_mismatch:expected={inventoried_generation_count}:observed={}",
-            generation_directory_entries
+            "generation_directory_inventory_mismatch:expected={inventoried_generation_count}:observed={generation_directory_entries}"
         ));
     }
     if staging_directory_entries != 0 {
         diagnostics.push(format!(
-            "staging_cleanup_pending:{}",
-            staging_directory_entries
+            "staging_cleanup_pending:{staging_directory_entries}"
         ));
     }
     if observation_truncated {
