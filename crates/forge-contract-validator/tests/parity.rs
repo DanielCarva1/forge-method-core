@@ -327,6 +327,7 @@ fn copy_validation_tree(source: &Path, target: &Path) {
     );
     copy_dir(&source.join("docs"), &target.join("docs"));
     for relative in [
+        "AGENTS.md",
         "CHANGELOG.md",
         "CONTEXT.md",
         "CONTRIBUTING.md",
