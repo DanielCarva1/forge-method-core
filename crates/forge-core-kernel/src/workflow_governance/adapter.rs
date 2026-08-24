@@ -189,6 +189,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const INITIAL_PHASE: &str = "1-discovery";
+const EVOLVE_PHASE: &str = "6-evolve";
 const ADAPTER_SOURCE_ID: &str = "forge.kernel.project-snapshot-adapter.v0";
 const MAX_SNAPSHOT_FILES: usize = 100_000;
 const MAX_SNAPSHOT_ENTRIES: usize = MAX_SNAPSHOT_FILES * 2;
@@ -2444,8 +2445,13 @@ impl WorkflowGovernanceProjectAdapter {
                     return Err(WorkflowGovernanceAdapterError::CooperativeObjectiveRetryConflict);
                 }
                 self.require_effective_epoch_current(admitted, &effective, &projection)?;
-                if projection.head_digest.as_deref()
+                if (projection.head_digest.as_deref()
                     != Some(objective_record.record_digest.as_str())
+                    && !cooperative_objective_evolve_reentry_tail_matches(
+                        &projection,
+                        objective_record,
+                        accepted_event,
+                    ))
                     || snapshot.digest() != accepted_event.snapshot_digest
                 {
                     return Err(WorkflowGovernanceAdapterError::AuthorizationBindingMismatch);
@@ -2562,6 +2568,18 @@ impl WorkflowGovernanceProjectAdapter {
         }
         let (proposal, revision_kind, revision_reason, carrying_principal, host_provenance) =
             cooperative_revision_from_input(previous, input)?;
+        let reenter_discovery = guidance.current_phase == EVOLVE_PHASE
+            && revision_kind == WorkflowCooperativeObjectiveRevisionKind::MaterialSupersession;
+        if reenter_discovery
+            && evaluate_transition(&TransitionRequest {
+                from: Phase::Evolve,
+                to: Phase::Discovery,
+                gates: &[],
+                waiver: None,
+            }) != TransitionDecision::Allowed
+        {
+            return Err(WorkflowGovernanceAdapterError::EvolveReentryNotAdmitted);
+        }
         let objective_digest = workflow_cooperative_objective_digest(
             &objective_id,
             next_objective_revision,
@@ -2602,12 +2620,34 @@ impl WorkflowGovernanceProjectAdapter {
             accepted_at_unix: now,
         };
         let identity = self.identity(admitted);
-        let objective_record = ledger.accept_cooperative_objective_unchecked_tcb(
-            &packet.binding.ledger_head_digest,
-            &identity,
-            projection.current_state_version().unwrap_or_default(),
-            event,
-        )?;
+        let current_state_version = projection.current_state_version().unwrap_or_default();
+        let objective_record = if reenter_discovery {
+            let mut batch =
+                ledger.begin_unchecked_tcb_batch(&packet.binding.ledger_head_digest, &identity)?;
+            let objective_record =
+                batch.push_cooperative_objective_unchecked_tcb(current_state_version, event)?;
+            let phase_state_version = current_state_version
+                .checked_add(1)
+                .ok_or(WorkflowGovernanceAdapterError::StateVersionOverflow)?;
+            batch.push_event(
+                phase_state_version,
+                WorkflowGovernanceEvent::PhaseAdvanced(PhaseAdvancedEvent {
+                    from_phase: Some(StableId(EVOLVE_PHASE.to_owned())),
+                    to_phase: StableId(INITIAL_PHASE.to_owned()),
+                    snapshot_digest: packet.binding.snapshot_digest.clone(),
+                }),
+            )?;
+            snapshot.revalidate()?;
+            batch.commit()?;
+            objective_record
+        } else {
+            ledger.accept_cooperative_objective_unchecked_tcb(
+                &packet.binding.ledger_head_digest,
+                &identity,
+                current_state_version,
+                event,
+            )?
+        };
         let committed = ledger.recover()?;
         let next = self.guidance_from_projection_with_snapshot(
             &registry, admitted, &effective, &committed, now, &snapshot,
@@ -7930,6 +7970,7 @@ pub enum WorkflowGovernanceAdapterError {
     PostBuildVerifyEpisodeBindingMismatch(&'static str),
     PostBuildVerifyEpisodeRouteInvalid,
     PostBuildVerifyGateNotAdmitted,
+    EvolveReentryNotAdmitted,
     CoordinationCasMismatch,
     CoordinationInvalid(String),
     ClaimProjection(String),
@@ -8069,6 +8110,9 @@ impl fmt::Display for WorkflowGovernanceAdapterError {
             ),
             Self::PostBuildVerifyGateNotAdmitted => f.write_str(
                 "post-BuildVerify phase advancement is blocked by the admitted gate or current assurance boundary",
+            ),
+            Self::EvolveReentryNotAdmitted => f.write_str(
+                "Evolve material-change reentry into Discovery is not admitted by the phase-transition contract",
             ),
             Self::CoordinationCasMismatch => f.write_str(
                 "coordination update CAS failed; refresh the ledger head and state version",
@@ -13236,6 +13280,41 @@ fn accepted_cooperative_objective_record(
         accepted = Some((record, event));
     }
     Ok(accepted)
+}
+
+fn cooperative_objective_evolve_reentry_tail_matches(
+    projection: &WorkflowGovernanceLedgerProjection,
+    objective_record: &WorkflowGovernanceLedgerRecord,
+    accepted_event: &CooperativeObjectiveAcceptedEvent,
+) -> bool {
+    if accepted_event.revision_kind
+        != WorkflowCooperativeObjectiveRevisionKind::MaterialSupersession
+    {
+        return false;
+    }
+    let Some(reentry_record) = projection.records.last() else {
+        return false;
+    };
+    let WorkflowGovernanceEvent::PhaseAdvanced(reentry) = &reentry_record.event else {
+        return false;
+    };
+    reentry
+        .from_phase
+        .as_ref()
+        .is_some_and(|phase| phase.0 == EVOLVE_PHASE)
+        && reentry.to_phase.0 == INITIAL_PHASE
+        && reentry.snapshot_digest == accepted_event.snapshot_digest
+        && reentry_record.previous_record_digest.as_deref()
+            == Some(objective_record.record_digest.as_str())
+        && objective_record
+            .sequence
+            .checked_add(1)
+            .is_some_and(|sequence| sequence == reentry_record.sequence)
+        && objective_record
+            .state_version
+            .checked_add(1)
+            .is_some_and(|state_version| state_version == reentry_record.state_version)
+        && projection.head_digest.as_deref() == Some(reentry_record.record_digest.as_str())
 }
 
 fn validated_cooperative_objective_packet(

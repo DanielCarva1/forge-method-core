@@ -371,6 +371,29 @@ fn append_test_phase(consumer: &Consumer) {
         .expect("append concurrent phase event");
 }
 
+fn append_test_phase_transition(consumer: &Consumer, from: &str, to: &str, snapshot: &str) {
+    let mut ledger =
+        lock_workflow_governance_ledger_tcb(&consumer.state).expect("lock phase fixture ledger");
+    let projection = ledger.recover().expect("recover phase fixture ledger");
+    let head = projection.head_digest.clone().expect("phase fixture head");
+    let identity = projection
+        .active_identity()
+        .expect("phase fixture identity")
+        .clone();
+    ledger
+        .append_unchecked_tcb_event(
+            &head,
+            &identity,
+            projection.next_state_version,
+            WorkflowGovernanceEvent::PhaseAdvanced(PhaseAdvancedEvent {
+                from_phase: Some(StableId(from.to_owned())),
+                to_phase: StableId(to.to_owned()),
+                snapshot_digest: snapshot.to_owned(),
+            }),
+        )
+        .expect("append phase fixture transition");
+}
+
 fn state_tree_snapshot(root: &Path) -> Vec<(String, String, Vec<u8>)> {
     fn walk(root: &Path, current: &Path, entries: &mut Vec<(String, String, Vec<u8>)>) {
         let mut children = fs::read_dir(current)
@@ -3450,6 +3473,125 @@ fn cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback
     assert_eq!(
         replacement["data"]["replacement_continuity"]["binding"]["active_objective_revision"],
         3
+    );
+}
+
+#[test]
+fn material_change_in_evolve_reopens_discovery_once_with_prior_objective_context() {
+    let consumer = Consumer::new();
+    assert_ok(&consumer.run(&["init"]));
+    let initial_next = assert_ok(&consumer.run(&["next"]));
+    let initial_packet = initial_next["data"]["authorization"]["action_packets"][0]
+        ["packet_digest"]
+        .as_str()
+        .expect("initial objective packet")
+        .to_owned();
+    let initial_input = consumer.write_json(
+        "evolve initial objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Keep the released notes app useful for one family",
+                "constraints": ["preserve existing notes"],
+                "unacceptable_outcomes": ["silently lose prior product context"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.evolve-reentry",
+                "interaction_ref": "turn.initial-product",
+                "conversation_digest": format!("sha256:{}", "d".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let initial = assert_ok(&run_cooperative_input(
+        &consumer,
+        &initial_packet,
+        &initial_input,
+    ));
+    let initial_digest = initial["data"]["active_objective"]["objective_digest"]
+        .as_str()
+        .expect("initial objective digest")
+        .to_owned();
+    let snapshot = initial["data"]["next"]["snapshot_digest"]
+        .as_str()
+        .expect("stable project snapshot")
+        .to_owned();
+    append_test_phase_transition(&consumer, "1-discovery", "6-evolve", &snapshot);
+
+    let evolve = assert_ok(&consumer.run(&["next"]));
+    assert_eq!(evolve["data"]["current_phase"], "6-evolve");
+    let material_packet = evolve["data"]["authorization"]["objective_management_packet"]
+        ["packet_digest"]
+        .as_str()
+        .expect("Evolve objective-management packet")
+        .to_owned();
+    let material_input = consumer.write_json(
+        "evolve material change.json",
+        &serde_json::json!({
+            "kind": "material_supersession",
+            "proposal": {
+                "outcome": "Let two family members share selected notes",
+                "constraints": ["preserve existing notes", "ask before sharing"],
+                "unacceptable_outcomes": ["silently lose prior product context"],
+                "open_uncertainties": ["which notes are shareable"]
+            },
+            "supersession_reason": "The owner requested a new sharing capability for the stable product",
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.evolve-reentry",
+                "interaction_ref": "turn.material-change",
+                "conversation_digest": format!("sha256:{}", "e".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let wal = consumer.state.join("wal/workflow-governance.ndjson");
+    let before_lines = fs::read_to_string(&wal)
+        .expect("WAL before Evolve reentry")
+        .lines()
+        .count();
+
+    let accepted = assert_ok(&run_cooperative_input(
+        &consumer,
+        &material_packet,
+        &material_input,
+    ));
+    assert_eq!(accepted["data"]["next"]["current_phase"], "1-discovery");
+    assert_eq!(accepted["data"]["active_objective"]["revision"], 2);
+    assert_eq!(
+        accepted["data"]["active_objective"]["previous_objective_digest"],
+        initial_digest
+    );
+    let accepted_wal = fs::read(&wal).expect("WAL after Evolve reentry");
+    assert_eq!(
+        String::from_utf8_lossy(&accepted_wal).lines().count(),
+        before_lines + 2,
+        "one bounded transaction should append only the objective and Evolve-to-Discovery records"
+    );
+
+    let retry = assert_ok(&run_cooperative_input(
+        &consumer,
+        &material_packet,
+        &material_input,
+    ));
+    assert_eq!(retry["data"], accepted["data"]);
+    assert_eq!(
+        fs::read(&wal).expect("WAL after exact Evolve retry"),
+        accepted_wal,
+        "an exact retry must not duplicate the objective or phase transition"
+    );
+
+    let resumed = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(resumed["data"]["current_phase"], "1-discovery");
+    assert_eq!(
+        resumed["data"]["active_objective"]["previous_objective_digest"], initial_digest,
+        "replacement-agent readback must keep the previous product direction as context"
     );
 }
 
