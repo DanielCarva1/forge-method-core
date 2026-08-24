@@ -301,7 +301,7 @@ def resume_summary_and_report(
     current_work = data.get("current_work")
     require(isinstance(current_work, dict), "workflow resume v9 lacks current_work")
     require(
-        current_work.get("schema_version") == "current_work_context_v2",
+        current_work.get("schema_version") == "current_work_context_v3",
         "workflow resume v9 has unsupported current_work",
     )
     journey = data.get("journey_guidance")

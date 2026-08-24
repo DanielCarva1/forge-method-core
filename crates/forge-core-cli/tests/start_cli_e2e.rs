@@ -444,7 +444,7 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
     assert_eq!(resumed["data"]["readiness_profile"], "solo_cooperative");
     assert_eq!(
         resumed["data"]["current_work"]["schema_version"],
-        "current_work_context_v2"
+        "current_work_context_v3"
     );
     assert_eq!(resumed["data"]["current_work"]["status"], "absent");
     assert!(resumed["data"]["current_work"]["focus"].is_null());

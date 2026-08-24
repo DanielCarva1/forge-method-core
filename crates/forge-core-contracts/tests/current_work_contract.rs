@@ -1,10 +1,12 @@
 use forge_core_contracts::{
     Phase, PrincipalId, RepoPath, StableId, WorkflowCollaborationLane, WorkflowCollaborationPlan,
-    WorkflowCooperativeHostProvenance, WorkflowCurrentWorkAuthority, WorkflowCurrentWorkContext,
-    WorkflowCurrentWorkDetail, WorkflowCurrentWorkDetailFocus, WorkflowCurrentWorkQuickCycleState,
-    WorkflowCurrentWorkQuickCycleSummary, WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary,
-    WorkflowCurrentWorkValidationError, WorkflowQuickCycleCloseout, WorkflowQuickCycleExpansion,
-    WorkflowQuickCycleSnapshot, WorkflowQuickCycleStageCloseouts, WorkflowWorkFocusAcceptInput,
+    WorkflowCooperativeHostProvenance, WorkflowCurrentWorkAuthority,
+    WorkflowCurrentWorkCollaborationLaneSummary, WorkflowCurrentWorkCollaborationSummary,
+    WorkflowCurrentWorkContext, WorkflowCurrentWorkDetail, WorkflowCurrentWorkDetailFocus,
+    WorkflowCurrentWorkQuickCycleState, WorkflowCurrentWorkQuickCycleSummary,
+    WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary, WorkflowCurrentWorkValidationError,
+    WorkflowQuickCycleCloseout, WorkflowQuickCycleExpansion, WorkflowQuickCycleSnapshot,
+    WorkflowQuickCycleStageCloseouts, WorkflowWorkFocusAcceptInput,
     WorkflowWorkFocusObjectiveBinding, WorkflowWorkFocusRecordedEvent, WorkflowWorkFocusState,
     WorkflowWorkFocusUpdateInput, CURRENT_WORK_CONTEXT_SCHEMA_VERSION,
     CURRENT_WORK_DETAIL_SCHEMA_VERSION, MAX_COLLABORATION_DEPENDENCIES_PER_LANE,
@@ -459,7 +461,7 @@ fn work_focus_event_rejects_unknown_fields() {
 fn current_work_readback_is_bounded_advisory_and_closed() {
     assert_eq!(
         CURRENT_WORK_CONTEXT_SCHEMA_VERSION,
-        "current_work_context_v2"
+        "current_work_context_v3"
     );
     assert_eq!(CURRENT_WORK_DETAIL_SCHEMA_VERSION, "current_work_detail_v2");
     let mut event = sample_event();
@@ -490,6 +492,18 @@ fn current_work_readback_is_bounded_advisory_and_closed() {
             state: WorkflowCurrentWorkQuickCycleState::ActiveExpanded,
             stage_closeout_count: 1,
             expansion_count: 1,
+        }),
+        collaboration: Some(WorkflowCurrentWorkCollaborationSummary {
+            lane_count: 2,
+            ready_lane_count: 1,
+            active_lane_count: 0,
+            blocked_lane_count: 1,
+            integrated_lane_count: 0,
+            next_ready_lane: Some(WorkflowCurrentWorkCollaborationLaneSummary {
+                lane_id: StableId("lane.contract".into()),
+                outcome: "Define the bounded contract".into(),
+                isolation_id: None,
+            }),
         }),
         detail_argv: vec![
             "forge-core".into(),
@@ -606,6 +620,7 @@ fn current_work_readback_rejects_invalid_state_and_bounds() {
             blocker_refs: Vec::new(),
             evidence_refs: Vec::new(),
             quick_cycle: None,
+            collaboration: None,
             detail_argv: vec!["forge-core".into()],
         }),
     };

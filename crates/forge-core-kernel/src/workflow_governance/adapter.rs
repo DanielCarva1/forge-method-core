@@ -77,28 +77,30 @@ use forge_core_contracts::{
     WorkflowBrokerCredentialStatus, WorkflowBrokerExternalSetupBlockReason,
     WorkflowBrokerExternalSetupState, WorkflowBrokerPublicRegistryDocument,
     WorkflowCapabilityProbeKind, WorkflowClaimGroundingKind, WorkflowClaimGroundingObservation,
-    WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy, WorkflowCompletionAssertion,
-    WorkflowContentAddressedReference, WorkflowCooperativeApplicabilityOutcome,
-    WorkflowCooperativeEvidenceAssuranceEffect, WorkflowCooperativeEvidenceBinding,
-    WorkflowCooperativeEvidenceCurrentStatus, WorkflowCooperativeEvidenceDisposition,
-    WorkflowCooperativeEvidenceNonProof, WorkflowCooperativeEvidenceObservedEvent,
-    WorkflowCooperativeEvidenceOffer, WorkflowCooperativeEvidenceProof,
-    WorkflowCooperativeEvidenceRejection, WorkflowCooperativeEvidenceRoute,
-    WorkflowCooperativeEvidenceTarget, WorkflowCooperativeExecutionStatus,
-    WorkflowCooperativeHostProvenance, WorkflowCooperativeMaterialScenarioKind,
-    WorkflowCooperativeObjectiveInput, WorkflowCooperativeObjectiveProposal,
-    WorkflowCooperativePriorEvidenceCandidate, WorkflowCooperativePriorEvidenceReference,
-    WorkflowCurrentWorkAuthority, WorkflowCurrentWorkContext, WorkflowCurrentWorkDetail,
-    WorkflowCurrentWorkDetailFocus, WorkflowCurrentWorkQuickCycleState,
-    WorkflowCurrentWorkQuickCycleSummary, WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary,
-    WorkflowEffectiveBundleIdentity, WorkflowEvaluatorProvider, WorkflowEvidenceFreshness,
-    WorkflowEvidenceKind, WorkflowEvidenceObservation, WorkflowEvidenceOutcome,
-    WorkflowEvidenceProvenance, WorkflowEvidenceStrength, WorkflowEvidenceSubject,
-    WorkflowEvidenceSubjectKind, WorkflowExpectedWorkFocus, WorkflowGovernanceBundleDocument,
-    WorkflowGovernanceEvaluation, WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent,
-    WorkflowGovernanceLedgerRecord, WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity,
-    WorkflowGovernanceSignal, WorkflowHumanIntentRevision, WorkflowPolicyActivation,
-    WorkflowPrerequisiteRequirement, WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance,
+    WorkflowClaimWaiverObservation, WorkflowClaimWaiverPolicy, WorkflowCollaborationPlan,
+    WorkflowCompletionAssertion, WorkflowContentAddressedReference,
+    WorkflowCooperativeApplicabilityOutcome, WorkflowCooperativeEvidenceAssuranceEffect,
+    WorkflowCooperativeEvidenceBinding, WorkflowCooperativeEvidenceCurrentStatus,
+    WorkflowCooperativeEvidenceDisposition, WorkflowCooperativeEvidenceNonProof,
+    WorkflowCooperativeEvidenceObservedEvent, WorkflowCooperativeEvidenceOffer,
+    WorkflowCooperativeEvidenceProof, WorkflowCooperativeEvidenceRejection,
+    WorkflowCooperativeEvidenceRoute, WorkflowCooperativeEvidenceTarget,
+    WorkflowCooperativeExecutionStatus, WorkflowCooperativeHostProvenance,
+    WorkflowCooperativeMaterialScenarioKind, WorkflowCooperativeObjectiveInput,
+    WorkflowCooperativeObjectiveProposal, WorkflowCooperativePriorEvidenceCandidate,
+    WorkflowCooperativePriorEvidenceReference, WorkflowCurrentWorkAuthority,
+    WorkflowCurrentWorkCollaborationLaneSummary, WorkflowCurrentWorkCollaborationSummary,
+    WorkflowCurrentWorkContext, WorkflowCurrentWorkDetail, WorkflowCurrentWorkDetailFocus,
+    WorkflowCurrentWorkQuickCycleState, WorkflowCurrentWorkQuickCycleSummary,
+    WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary, WorkflowEffectiveBundleIdentity,
+    WorkflowEvaluatorProvider, WorkflowEvidenceFreshness, WorkflowEvidenceKind,
+    WorkflowEvidenceObservation, WorkflowEvidenceOutcome, WorkflowEvidenceProvenance,
+    WorkflowEvidenceStrength, WorkflowEvidenceSubject, WorkflowEvidenceSubjectKind,
+    WorkflowExpectedWorkFocus, WorkflowGovernanceBundleDocument, WorkflowGovernanceEvaluation,
+    WorkflowGovernanceEvaluationDocument, WorkflowGovernanceEvent, WorkflowGovernanceLedgerRecord,
+    WorkflowGovernancePolicy, WorkflowGovernanceReleaseIdentity, WorkflowGovernanceSignal,
+    WorkflowHumanIntentRevision, WorkflowPolicyActivation, WorkflowPrerequisiteRequirement,
+    WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance,
     WorkflowRepresentativeSliceDefinitionDocument, WorkflowRuntimeBundleIdentity,
     WorkflowWorkFocusAcceptInput, WorkflowWorkFocusChange, WorkflowWorkFocusContinuityInput,
     WorkflowWorkFocusDraft, WorkflowWorkFocusObjectiveBinding, WorkflowWorkFocusRecordedEvent,
@@ -3330,7 +3332,8 @@ impl WorkflowGovernanceProjectAdapter {
                     ),
                 );
             }
-            guidance.current_work = Some(self.current_work_context(&projection)?);
+            guidance.current_work =
+                Some(self.current_work_context(&projection, Some(&continuity))?);
             guidance.replacement_continuity = Some(continuity);
             Ok(guidance)
         })
@@ -3857,7 +3860,7 @@ impl WorkflowGovernanceProjectAdapter {
         let mut guidance = self.guidance_from_projection_with_snapshot(
             &registry, admitted, &effective, &committed, now, &snapshot,
         )?;
-        let current_work = self.current_work_context(&committed)?;
+        let current_work = self.current_work_context(&committed, None)?;
         guidance.current_work = Some(current_work.clone());
         Ok(WorkflowWorkFocusAcceptance {
             focus_record,
@@ -3992,6 +3995,7 @@ impl WorkflowGovernanceProjectAdapter {
     fn current_work_context(
         &self,
         projection: &WorkflowGovernanceLedgerProjection,
+        continuity: Option<&WorkflowReplacementContinuity>,
     ) -> Result<WorkflowCurrentWorkContext, WorkflowGovernanceAdapterError> {
         let Some((record, focus)) = projection.latest_work_focus_record() else {
             let context = WorkflowCurrentWorkContext {
@@ -4054,6 +4058,10 @@ impl WorkflowGovernanceProjectAdapter {
                     .cloned()
                     .collect(),
                 quick_cycle: Self::current_work_quick_cycle_summary(focus),
+                collaboration: focus.collaboration.as_ref().and_then(|plan| {
+                    continuity
+                        .map(|continuity| current_work_collaboration_summary(plan, continuity))
+                }),
                 detail_argv: self.current_work_detail_argv(
                     projection
                         .head_digest
@@ -13403,6 +13411,133 @@ fn compact_current_work_summary_text(value: &str) -> String {
     format!("{}{}", &value[..end], SUFFIX)
 }
 
+fn current_work_collaboration_summary(
+    plan: &WorkflowCollaborationPlan,
+    continuity: &WorkflowReplacementContinuity,
+) -> WorkflowCurrentWorkCollaborationSummary {
+    let integrated_isolations = continuity
+        .promotions
+        .iter()
+        .filter(|promotion| promotion.status == WorkflowReplacementPromotionStatus::Completed)
+        .map(|promotion| promotion.isolation_id.clone())
+        .collect::<BTreeSet<_>>();
+    let active_isolations = continuity
+        .isolations
+        .iter()
+        .filter(|isolation| {
+            matches!(
+                isolation.contract.status,
+                IsolationStatus::Active | IsolationStatus::Merging
+            )
+        })
+        .map(|isolation| isolation.contract.id.clone())
+        .collect::<BTreeSet<_>>();
+    let mut blocked_isolations = continuity
+        .gaps
+        .iter()
+        .filter(|gap| gap.blocking)
+        .filter_map(|gap| gap.isolation_id.clone())
+        .collect::<BTreeSet<_>>();
+    blocked_isolations.extend(
+        continuity
+            .promotions
+            .iter()
+            .filter(|promotion| {
+                matches!(
+                    promotion.status,
+                    WorkflowReplacementPromotionStatus::Recoverable
+                        | WorkflowReplacementPromotionStatus::BlockedCorrupt
+                )
+            })
+            .map(|promotion| promotion.isolation_id.clone()),
+    );
+    blocked_isolations.extend(
+        continuity
+            .isolations
+            .iter()
+            .filter(|isolation| {
+                matches!(
+                    isolation.contract.status,
+                    IsolationStatus::Merged | IsolationStatus::Abandoned
+                )
+            })
+            .map(|isolation| isolation.contract.id.clone()),
+    );
+
+    current_work_collaboration_summary_from_owner_sets(
+        plan,
+        &integrated_isolations,
+        &active_isolations,
+        &blocked_isolations,
+    )
+}
+
+fn current_work_collaboration_summary_from_owner_sets(
+    plan: &WorkflowCollaborationPlan,
+    integrated_isolations: &BTreeSet<StableId>,
+    active_isolations: &BTreeSet<StableId>,
+    blocked_isolations: &BTreeSet<StableId>,
+) -> WorkflowCurrentWorkCollaborationSummary {
+    let integrated_lanes = plan
+        .lanes
+        .iter()
+        .filter(|lane| {
+            lane.isolation_id
+                .as_ref()
+                .is_some_and(|isolation_id| integrated_isolations.contains(isolation_id))
+        })
+        .map(|lane| lane.lane_id.clone())
+        .collect::<BTreeSet<_>>();
+
+    let mut ready_lane_count = 0usize;
+    let mut active_lane_count = 0usize;
+    let mut blocked_lane_count = 0usize;
+    let mut integrated_lane_count = 0usize;
+    let mut next_ready_lane = None;
+
+    for lane in &plan.lanes {
+        let integrated = integrated_lanes.contains(&lane.lane_id);
+        let dependencies_integrated = lane
+            .depends_on
+            .iter()
+            .all(|dependency| integrated_lanes.contains(dependency));
+        let active = lane
+            .isolation_id
+            .as_ref()
+            .is_some_and(|isolation_id| active_isolations.contains(isolation_id));
+        let owner_blocked = lane
+            .isolation_id
+            .as_ref()
+            .is_some_and(|isolation_id| blocked_isolations.contains(isolation_id));
+
+        if integrated {
+            integrated_lane_count += 1;
+        } else if !dependencies_integrated || owner_blocked {
+            blocked_lane_count += 1;
+        } else if active {
+            active_lane_count += 1;
+        } else {
+            ready_lane_count += 1;
+            if next_ready_lane.is_none() {
+                next_ready_lane = Some(WorkflowCurrentWorkCollaborationLaneSummary {
+                    lane_id: lane.lane_id.clone(),
+                    outcome: lane.outcome.clone(),
+                    isolation_id: lane.isolation_id.clone(),
+                });
+            }
+        }
+    }
+
+    WorkflowCurrentWorkCollaborationSummary {
+        lane_count: plan.lanes.len(),
+        ready_lane_count,
+        active_lane_count,
+        blocked_lane_count,
+        integrated_lane_count,
+        next_ready_lane,
+    }
+}
+
 fn compact_current_work_summary_ref(value: Option<&str>) -> Option<String> {
     value
         .filter(|value| value.len() <= MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES)
@@ -15366,6 +15501,61 @@ mod tests {
     }
 
     #[test]
+    fn collaboration_summary_selects_only_dependency_ready_inactive_work() {
+        let plan = WorkflowCollaborationPlan {
+            lanes: vec![
+                forge_core_contracts::WorkflowCollaborationLane {
+                    lane_id: StableId("lane.integrated".to_owned()),
+                    outcome: "Provide the dependency".to_owned(),
+                    depends_on: Vec::new(),
+                    isolation_id: Some(StableId("isolation.integrated".to_owned())),
+                },
+                forge_core_contracts::WorkflowCollaborationLane {
+                    lane_id: StableId("lane.active".to_owned()),
+                    outcome: "Continue independent active work".to_owned(),
+                    depends_on: Vec::new(),
+                    isolation_id: Some(StableId("isolation.active".to_owned())),
+                },
+                forge_core_contracts::WorkflowCollaborationLane {
+                    lane_id: StableId("lane.ready".to_owned()),
+                    outcome: "Start after the integrated dependency".to_owned(),
+                    depends_on: vec![StableId("lane.integrated".to_owned())],
+                    isolation_id: None,
+                },
+                forge_core_contracts::WorkflowCollaborationLane {
+                    lane_id: StableId("lane.waiting".to_owned()),
+                    outcome: "Wait for the ready lane".to_owned(),
+                    depends_on: vec![StableId("lane.ready".to_owned())],
+                    isolation_id: None,
+                },
+                forge_core_contracts::WorkflowCollaborationLane {
+                    lane_id: StableId("lane.owner-blocked".to_owned()),
+                    outcome: "Repair its owner before work".to_owned(),
+                    depends_on: Vec::new(),
+                    isolation_id: Some(StableId("isolation.blocked".to_owned())),
+                },
+            ],
+        };
+        plan.validate().expect("valid collaboration plan");
+        let summary = current_work_collaboration_summary_from_owner_sets(
+            &plan,
+            &BTreeSet::from([StableId("isolation.integrated".to_owned())]),
+            &BTreeSet::from([StableId("isolation.active".to_owned())]),
+            &BTreeSet::from([StableId("isolation.blocked".to_owned())]),
+        );
+
+        assert_eq!(summary.lane_count, 5);
+        assert_eq!(summary.ready_lane_count, 1);
+        assert_eq!(summary.active_lane_count, 1);
+        assert_eq!(summary.blocked_lane_count, 2);
+        assert_eq!(summary.integrated_lane_count, 1);
+        assert_eq!(
+            summary.next_ready_lane.expect("one ready lane").lane_id.0,
+            "lane.ready"
+        );
+    }
+
+    #[test]
     fn resume_and_detail_project_one_accepted_work_focus() {
         let (root, state) = temp_project("current-work-resume-detail");
         let adapter = WorkflowGovernanceProjectAdapter::new(
@@ -15508,7 +15698,7 @@ mod tests {
         let projection = ledger.recover().expect("recover focus ledger");
         drop(ledger);
         let baseline = adapter
-            .current_work_context(&projection)
+            .current_work_context(&projection, None)
             .expect("baseline Current Work");
         let blocker_digest = format!("sha256:{}", "7".repeat(64));
         let evidence_digest = format!("sha256:{}", "8".repeat(64));
@@ -15538,7 +15728,7 @@ mod tests {
         );
         unresolved.records.push(blocker_record);
         let blocked = adapter
-            .current_work_context(&unresolved)
+            .current_work_context(&unresolved, None)
             .expect("bound blocker projection");
         let blocked_focus = blocked.focus.expect("blocked focus");
         assert_eq!(blocked.status, WorkflowCurrentWorkStatus::Blocked);
@@ -15546,7 +15736,7 @@ mod tests {
         assert_eq!(blocked_focus.evidence_refs, vec![evidence_digest.clone()]);
 
         let resolved = adapter
-            .current_work_context(&bound_projection)
+            .current_work_context(&bound_projection, None)
             .expect("resolved blocker projection");
         let resolved_focus = resolved.focus.expect("resolved focus");
         assert_eq!(resolved.status, WorkflowCurrentWorkStatus::Current);

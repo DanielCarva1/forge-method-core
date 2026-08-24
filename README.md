@@ -4,7 +4,7 @@ Forge Method Core is a local, model-agnostic governance runtime for agent-led
 product work. A human stays in chat, a host agent drives `forge-core`, and Forge
 persists typed obligations, authority, evidence, and continuity.
 
-The active source line is **`0.12.0-alpha.36`**. `Cargo.toml` is the single
+The active source line is **`0.12.0-alpha.37`**. `Cargo.toml` is the single
 package-version authority; live documentation does not use older prerelease
 numbers to describe the current product. Historical versions remain only in
 `CHANGELOG.md` and retained audit evidence. Verify the selected executable with
@@ -42,7 +42,7 @@ turning prose into runtime authority.
 
 | Identity | Current source fact | How to verify |
 |---|---|---|
-| **Source checkpoint** | Workspace package SemVer `0.12.0-alpha.36` plus the exact Git commit/working-tree state. A dirty checkout is not immutable. | `git rev-parse HEAD`, `git status --short`, and `[workspace.package].version` in `Cargo.toml` |
+| **Source checkpoint** | Workspace package SemVer `0.12.0-alpha.37` plus the exact Git commit/working-tree state. A dirty checkout is not immutable. | `git rev-parse HEAD`, `git status --short`, and `[workspace.package].version` in `Cargo.toml` |
 | **Installed executable** | The binary actually selected by `PATH`; it may differ from the checkout until reinstalled. | `command -v forge-core` and `forge-core --version` |
 | **Workflow release identity** | Compiled append-only successor `workflow-governance.release.universal-assurance-v0` / `0.5.0` (six releases, 43 policies). Each project has its own durable pin. | `forge-core workflow release-status --root <project> --json` and only its exact returned upgrade argv |
 | **Domain Pack effective epoch** | Project-local digest joining the admitted workflow release with the active immutable Domain Pack generation. It has no global package SemVer and does not rewrite core identity. | `workflow next|resume` and `domain-pack status` against the Project Link-resolved state |

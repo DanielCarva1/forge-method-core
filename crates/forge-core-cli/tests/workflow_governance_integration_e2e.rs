@@ -1183,7 +1183,7 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     assert_eq!(summary["data"]["detail_level"], "summary");
     assert_eq!(
         summary["data"]["current_work"]["schema_version"],
-        "current_work_context_v2"
+        "current_work_context_v3"
     );
     assert_eq!(summary["data"]["current_work"]["status"], "absent");
     assert_eq!(
@@ -2231,7 +2231,7 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
     );
     assert_eq!(
         resumed["data"]["current_work"]["schema_version"],
-        "current_work_context_v2"
+        "current_work_context_v3"
     );
     assert!(resumed["data"]["current_work"]["focus"]
         .get("quick_cycle")
@@ -2374,6 +2374,34 @@ fn collaboration_v3_replaces_the_complete_plan_with_one_write_per_change() {
     assert_eq!(
         accepted["data"]["focus_record"]["event"]["payload"]["collaboration"],
         initial_plan
+    );
+    let state_after_accept = state_tree_snapshot(&consumer.state);
+    let resumed = assert_ok(&consumer.run(&["resume"]));
+    let current_work = &resumed["data"]["current_work"];
+    assert_eq!(current_work["schema_version"], "current_work_context_v3");
+    assert_eq!(current_work["focus"]["collaboration"]["lane_count"], 2);
+    assert_eq!(
+        current_work["focus"]["collaboration"]["ready_lane_count"],
+        1
+    );
+    assert_eq!(
+        current_work["focus"]["collaboration"]["blocked_lane_count"],
+        1
+    );
+    assert_eq!(
+        current_work["focus"]["collaboration"]["next_ready_lane"]["lane_id"],
+        "lane.contract"
+    );
+    assert!(
+        serde_json::to_vec(current_work)
+            .expect("serialize Current Work")
+            .len()
+            <= MAX_CURRENT_WORK_SUMMARY_BYTES
+    );
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        state_after_accept,
+        "collaboration resume readback must not write state"
     );
 
     let assigned_plan = serde_json::json!({

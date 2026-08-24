@@ -2,7 +2,7 @@ use crate::{Phase, PrincipalId, RepoPath, StableId, WorkflowCooperativeHostProve
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-pub const CURRENT_WORK_CONTEXT_SCHEMA_VERSION: &str = "current_work_context_v2";
+pub const CURRENT_WORK_CONTEXT_SCHEMA_VERSION: &str = "current_work_context_v3";
 pub const CURRENT_WORK_DETAIL_SCHEMA_VERSION: &str = "current_work_detail_v2";
 pub const LEGACY_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v1";
 pub const LEGACY_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION: &str = "work_focus_update_input_v1";
@@ -341,6 +341,8 @@ pub struct WorkflowCurrentWorkSummary {
     pub evidence_refs: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quick_cycle: Option<WorkflowCurrentWorkQuickCycleSummary>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collaboration: Option<WorkflowCurrentWorkCollaborationSummary>,
     pub detail_argv: Vec<String>,
 }
 
@@ -361,6 +363,29 @@ pub struct WorkflowCurrentWorkQuickCycleSummary {
     pub state: WorkflowCurrentWorkQuickCycleState,
     pub stage_closeout_count: usize,
     pub expansion_count: usize,
+}
+
+/// Small collaboration view for ordinary resume. Exact lanes and owner state
+/// remain progressive detail; this summary carries counts and one next lane.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCurrentWorkCollaborationSummary {
+    pub lane_count: usize,
+    pub ready_lane_count: usize,
+    pub active_lane_count: usize,
+    pub blocked_lane_count: usize,
+    pub integrated_lane_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_ready_lane: Option<WorkflowCurrentWorkCollaborationLaneSummary>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCurrentWorkCollaborationLaneSummary {
+    pub lane_id: StableId,
+    pub outcome: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub isolation_id: Option<StableId>,
 }
 
 /// Bounded progressive readback used only when the resume summary is insufficient.
@@ -591,6 +616,30 @@ fn validate_summary(
             ) && quick_cycle.stage_closeout_count != 5
         {
             return Err(WorkflowCurrentWorkValidationError::ListBound);
+        }
+    }
+    if let Some(collaboration) = focus.collaboration.as_ref() {
+        let classified = collaboration.ready_lane_count
+            + collaboration.active_lane_count
+            + collaboration.blocked_lane_count
+            + collaboration.integrated_lane_count;
+        if collaboration.lane_count == 0
+            || collaboration.lane_count > MAX_COLLABORATION_LANES
+            || classified != collaboration.lane_count
+            || (collaboration.ready_lane_count == 0) != collaboration.next_ready_lane.is_none()
+        {
+            return Err(WorkflowCurrentWorkValidationError::ListBound);
+        }
+        if let Some(lane) = collaboration.next_ready_lane.as_ref() {
+            validate_collaboration_id(&lane.lane_id, MAX_COLLABORATION_LANE_ID_BYTES)?;
+            if lane.outcome.trim().is_empty()
+                || lane.outcome.as_bytes().len() > MAX_COLLABORATION_OUTCOME_BYTES
+            {
+                return Err(WorkflowCurrentWorkValidationError::FieldBound);
+            }
+            if let Some(isolation_id) = lane.isolation_id.as_ref() {
+                validate_collaboration_id(isolation_id, MAX_COLLABORATION_ISOLATION_ID_BYTES)?;
+            }
         }
     }
     if focus.open_decision_refs.len() > focus.open_decision_count
