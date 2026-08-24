@@ -9,6 +9,15 @@ authority:
 scan_roots:
   - "."
 allowlist:
+  - path: "AGENTS.md"
+    role: "agent_guidance"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/policies/agent-native-product-constitution.yaml"
+      - "contracts/spec/product-journey-guidance-v0.yaml"
+    non_authority_reason: "Repository navigation and contribution guidance only; typed product contracts and accepted GitHub state control."
   - path: "CHANGELOG.md"
     role: "distribution_only"
     provenance: "hand_authored"
