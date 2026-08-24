@@ -305,6 +305,7 @@ pub const COMMAND_WORKFLOW: CommandSpec = CommandSpec {
         "       forge-core workflow promotion apply --root <canonical-project> --isolation-id <id> --expected-preview-digest <sha256:...> [--json|--no-json]",
         "       forge-core workflow promotion recover --root <canonical-project> --isolation-id <id> --expected-preview-digest <sha256:...> [--json|--no-json]",
         "       forge-core workflow intent record --root <path> --origin-envelope-file <signed-json> [--json|--no-json]",
+        "       forge-core workflow episode apply --root <path> --input-file <episode-apply.json> [--json|--no-json]",
         "       forge-core workflow resume [--root <path>] [--json|--no-json]",
         "       forge-core workflow current-work accept --root <path> --input-file <focus.json> [--json|--no-json]",
         "       forge-core workflow current-work update --root <path> --input-file <change.json> [--json|--no-json]",

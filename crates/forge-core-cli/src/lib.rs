@@ -74,6 +74,7 @@ mod workflow_autonomy_cmd;
 mod workflow_broker_cmd;
 pub mod workflow_cmd;
 mod workflow_credential_cmd;
+mod workflow_episode_cmd;
 mod workflow_evidence_cmd;
 mod workflow_intent_cmd;
 mod workflow_promotion_cmd;

@@ -88,6 +88,12 @@ pure_decision_composition:
 
 c5_2_runtime_admission:
   api: "WorkflowGovernanceProjectAdapter::apply_post_build_verify_episode"
+  public_cli: "forge-core workflow episode apply --root <path> --input-file <episode-apply.json>"
+  public_cli_boundary: >-
+    The host agent supplies one bounded closed JSON wrapper containing the
+    candidate document and exact snapshot, ledger-head, and state-version CAS
+    bindings. The CLI does not invent deployment or operational evidence and
+    delegates the only mutation to the existing kernel admission API.
   request_bindings:
     - "candidate PostBuildVerifyEpisodeDocument"
     - "exact current project snapshot digest"
@@ -149,7 +155,7 @@ owner_boundaries:
 status_boundary: >-
   C5.1 candidate contracts and pure decisions, C5.2 guarded admission, and C5.3
   complete epoch-0.8 persistence plus authority-free fresh-process projection are
-  implemented and compile. This does not claim Rust test execution, runtime
-  fresh-process or interruption proof, a dedicated CLI command, a real deployment,
-  rollback execution, host execution, remote operations, hosted CI,
-  release/publication, or field evidence.
+  implemented. C5.2 is publicly reachable through one bounded CLI bridge with
+  focused fresh-process E2E coverage. This does not claim a real deployment,
+  rollback execution, remote operations, hosted CI, release/publication, or field
+  evidence.

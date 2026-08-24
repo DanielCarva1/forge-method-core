@@ -13,16 +13,17 @@ use forge_core_authority::{
 };
 use forge_core_contracts::{
     workflow_broker_expected_audience, DecisionNeedRaisedEvent, GovernedPromotionReceipt,
-    PhaseAdvancedEvent, PolicyCompletedEvent, PrincipalId, ProjectImportedEvent, ReadinessTarget,
-    RuntimeKind, StableId, WorkflowBrokerBoundOperation, WorkflowBrokerCredentialProfile,
-    WorkflowBrokerCredentialPurpose, WorkflowBrokerCredentialStatus, WorkflowBrokerCustodyKind,
-    WorkflowBrokerHostBinding, WorkflowBrokerHostInteractionKind,
-    WorkflowBrokerNativeHostProvenance, WorkflowBrokerPublicCredentialMetadata,
-    WorkflowBrokerPublicKeyAlgorithm, WorkflowBrokerPublicRegistryDocument,
-    WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind, WorkflowGovernanceEvent,
-    WorkflowGovernanceReceiptDocument, MAX_CURRENT_WORK_DETAIL_BYTES,
-    MAX_CURRENT_WORK_SUMMARY_BYTES, MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS,
-    WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION, WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION,
+    PhaseAdvancedEvent, PolicyCompletedEvent, PostBuildVerifyEpisodeDocument, PrincipalId,
+    ProjectImportedEvent, ReadinessTarget, RuntimeKind, StableId, WorkflowBrokerBoundOperation,
+    WorkflowBrokerCredentialProfile, WorkflowBrokerCredentialPurpose,
+    WorkflowBrokerCredentialStatus, WorkflowBrokerCustodyKind, WorkflowBrokerHostBinding,
+    WorkflowBrokerHostInteractionKind, WorkflowBrokerNativeHostProvenance,
+    WorkflowBrokerPublicCredentialMetadata, WorkflowBrokerPublicKeyAlgorithm,
+    WorkflowBrokerPublicRegistryDocument, WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind,
+    WorkflowGovernanceEvent, WorkflowGovernanceReceiptDocument, WorkflowGovernanceReleaseIdentity,
+    MAX_CURRENT_WORK_DETAIL_BYTES, MAX_CURRENT_WORK_SUMMARY_BYTES,
+    MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS, WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION,
+    WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION,
 };
 use forge_core_workflow_governance_tcb::{
     lock_workflow_governance_ledger_tcb, WorkflowGovernanceLedgerIdentity,
@@ -123,6 +124,17 @@ impl Consumer {
         ];
         args.extend(tail[1..].iter().map(|value| (*value).to_owned()));
         bin().args(args).output().expect("run workflow command")
+    }
+
+    fn apply_episode(&self, input: &Path) -> Output {
+        bin()
+            .args(["workflow", "episode", "apply", "--root"])
+            .arg(&self.app)
+            .arg("--input-file")
+            .arg(input)
+            .arg("--json")
+            .output()
+            .expect("apply workflow episode")
     }
 
     fn write_json<T: Serialize>(&self, name: &str, value: &T) -> PathBuf {
@@ -392,6 +404,101 @@ fn append_test_phase_transition(consumer: &Consumer, from: &str, to: &str, snaps
             }),
         )
         .expect("append phase fixture transition");
+}
+
+fn post_build_verify_episode_document(
+    release: WorkflowGovernanceReleaseIdentity,
+    snapshot: &str,
+) -> PostBuildVerifyEpisodeDocument {
+    let digest = |byte: char| format!("sha256:{}", byte.to_string().repeat(64));
+    let release_digest = release.release_digest.clone();
+    let policy_references = [
+        "readiness",
+        "ready_release",
+        "reality_evidence",
+        "context_recovery",
+        "evolve_project",
+    ]
+    .into_iter()
+    .enumerate()
+    .map(|(index, role)| {
+        serde_json::json!({
+            "role": role,
+            "policy_id": format!("policy.episode.{index}"),
+            "policy_ref": format!("contracts/policies/episode-{index}.yaml")
+        })
+    })
+    .collect::<Vec<_>>();
+    let mut document: PostBuildVerifyEpisodeDocument = serde_json::from_value(serde_json::json!({
+        "schema_version": "0.1",
+        "post_build_verify_episode": {
+            "episode_id": "episode.notes.release.1",
+            "generation": 1,
+            "previous_episode_digest": null,
+            "authority": "candidate_only",
+            "release_subject": release,
+            "build_verify_snapshot": {
+                "subject_ref": "project.current_snapshot",
+                "subject_digest": snapshot
+            },
+            "rollback_baseline": {
+                "kind": "build_verify_snapshot",
+                "snapshot": {
+                    "subject_ref": "project.current_snapshot",
+                    "subject_digest": snapshot
+                }
+            },
+            "policy_references": policy_references,
+            "deployment_observations": [{
+                "observation_id": "observation.notes.healthy",
+                "release_digest": release_digest,
+                "deployment": {
+                    "subject_ref": "deployment/notes",
+                    "subject_digest": digest('2')
+                },
+                "outcome": "healthy",
+                "observed_at_unix": 1
+            }],
+            "operational_evidence": [{
+                "evidence_id": "evidence.notes.verification",
+                "release_digest": release_digest,
+                "evidence": {
+                    "subject_ref": "evidence/notes",
+                    "subject_digest": digest('3')
+                },
+                "kind": "verification",
+                "outcome": "supports_readiness",
+                "observed_at_unix": 1
+            }],
+            "feedback": [],
+            "intake": [],
+            "evolution": {
+                "evolution_episode_id": "evolution.notes.1",
+                "generation": 1,
+                "release_digest": release_digest,
+                "status": "dormant",
+                "trigger": "planned_follow_up",
+                "proposed_entry_phase": "1-discovery",
+                "continuity_subject": {
+                    "subject_ref": "continuity/notes",
+                    "subject_digest": digest('4')
+                }
+            },
+            "continuity": {
+                "context_recovery_subject": {
+                    "subject_ref": "recovery/notes",
+                    "subject_digest": digest('5')
+                },
+                "next_action_ref": "action.monitor-notes"
+            },
+            "episode_digest": digest('0')
+        }
+    }))
+    .expect("typed episode fixture");
+    document.post_build_verify_episode.episode_digest =
+        document.episode_digest().expect("episode digest");
+    assert!(document.validate().is_empty());
+    document
 }
 
 fn state_tree_snapshot(root: &Path) -> Vec<(String, String, Vec<u8>)> {
@@ -3474,6 +3581,98 @@ fn cooperative_objective_cli_supersedes_then_clarifies_with_replacement_readback
         replacement["data"]["replacement_continuity"]["binding"]["active_objective_revision"],
         3
     );
+}
+
+#[test]
+fn public_episode_apply_enters_evolve_once_and_resume_reads_it_back() {
+    let consumer = Consumer::new_with_prefix("forge-public-episode-e2e");
+    assert_ok(&consumer.run(&["init", "--readiness-profile", "solo_cooperative"]));
+    let discovery = assert_ok(&consumer.run(&["next"]));
+    let packet_digest = discovery["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("objective packet")
+        .to_owned();
+    let objective = consumer.write_json(
+        "episode objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Keep the stable notes app useful",
+                "constraints": ["preserve existing notes"],
+                "unacceptable_outcomes": ["lose the released product context"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.agent.episode-e2e",
+            "host_provenance": {
+                "host_id": "host.episode-e2e",
+                "host_version": "test",
+                "session_ref": "session.episode-e2e",
+                "interaction_ref": "turn.initial-objective",
+                "conversation_digest": format!("sha256:{}", "8".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let accepted = assert_ok(&run_cooperative_input(
+        &consumer,
+        &packet_digest,
+        &objective,
+    ));
+    let snapshot = accepted["data"]["next"]["snapshot_digest"]
+        .as_str()
+        .expect("stable snapshot")
+        .to_owned();
+    append_test_phase_transition(&consumer, "1-discovery", "5-ready-operate", &snapshot);
+
+    let (applied, input) = loop {
+        let status = assert_ok(&consumer.run(&["release-status"]));
+        let document = post_build_verify_episode_document(
+            serde_json::from_value(status["data"]["active"]["release"].clone())
+                .expect("active release"),
+            status["data"]["snapshot_digest"]
+                .as_str()
+                .expect("current snapshot"),
+        );
+        let input = consumer.write_json(
+            "episode apply.json",
+            &serde_json::json!({
+                "document": document,
+                "expected_snapshot_digest": status["data"]["snapshot_digest"],
+                "expected_ledger_head_digest": status["data"]["ledger_head_digest"],
+                "expected_state_version": status["data"]["state_version"]
+            }),
+        );
+        let attempt = consumer.apply_episode(&input);
+        if attempt.status.success() {
+            break (assert_ok(&attempt), input);
+        }
+        let rejection = json(&attempt);
+        assert_eq!(rejection["exit_reason"], "rejected_by_gate");
+
+        let output = consumer.run(&["next"]);
+        let next = json(&output);
+        assert!(
+            output.status.success(),
+            "unexpected guidance failure: {next:#}"
+        );
+        append_test_policy_completion(&consumer, &next);
+    };
+    assert_eq!(applied["command"], "workflow.episode.apply");
+    assert_eq!(applied["data"]["outcome"], "advanced_to_evolve");
+
+    let resumed = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(resumed["data"]["current_phase"], "6-evolve");
+    let evolve_head = resumed["data"]["ledger_head_digest"].clone();
+
+    let retry = consumer.apply_episode(&input);
+    let retry_envelope = json(&retry);
+    assert!(!retry.status.success());
+    assert_eq!(retry_envelope["command"], "workflow.episode.apply");
+    assert_eq!(retry_envelope["exit_reason"], "conflict");
+
+    let after_retry = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(after_retry["data"]["current_phase"], "6-evolve");
+    assert_eq!(after_retry["data"]["ledger_head_digest"], evolve_head);
 }
 
 #[test]

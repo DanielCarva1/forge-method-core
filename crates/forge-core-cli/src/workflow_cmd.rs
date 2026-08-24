@@ -103,6 +103,9 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
     if args.get(1).is_some_and(|value| value == "evidence") {
         return crate::workflow_evidence_cmd::run(&args[2..]);
     }
+    if args.get(1).is_some_and(|value| value == "episode") {
+        return crate::workflow_episode_cmd::run(&args[2..]);
+    }
     if args.get(1).is_some_and(|value| value == "promotion") {
         return crate::workflow_promotion_cmd::run(&args[2..]);
     }
@@ -1573,6 +1576,7 @@ pub(crate) fn classify_error(error: &WorkflowGovernanceAdapterError) -> ExitReas
         | WorkflowGovernanceAdapterError::CooperativeObjectiveRetryConflict
         | WorkflowGovernanceAdapterError::StaleCooperativeObjectiveManagementPacket
         | WorkflowGovernanceAdapterError::WorkFocusCasMismatch
+        | WorkflowGovernanceAdapterError::PostBuildVerifyEpisodeBindingMismatch(_)
         | WorkflowGovernanceAdapterError::ReleaseCasMismatch
         | WorkflowGovernanceAdapterError::ReleaseChainInvalid
         | WorkflowGovernanceAdapterError::ReleaseCommitIndeterminate

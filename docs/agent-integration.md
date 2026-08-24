@@ -404,6 +404,20 @@ symlink-escaping, oversized, or unreadable basis paths. Reusing an offer id with
 identical canonical bytes is idempotent; reusing it for different bytes is a
 closed conflict. Rejected offers never supersede admitted ones.
 
+## Stable product entry into Evolve
+
+After the admitted `ReadyOperate` release boundary is complete, the agent can submit an
+honest post-BuildVerify episode with `forge-core workflow episode apply`. The strict,
+bounded input carries the episode document plus the exact snapshot, ledger head, and
+state version returned by current Forge readback. Forge rechecks the active release,
+phase policies, assurance, release gate, generation, predecessor, and all CAS bindings
+before one atomic append. A stale retry is a conflict and cannot duplicate the episode.
+
+This command enters `Evolve`; it does not perform feature work there. Once the human and
+agent agree on a material change, the existing cooperative material-supersession command
+records the new objective and immediately reopens Discovery with the prior objective in
+history.
+
 Applicability is deliberately basis-scoped. Changes outside its admitted basis
 do not invalidate the routing result; changed or missing basis bytes do. Only
 the newest admitted applicability result for the exact objective, policy,

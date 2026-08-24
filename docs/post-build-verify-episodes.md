@@ -92,6 +92,22 @@ routes hold the retained workflow-ledger lock, enforce exact predecessor/CAS bin
 and append one hash-chained record. Deserializing the record cannot recreate the kernel
 admission that originally produced it.
 
+## Public agent entry
+
+Host agents apply one closed candidate through:
+
+```text
+forge-core workflow episode apply --root <project> --input-file <episode-apply.json>
+```
+
+The input is a strict JSON object with `document`, `expected_snapshot_digest`,
+`expected_ledger_head_digest`, and `expected_state_version`. It is capped at 256 KiB and
+read through the shared bounded no-follow file reader. The CLI does not create another
+gate or ledger path: it forwards the exact bindings to
+`WorkflowGovernanceProjectAdapter::apply_post_build_verify_episode`. Stale bindings fail
+without a second append. The host must record honest observations in the candidate; the
+command never manufactures deployment or operational evidence.
+
 ## Durable coordination lifecycle
 
 C5.3 persists closed coordination projections alongside the complete episode:
