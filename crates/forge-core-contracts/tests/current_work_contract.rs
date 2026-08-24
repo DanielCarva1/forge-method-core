@@ -11,7 +11,8 @@ use forge_core_contracts::{
     MAX_COLLABORATION_ISOLATION_ID_BYTES, MAX_COLLABORATION_LANES, MAX_COLLABORATION_LANE_ID_BYTES,
     MAX_COLLABORATION_OUTCOME_BYTES, MAX_CURRENT_WORK_DETAIL_BYTES, MAX_CURRENT_WORK_SUMMARY_BYTES,
     MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES, MAX_WORK_FOCUS_TEXT_BYTES,
-    MAX_WORK_FOCUS_UPDATE_INPUT_BYTES, WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
+    MAX_WORK_FOCUS_UPDATE_INPUT_BYTES, QUICK_CYCLE_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
+    QUICK_CYCLE_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION, WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
     WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION,
 };
 
@@ -292,13 +293,21 @@ fn quick_cycle_snapshot_is_optional_closed_and_round_trips() {
 }
 
 #[test]
-fn quick_cycle_v2_inputs_are_closed_bounded_and_keep_v1_readable() {
+fn collaboration_v3_inputs_are_closed_bounded_and_keep_v1_v2_readable() {
     assert_eq!(
         WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
-        "work_focus_accept_input_v2"
+        "work_focus_accept_input_v3"
     );
     assert_eq!(
         WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION,
+        "work_focus_update_input_v3"
+    );
+    assert_eq!(
+        QUICK_CYCLE_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
+        "work_focus_accept_input_v2"
+    );
+    assert_eq!(
+        QUICK_CYCLE_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION,
         "work_focus_update_input_v2"
     );
     let focus = serde_json::json!({
@@ -339,6 +348,24 @@ fn quick_cycle_v2_inputs_are_closed_bounded_and_keep_v1_readable() {
     serde_json::from_value::<WorkflowWorkFocusAcceptInput>(v2_accept.clone())
         .expect("v2 accept input is typed");
 
+    let mut v3_accept = v2_accept.clone();
+    v3_accept["schema_version"] = serde_json::json!("work_focus_accept_input_v3");
+    v3_accept["continuity"]["collaboration"] =
+        serde_json::to_value(sample_collaboration_plan()).expect("collaboration serializes");
+    assert!(
+        serde_json::to_vec(&v3_accept).unwrap().len() <= MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES as usize
+    );
+    let typed_v3 = serde_json::from_value::<WorkflowWorkFocusAcceptInput>(v3_accept.clone())
+        .expect("v3 acceptance input is typed");
+    assert_eq!(
+        typed_v3
+            .continuity
+            .expect("v3 continuity")
+            .collaboration
+            .expect("v3 collaboration"),
+        sample_collaboration_plan()
+    );
+
     let v2_complete = serde_json::json!({
         "schema_version": "work_focus_update_input_v2",
         "expected_snapshot_digest": format!("sha256:{}", "b".repeat(64)),
@@ -364,7 +391,34 @@ fn quick_cycle_v2_inputs_are_closed_bounded_and_keep_v1_readable() {
     serde_json::from_value::<WorkflowWorkFocusUpdateInput>(v2_complete)
         .expect("v2 completion input is typed");
 
-    let mut unknown = v2_accept;
+    let v3_checkpoint = serde_json::json!({
+        "schema_version": "work_focus_update_input_v3",
+        "expected_snapshot_digest": format!("sha256:{}", "b".repeat(64)),
+        "expected_ledger_head_digest": format!("sha256:{}", "c".repeat(64)),
+        "expected_state_version": 24,
+        "expected_work_focus": {
+            "status": "current",
+            "record_digest": format!("sha256:{}", "d".repeat(64))
+        },
+        "change": {
+            "kind": "checkpoint_collaboration",
+            "current_activity": "Persist the complete plan",
+            "next_step": "Run the ready lane",
+            "continuity": {
+                "collaboration": sample_collaboration_plan()
+            }
+        },
+        "recorded_by": "principal.agent.contract-test",
+        "host_provenance": host_provenance
+    });
+    assert!(
+        serde_json::to_vec(&v3_checkpoint).unwrap().len()
+            <= MAX_WORK_FOCUS_UPDATE_INPUT_BYTES as usize
+    );
+    serde_json::from_value::<WorkflowWorkFocusUpdateInput>(v3_checkpoint)
+        .expect("v3 collaboration checkpoint is typed");
+
+    let mut unknown = v3_accept;
     unknown["continuity"]["second_authority"] = serde_json::json!(true);
     assert!(
         serde_json::from_value::<WorkflowWorkFocusAcceptInput>(unknown)

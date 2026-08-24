@@ -796,6 +796,7 @@ compatibility_and_rollout:
   - "Quick Cycle is optional on historical Work Focus events and absence means not recorded, never inferred from current_activity or acceptance_summary."
   - "Adding required Quick Cycle summary fields advances workflow resume beyond v8; adding full closeouts advances Current Work detail beyond v1, and exact consumers update together."
   - "No separate migration writes old Quick Cycle history; replacement hosts receive an honest not-recorded result."
+  - "The first collaboration-bearing Work Focus advances the ledger wire after 0.17; frozen earlier records and digests remain byte-identical."
 
 success_metrics:
   product:

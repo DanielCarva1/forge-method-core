@@ -6,8 +6,10 @@ pub const CURRENT_WORK_CONTEXT_SCHEMA_VERSION: &str = "current_work_context_v2";
 pub const CURRENT_WORK_DETAIL_SCHEMA_VERSION: &str = "current_work_detail_v2";
 pub const LEGACY_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v1";
 pub const LEGACY_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION: &str = "work_focus_update_input_v1";
-pub const WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v2";
-pub const WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION: &str = "work_focus_update_input_v2";
+pub const QUICK_CYCLE_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v2";
+pub const QUICK_CYCLE_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION: &str = "work_focus_update_input_v2";
+pub const WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v3";
+pub const WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION: &str = "work_focus_update_input_v3";
 pub const MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES: u64 = 16 * 1_024;
 pub const MAX_WORK_FOCUS_UPDATE_INPUT_BYTES: u64 = 16 * 1_024;
 pub const MAX_WORK_FOCUS_TEXT_BYTES: usize = 1_024;
@@ -168,6 +170,8 @@ pub struct WorkflowWorkFocusContinuityInput {
     pub evidence_record_digests: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quick_cycle: Option<WorkflowQuickCycleSnapshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collaboration: Option<WorkflowCollaborationPlan>,
 }
 
 /// Closed public input for the first accepted Work Focus.
@@ -196,6 +200,11 @@ pub enum WorkflowWorkFocusChange {
         continuity: Option<WorkflowWorkFocusContinuityInput>,
     },
     CheckpointQuickCycle {
+        current_activity: String,
+        next_step: String,
+        continuity: WorkflowWorkFocusContinuityInput,
+    },
+    CheckpointCollaboration {
         current_activity: String,
         next_step: String,
         continuity: WorkflowWorkFocusContinuityInput,

@@ -123,7 +123,9 @@ use forge_core_contracts::{
     MAX_WORKFLOW_INTENT_ITEM_BYTES, MAX_WORKFLOW_INTENT_LIST_ITEMS,
     MAX_WORKFLOW_INTENT_SOURCE_REF_BYTES, MAX_WORKFLOW_INTENT_TOTAL_BYTES,
     MAX_WORK_FOCUS_LIST_ITEMS, POST_BUILD_VERIFY_CANONICAL_POLICY_RECORDS, PROJECT_LINK_FILE_NAME,
-    PROJECT_LINK_SCHEMA_VERSION, SOLO_COOPERATIVE_APPLICABILITY_DESCRIPTOR_VERSION,
+    PROJECT_LINK_SCHEMA_VERSION, QUICK_CYCLE_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
+    QUICK_CYCLE_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION,
+    SOLO_COOPERATIVE_APPLICABILITY_DESCRIPTOR_VERSION,
     SOLO_COOPERATIVE_APPLICABILITY_POLICY_VERSION, SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION,
     SOLO_COOPERATIVE_CLAIM_DESCRIPTOR_VERSION_V1, SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION,
     SOLO_COOPERATIVE_EVIDENCE_POLICY_VERSION_V1, SOLO_COOPERATIVE_EXECUTION_DESCRIPTOR_VERSION,
@@ -3341,18 +3343,29 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         input: WorkflowWorkFocusAcceptInput,
     ) -> Result<WorkflowWorkFocusAcceptance, WorkflowGovernanceAdapterError> {
-        let legacy_schema = match input.schema_version.as_str() {
-            WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION => false,
-            LEGACY_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION => true,
+        let input_version = match input.schema_version.as_str() {
+            WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION => 3,
+            QUICK_CYCLE_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION => 2,
+            LEGACY_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION => 1,
             _ => {
                 return Err(WorkflowGovernanceAdapterError::InvalidObservation(
                     "Work Focus acceptance input has an unsupported schema version".to_owned(),
                 ));
             }
         };
-        if legacy_schema && input.continuity.is_some() {
+        if input_version == 1 && input.continuity.is_some() {
             return Err(WorkflowGovernanceAdapterError::InvalidObservation(
-                "Work Focus v1 acceptance cannot carry v2 continuity".to_owned(),
+                "Work Focus v1 acceptance cannot carry continuity fields".to_owned(),
+            ));
+        }
+        if input_version < 3
+            && input
+                .continuity
+                .as_ref()
+                .is_some_and(|continuity| continuity.collaboration.is_some())
+        {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "Work Focus collaboration requires v3 acceptance input".to_owned(),
             ));
         }
         if !matches!(
@@ -3385,9 +3398,10 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         input: WorkflowWorkFocusUpdateInput,
     ) -> Result<WorkflowWorkFocusAcceptance, WorkflowGovernanceAdapterError> {
-        let legacy_schema = match input.schema_version.as_str() {
-            WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION => false,
-            LEGACY_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION => true,
+        let input_version = match input.schema_version.as_str() {
+            WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION => 3,
+            QUICK_CYCLE_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION => 2,
+            LEGACY_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION => 1,
             _ => {
                 return Err(WorkflowGovernanceAdapterError::InvalidObservation(
                     "Work Focus update input has an unsupported schema version".to_owned(),
@@ -3403,11 +3417,29 @@ impl WorkflowGovernanceProjectAdapter {
                     .to_owned(),
             ));
         }
+        let collaboration = match &input.change {
+            WorkflowWorkFocusChange::Supersede {
+                continuity: Some(continuity),
+                ..
+            }
+            | WorkflowWorkFocusChange::CheckpointQuickCycle { continuity, .. }
+            | WorkflowWorkFocusChange::CheckpointCollaboration { continuity, .. }
+            | WorkflowWorkFocusChange::Complete {
+                continuity: Some(continuity),
+                ..
+            } => continuity.collaboration.as_ref(),
+            _ => None,
+        };
+        if input_version < 3 && collaboration.is_some() {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "Work Focus collaboration requires v3 update input".to_owned(),
+            ));
+        }
         let change = match input.change {
             WorkflowWorkFocusChange::Supersede { focus, continuity } => {
-                if legacy_schema && continuity.is_some() {
+                if input_version == 1 && continuity.is_some() {
                     return Err(WorkflowGovernanceAdapterError::InvalidObservation(
-                        "Work Focus v1 supersede cannot carry v2 continuity".to_owned(),
+                        "Work Focus v1 supersede cannot carry continuity fields".to_owned(),
                     ));
                 }
                 WorkFocusAdmissionChange::Supersede { focus, continuity }
@@ -3417,13 +3449,30 @@ impl WorkflowGovernanceProjectAdapter {
                 next_step,
                 continuity,
             } => {
-                if legacy_schema || continuity.quick_cycle.is_none() {
+                if input_version == 1 || continuity.quick_cycle.is_none() {
                     return Err(WorkflowGovernanceAdapterError::InvalidObservation(
                         "Quick Cycle checkpoint requires v2 input and an explicit snapshot"
                             .to_owned(),
                     ));
                 }
                 WorkFocusAdmissionChange::CheckpointQuickCycle {
+                    current_activity,
+                    next_step,
+                    continuity,
+                }
+            }
+            WorkflowWorkFocusChange::CheckpointCollaboration {
+                current_activity,
+                next_step,
+                continuity,
+            } => {
+                if input_version < 3 || continuity.collaboration.is_none() {
+                    return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                        "collaboration checkpoint requires v3 input and an explicit plan"
+                            .to_owned(),
+                    ));
+                }
+                WorkFocusAdmissionChange::CheckpointCollaboration {
                     current_activity,
                     next_step,
                     continuity,
@@ -3436,10 +3485,10 @@ impl WorkflowGovernanceProjectAdapter {
             } => WorkFocusAdmissionChange::Complete {
                 completion_summary,
                 next_step,
-                continuity: if legacy_schema {
+                continuity: if input_version == 1 {
                     if continuity.is_some() {
                         return Err(WorkflowGovernanceAdapterError::InvalidObservation(
-                            "Work Focus v1 completion cannot carry v2 continuity".to_owned(),
+                            "Work Focus v1 completion cannot carry continuity fields".to_owned(),
                         ));
                     }
                     None
@@ -3502,6 +3551,7 @@ impl WorkflowGovernanceProjectAdapter {
                 ..
             }
             | WorkFocusAdmissionChange::CheckpointQuickCycle { continuity, .. }
+            | WorkFocusAdmissionChange::CheckpointCollaboration { continuity, .. }
             | WorkFocusAdmissionChange::Complete {
                 continuity: Some(continuity),
                 ..
@@ -3515,6 +3565,28 @@ impl WorkflowGovernanceProjectAdapter {
             } => Some((blocker_record_digests, evidence_record_digests)),
             _ => None,
         };
+        let collaboration = match &change {
+            WorkFocusAdmissionChange::Start {
+                continuity: Some(continuity),
+                ..
+            }
+            | WorkFocusAdmissionChange::Supersede {
+                continuity: Some(continuity),
+                ..
+            }
+            | WorkFocusAdmissionChange::CheckpointQuickCycle { continuity, .. }
+            | WorkFocusAdmissionChange::CheckpointCollaboration { continuity, .. }
+            | WorkFocusAdmissionChange::Complete {
+                continuity: Some(continuity),
+                ..
+            } => continuity.collaboration.as_ref(),
+            _ => None,
+        };
+        if collaboration.is_some_and(|plan| plan.validate().is_err()) {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "Work Focus collaboration plan is invalid".to_owned(),
+            ));
+        }
         if let Some((blocker_record_digests, evidence_record_digests)) = continuity_references {
             let blocker_set = blocker_record_digests.iter().collect::<BTreeSet<_>>();
             let evidence_set = evidence_record_digests.iter().collect::<BTreeSet<_>>();
@@ -3586,6 +3658,7 @@ impl WorkflowGovernanceProjectAdapter {
                 WorkflowExpectedWorkFocus::Current { record_digest },
                 WorkFocusAdmissionChange::Supersede { .. }
                 | WorkFocusAdmissionChange::CheckpointQuickCycle { .. }
+                | WorkFocusAdmissionChange::CheckpointCollaboration { .. }
                 | WorkFocusAdmissionChange::Complete { .. }
                 | WorkFocusAdmissionChange::BindReferences { .. },
                 Some((record, event)),
@@ -3671,6 +3744,7 @@ impl WorkflowGovernanceProjectAdapter {
                     completed.blocker_record_digests = continuity.blocker_record_digests;
                     completed.evidence_record_digests = continuity.evidence_record_digests;
                     completed.quick_cycle = continuity.quick_cycle;
+                    completed.collaboration = continuity.collaboration;
                 }
                 completed.previous_work_focus_record_digest = Some(previous_digest.clone());
                 completed.admission_ledger_head_digest = head.clone();
@@ -3703,6 +3777,39 @@ impl WorkflowGovernanceProjectAdapter {
                 checkpoint.blocker_record_digests = continuity.blocker_record_digests;
                 checkpoint.evidence_record_digests = continuity.evidence_record_digests;
                 checkpoint.quick_cycle = continuity.quick_cycle;
+                checkpoint.collaboration = continuity.collaboration;
+                checkpoint.previous_work_focus_record_digest = Some(previous_digest.clone());
+                checkpoint.admission_ledger_head_digest = head.clone();
+                checkpoint.admission_state_version = state_version;
+                checkpoint.recorded_by = recorded_by;
+                checkpoint.host_provenance = host_provenance;
+                checkpoint.recorded_at_unix = now;
+                checkpoint
+            }
+            WorkFocusAdmissionChange::CheckpointCollaboration {
+                current_activity,
+                next_step,
+                continuity,
+            } => {
+                let (previous_digest, previous_event) = previous
+                    .as_ref()
+                    .expect("collaboration checkpoint requires an exact current focus");
+                if previous_event.state != WorkflowWorkFocusState::Active
+                    || previous_event.objective != objective_binding
+                    || previous_event.phase != phase
+                {
+                    return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                        "only the active Work Focus bound to the current objective and phase can checkpoint collaboration"
+                            .to_owned(),
+                    ));
+                }
+                let mut checkpoint = previous_event.clone();
+                checkpoint.current_activity = current_activity;
+                checkpoint.next_step = next_step;
+                checkpoint.blocker_record_digests = continuity.blocker_record_digests;
+                checkpoint.evidence_record_digests = continuity.evidence_record_digests;
+                checkpoint.quick_cycle = continuity.quick_cycle;
+                checkpoint.collaboration = continuity.collaboration;
                 checkpoint.previous_work_focus_record_digest = Some(previous_digest.clone());
                 checkpoint.admission_ledger_head_digest = head.clone();
                 checkpoint.admission_state_version = state_version;
@@ -7965,6 +8072,11 @@ enum WorkFocusAdmissionChange {
         next_step: String,
         continuity: WorkflowWorkFocusContinuityInput,
     },
+    CheckpointCollaboration {
+        current_activity: String,
+        next_step: String,
+        continuity: WorkflowWorkFocusContinuityInput,
+    },
     Complete {
         completion_summary: String,
         next_step: String,
@@ -7997,12 +8109,13 @@ fn work_focus_event_from_draft(
     host_provenance: forge_core_contracts::WorkflowCooperativeHostProvenance,
     recorded_at_unix: u64,
 ) -> WorkflowWorkFocusRecordedEvent {
-    let (blocker_record_digests, evidence_record_digests, quick_cycle) = continuity
+    let (blocker_record_digests, evidence_record_digests, quick_cycle, collaboration) = continuity
         .map(|continuity| {
             (
                 continuity.blocker_record_digests,
                 continuity.evidence_record_digests,
                 continuity.quick_cycle,
+                continuity.collaboration,
             )
         })
         .unwrap_or_default();
@@ -8025,7 +8138,7 @@ fn work_focus_event_from_draft(
         blocker_record_digests,
         evidence_record_digests,
         quick_cycle,
-        collaboration: None,
+        collaboration,
         previous_work_focus_record_digest,
         admission_ledger_head_digest: admission_ledger_head_digest.to_owned(),
         admission_state_version,

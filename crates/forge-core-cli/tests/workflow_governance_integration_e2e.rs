@@ -22,6 +22,7 @@ use forge_core_contracts::{
     WorkflowEvidenceOutcome, WorkflowEvidenceSubjectKind, WorkflowGovernanceEvent,
     WorkflowGovernanceReceiptDocument, MAX_CURRENT_WORK_DETAIL_BYTES,
     MAX_CURRENT_WORK_SUMMARY_BYTES, MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS,
+    MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES, MAX_WORK_FOCUS_UPDATE_INPUT_BYTES,
     WORKFLOW_BROKER_PUBLIC_REGISTRY_SCHEMA_VERSION, WORKFLOW_BROKER_REQUIRED_EVENT_SCHEMA_VERSION,
 };
 use forge_core_workflow_governance_tcb::{
@@ -2281,6 +2282,260 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
 }
 
 #[test]
+fn collaboration_v3_replaces_the_complete_plan_with_one_write_per_change() {
+    let consumer = Consumer::new_with_prefix("forge-collaboration-persistence-e2e");
+    assert_ok(&consumer.run(&["init"]));
+    let next = assert_ok(&consumer.run(&["next"]));
+    let packet_digest = next["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("cooperative packet digest");
+    let objective_input = consumer.write_json(
+        "collaboration objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Coordinate two bounded Forge lanes without another state store",
+                "constraints": ["persist only material plan changes"],
+                "unacceptable_outcomes": ["copy claim or isolation state"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.collaboration-e2e",
+                "interaction_ref": "turn.accept-objective",
+                "conversation_digest": format!("sha256:{}", "1".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    assert_ok(&run_cooperative_input(
+        &consumer,
+        packet_digest,
+        &objective_input,
+    ));
+    let before = assert_ok(&consumer.run(&["resume"]));
+    let initial_plan = serde_json::json!({
+        "lanes": [
+            {
+                "lane_id": "lane.contract",
+                "outcome": "Define the bounded collaboration contract",
+                "isolation_id": "isolation.contract"
+            },
+            {
+                "lane_id": "lane.persistence",
+                "outcome": "Persist the complete collaboration plan",
+                "depends_on": ["lane.contract"]
+            }
+        ]
+    });
+    let provenance = |interaction_ref: &str, digest_digit: &str| {
+        serde_json::json!({
+            "host_id": "host.cli-e2e",
+            "host_version": "test",
+            "session_ref": "session.collaboration-e2e",
+            "interaction_ref": interaction_ref,
+            "conversation_digest": format!("sha256:{}", digest_digit.repeat(64)),
+            "observed_at_unix": 1
+        })
+    };
+    let records_before = work_focus_record_count(&consumer.state);
+    let accept_input = consumer.write_json(
+        "collaboration accept.json",
+        &serde_json::json!({
+            "schema_version": "work_focus_accept_input_v3",
+            "expected_snapshot_digest": before["data"]["snapshot_digest"],
+            "expected_ledger_head_digest": before["data"]["ledger_head_digest"],
+            "expected_state_version": before["data"]["state_version"],
+            "expected_work_focus": { "status": "absent" },
+            "focus": {
+                "focus_id": "focus.collaboration.persistence-e2e",
+                "title": "Persist a bounded collaboration plan",
+                "intended_outcome": "One Work Focus coordinates independent lanes",
+                "acceptance_summary": "Each material plan change is one atomic write",
+                "affected_area_refs": ["crates/forge-core-kernel"],
+                "current_activity": "Accept the initial lane plan",
+                "next_step": "Assign the persistence isolation"
+            },
+            "continuity": { "collaboration": initial_plan },
+            "recorded_by": "principal.agent.cli-e2e",
+            "host_provenance": provenance("turn.accept-collaboration", "2")
+        }),
+    );
+    assert!(
+        fs::metadata(&accept_input)
+            .expect("accept input metadata")
+            .len()
+            <= MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES
+    );
+    let accepted = assert_ok(&run_current_work_accept(&consumer, &accept_input));
+    assert_eq!(work_focus_record_count(&consumer.state), records_before + 1);
+    assert_eq!(
+        accepted["data"]["focus_record"]["event"]["payload"]["collaboration"],
+        initial_plan
+    );
+
+    let assigned_plan = serde_json::json!({
+        "lanes": [
+            {
+                "lane_id": "lane.contract",
+                "outcome": "Define the bounded collaboration contract",
+                "isolation_id": "isolation.contract"
+            },
+            {
+                "lane_id": "lane.persistence",
+                "outcome": "Persist the complete collaboration plan",
+                "depends_on": ["lane.contract"],
+                "isolation_id": "isolation.persistence"
+            }
+        ]
+    });
+    let v2_reject_input = consumer.write_json(
+        "collaboration v2 reject.json",
+        &serde_json::json!({
+            "schema_version": "work_focus_update_input_v2",
+            "expected_snapshot_digest": accepted["data"]["snapshot_digest"],
+            "expected_ledger_head_digest": accepted["data"]["ledger_head_digest"],
+            "expected_state_version": accepted["data"]["state_version"],
+            "expected_work_focus": {
+                "status": "current",
+                "record_digest": accepted["data"]["focus_record"]["record_digest"]
+            },
+            "change": {
+                "kind": "checkpoint_collaboration",
+                "current_activity": "Attempt a version-confused update",
+                "next_step": "Reject before append",
+                "continuity": { "collaboration": assigned_plan }
+            },
+            "recorded_by": "principal.agent.cli-e2e",
+            "host_provenance": provenance("turn.reject-v2-collaboration", "3")
+        }),
+    );
+    let wal = consumer.state.join("wal/workflow-governance.ndjson");
+    let wal_after_accept = fs::read(&wal).expect("WAL after accept");
+    assert!(!run_current_work_update(&consumer, &v2_reject_input)
+        .status
+        .success());
+    assert_eq!(
+        fs::read(&wal).expect("WAL after v2 reject"),
+        wal_after_accept
+    );
+
+    let checkpoint_input = consumer.write_json(
+        "collaboration checkpoint.json",
+        &serde_json::json!({
+            "schema_version": "work_focus_update_input_v3",
+            "expected_snapshot_digest": accepted["data"]["snapshot_digest"],
+            "expected_ledger_head_digest": accepted["data"]["ledger_head_digest"],
+            "expected_state_version": accepted["data"]["state_version"],
+            "expected_work_focus": {
+                "status": "current",
+                "record_digest": accepted["data"]["focus_record"]["record_digest"]
+            },
+            "change": {
+                "kind": "checkpoint_collaboration",
+                "current_activity": "Assign the persistence isolation",
+                "next_step": "Supersede with the integration focus",
+                "continuity": { "collaboration": assigned_plan }
+            },
+            "recorded_by": "principal.agent.cli-e2e",
+            "host_provenance": provenance("turn.checkpoint-collaboration", "4")
+        }),
+    );
+    assert!(
+        fs::metadata(&checkpoint_input)
+            .expect("checkpoint input metadata")
+            .len()
+            <= MAX_WORK_FOCUS_UPDATE_INPUT_BYTES
+    );
+    let checkpointed = assert_ok(&run_current_work_update(&consumer, &checkpoint_input));
+    assert_eq!(work_focus_record_count(&consumer.state), records_before + 2);
+    assert_eq!(
+        checkpointed["data"]["focus_record"]["event"]["payload"]["collaboration"],
+        assigned_plan
+    );
+    let wal_after_checkpoint = fs::read(&wal).expect("WAL after checkpoint");
+    assert!(!run_current_work_update(&consumer, &checkpoint_input)
+        .status
+        .success());
+    assert_eq!(
+        fs::read(&wal).expect("WAL after stale retry"),
+        wal_after_checkpoint
+    );
+
+    let integration_plan = serde_json::json!({
+        "lanes": [{
+            "lane_id": "lane.integration",
+            "outcome": "Integrate the completed contract and persistence lanes",
+            "isolation_id": "isolation.integration"
+        }]
+    });
+    let supersede_input = consumer.write_json(
+        "collaboration supersede.json",
+        &serde_json::json!({
+            "schema_version": "work_focus_update_input_v3",
+            "expected_snapshot_digest": checkpointed["data"]["snapshot_digest"],
+            "expected_ledger_head_digest": checkpointed["data"]["ledger_head_digest"],
+            "expected_state_version": checkpointed["data"]["state_version"],
+            "expected_work_focus": {
+                "status": "current",
+                "record_digest": checkpointed["data"]["focus_record"]["record_digest"]
+            },
+            "change": {
+                "kind": "supersede",
+                "focus": {
+                    "focus_id": "focus.collaboration.integration-e2e",
+                    "title": "Integrate the collaboration lanes",
+                    "intended_outcome": "One bounded integration focus follows the lane work",
+                    "acceptance_summary": "The successor carries only its own stable lane plan",
+                    "current_activity": "Integrate the lane outcomes",
+                    "next_step": "Complete the integration focus"
+                },
+                "continuity": { "collaboration": integration_plan }
+            },
+            "recorded_by": "principal.agent.cli-e2e",
+            "host_provenance": provenance("turn.supersede-collaboration", "5")
+        }),
+    );
+    let superseded = assert_ok(&run_current_work_update(&consumer, &supersede_input));
+    assert_eq!(work_focus_record_count(&consumer.state), records_before + 3);
+    assert_eq!(
+        superseded["data"]["focus_record"]["event"]["payload"]["collaboration"],
+        integration_plan
+    );
+
+    let complete_input = consumer.write_json(
+        "collaboration complete.json",
+        &serde_json::json!({
+            "schema_version": "work_focus_update_input_v3",
+            "expected_snapshot_digest": superseded["data"]["snapshot_digest"],
+            "expected_ledger_head_digest": superseded["data"]["ledger_head_digest"],
+            "expected_state_version": superseded["data"]["state_version"],
+            "expected_work_focus": {
+                "status": "current",
+                "record_digest": superseded["data"]["focus_record"]["record_digest"]
+            },
+            "change": {
+                "kind": "complete",
+                "completion_summary": "The collaboration plan was integrated atomically",
+                "next_step": "Expose progressive readback",
+                "continuity": { "collaboration": integration_plan }
+            },
+            "recorded_by": "principal.agent.cli-e2e",
+            "host_provenance": provenance("turn.complete-collaboration", "6")
+        }),
+    );
+    let completed = assert_ok(&run_current_work_update(&consumer, &complete_input));
+    assert_eq!(completed["data"]["current_work"]["status"], "completed");
+    assert_eq!(work_focus_record_count(&consumer.state), records_before + 4);
+    assert_eq!(
+        completed["data"]["focus_record"]["event"]["payload"]["collaboration"],
+        integration_plan
+    );
+}
+
+#[test]
 fn cooperative_objective_grounding_survives_restart_and_local_writes() {
     let consumer = Consumer::new();
     assert_ok(&consumer.run(&["init"]));
@@ -3681,8 +3936,8 @@ fn public_episode_apply_routes_evolve_changes_and_resume_context() {
     assert_eq!(after_retry["data"]["current_phase"], "6-evolve");
     assert_eq!(after_retry["data"]["ledger_head_digest"], evolve_head);
 
-    let clarification_packet = after_retry["data"]["authorization"]
-        ["objective_management_packet"]["packet_digest"]
+    let clarification_packet = after_retry["data"]["authorization"]["objective_management_packet"]
+        ["packet_digest"]
         .as_str()
         .expect("Evolve objective-management packet")
         .to_owned();
@@ -3747,8 +4002,8 @@ fn public_episode_apply_routes_evolve_changes_and_resume_context() {
         "an exact clarification retry must not duplicate the objective revision"
     );
 
-    let material_packet = clarified["data"]["next"]["authorization"]
-        ["objective_management_packet"]["packet_digest"]
+    let material_packet = clarified["data"]["next"]["authorization"]["objective_management_packet"]
+        ["packet_digest"]
         .as_str()
         .expect("fresh Evolve objective-management packet")
         .to_owned();
