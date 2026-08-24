@@ -25,6 +25,11 @@ pub const MAX_QUICK_CYCLE_CLOSEOUT_SUMMARY_BYTES: usize = 768;
 pub const MAX_QUICK_CYCLE_EXPANSION_REASON_BYTES: usize = 512;
 pub const MAX_QUICK_CYCLE_EXPANSION_ITEMS: usize = 4;
 pub const MAX_QUICK_CYCLE_EVIDENCE_ITEMS: usize = 2;
+pub const MAX_COLLABORATION_LANES: usize = 8;
+pub const MAX_COLLABORATION_DEPENDENCIES_PER_LANE: usize = 7;
+pub const MAX_COLLABORATION_LANE_ID_BYTES: usize = 128;
+pub const MAX_COLLABORATION_OUTCOME_BYTES: usize = 256;
+pub const MAX_COLLABORATION_ISOLATION_ID_BYTES: usize = 128;
 
 /// Exact objective revision to which one Work Focus belongs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -94,6 +99,29 @@ pub struct WorkflowQuickCycleSnapshot {
     pub stage_closeouts: WorkflowQuickCycleStageCloseouts,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub expansion_history: Vec<WorkflowQuickCycleExpansion>,
+}
+
+/// One independently useful outcome in a bounded collaboration plan. Runtime
+/// ownership, worktree, path claims, and integration evidence remain in their
+/// existing contracts and are deliberately not copied here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCollaborationLane {
+    pub lane_id: StableId,
+    pub outcome: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub depends_on: Vec<StableId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub isolation_id: Option<StableId>,
+}
+
+/// Optional task-local plan for cooperating agents. This is only the stable
+/// plan: mutable execution state is derived later from claim, isolation, and
+/// promotion owners rather than persisted a second time.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCollaborationPlan {
+    pub lanes: Vec<WorkflowCollaborationLane>,
 }
 
 /// Exact Work Focus state observed by the host before proposing a change.
@@ -386,6 +414,74 @@ pub enum WorkflowCurrentWorkValidationError {
     ListBound,
     InvalidDigest,
     PayloadTooLarge,
+    DuplicateLaneId,
+    DuplicateLaneDependency,
+    UnknownLaneDependency,
+    SelfLaneDependency,
+    CyclicLaneDependency,
+}
+
+impl WorkflowCollaborationPlan {
+    pub fn validate(&self) -> Result<(), WorkflowCurrentWorkValidationError> {
+        if self.lanes.is_empty() || self.lanes.len() > MAX_COLLABORATION_LANES {
+            return Err(WorkflowCurrentWorkValidationError::ListBound);
+        }
+
+        for (lane_index, lane) in self.lanes.iter().enumerate() {
+            validate_collaboration_id(&lane.lane_id, MAX_COLLABORATION_LANE_ID_BYTES)?;
+            if lane.outcome.trim().is_empty()
+                || lane.outcome.as_bytes().len() > MAX_COLLABORATION_OUTCOME_BYTES
+            {
+                return Err(WorkflowCurrentWorkValidationError::FieldBound);
+            }
+            if let Some(isolation_id) = lane.isolation_id.as_ref() {
+                validate_collaboration_id(isolation_id, MAX_COLLABORATION_ISOLATION_ID_BYTES)?;
+            }
+            if self.lanes[..lane_index]
+                .iter()
+                .any(|other| other.lane_id == lane.lane_id)
+            {
+                return Err(WorkflowCurrentWorkValidationError::DuplicateLaneId);
+            }
+            if lane.depends_on.len() > MAX_COLLABORATION_DEPENDENCIES_PER_LANE {
+                return Err(WorkflowCurrentWorkValidationError::ListBound);
+            }
+            for (dependency_index, dependency) in lane.depends_on.iter().enumerate() {
+                validate_collaboration_id(dependency, MAX_COLLABORATION_LANE_ID_BYTES)?;
+                if dependency == &lane.lane_id {
+                    return Err(WorkflowCurrentWorkValidationError::SelfLaneDependency);
+                }
+                if lane.depends_on[..dependency_index].contains(dependency) {
+                    return Err(WorkflowCurrentWorkValidationError::DuplicateLaneDependency);
+                }
+                if !self.lanes.iter().any(|other| &other.lane_id == dependency) {
+                    return Err(WorkflowCurrentWorkValidationError::UnknownLaneDependency);
+                }
+            }
+        }
+
+        let mut resolved = vec![false; self.lanes.len()];
+        for _ in 0..self.lanes.len() {
+            let next = self
+                .lanes
+                .iter()
+                .enumerate()
+                .position(|(lane_index, lane)| {
+                    !resolved[lane_index]
+                        && lane.depends_on.iter().all(|dependency| {
+                            self.lanes
+                                .iter()
+                                .position(|other| &other.lane_id == dependency)
+                                .is_some_and(|dependency_index| resolved[dependency_index])
+                        })
+                });
+            let Some(next) = next else {
+                return Err(WorkflowCurrentWorkValidationError::CyclicLaneDependency);
+            };
+            resolved[next] = true;
+        }
+        Ok(())
+    }
 }
 
 impl WorkflowCurrentWorkContext {
@@ -625,6 +721,16 @@ fn validate_objective(
 
 fn validate_text(value: &str) -> Result<(), WorkflowCurrentWorkValidationError> {
     if value.trim().is_empty() || value.as_bytes().len() > MAX_WORK_FOCUS_TEXT_BYTES {
+        return Err(WorkflowCurrentWorkValidationError::FieldBound);
+    }
+    Ok(())
+}
+
+fn validate_collaboration_id(
+    value: &StableId,
+    max_bytes: usize,
+) -> Result<(), WorkflowCurrentWorkValidationError> {
+    if value.0.trim().is_empty() || value.0.as_bytes().len() > max_bytes {
         return Err(WorkflowCurrentWorkValidationError::FieldBound);
     }
     Ok(())

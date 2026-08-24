@@ -1,14 +1,16 @@
 use forge_core_contracts::{
-    Phase, PrincipalId, RepoPath, StableId, WorkflowCooperativeHostProvenance,
-    WorkflowCurrentWorkAuthority, WorkflowCurrentWorkContext, WorkflowCurrentWorkDetail,
-    WorkflowCurrentWorkDetailFocus, WorkflowCurrentWorkQuickCycleState,
+    Phase, PrincipalId, RepoPath, StableId, WorkflowCollaborationLane, WorkflowCollaborationPlan,
+    WorkflowCooperativeHostProvenance, WorkflowCurrentWorkAuthority, WorkflowCurrentWorkContext,
+    WorkflowCurrentWorkDetail, WorkflowCurrentWorkDetailFocus, WorkflowCurrentWorkQuickCycleState,
     WorkflowCurrentWorkQuickCycleSummary, WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary,
     WorkflowCurrentWorkValidationError, WorkflowQuickCycleCloseout, WorkflowQuickCycleExpansion,
     WorkflowQuickCycleSnapshot, WorkflowQuickCycleStageCloseouts, WorkflowWorkFocusAcceptInput,
     WorkflowWorkFocusObjectiveBinding, WorkflowWorkFocusRecordedEvent, WorkflowWorkFocusState,
     WorkflowWorkFocusUpdateInput, CURRENT_WORK_CONTEXT_SCHEMA_VERSION,
-    CURRENT_WORK_DETAIL_SCHEMA_VERSION, MAX_CURRENT_WORK_DETAIL_BYTES,
-    MAX_CURRENT_WORK_SUMMARY_BYTES, MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES, MAX_WORK_FOCUS_TEXT_BYTES,
+    CURRENT_WORK_DETAIL_SCHEMA_VERSION, MAX_COLLABORATION_DEPENDENCIES_PER_LANE,
+    MAX_COLLABORATION_ISOLATION_ID_BYTES, MAX_COLLABORATION_LANES, MAX_COLLABORATION_LANE_ID_BYTES,
+    MAX_COLLABORATION_OUTCOME_BYTES, MAX_CURRENT_WORK_DETAIL_BYTES, MAX_CURRENT_WORK_SUMMARY_BYTES,
+    MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES, MAX_WORK_FOCUS_TEXT_BYTES,
     MAX_WORK_FOCUS_UPDATE_INPUT_BYTES, WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
     WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION,
 };
@@ -89,6 +91,25 @@ fn sample_quick_cycle() -> WorkflowQuickCycleSnapshot {
     }
 }
 
+fn sample_collaboration_plan() -> WorkflowCollaborationPlan {
+    WorkflowCollaborationPlan {
+        lanes: vec![
+            WorkflowCollaborationLane {
+                lane_id: StableId("lane.contract".into()),
+                outcome: "Define the bounded collaboration contract.".into(),
+                depends_on: Vec::new(),
+                isolation_id: Some(StableId("isolation.contract".into())),
+            },
+            WorkflowCollaborationLane {
+                lane_id: StableId("lane.persistence".into()),
+                outcome: "Persist the accepted plan atomically.".into(),
+                depends_on: vec![StableId("lane.contract".into())],
+                isolation_id: None,
+            },
+        ],
+    }
+}
+
 #[test]
 fn work_focus_event_round_trips_without_gaining_authority() {
     let event = sample_event();
@@ -100,6 +121,130 @@ fn work_focus_event_round_trips_without_gaining_authority() {
     let decoded: WorkflowWorkFocusRecordedEvent =
         serde_json::from_value(encoded).expect("event deserializes");
     assert_eq!(decoded, event);
+}
+
+#[test]
+fn collaboration_plan_is_bounded_closed_and_does_not_change_the_event_wire() {
+    let plan = sample_collaboration_plan();
+    assert_eq!(MAX_COLLABORATION_LANES, 8);
+    assert_eq!(MAX_COLLABORATION_DEPENDENCIES_PER_LANE, 7);
+    assert_eq!(MAX_COLLABORATION_LANE_ID_BYTES, 128);
+    assert_eq!(MAX_COLLABORATION_OUTCOME_BYTES, 256);
+    assert_eq!(MAX_COLLABORATION_ISOLATION_ID_BYTES, 128);
+    assert_eq!(plan.validate(), Ok(()));
+
+    let encoded = serde_json::to_value(&plan).expect("collaboration plan serializes");
+    let decoded: WorkflowCollaborationPlan =
+        serde_json::from_value(encoded.clone()).expect("collaboration plan deserializes");
+    assert_eq!(decoded, plan);
+
+    let mut unknown = encoded;
+    unknown["lanes"][0]
+        .as_object_mut()
+        .expect("lane object")
+        .insert(
+            "agent_id".into(),
+            serde_json::json!("agent.duplicate-owner"),
+        );
+    assert!(serde_json::from_value::<WorkflowCollaborationPlan>(unknown)
+        .expect_err("unknown lane fields fail closed")
+        .to_string()
+        .contains("unknown field"));
+
+    let old_event = serde_json::to_value(sample_event()).expect("old event serializes");
+    assert!(old_event.get("collaboration").is_none());
+}
+
+#[test]
+fn collaboration_plan_rejects_invalid_bounds_and_dependency_graphs() {
+    let mut empty = sample_collaboration_plan();
+    empty.lanes.clear();
+    assert_eq!(
+        empty.validate(),
+        Err(WorkflowCurrentWorkValidationError::ListBound)
+    );
+
+    let mut too_many_lanes = sample_collaboration_plan();
+    too_many_lanes.lanes = (0..=MAX_COLLABORATION_LANES)
+        .map(|index| WorkflowCollaborationLane {
+            lane_id: StableId(format!("lane.{index}")),
+            outcome: format!("Outcome {index}"),
+            depends_on: Vec::new(),
+            isolation_id: None,
+        })
+        .collect();
+    assert_eq!(
+        too_many_lanes.validate(),
+        Err(WorkflowCurrentWorkValidationError::ListBound)
+    );
+
+    let mut bad_outcome = sample_collaboration_plan();
+    bad_outcome.lanes[0].outcome = "o".repeat(MAX_COLLABORATION_OUTCOME_BYTES + 1);
+    assert_eq!(
+        bad_outcome.validate(),
+        Err(WorkflowCurrentWorkValidationError::FieldBound)
+    );
+
+    let mut bad_lane_id = sample_collaboration_plan();
+    bad_lane_id.lanes[0].lane_id = StableId("l".repeat(MAX_COLLABORATION_LANE_ID_BYTES + 1));
+    assert_eq!(
+        bad_lane_id.validate(),
+        Err(WorkflowCurrentWorkValidationError::FieldBound)
+    );
+
+    let mut bad_isolation_id = sample_collaboration_plan();
+    bad_isolation_id.lanes[0].isolation_id = Some(StableId(
+        "i".repeat(MAX_COLLABORATION_ISOLATION_ID_BYTES + 1),
+    ));
+    assert_eq!(
+        bad_isolation_id.validate(),
+        Err(WorkflowCurrentWorkValidationError::FieldBound)
+    );
+
+    let mut too_many_dependencies = sample_collaboration_plan();
+    too_many_dependencies.lanes[1].depends_on =
+        vec![StableId("lane.contract".into()); MAX_COLLABORATION_DEPENDENCIES_PER_LANE + 1];
+    assert_eq!(
+        too_many_dependencies.validate(),
+        Err(WorkflowCurrentWorkValidationError::ListBound)
+    );
+
+    let mut duplicate_lane = sample_collaboration_plan();
+    duplicate_lane.lanes[1].lane_id = duplicate_lane.lanes[0].lane_id.clone();
+    assert_eq!(
+        duplicate_lane.validate(),
+        Err(WorkflowCurrentWorkValidationError::DuplicateLaneId)
+    );
+
+    let mut duplicate_dependency = sample_collaboration_plan();
+    duplicate_dependency.lanes[1]
+        .depends_on
+        .push(StableId("lane.contract".into()));
+    assert_eq!(
+        duplicate_dependency.validate(),
+        Err(WorkflowCurrentWorkValidationError::DuplicateLaneDependency)
+    );
+
+    let mut unknown_dependency = sample_collaboration_plan();
+    unknown_dependency.lanes[1].depends_on = vec![StableId("lane.missing".into())];
+    assert_eq!(
+        unknown_dependency.validate(),
+        Err(WorkflowCurrentWorkValidationError::UnknownLaneDependency)
+    );
+
+    let mut self_dependency = sample_collaboration_plan();
+    self_dependency.lanes[0].depends_on = vec![StableId("lane.contract".into())];
+    assert_eq!(
+        self_dependency.validate(),
+        Err(WorkflowCurrentWorkValidationError::SelfLaneDependency)
+    );
+
+    let mut cycle = sample_collaboration_plan();
+    cycle.lanes[0].depends_on = vec![StableId("lane.persistence".into())];
+    assert_eq!(
+        cycle.validate(),
+        Err(WorkflowCurrentWorkValidationError::CyclicLaneDependency)
+    );
 }
 
 #[test]
