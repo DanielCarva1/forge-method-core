@@ -13,6 +13,7 @@ use forge_core_contracts::request::RequestStatus;
 use forge_core_contracts::workflow_governance::{
     WorkflowCooperativeAuthorityBasis, WorkflowCooperativeObjectiveRevisionKind,
     WorkflowReadinessProfile, MAX_WORKFLOW_COOPERATIVE_HOST_TEXT_BYTES,
+    WORKFLOW_GOVERNANCE_COLLABORATION_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_COOPERATIVE_EVIDENCE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_LEDGER_SCHEMA_VERSION,
     WORKFLOW_GOVERNANCE_COOPERATIVE_OBJECTIVE_REVISION_LEDGER_SCHEMA_VERSION,
@@ -2034,6 +2035,7 @@ fn recover_from_reader(
             && document.schema_version
                 != WORKFLOW_GOVERNANCE_WORK_FOCUS_BINDINGS_LEDGER_SCHEMA_VERSION
             && document.schema_version != WORKFLOW_GOVERNANCE_QUICK_CYCLE_LEDGER_SCHEMA_VERSION
+            && document.schema_version != WORKFLOW_GOVERNANCE_COLLABORATION_LEDGER_SCHEMA_VERSION
         {
             return Err(WorkflowGovernanceLedgerError::UnsupportedSchema {
                 line: line_number,
@@ -2084,6 +2086,7 @@ fn recover_from_reader(
         let is_work_focus = work_focus_wire_level >= 1;
         let is_work_focus_bindings = work_focus_wire_level >= 2;
         let is_quick_cycle = work_focus_wire_level == 3;
+        let is_collaboration = work_focus_wire_level == 4;
         let is_native_host_origin = matches!(
             &record.event,
             WorkflowGovernanceEvent::BrokerOriginApplied(event)
@@ -2112,7 +2115,9 @@ fn recover_from_reader(
         let intent_wire_required = is_intent_revision || identity_state.intent_revision_seen;
         let effective_wire_required =
             is_domain_transition || identity_state.active_effective.is_some();
-        let expected_schema = if is_quick_cycle || identity_state.quick_cycle_seen {
+        let expected_schema = if is_collaboration || identity_state.collaboration_seen {
+            WORKFLOW_GOVERNANCE_COLLABORATION_LEDGER_SCHEMA_VERSION
+        } else if is_quick_cycle || identity_state.quick_cycle_seen {
             WORKFLOW_GOVERNANCE_QUICK_CYCLE_LEDGER_SCHEMA_VERSION
         } else if is_work_focus_bindings || identity_state.work_focus_bindings_seen {
             WORKFLOW_GOVERNANCE_WORK_FOCUS_BINDINGS_LEDGER_SCHEMA_VERSION
@@ -2251,6 +2256,7 @@ struct RecoveredIdentityState {
     work_focus_seen: bool,
     work_focus_bindings_seen: bool,
     quick_cycle_seen: bool,
+    collaboration_seen: bool,
     latest_cooperative_objective: Option<forge_core_contracts::CooperativeObjectiveAcceptedEvent>,
     latest_cooperative_objective_record_digest: Option<String>,
     latest_cooperative_objective_record_sequence: Option<u64>,
@@ -2490,6 +2496,7 @@ fn validate_recovered_semantics(
         identity.work_focus_bindings_seen |=
             !event.blocker_record_digests.is_empty() || !event.evidence_record_digests.is_empty();
         identity.quick_cycle_seen |= event.quick_cycle.is_some();
+        identity.collaboration_seen |= event.collaboration.is_some();
         identity.latest_work_focus = Some(event.clone());
         identity.latest_work_focus_record_digest = Some(record.record_digest.clone());
     }
@@ -2923,6 +2930,7 @@ fn event_contains_prior_cooperative_evidence(event: &WorkflowGovernanceEvent) ->
 
 fn work_focus_wire_level(event: &WorkflowGovernanceEvent) -> u8 {
     match event {
+        WorkflowGovernanceEvent::WorkFocusRecorded(focus) if focus.collaboration.is_some() => 4,
         WorkflowGovernanceEvent::WorkFocusRecorded(focus) if focus.quick_cycle.is_some() => 3,
         WorkflowGovernanceEvent::WorkFocusRecorded(focus)
             if !focus.blocker_record_digests.is_empty()
@@ -2940,6 +2948,7 @@ fn ledger_wire_schema(
     event: &WorkflowGovernanceEvent,
 ) -> &'static str {
     match work_focus_wire_level(event).max(projection.work_focus_wire_level()) {
+        4 => return WORKFLOW_GOVERNANCE_COLLABORATION_LEDGER_SCHEMA_VERSION,
         3 => return WORKFLOW_GOVERNANCE_QUICK_CYCLE_LEDGER_SCHEMA_VERSION,
         2 => return WORKFLOW_GOVERNANCE_WORK_FOCUS_BINDINGS_LEDGER_SCHEMA_VERSION,
         1 => return WORKFLOW_GOVERNANCE_CURRENT_WORK_LEDGER_SCHEMA_VERSION,
@@ -4405,6 +4414,16 @@ fn validate_work_focus_shape(
         });
     }
     validate_quick_cycle_shape(event, line)?;
+    if event
+        .collaboration
+        .as_ref()
+        .is_some_and(|plan| plan.validate().is_err())
+    {
+        return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+            line,
+            reason: "Work Focus collaboration plan is invalid",
+        });
+    }
     for digest in [
         event.objective.objective_digest.as_str(),
         event.objective.accepted_objective_record_digest.as_str(),
@@ -6976,6 +6995,25 @@ mod replacement_protocol_tests {
         }
     }
 
+    fn collaboration_plan() -> forge_core_contracts::WorkflowCollaborationPlan {
+        forge_core_contracts::WorkflowCollaborationPlan {
+            lanes: vec![
+                forge_core_contracts::WorkflowCollaborationLane {
+                    lane_id: StableId("lane.contract".to_owned()),
+                    outcome: "Define the bounded collaboration contract".to_owned(),
+                    depends_on: Vec::new(),
+                    isolation_id: Some(StableId("isolation.contract".to_owned())),
+                },
+                forge_core_contracts::WorkflowCollaborationLane {
+                    lane_id: StableId("lane.persistence".to_owned()),
+                    outcome: "Persist the collaboration plan atomically".to_owned(),
+                    depends_on: vec![StableId("lane.contract".to_owned())],
+                    isolation_id: None,
+                },
+            ],
+        }
+    }
+
     fn next_work_focus_event(
         projection: &WorkflowGovernanceLedgerProjection,
     ) -> WorkflowWorkFocusRecordedEvent {
@@ -7030,6 +7068,7 @@ mod replacement_protocol_tests {
             blocker_record_digests: Vec::new(),
             evidence_record_digests: Vec::new(),
             quick_cycle: None,
+            collaboration: None,
             previous_work_focus_record_digest: None,
             admission_ledger_head_digest: projection.head_digest.clone().expect("objective head"),
             admission_state_version: projection.current_state_version().expect("objective state"),
@@ -7321,6 +7360,133 @@ mod replacement_protocol_tests {
             recover_under_lock(&root),
             Err(WorkflowGovernanceLedgerError::UnsupportedSchema { line: 3, .. })
         ));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn collaboration_advances_to_0_18_without_rewriting_history() {
+        let root = test_root("collaboration-wire");
+        let (projection, objective_record) =
+            initialize_quick_cycle_focus(&root, "objective.workflow.collaboration-wire-test");
+        let historical =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("historical WAL");
+        let mut event = work_focus_event(&projection, &objective_record);
+        event.collaboration = Some(collaboration_plan());
+        let collaboration_record = lock_workflow_governance_ledger_tcb(&root)
+            .expect("collaboration ledger")
+            .record_work_focus_unchecked_tcb(
+                projection.head_digest.as_deref().expect("objective head"),
+                &test_identity(),
+                projection.current_state_version().expect("objective state"),
+                event,
+            )
+            .expect("record collaboration");
+
+        let collaboration_wal =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("0.18 WAL");
+        assert_eq!(
+            &collaboration_wal[..historical.len()],
+            historical.as_slice()
+        );
+        let collaboration_line = collaboration_wal
+            .split_inclusive(|byte| *byte == b'\n')
+            .last()
+            .expect("0.18 record");
+        assert_eq!(
+            schema_from_line(collaboration_line),
+            WORKFLOW_GOVERNANCE_COLLABORATION_LEDGER_SCHEMA_VERSION
+        );
+        let projection = recover_under_lock(&root).expect("recover 0.18");
+        assert_eq!(
+            projection.head_digest,
+            Some(collaboration_record.record_digest.clone())
+        );
+
+        lock_workflow_governance_ledger_tcb(&root)
+            .expect("successor ledger")
+            .append_unchecked_tcb_event(
+                &collaboration_record.record_digest,
+                &test_identity(),
+                projection
+                    .current_state_version()
+                    .expect("collaboration state"),
+                WorkflowGovernanceEvent::DecisionNeedRaised(
+                    forge_core_contracts::DecisionNeedRaisedEvent {
+                        policy_ref: StableId("policy.workflow.collaboration-wire-test".to_owned()),
+                        decision_ref: StableId(
+                            "decision.workflow.collaboration-wire-test".to_owned(),
+                        ),
+                        authority_scope: StableId("workflow.decision.resolve".to_owned()),
+                        question_digest: sha256_digest(b"collaboration wire question"),
+                    },
+                ),
+            )
+            .expect("record successor");
+        let successor_wal =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("successor WAL");
+        let successor_line = successor_wal
+            .split_inclusive(|byte| *byte == b'\n')
+            .last()
+            .expect("successor record");
+        assert_eq!(
+            schema_from_line(successor_line),
+            WORKFLOW_GOVERNANCE_COLLABORATION_LEDGER_SCHEMA_VERSION
+        );
+
+        let downgraded = String::from_utf8(collaboration_line.to_vec())
+            .expect("0.18 UTF-8")
+            .replacen(
+                &format!(
+                    "\"schema_version\":\"{WORKFLOW_GOVERNANCE_COLLABORATION_LEDGER_SCHEMA_VERSION}\""
+                ),
+                &format!(
+                    "\"schema_version\":\"{WORKFLOW_GOVERNANCE_QUICK_CYCLE_LEDGER_SCHEMA_VERSION}\""
+                ),
+                1,
+            );
+        let mut downgraded_wal = historical;
+        downgraded_wal.extend_from_slice(downgraded.as_bytes());
+        fs::write(
+            root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH),
+            downgraded_wal,
+        )
+        .expect("install downgraded collaboration");
+        assert!(matches!(
+            recover_under_lock(&root),
+            Err(WorkflowGovernanceLedgerError::UnsupportedSchema { line: 3, .. })
+        ));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn collaboration_rejects_invalid_plan_before_append() {
+        let root = test_root("collaboration-invalid-plan");
+        let (projection, objective_record) = initialize_quick_cycle_focus(
+            &root,
+            "objective.workflow.collaboration-invalid-plan-test",
+        );
+        let mut event = work_focus_event(&projection, &objective_record);
+        let mut plan = collaboration_plan();
+        plan.lanes[0].depends_on = vec![StableId("lane.persistence".to_owned())];
+        event.collaboration = Some(plan);
+        let before =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("WAL before reject");
+
+        assert!(matches!(
+            lock_workflow_governance_ledger_tcb(&root)
+                .expect("invalid collaboration ledger")
+                .record_work_focus_unchecked_tcb(
+                    projection.head_digest.as_deref().expect("objective head"),
+                    &test_identity(),
+                    projection.current_state_version().expect("objective state"),
+                    event,
+                ),
+            Err(WorkflowGovernanceLedgerError::WorkFocusInvalid { .. })
+        ));
+        assert_eq!(
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("WAL after reject"),
+            before
+        );
         fs::remove_dir_all(root).expect("cleanup");
     }
 

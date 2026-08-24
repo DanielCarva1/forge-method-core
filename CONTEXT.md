@@ -13,7 +13,7 @@ Use evidence in this order:
 4. explanatory prose;
 5. retained historical notes.
 
-The active source line is **`0.12.0-alpha.34`**. `Cargo.toml` is the package
+The active source line is **`0.12.0-alpha.35`**. `Cargo.toml` is the package
 version authority; `forge-core --version` identifies the executable actually on
 `PATH`. `README.md` owns the canonical identity table. Historical prerelease
 numbers belong in `CHANGELOG.md` and audit evidence, not in current guidance.

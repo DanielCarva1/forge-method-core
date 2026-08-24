@@ -273,6 +273,8 @@ pub struct WorkflowWorkFocusRecordedEvent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quick_cycle: Option<WorkflowQuickCycleSnapshot>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collaboration: Option<WorkflowCollaborationPlan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub previous_work_focus_record_digest: Option<String>,
     pub admission_ledger_head_digest: String,
     pub admission_state_version: u64,

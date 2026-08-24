@@ -46,6 +46,7 @@ fn sample_event() -> WorkflowWorkFocusRecordedEvent {
         blocker_record_digests: Vec::new(),
         evidence_record_digests: Vec::new(),
         quick_cycle: None,
+        collaboration: None,
         previous_work_focus_record_digest: None,
         admission_ledger_head_digest:
             "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc".into(),
@@ -153,6 +154,13 @@ fn collaboration_plan_is_bounded_closed_and_does_not_change_the_event_wire() {
 
     let old_event = serde_json::to_value(sample_event()).expect("old event serializes");
     assert!(old_event.get("collaboration").is_none());
+
+    let mut event = sample_event();
+    event.collaboration = Some(plan);
+    let encoded_event = serde_json::to_value(&event).expect("collaboration event serializes");
+    let decoded_event: WorkflowWorkFocusRecordedEvent =
+        serde_json::from_value(encoded_event).expect("collaboration event deserializes");
+    assert_eq!(decoded_event, event);
 }
 
 #[test]

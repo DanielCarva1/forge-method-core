@@ -96,6 +96,9 @@ pub const WORKFLOW_GOVERNANCE_WORK_FOCUS_BINDINGS_LEDGER_SCHEMA_VERSION: &str = 
 /// Work Focus records carrying a bounded Quick Cycle snapshot require a new
 /// wire so older readers fail closed instead of ignoring lifecycle continuity.
 pub const WORKFLOW_GOVERNANCE_QUICK_CYCLE_LEDGER_SCHEMA_VERSION: &str = "0.17";
+/// Work Focus records carrying a bounded collaboration plan require a new wire
+/// so older readers fail closed instead of silently ignoring agent lanes.
+pub const WORKFLOW_GOVERNANCE_COLLABORATION_LEDGER_SCHEMA_VERSION: &str = "0.18";
 
 /// Maximum encoded UTF-8 JSON input accepted by the cooperative objective
 /// command. The action packet publishes this same bound so a host never needs
