@@ -479,6 +479,17 @@ fn run_current_work_detail(consumer: &Consumer, expected_head_digest: &str) -> O
         .expect("run Current Work detail command")
 }
 
+fn work_focus_record_count(state_root: &Path) -> usize {
+    lock_workflow_governance_ledger_tcb(state_root)
+        .expect("open ledger for Work Focus count")
+        .recover()
+        .expect("recover ledger for Work Focus count")
+        .records
+        .iter()
+        .filter(|record| matches!(&record.event, WorkflowGovernanceEvent::WorkFocusRecorded(_)))
+        .count()
+}
+
 fn run_cooperative_evidence(consumer: &Consumer, input_path: &Path) -> Output {
     bin()
         .args([
@@ -1847,6 +1858,190 @@ fn current_work_accepts_and_transitions_exact_focus_with_resume_readback() {
     assert_eq!(
         next_focus["data"]["current_work"]["focus"]["focus_id"],
         "focus.issue-35.replacement-dogfood"
+    );
+}
+
+#[test]
+fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
+    let consumer = Consumer::new_with_prefix("forge-quick-cycle-persistence-e2e");
+    assert_ok(&consumer.run(&["init"]));
+    let next = assert_ok(&consumer.run(&["next"]));
+    let packet_digest = next["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("cooperative packet digest");
+    let objective_input = consumer.write_json(
+        "quick-cycle objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Persist one proportional dogfooding cycle without extra stores",
+                "constraints": ["write only accepted current-work transitions"],
+                "unacceptable_outcomes": ["leave partial state"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.quick-cycle-e2e",
+                "interaction_ref": "turn.accept-objective",
+                "conversation_digest": format!("sha256:{}", "1".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    assert_ok(&run_cooperative_input(
+        &consumer,
+        packet_digest,
+        &objective_input,
+    ));
+    let before = assert_ok(&consumer.run(&["resume"]));
+    let wal = consumer.state.join("wal/workflow-governance.ndjson");
+    let records_before_accept = work_focus_record_count(&consumer.state);
+
+    let accept_input = consumer.write_json(
+        "quick-cycle accept.json",
+        &serde_json::json!({
+            "schema_version": "work_focus_accept_input_v2",
+            "expected_snapshot_digest": before["data"]["snapshot_digest"],
+            "expected_ledger_head_digest": before["data"]["ledger_head_digest"],
+            "expected_state_version": before["data"]["state_version"],
+            "expected_work_focus": { "status": "absent" },
+            "focus": {
+                "focus_id": "focus.quick-cycle.persistence-e2e",
+                "title": "Persist a compact Quick Cycle",
+                "intended_outcome": "One accepted focus owns the proportional lifecycle summary",
+                "acceptance_summary": "Acceptance and completion each append one atomic record",
+                "affected_area_refs": ["crates/forge-core-kernel"],
+                "current_activity": "Accept the compact cycle",
+                "next_step": "Complete all five lifecycle summaries"
+            },
+            "continuity": {
+                "quick_cycle": {
+                    "compactness_reason": "The behavior is bounded to one existing Current Work path",
+                    "stage_closeouts": {},
+                    "expansion_history": []
+                }
+            },
+            "recorded_by": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.quick-cycle-e2e",
+                "interaction_ref": "turn.accept-cycle",
+                "conversation_digest": format!("sha256:{}", "2".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let accepted = assert_ok(&run_current_work_accept(&consumer, &accept_input));
+    assert_eq!(
+        work_focus_record_count(&consumer.state),
+        records_before_accept + 1
+    );
+    assert_eq!(
+        accepted["data"]["focus_record"]["event"]["payload"]["quick_cycle"]["compactness_reason"],
+        "The behavior is bounded to one existing Current Work path"
+    );
+
+    let blocker_record = {
+        let mut ledger = lock_workflow_governance_ledger_tcb(&consumer.state)
+            .expect("open ledger for final Quick Cycle reference");
+        let projection = ledger.recover().expect("recover final reference state");
+        let identity = projection.identity().expect("active ledger identity");
+        ledger
+            .append_unchecked_tcb_event(
+                projection
+                    .head_digest
+                    .as_deref()
+                    .expect("final reference head"),
+                &identity,
+                projection
+                    .current_state_version()
+                    .expect("final reference state version"),
+                WorkflowGovernanceEvent::DecisionNeedRaised(DecisionNeedRaisedEvent {
+                    policy_ref: StableId("policy.workflow.domain-scan".to_owned()),
+                    decision_ref: StableId("decision.quick-cycle.final-reference".to_owned()),
+                    authority_scope: StableId("workflow.decision.resolve".to_owned()),
+                    question_digest: format!("sha256:{}", "4".repeat(64)),
+                }),
+            )
+            .expect("append final Quick Cycle reference")
+    };
+    let after_reference = assert_ok(&consumer.run(&["resume"]));
+    let blocker_digest = blocker_record.record_digest;
+    let completion = |validation_summary: Option<&str>, interaction_ref: &str| {
+        consumer.write_json(
+            &format!("quick-cycle {interaction_ref}.json"),
+            &serde_json::json!({
+                "schema_version": "work_focus_update_input_v2",
+                "expected_snapshot_digest": after_reference["data"]["snapshot_digest"],
+                "expected_ledger_head_digest": after_reference["data"]["ledger_head_digest"],
+                "expected_state_version": after_reference["data"]["state_version"],
+                "expected_work_focus": {
+                    "status": "current",
+                    "record_digest": accepted["data"]["focus_record"]["record_digest"]
+                },
+                "change": {
+                    "kind": "complete",
+                    "completion_summary": "The proportional lifecycle was completed atomically",
+                    "next_step": "Read the compact cycle through Current Work",
+                    "continuity": {
+                        "blocker_record_digests": [blocker_digest],
+                        "quick_cycle": {
+                            "compactness_reason": "The behavior is bounded to one existing Current Work path",
+                            "stage_closeouts": {
+                                "analysis_discovery": { "summary": "The user need and existing path were checked" },
+                                "product_planning": { "summary": "The bounded acceptance rules were agreed" },
+                                "solution_definition": { "summary": "Current Work remains the single owner" },
+                                "implementation": { "summary": "The v2 input uses the existing atomic WAL" },
+                                "validation_delivery": validation_summary.map(|summary| serde_json::json!({ "summary": summary }))
+                            },
+                            "expansion_history": []
+                        }
+                    }
+                },
+                "recorded_by": "principal.agent.cli-e2e",
+                "host_provenance": {
+                    "host_id": "host.cli-e2e",
+                    "host_version": "test",
+                    "session_ref": "session.quick-cycle-e2e",
+                    "interaction_ref": interaction_ref,
+                    "conversation_digest": format!("sha256:{}", "3".repeat(64)),
+                    "observed_at_unix": 1
+                }
+            }),
+        )
+    };
+    let incomplete_input = completion(None, "turn.reject-incomplete-cycle");
+    let wal_after_accept = fs::read(&wal).expect("WAL before incomplete completion");
+    let incomplete = run_current_work_update(&consumer, &incomplete_input);
+    assert!(!incomplete.status.success());
+    assert_eq!(
+        fs::read(&wal).expect("WAL after incomplete completion"),
+        wal_after_accept,
+        "an incomplete Quick Cycle must not leave a partial record"
+    );
+
+    let complete_input = completion(
+        Some("The focused contract, transition, and CLI journey passed"),
+        "turn.complete-cycle",
+    );
+    let completed = assert_ok(&run_current_work_update(&consumer, &complete_input));
+    assert_eq!(completed["data"]["current_work"]["status"], "completed");
+    assert_eq!(
+        completed["data"]["focus_record"]["event"]["payload"]["quick_cycle"]["stage_closeouts"]
+            ["validation_delivery"]["summary"],
+        "The focused contract, transition, and CLI journey passed"
+    );
+    assert_eq!(
+        completed["data"]["focus_record"]["event"]["payload"]["blocker_record_digests"],
+        serde_json::json!([blocker_digest])
+    );
+    assert_eq!(
+        work_focus_record_count(&consumer.state),
+        records_before_accept + 2,
+        "normal Quick Cycle persistence is exactly accept plus complete"
     );
 }
 

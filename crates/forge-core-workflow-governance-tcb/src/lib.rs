@@ -4253,6 +4253,7 @@ fn validate_work_focus_current_bindings(
                     reason: "Work Focus predecessor does not match the latest focus record",
                 });
             }
+            validate_quick_cycle_transition(previous_event, event, line)?;
             let previous_is_terminal = matches!(
                 previous_event.state,
                 WorkflowWorkFocusState::Completed | WorkflowWorkFocusState::Abandoned
@@ -4265,6 +4266,65 @@ fn validate_work_focus_current_bindings(
                     line,
                     reason:
                         "a terminal or superseded Work Focus must continue as a new active focus",
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_quick_cycle_transition(
+    previous: &WorkflowWorkFocusRecordedEvent,
+    next: &WorkflowWorkFocusRecordedEvent,
+    line: Option<usize>,
+) -> Result<(), WorkflowGovernanceLedgerError> {
+    if previous.focus_id != next.focus_id {
+        if next
+            .quick_cycle
+            .as_ref()
+            .is_some_and(|cycle| cycle.expansion_history.len() > 1)
+        {
+            return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+                line,
+                reason: "a superseding Quick Cycle starts with at most one expansion",
+            });
+        }
+        return Ok(());
+    }
+
+    match (&previous.quick_cycle, &next.quick_cycle) {
+        (None, None) => return Ok(()),
+        (Some(_), None) | (None, Some(_)) => {
+            return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+                line,
+                reason: "same-focus updates cannot add or remove Quick Cycle continuity",
+            });
+        }
+        (Some(previous_cycle), Some(next_cycle)) => {
+            if previous_cycle.compactness_reason != next_cycle.compactness_reason
+                || next_cycle.expansion_history.len() < previous_cycle.expansion_history.len()
+                || next_cycle.expansion_history[..previous_cycle.expansion_history.len()]
+                    != previous_cycle.expansion_history
+            {
+                return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+                    line,
+                    reason: "same-focus Quick Cycle updates must preserve compactness and the expansion-history prefix",
+                });
+            }
+            if next.state == WorkflowWorkFocusState::Completed
+                && [
+                    next_cycle.stage_closeouts.analysis_discovery.as_ref(),
+                    next_cycle.stage_closeouts.product_planning.as_ref(),
+                    next_cycle.stage_closeouts.solution_definition.as_ref(),
+                    next_cycle.stage_closeouts.implementation.as_ref(),
+                    next_cycle.stage_closeouts.validation_delivery.as_ref(),
+                ]
+                .iter()
+                .any(|closeout| closeout.is_none())
+            {
+                return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
+                    line,
+                    reason: "a completed Quick Cycle requires all five lifecycle closeouts",
                 });
             }
         }
@@ -6916,6 +6976,21 @@ mod replacement_protocol_tests {
         }
     }
 
+    fn next_work_focus_event(
+        projection: &WorkflowGovernanceLedgerProjection,
+    ) -> WorkflowWorkFocusRecordedEvent {
+        let (record, previous) = projection
+            .latest_work_focus_record()
+            .expect("latest Work Focus");
+        let mut next = previous.clone();
+        next.previous_work_focus_record_digest = Some(record.record_digest.clone());
+        next.admission_ledger_head_digest = projection.head_digest.clone().expect("focus head");
+        next.admission_state_version = projection
+            .current_state_version()
+            .expect("focus state version");
+        next
+    }
+
     fn work_focus_event(
         projection: &WorkflowGovernanceLedgerProjection,
         objective_record: &WorkflowGovernanceLedgerRecord,
@@ -7355,6 +7430,207 @@ mod replacement_protocol_tests {
                 before
             );
         }
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn quick_cycle_same_focus_preserves_expansion_history_prefix() {
+        let root = test_root("quick-cycle-append-only-history");
+        let (projection, objective_record) =
+            initialize_quick_cycle_focus(&root, "objective.workflow.quick-cycle-append-only-test");
+        let mut first = work_focus_event(&projection, &objective_record);
+        first.quick_cycle = Some(quick_cycle_snapshot());
+        lock_workflow_governance_ledger_tcb(&root)
+            .expect("initial Quick Cycle ledger")
+            .record_work_focus_unchecked_tcb(
+                projection.head_digest.as_deref().expect("objective head"),
+                &test_identity(),
+                projection.current_state_version().expect("objective state"),
+                first,
+            )
+            .expect("record initial Quick Cycle");
+
+        let projection = recover_under_lock(&root).expect("recover initial Quick Cycle");
+        let mut expanded = next_work_focus_event(&projection);
+        expanded
+            .quick_cycle
+            .as_mut()
+            .expect("Quick Cycle")
+            .expansion_history
+            .push(forge_core_contracts::WorkflowQuickCycleExpansion {
+                phase: Phase::Discovery,
+                reason: "The user intent needs one more focused check".to_owned(),
+                evidence_record_digests: Vec::new(),
+            });
+        lock_workflow_governance_ledger_tcb(&root)
+            .expect("expanded Quick Cycle ledger")
+            .record_work_focus_unchecked_tcb(
+                projection
+                    .head_digest
+                    .as_deref()
+                    .expect("initial focus head"),
+                &test_identity(),
+                projection
+                    .current_state_version()
+                    .expect("initial focus state"),
+                expanded,
+            )
+            .expect("append accepted expansion");
+
+        let projection = recover_under_lock(&root).expect("recover expansion");
+        let mut rewritten = next_work_focus_event(&projection);
+        rewritten
+            .quick_cycle
+            .as_mut()
+            .expect("Quick Cycle")
+            .expansion_history[0]
+            .reason = "A rewritten reason must not replace accepted history".to_owned();
+        let before =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("WAL before reject");
+        assert!(matches!(
+            lock_workflow_governance_ledger_tcb(&root)
+                .expect("rewritten Quick Cycle ledger")
+                .record_work_focus_unchecked_tcb(
+                    projection
+                        .head_digest
+                        .as_deref()
+                        .expect("expanded focus head"),
+                    &test_identity(),
+                    projection
+                        .current_state_version()
+                        .expect("expanded focus state"),
+                    rewritten,
+                ),
+            Err(WorkflowGovernanceLedgerError::WorkFocusInvalid { .. })
+        ));
+        assert_eq!(
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("WAL after reject"),
+            before
+        );
+
+        let mut incomplete = next_work_focus_event(&projection);
+        incomplete.state = WorkflowWorkFocusState::Completed;
+        incomplete
+            .quick_cycle
+            .as_mut()
+            .expect("Quick Cycle")
+            .stage_closeouts
+            .analysis_discovery = Some(forge_core_contracts::WorkflowQuickCycleCloseout {
+            summary: "The need was understood".to_owned(),
+            evidence_record_digests: Vec::new(),
+        });
+        assert!(matches!(
+            lock_workflow_governance_ledger_tcb(&root)
+                .expect("incomplete Quick Cycle ledger")
+                .record_work_focus_unchecked_tcb(
+                    projection
+                        .head_digest
+                        .as_deref()
+                        .expect("expanded focus head"),
+                    &test_identity(),
+                    projection
+                        .current_state_version()
+                        .expect("expanded focus state"),
+                    incomplete,
+                ),
+            Err(WorkflowGovernanceLedgerError::WorkFocusInvalid { .. })
+        ));
+        assert_eq!(
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH))
+                .expect("WAL after incomplete closeout reject"),
+            before
+        );
+
+        let mut bounded = next_work_focus_event(&projection);
+        let history = &mut bounded
+            .quick_cycle
+            .as_mut()
+            .expect("Quick Cycle")
+            .expansion_history;
+        for (phase, reason) in [
+            (
+                Phase::Specification,
+                "Planning needed one focused clarification",
+            ),
+            (
+                Phase::Plan,
+                "The solution boundary needed one focused check",
+            ),
+            (
+                Phase::BuildVerify,
+                "Implementation exposed one bounded follow-up",
+            ),
+        ] {
+            history.push(forge_core_contracts::WorkflowQuickCycleExpansion {
+                phase,
+                reason: reason.to_owned(),
+                evidence_record_digests: Vec::new(),
+            });
+        }
+        lock_workflow_governance_ledger_tcb(&root)
+            .expect("bounded Quick Cycle ledger")
+            .record_work_focus_unchecked_tcb(
+                projection
+                    .head_digest
+                    .as_deref()
+                    .expect("expanded focus head"),
+                &test_identity(),
+                projection
+                    .current_state_version()
+                    .expect("expanded focus state"),
+                bounded,
+            )
+            .expect("record four bounded expansions");
+
+        let projection = recover_under_lock(&root).expect("recover bounded expansions");
+        let mut copied_history = next_work_focus_event(&projection);
+        copied_history.focus_id = StableId("focus.quick-cycle.superseding".to_owned());
+        let before_copied_history =
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("WAL before copy");
+        assert!(matches!(
+            lock_workflow_governance_ledger_tcb(&root)
+                .expect("copied-history ledger")
+                .record_work_focus_unchecked_tcb(
+                    projection
+                        .head_digest
+                        .as_deref()
+                        .expect("bounded focus head"),
+                    &test_identity(),
+                    projection
+                        .current_state_version()
+                        .expect("bounded focus state"),
+                    copied_history,
+                ),
+            Err(WorkflowGovernanceLedgerError::WorkFocusInvalid { .. })
+        ));
+        assert_eq!(
+            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH))
+                .expect("WAL after copied-history reject"),
+            before_copied_history
+        );
+
+        let mut superseding = next_work_focus_event(&projection);
+        superseding.focus_id = StableId("focus.quick-cycle.superseding".to_owned());
+        superseding
+            .quick_cycle
+            .as_mut()
+            .expect("Quick Cycle")
+            .expansion_history
+            .truncate(1);
+        lock_workflow_governance_ledger_tcb(&root)
+            .expect("superseding Quick Cycle ledger")
+            .record_work_focus_unchecked_tcb(
+                projection
+                    .head_digest
+                    .as_deref()
+                    .expect("bounded focus head"),
+                &test_identity(),
+                projection
+                    .current_state_version()
+                    .expect("bounded focus state"),
+                superseding,
+            )
+            .expect("start superseding cycle with bounded fresh history");
         fs::remove_dir_all(root).expect("cleanup");
     }
 

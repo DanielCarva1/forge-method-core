@@ -3,10 +3,13 @@ use forge_core_contracts::{
     WorkflowCurrentWorkAuthority, WorkflowCurrentWorkContext, WorkflowCurrentWorkDetail,
     WorkflowCurrentWorkDetailFocus, WorkflowCurrentWorkStatus, WorkflowCurrentWorkSummary,
     WorkflowCurrentWorkValidationError, WorkflowQuickCycleCloseout, WorkflowQuickCycleExpansion,
-    WorkflowQuickCycleSnapshot, WorkflowQuickCycleStageCloseouts,
+    WorkflowQuickCycleSnapshot, WorkflowQuickCycleStageCloseouts, WorkflowWorkFocusAcceptInput,
     WorkflowWorkFocusObjectiveBinding, WorkflowWorkFocusRecordedEvent, WorkflowWorkFocusState,
-    CURRENT_WORK_CONTEXT_SCHEMA_VERSION, CURRENT_WORK_DETAIL_SCHEMA_VERSION,
-    MAX_CURRENT_WORK_DETAIL_BYTES, MAX_CURRENT_WORK_SUMMARY_BYTES, MAX_WORK_FOCUS_TEXT_BYTES,
+    WorkflowWorkFocusUpdateInput, CURRENT_WORK_CONTEXT_SCHEMA_VERSION,
+    CURRENT_WORK_DETAIL_SCHEMA_VERSION, MAX_CURRENT_WORK_DETAIL_BYTES,
+    MAX_CURRENT_WORK_SUMMARY_BYTES, MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES, MAX_WORK_FOCUS_TEXT_BYTES,
+    MAX_WORK_FOCUS_UPDATE_INPUT_BYTES, WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
+    WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION,
 };
 
 fn sample_event() -> WorkflowWorkFocusRecordedEvent {
@@ -132,6 +135,102 @@ fn quick_cycle_snapshot_is_optional_closed_and_round_trips() {
             .to_string()
             .contains("unknown field")
     );
+}
+
+#[test]
+fn quick_cycle_v2_inputs_are_closed_bounded_and_keep_v1_readable() {
+    assert_eq!(
+        WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
+        "work_focus_accept_input_v2"
+    );
+    assert_eq!(
+        WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION,
+        "work_focus_update_input_v2"
+    );
+    let focus = serde_json::json!({
+        "focus_id": "focus.quick-cycle-contract",
+        "title": "Persist Quick Cycle",
+        "intended_outcome": "One atomic Work Focus write",
+        "acceptance_summary": "The public input carries bounded continuity",
+        "current_activity": "Test the contract",
+        "next_step": "Persist the event"
+    });
+    let host_provenance = serde_json::json!({
+        "host_id": "host.contract-test",
+        "host_version": "test",
+        "session_ref": "session.contract-test",
+        "interaction_ref": "turn.contract-test",
+        "conversation_digest": format!("sha256:{}", "a".repeat(64)),
+        "observed_at_unix": 1
+    });
+    let continuity = serde_json::json!({
+        "blocker_record_digests": [],
+        "evidence_record_digests": [format!("sha256:{}", "1".repeat(64))],
+        "quick_cycle": sample_quick_cycle()
+    });
+    let v2_accept = serde_json::json!({
+        "schema_version": "work_focus_accept_input_v2",
+        "expected_snapshot_digest": format!("sha256:{}", "b".repeat(64)),
+        "expected_ledger_head_digest": format!("sha256:{}", "c".repeat(64)),
+        "expected_state_version": 24,
+        "expected_work_focus": { "status": "absent" },
+        "focus": focus,
+        "continuity": continuity,
+        "recorded_by": "principal.agent.contract-test",
+        "host_provenance": host_provenance
+    });
+    assert!(
+        serde_json::to_vec(&v2_accept).unwrap().len() <= MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES as usize
+    );
+    serde_json::from_value::<WorkflowWorkFocusAcceptInput>(v2_accept.clone())
+        .expect("v2 accept input is typed");
+
+    let v2_complete = serde_json::json!({
+        "schema_version": "work_focus_update_input_v2",
+        "expected_snapshot_digest": format!("sha256:{}", "b".repeat(64)),
+        "expected_ledger_head_digest": format!("sha256:{}", "c".repeat(64)),
+        "expected_state_version": 24,
+        "expected_work_focus": {
+            "status": "current",
+            "record_digest": format!("sha256:{}", "d".repeat(64))
+        },
+        "change": {
+            "kind": "complete",
+            "completion_summary": "All five stages closed",
+            "next_step": "Deliver",
+            "continuity": continuity
+        },
+        "recorded_by": "principal.agent.contract-test",
+        "host_provenance": host_provenance
+    });
+    assert!(
+        serde_json::to_vec(&v2_complete).unwrap().len()
+            <= MAX_WORK_FOCUS_UPDATE_INPUT_BYTES as usize
+    );
+    serde_json::from_value::<WorkflowWorkFocusUpdateInput>(v2_complete)
+        .expect("v2 completion input is typed");
+
+    let mut unknown = v2_accept;
+    unknown["continuity"]["second_authority"] = serde_json::json!(true);
+    assert!(
+        serde_json::from_value::<WorkflowWorkFocusAcceptInput>(unknown)
+            .expect_err("unknown continuity fields fail closed")
+            .to_string()
+            .contains("unknown field")
+    );
+
+    let v1_accept = serde_json::json!({
+        "schema_version": "work_focus_accept_input_v1",
+        "expected_snapshot_digest": format!("sha256:{}", "b".repeat(64)),
+        "expected_ledger_head_digest": format!("sha256:{}", "c".repeat(64)),
+        "expected_state_version": 24,
+        "expected_work_focus": { "status": "absent" },
+        "focus": focus,
+        "recorded_by": "principal.agent.contract-test",
+        "host_provenance": host_provenance
+    });
+    serde_json::from_value::<WorkflowWorkFocusAcceptInput>(v1_accept)
+        .expect("v1 input remains readable");
 }
 
 #[test]

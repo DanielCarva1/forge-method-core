@@ -4,8 +4,10 @@ use serde::{Deserialize, Serialize};
 
 pub const CURRENT_WORK_CONTEXT_SCHEMA_VERSION: &str = "current_work_context_v1";
 pub const CURRENT_WORK_DETAIL_SCHEMA_VERSION: &str = "current_work_detail_v1";
-pub const WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v1";
-pub const WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION: &str = "work_focus_update_input_v1";
+pub const LEGACY_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v1";
+pub const LEGACY_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION: &str = "work_focus_update_input_v1";
+pub const WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION: &str = "work_focus_accept_input_v2";
+pub const WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION: &str = "work_focus_update_input_v2";
 pub const MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES: u64 = 16 * 1_024;
 pub const MAX_WORK_FOCUS_UPDATE_INPUT_BYTES: u64 = 16 * 1_024;
 pub const MAX_WORK_FOCUS_TEXT_BYTES: usize = 1_024;
@@ -127,6 +129,19 @@ pub struct WorkflowWorkFocusDraft {
     pub next_step: String,
 }
 
+/// Optional task-local continuity written atomically with the surrounding Work
+/// Focus change. The ledger remains the owner of referenced records.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowWorkFocusContinuityInput {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocker_record_digests: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evidence_record_digests: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quick_cycle: Option<WorkflowQuickCycleSnapshot>,
+}
+
 /// Closed public input for the first accepted Work Focus.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -137,6 +152,8 @@ pub struct WorkflowWorkFocusAcceptInput {
     pub expected_state_version: u64,
     pub expected_work_focus: WorkflowExpectedWorkFocus,
     pub focus: WorkflowWorkFocusDraft,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub continuity: Option<WorkflowWorkFocusContinuityInput>,
     pub recorded_by: PrincipalId,
     pub host_provenance: WorkflowCooperativeHostProvenance,
 }
@@ -147,10 +164,19 @@ pub struct WorkflowWorkFocusAcceptInput {
 pub enum WorkflowWorkFocusChange {
     Supersede {
         focus: WorkflowWorkFocusDraft,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        continuity: Option<WorkflowWorkFocusContinuityInput>,
+    },
+    CheckpointQuickCycle {
+        current_activity: String,
+        next_step: String,
+        continuity: WorkflowWorkFocusContinuityInput,
     },
     Complete {
         completion_summary: String,
         next_step: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        continuity: Option<WorkflowWorkFocusContinuityInput>,
     },
     /// Replace the complete set of canonical ledger records explicitly related
     /// to the current focus. Empty lists intentionally clear prior bindings.

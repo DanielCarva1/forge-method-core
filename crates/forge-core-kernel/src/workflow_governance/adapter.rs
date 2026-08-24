@@ -99,16 +99,18 @@ use forge_core_contracts::{
     WorkflowGovernanceSignal, WorkflowHumanIntentRevision, WorkflowPolicyActivation,
     WorkflowPrerequisiteRequirement, WorkflowReceiptCarryover, WorkflowReleaseRegistryProvenance,
     WorkflowRepresentativeSliceDefinitionDocument, WorkflowRuntimeBundleIdentity,
-    WorkflowWorkFocusAcceptInput, WorkflowWorkFocusChange, WorkflowWorkFocusDraft,
-    WorkflowWorkFocusObjectiveBinding, WorkflowWorkFocusRecordedEvent, WorkflowWorkFocusState,
-    WorkflowWorkFocusUpdateInput, COOPERATIVE_APPLICABILITY_ATTESTATION_SCHEMA_VERSION,
+    WorkflowWorkFocusAcceptInput, WorkflowWorkFocusChange, WorkflowWorkFocusContinuityInput,
+    WorkflowWorkFocusDraft, WorkflowWorkFocusObjectiveBinding, WorkflowWorkFocusRecordedEvent,
+    WorkflowWorkFocusState, WorkflowWorkFocusUpdateInput,
+    COOPERATIVE_APPLICABILITY_ATTESTATION_SCHEMA_VERSION,
     COOPERATIVE_APPLICABILITY_OFFER_SCHEMA_VERSION,
     COOPERATIVE_EVIDENCE_ATTESTATION_SCHEMA_VERSION_V1,
     COOPERATIVE_EVIDENCE_OFFER_SCHEMA_VERSION_V1, COOPERATIVE_EXECUTION_ATTESTATION_SCHEMA_VERSION,
     COOPERATIVE_EXECUTION_OFFER_SCHEMA_VERSION,
     COOPERATIVE_PRIOR_EVIDENCE_ATTESTATION_SCHEMA_VERSION,
     COOPERATIVE_PRIOR_EVIDENCE_OFFER_SCHEMA_VERSION, CURRENT_WORK_CONTEXT_SCHEMA_VERSION,
-    CURRENT_WORK_DETAIL_SCHEMA_VERSION, MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS,
+    CURRENT_WORK_DETAIL_SCHEMA_VERSION, LEGACY_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
+    LEGACY_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION, MAX_CURRENT_WORK_SUMMARY_REFERENCE_ITEMS,
     MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES, MAX_REPRESENTATIVE_SLICE_ITEMS,
     MAX_REPRESENTATIVE_SLICE_ITEM_BYTES, MAX_REPRESENTATIVE_SLICE_TEXT_BYTES,
     MAX_REPRESENTATIVE_SLICE_TOTAL_BYTES, MAX_WORKFLOW_COOPERATIVE_EVIDENCE_BASIS_FILE_BYTES,
@@ -3132,9 +3134,18 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         input: WorkflowWorkFocusAcceptInput,
     ) -> Result<WorkflowWorkFocusAcceptance, WorkflowGovernanceAdapterError> {
-        if input.schema_version != WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION {
+        let legacy_schema = match input.schema_version.as_str() {
+            WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION => false,
+            LEGACY_WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION => true,
+            _ => {
+                return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                    "Work Focus acceptance input has an unsupported schema version".to_owned(),
+                ));
+            }
+        };
+        if legacy_schema && input.continuity.is_some() {
             return Err(WorkflowGovernanceAdapterError::InvalidObservation(
-                "Work Focus acceptance input has an unsupported schema version".to_owned(),
+                "Work Focus v1 acceptance cannot carry v2 continuity".to_owned(),
             ));
         }
         if !matches!(
@@ -3151,7 +3162,10 @@ impl WorkflowGovernanceProjectAdapter {
             input.expected_ledger_head_digest,
             input.expected_state_version,
             input.expected_work_focus,
-            WorkFocusAdmissionChange::Start(input.focus),
+            WorkFocusAdmissionChange::Start {
+                focus: input.focus,
+                continuity: input.continuity,
+            },
             input.recorded_by,
             input.host_provenance,
         )
@@ -3164,11 +3178,15 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         input: WorkflowWorkFocusUpdateInput,
     ) -> Result<WorkflowWorkFocusAcceptance, WorkflowGovernanceAdapterError> {
-        if input.schema_version != WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION {
-            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
-                "Work Focus update input has an unsupported schema version".to_owned(),
-            ));
-        }
+        let legacy_schema = match input.schema_version.as_str() {
+            WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION => false,
+            LEGACY_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION => true,
+            _ => {
+                return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                    "Work Focus update input has an unsupported schema version".to_owned(),
+                ));
+            }
+        };
         if !matches!(
             &input.expected_work_focus,
             WorkflowExpectedWorkFocus::Current { .. }
@@ -3179,15 +3197,48 @@ impl WorkflowGovernanceProjectAdapter {
             ));
         }
         let change = match input.change {
-            WorkflowWorkFocusChange::Supersede { focus } => {
-                WorkFocusAdmissionChange::Supersede(focus)
+            WorkflowWorkFocusChange::Supersede { focus, continuity } => {
+                if legacy_schema && continuity.is_some() {
+                    return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                        "Work Focus v1 supersede cannot carry v2 continuity".to_owned(),
+                    ));
+                }
+                WorkFocusAdmissionChange::Supersede { focus, continuity }
+            }
+            WorkflowWorkFocusChange::CheckpointQuickCycle {
+                current_activity,
+                next_step,
+                continuity,
+            } => {
+                if legacy_schema || continuity.quick_cycle.is_none() {
+                    return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                        "Quick Cycle checkpoint requires v2 input and an explicit snapshot"
+                            .to_owned(),
+                    ));
+                }
+                WorkFocusAdmissionChange::CheckpointQuickCycle {
+                    current_activity,
+                    next_step,
+                    continuity,
+                }
             }
             WorkflowWorkFocusChange::Complete {
                 completion_summary,
                 next_step,
+                continuity,
             } => WorkFocusAdmissionChange::Complete {
                 completion_summary,
                 next_step,
+                continuity: if legacy_schema {
+                    if continuity.is_some() {
+                        return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                            "Work Focus v1 completion cannot carry v2 continuity".to_owned(),
+                        ));
+                    }
+                    None
+                } else {
+                    continuity
+                },
             },
             WorkflowWorkFocusChange::BindReferences {
                 blocker_record_digests,
@@ -3234,11 +3285,30 @@ impl WorkflowGovernanceProjectAdapter {
                 ));
             }
         }
-        if let WorkFocusAdmissionChange::BindReferences {
-            blocker_record_digests,
-            evidence_record_digests,
-        } = &change
-        {
+        let continuity_references = match &change {
+            WorkFocusAdmissionChange::Start {
+                continuity: Some(continuity),
+                ..
+            }
+            | WorkFocusAdmissionChange::Supersede {
+                continuity: Some(continuity),
+                ..
+            }
+            | WorkFocusAdmissionChange::CheckpointQuickCycle { continuity, .. }
+            | WorkFocusAdmissionChange::Complete {
+                continuity: Some(continuity),
+                ..
+            } => Some((
+                &continuity.blocker_record_digests,
+                &continuity.evidence_record_digests,
+            )),
+            WorkFocusAdmissionChange::BindReferences {
+                blocker_record_digests,
+                evidence_record_digests,
+            } => Some((blocker_record_digests, evidence_record_digests)),
+            _ => None,
+        };
+        if let Some((blocker_record_digests, evidence_record_digests)) = continuity_references {
             let blocker_set = blocker_record_digests.iter().collect::<BTreeSet<_>>();
             let evidence_set = evidence_record_digests.iter().collect::<BTreeSet<_>>();
             if blocker_record_digests.len() > MAX_WORK_FOCUS_LIST_ITEMS
@@ -3291,10 +3361,12 @@ impl WorkflowGovernanceProjectAdapter {
             &change,
             projection.latest_work_focus_record(),
         ) {
-            (WorkflowExpectedWorkFocus::Absent, WorkFocusAdmissionChange::Start(_), None) => None,
+            (WorkflowExpectedWorkFocus::Absent, WorkFocusAdmissionChange::Start { .. }, None) => {
+                None
+            }
             (
                 WorkflowExpectedWorkFocus::Absent,
-                WorkFocusAdmissionChange::Start(_),
+                WorkFocusAdmissionChange::Start { .. },
                 Some((record, event)),
             ) if matches!(
                 event.state,
@@ -3305,7 +3377,8 @@ impl WorkflowGovernanceProjectAdapter {
             }
             (
                 WorkflowExpectedWorkFocus::Current { record_digest },
-                WorkFocusAdmissionChange::Supersede(_)
+                WorkFocusAdmissionChange::Supersede { .. }
+                | WorkFocusAdmissionChange::CheckpointQuickCycle { .. }
                 | WorkFocusAdmissionChange::Complete { .. }
                 | WorkFocusAdmissionChange::BindReferences { .. },
                 Some((record, event)),
@@ -3332,8 +3405,9 @@ impl WorkflowGovernanceProjectAdapter {
             assurance_epoch: objective.assurance_epoch,
         };
         let event = match change {
-            WorkFocusAdmissionChange::Start(focus) => work_focus_event_from_draft(
+            WorkFocusAdmissionChange::Start { focus, continuity } => work_focus_event_from_draft(
                 focus,
+                continuity,
                 objective_binding,
                 phase,
                 previous.map(|(record_digest, _)| record_digest),
@@ -3343,7 +3417,7 @@ impl WorkflowGovernanceProjectAdapter {
                 host_provenance,
                 now,
             ),
-            WorkFocusAdmissionChange::Supersede(focus) => {
+            WorkFocusAdmissionChange::Supersede { focus, continuity } => {
                 let (previous_digest, previous_event) = previous
                     .as_ref()
                     .expect("supersede requires an exact current focus");
@@ -3354,6 +3428,7 @@ impl WorkflowGovernanceProjectAdapter {
                 }
                 work_focus_event_from_draft(
                     focus,
+                    continuity,
                     objective_binding,
                     phase,
                     Some(previous_digest.clone()),
@@ -3367,6 +3442,7 @@ impl WorkflowGovernanceProjectAdapter {
             WorkFocusAdmissionChange::Complete {
                 completion_summary,
                 next_step,
+                continuity,
             } => {
                 let (previous_digest, previous_event) = previous
                     .as_ref()
@@ -3384,6 +3460,11 @@ impl WorkflowGovernanceProjectAdapter {
                 completed.state = WorkflowWorkFocusState::Completed;
                 completed.current_activity = completion_summary;
                 completed.next_step = next_step;
+                if let Some(continuity) = continuity {
+                    completed.blocker_record_digests = continuity.blocker_record_digests;
+                    completed.evidence_record_digests = continuity.evidence_record_digests;
+                    completed.quick_cycle = continuity.quick_cycle;
+                }
                 completed.previous_work_focus_record_digest = Some(previous_digest.clone());
                 completed.admission_ledger_head_digest = head.clone();
                 completed.admission_state_version = state_version;
@@ -3391,6 +3472,37 @@ impl WorkflowGovernanceProjectAdapter {
                 completed.host_provenance = host_provenance;
                 completed.recorded_at_unix = now;
                 completed
+            }
+            WorkFocusAdmissionChange::CheckpointQuickCycle {
+                current_activity,
+                next_step,
+                continuity,
+            } => {
+                let (previous_digest, previous_event) = previous
+                    .as_ref()
+                    .expect("Quick Cycle checkpoint requires an exact current focus");
+                if previous_event.state != WorkflowWorkFocusState::Active
+                    || previous_event.objective != objective_binding
+                    || previous_event.phase != phase
+                {
+                    return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                        "only the active Work Focus bound to the current objective and phase can checkpoint Quick Cycle continuity"
+                            .to_owned(),
+                    ));
+                }
+                let mut checkpoint = previous_event.clone();
+                checkpoint.current_activity = current_activity;
+                checkpoint.next_step = next_step;
+                checkpoint.blocker_record_digests = continuity.blocker_record_digests;
+                checkpoint.evidence_record_digests = continuity.evidence_record_digests;
+                checkpoint.quick_cycle = continuity.quick_cycle;
+                checkpoint.previous_work_focus_record_digest = Some(previous_digest.clone());
+                checkpoint.admission_ledger_head_digest = head.clone();
+                checkpoint.admission_state_version = state_version;
+                checkpoint.recorded_by = recorded_by;
+                checkpoint.host_provenance = host_provenance;
+                checkpoint.recorded_at_unix = now;
+                checkpoint
             }
             WorkFocusAdmissionChange::BindReferences {
                 blocker_record_digests,
@@ -7540,11 +7652,23 @@ pub struct WorkflowGovernanceCompletionReceipt {
 }
 
 enum WorkFocusAdmissionChange {
-    Start(WorkflowWorkFocusDraft),
-    Supersede(WorkflowWorkFocusDraft),
+    Start {
+        focus: WorkflowWorkFocusDraft,
+        continuity: Option<WorkflowWorkFocusContinuityInput>,
+    },
+    Supersede {
+        focus: WorkflowWorkFocusDraft,
+        continuity: Option<WorkflowWorkFocusContinuityInput>,
+    },
+    CheckpointQuickCycle {
+        current_activity: String,
+        next_step: String,
+        continuity: WorkflowWorkFocusContinuityInput,
+    },
     Complete {
         completion_summary: String,
         next_step: String,
+        continuity: Option<WorkflowWorkFocusContinuityInput>,
     },
     BindReferences {
         blocker_record_digests: Vec<String>,
@@ -7563,6 +7687,7 @@ struct CurrentWorkProjection {
 #[allow(clippy::too_many_arguments)]
 fn work_focus_event_from_draft(
     focus: WorkflowWorkFocusDraft,
+    continuity: Option<WorkflowWorkFocusContinuityInput>,
     objective: WorkflowWorkFocusObjectiveBinding,
     phase: Phase,
     previous_work_focus_record_digest: Option<String>,
@@ -7572,6 +7697,15 @@ fn work_focus_event_from_draft(
     host_provenance: forge_core_contracts::WorkflowCooperativeHostProvenance,
     recorded_at_unix: u64,
 ) -> WorkflowWorkFocusRecordedEvent {
+    let (blocker_record_digests, evidence_record_digests, quick_cycle) = continuity
+        .map(|continuity| {
+            (
+                continuity.blocker_record_digests,
+                continuity.evidence_record_digests,
+                continuity.quick_cycle,
+            )
+        })
+        .unwrap_or_default();
     WorkflowWorkFocusRecordedEvent {
         focus_id: focus.focus_id,
         objective,
@@ -7588,9 +7722,9 @@ fn work_focus_event_from_draft(
         selected_practice_reason: focus.selected_practice_reason,
         current_activity: focus.current_activity,
         next_step: focus.next_step,
-        blocker_record_digests: Vec::new(),
-        evidence_record_digests: Vec::new(),
-        quick_cycle: None,
+        blocker_record_digests,
+        evidence_record_digests,
+        quick_cycle,
         previous_work_focus_record_digest,
         admission_ledger_head_digest: admission_ledger_head_digest.to_owned(),
         admission_state_version,
