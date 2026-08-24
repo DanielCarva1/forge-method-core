@@ -3293,6 +3293,17 @@ impl WorkflowGovernanceProjectAdapter {
         ) {
             (WorkflowExpectedWorkFocus::Absent, WorkFocusAdmissionChange::Start(_), None) => None,
             (
+                WorkflowExpectedWorkFocus::Absent,
+                WorkFocusAdmissionChange::Start(_),
+                Some((record, event)),
+            ) if matches!(
+                event.state,
+                WorkflowWorkFocusState::Completed | WorkflowWorkFocusState::Abandoned
+            ) =>
+            {
+                Some((record.record_digest.clone(), event.clone()))
+            }
+            (
                 WorkflowExpectedWorkFocus::Current { record_digest },
                 WorkFocusAdmissionChange::Supersede(_)
                 | WorkFocusAdmissionChange::Complete { .. }
@@ -3325,7 +3336,7 @@ impl WorkflowGovernanceProjectAdapter {
                 focus,
                 objective_binding,
                 phase,
-                None,
+                previous.map(|(record_digest, _)| record_digest),
                 &head,
                 state_version,
                 recorded_by,

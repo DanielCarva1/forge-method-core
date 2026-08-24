@@ -1808,6 +1808,46 @@ fn current_work_accepts_and_transitions_exact_focus_with_resume_readback() {
         resumed["data"]["current_work"]["focus"]["next_step"],
         "Bind blockers and evidence explicitly"
     );
+
+    let next_focus_input = consumer.write_json(
+        "current-work accept after completion.json",
+        &serde_json::json!({
+            "schema_version": "work_focus_accept_input_v1",
+            "expected_snapshot_digest": completed["data"]["snapshot_digest"],
+            "expected_ledger_head_digest": completed["data"]["ledger_head_digest"],
+            "expected_state_version": completed["data"]["state_version"],
+            "expected_work_focus": { "status": "absent" },
+            "focus": {
+                "focus_id": "focus.issue-35.replacement-dogfood",
+                "title": "Prove the next replacement-host journey",
+                "intended_outcome": "A completed focus does not prevent the next bounded slice",
+                "acceptance_summary": "The next focus becomes current and links to the terminal predecessor",
+                "non_goals": ["reopen the completed focus"],
+                "canonical_refs": ["contracts/spec/product-journey-guidance-v0.yaml"],
+                "affected_area_refs": ["crates/forge-core-cli"],
+                "external_work_item_ref": "https://github.com/DanielCarva1/forge-method-core/issues/35",
+                "selected_practice_ref": "edge-case-review",
+                "selected_practice_reason": "Exercise the boundary after a completed slice",
+                "current_activity": "Start the next focused journey",
+                "next_step": "Run replacement-host dogfood"
+            },
+            "recorded_by": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e",
+                "host_version": "test",
+                "session_ref": "session.current-work-e2e",
+                "interaction_ref": "turn.accept-next-current-work",
+                "conversation_digest": format!("sha256:{}", "8".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    let next_focus = assert_ok(&run_current_work_accept(&consumer, &next_focus_input));
+    assert_eq!(next_focus["data"]["current_work"]["status"], "current");
+    assert_eq!(
+        next_focus["data"]["current_work"]["focus"]["focus_id"],
+        "focus.issue-35.replacement-dogfood"
+    );
 }
 
 #[test]
