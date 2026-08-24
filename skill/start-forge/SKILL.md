@@ -122,6 +122,19 @@ silently reused. `completed` and `abandoned` are terminal: a terminal
 accepted detail without scanning project documentation. This block is
 read-only advice and never authorizes edits or completion.
 
+When Discovery follows an accepted `material_supersession` and
+`data.active_objective.previous_objective_digest` is present, treat this as an
+Evolve reentry that needs progressive context recovery. Start with the current
+proposal, repository evidence, and the stale Work Focus summary; open its
+bounded detail only when the summary is insufficient. A stale Work Focus is
+predecessor context, not active work. If those sources still do not explain the
+meaning of the previous product direction, run at most one `workflow report`
+for the same root and read only the relevant entries from
+`replacement_continuity.objective_history`. Do not run another `workflow
+resume` afterward because the report is read-only. Explain to the human what
+remains valid, what changed, what is still uncertain, and the first Discovery
+step. Do not dump the history or ask the human to interpret digests.
+
 When `focus.quick_cycle` is present, resume exposes only its derived state and
 counts. Absence means "not recorded"; never rebuild a Quick Cycle from prose.
 Use `focus.detail_argv` only when the accepted compactness reason, closeouts, or

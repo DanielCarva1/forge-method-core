@@ -318,6 +318,16 @@ remains under `simulation.candidate_decision_requests`; it is not described as
 a decision recovered from an earlier chat. Run the report only for an explicit
 history/audit request or a continuity diagnosis that requires omitted records.
 
+An Evolve reentry is the narrow case that makes this continuity diagnosis
+explicit. When Discovery follows `material_supersession`, progressive context
+recovery uses the current proposal, repository evidence, and stale Work Focus
+first. A stale Work Focus is predecessor context, not active work. Only if those
+sources cannot explain the previous direction may the host run at most one
+`workflow report` and read the relevant objective-history entries. Do not run
+another `workflow resume` afterward. The user-facing result states what
+remains valid, what changed, what is still uncertain, and the first Discovery
+step instead of exposing the raw history.
+
 During one chat, read-only Forge commands and ordinary repository work do not
 require another resume. Refresh through `workflow resume --root <same-root>
 --json` once after a successful Forge command changes durable workflow state,

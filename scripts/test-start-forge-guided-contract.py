@@ -160,6 +160,31 @@ class GuidedActivationContractTests(unittest.TestCase):
             "one primary next step",
         )
 
+    def test_evolve_reentry_recovers_prior_context_progressively(self) -> None:
+        self.assert_contract_contains(
+            "material_supersession",
+            "previous_objective_digest",
+            "stale Work Focus",
+            "current proposal",
+            "repository evidence",
+            "at most one `workflow report`",
+            "Do not run another `workflow resume`",
+            "what remains valid",
+            "what changed",
+            "what is still uncertain",
+            "first Discovery step",
+        )
+        integration = normalized(AGENT_INTEGRATION.read_text(encoding="utf-8"))
+        for expected in (
+            "material_supersession",
+            "progressive context recovery",
+            "at most one `workflow report`",
+            "stale work focus is predecessor context, not active work",
+            "do not run another `workflow resume`",
+        ):
+            with self.subTest(integration=expected):
+                self.assertIn(expected.casefold(), integration)
+
     def test_collaboration_uses_progressive_detail_and_safe_worktrees(self) -> None:
         self.assert_contract_contains(
             "focus.collaboration",
