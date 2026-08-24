@@ -300,6 +300,7 @@ fn quick_cycle_snapshot_is_optional_closed_and_round_trips() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn collaboration_v3_inputs_are_closed_bounded_and_keep_v1_v2_readable() {
     assert_eq!(
         WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION,
@@ -317,6 +318,10 @@ fn collaboration_v3_inputs_are_closed_bounded_and_keep_v1_v2_readable() {
         QUICK_CYCLE_WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION,
         "work_focus_update_input_v2"
     );
+    let max_accept_bytes =
+        usize::try_from(MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES).expect("accept input bound fits usize");
+    let max_update_bytes =
+        usize::try_from(MAX_WORK_FOCUS_UPDATE_INPUT_BYTES).expect("update input bound fits usize");
     let focus = serde_json::json!({
         "focus_id": "focus.quick-cycle-contract",
         "title": "Persist Quick Cycle",
@@ -349,9 +354,7 @@ fn collaboration_v3_inputs_are_closed_bounded_and_keep_v1_v2_readable() {
         "recorded_by": "principal.agent.contract-test",
         "host_provenance": host_provenance
     });
-    assert!(
-        serde_json::to_vec(&v2_accept).unwrap().len() <= MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES as usize
-    );
+    assert!(serde_json::to_vec(&v2_accept).unwrap().len() <= max_accept_bytes);
     serde_json::from_value::<WorkflowWorkFocusAcceptInput>(v2_accept.clone())
         .expect("v2 accept input is typed");
 
@@ -359,9 +362,7 @@ fn collaboration_v3_inputs_are_closed_bounded_and_keep_v1_v2_readable() {
     v3_accept["schema_version"] = serde_json::json!("work_focus_accept_input_v3");
     v3_accept["continuity"]["collaboration"] =
         serde_json::to_value(sample_collaboration_plan()).expect("collaboration serializes");
-    assert!(
-        serde_json::to_vec(&v3_accept).unwrap().len() <= MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES as usize
-    );
+    assert!(serde_json::to_vec(&v3_accept).unwrap().len() <= max_accept_bytes);
     let typed_v3 = serde_json::from_value::<WorkflowWorkFocusAcceptInput>(v3_accept.clone())
         .expect("v3 acceptance input is typed");
     assert_eq!(
@@ -391,10 +392,7 @@ fn collaboration_v3_inputs_are_closed_bounded_and_keep_v1_v2_readable() {
         "recorded_by": "principal.agent.contract-test",
         "host_provenance": host_provenance
     });
-    assert!(
-        serde_json::to_vec(&v2_complete).unwrap().len()
-            <= MAX_WORK_FOCUS_UPDATE_INPUT_BYTES as usize
-    );
+    assert!(serde_json::to_vec(&v2_complete).unwrap().len() <= max_update_bytes);
     serde_json::from_value::<WorkflowWorkFocusUpdateInput>(v2_complete)
         .expect("v2 completion input is typed");
 
@@ -418,10 +416,7 @@ fn collaboration_v3_inputs_are_closed_bounded_and_keep_v1_v2_readable() {
         "recorded_by": "principal.agent.contract-test",
         "host_provenance": host_provenance
     });
-    assert!(
-        serde_json::to_vec(&v3_checkpoint).unwrap().len()
-            <= MAX_WORK_FOCUS_UPDATE_INPUT_BYTES as usize
-    );
+    assert!(serde_json::to_vec(&v3_checkpoint).unwrap().len() <= max_update_bytes);
     serde_json::from_value::<WorkflowWorkFocusUpdateInput>(v3_checkpoint)
         .expect("v3 collaboration checkpoint is typed");
 
@@ -463,6 +458,7 @@ fn work_focus_event_rejects_unknown_fields() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn current_work_readback_is_bounded_advisory_and_closed() {
     assert_eq!(
         CURRENT_WORK_CONTEXT_SCHEMA_VERSION,

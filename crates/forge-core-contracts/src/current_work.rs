@@ -597,6 +597,10 @@ pub enum WorkflowCurrentWorkValidationError {
 }
 
 impl WorkflowCollaborationPlan {
+    /// # Errors
+    ///
+    /// Returns an error when lane fields exceed their bounds or lane IDs and
+    /// dependencies do not form one valid acyclic plan.
     pub fn validate(&self) -> Result<(), WorkflowCurrentWorkValidationError> {
         if self.lanes.is_empty() || self.lanes.len() > MAX_COLLABORATION_LANES {
             return Err(WorkflowCurrentWorkValidationError::ListBound);
@@ -660,6 +664,10 @@ impl WorkflowCollaborationPlan {
 }
 
 impl WorkflowCurrentWorkContext {
+    /// # Errors
+    ///
+    /// Returns an error when the schema, status/focus pairing, focus summary,
+    /// referenced values, or serialized payload violates the public contract.
     pub fn validate(&self) -> Result<(), WorkflowCurrentWorkValidationError> {
         if self.schema_version != CURRENT_WORK_CONTEXT_SCHEMA_VERSION {
             return Err(WorkflowCurrentWorkValidationError::WrongSchema);
@@ -675,6 +683,10 @@ impl WorkflowCurrentWorkContext {
 }
 
 impl WorkflowCurrentWorkPreparationPacket {
+    /// # Errors
+    ///
+    /// Returns an error when the schema, state binding, apply command,
+    /// replacement markers, operation shape, or payload size is invalid.
     pub fn validate(&self) -> Result<(), WorkflowCurrentWorkValidationError> {
         if self.schema_version != CURRENT_WORK_PREPARATION_SCHEMA_VERSION
             || self.input_file_token != CURRENT_WORK_INPUT_FILE_TOKEN
@@ -729,6 +741,10 @@ impl WorkflowCurrentWorkPreparationPacket {
 }
 
 impl WorkflowCurrentWorkDetail {
+    /// # Errors
+    ///
+    /// Returns an error when the schema, lifecycle state, detailed focus,
+    /// record references, predecessor command, or payload size is invalid.
     pub fn validate(&self) -> Result<(), WorkflowCurrentWorkValidationError> {
         if self.schema_version != CURRENT_WORK_DETAIL_SCHEMA_VERSION {
             return Err(WorkflowCurrentWorkValidationError::WrongSchema);
