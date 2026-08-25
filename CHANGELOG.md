@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   proofs remain pending.
 
 ### Changed
+- **Workspace crate-boundary validation is now connected end to end in Rust.**
+  `forge-core validate` compares full Cargo metadata with the checked-in
+  workspace policy, checks production-only edges against the authority boundary,
+  and distinguishes test dependencies from shipped dependencies. The disconnected
+  Python checker was removed.
 - **The historical Python workflow migrator was retired.** Its Markdown inputs
   and sibling-repository destination no longer exist, while the active and
   frozen catalogs are owned and verified by Rust. Stale test messages no longer

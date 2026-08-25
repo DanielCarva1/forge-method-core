@@ -75,9 +75,9 @@ use forge_core_decisions::{
 };
 use forge_core_store::{collect_known_repo_paths, collect_validation_yaml_documents};
 use forge_core_validate::{
-    validate_assurance_case, validate_claim, validate_claim_cross_references, validate_command,
-    validate_common_borrowed_shell_contracts, validate_completion,
-    validate_completion_cross_references, validate_coordination_eval,
+    validate_assurance_case, validate_cargo_metadata_workspace, validate_claim,
+    validate_claim_cross_references, validate_command, validate_common_borrowed_shell_contracts,
+    validate_completion, validate_completion_cross_references, validate_coordination_eval,
     validate_coordination_eval_cross_references, validate_decision_close,
     validate_decision_close_cross_references, validate_evidence_registry, validate_gate,
     validate_gate_cross_references, validate_health_recovery,
@@ -397,30 +397,61 @@ fn validate_host_support_matrix_authority(root: &Path, summary: &mut ValidateSum
 }
 
 fn validate_workspace_architecture_authority(root: &Path, summary: &mut ValidateSummary) {
-    match validate_workspace_architecture_contracts(root) {
-        Ok(report) => {
-            let diagnostics = report
-                .issues
-                .into_iter()
-                .map(|issue| {
+    let mut diagnostics = match validate_workspace_architecture_contracts(root) {
+        Ok(report) => report
+            .issues
+            .into_iter()
+            .map(|issue| {
+                Diagnostic::error(
+                    DiagnosticCode::WorkspaceArchitectureInvalid,
+                    "workspace_architecture",
+                    format!("{}: {}", issue.code, issue.detail),
+                )
+            })
+            .collect::<Vec<_>>(),
+        Err(error) => vec![Diagnostic::error(
+            DiagnosticCode::WorkspaceArchitectureInvalid,
+            "workspace_architecture",
+            error,
+        )],
+    };
+
+    match std::process::Command::new("cargo")
+        .args(["metadata", "--locked", "--no-deps", "--format-version", "1"])
+        .current_dir(root)
+        .output()
+    {
+        Ok(output) if output.status.success() => {
+            match validate_cargo_metadata_workspace(root, &output.stdout) {
+                Ok(issues) => diagnostics.extend(issues.into_iter().map(|issue| {
                     Diagnostic::error(
-                        DiagnosticCode::YamlParseFailed,
+                        DiagnosticCode::WorkspaceArchitectureInvalid,
                         "workspace_architecture",
                         format!("{}: {}", issue.code, issue.detail),
                     )
-                })
-                .collect::<Vec<_>>();
-            summary.add_validation_diagnostics("workspace_architecture", &diagnostics);
+                })),
+                Err(error) => diagnostics.push(Diagnostic::error(
+                    DiagnosticCode::WorkspaceArchitectureInvalid,
+                    "workspace_architecture",
+                    error,
+                )),
+            }
         }
-        Err(error) => summary.add_validation_diagnostics(
+        Ok(output) => diagnostics.push(Diagnostic::error(
+            DiagnosticCode::WorkspaceArchitectureInvalid,
             "workspace_architecture",
-            &[Diagnostic::error(
-                DiagnosticCode::YamlReadFailed,
-                "workspace_architecture",
-                error,
-            )],
-        ),
+            format!(
+                "cargo metadata failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ),
+        )),
+        Err(error) => diagnostics.push(Diagnostic::error(
+            DiagnosticCode::WorkspaceArchitectureInvalid,
+            "workspace_architecture",
+            format!("cannot run cargo metadata: {error}"),
+        )),
     }
+    summary.add_validation_diagnostics("workspace_architecture", &diagnostics);
 }
 
 fn validate_markdown_retirement_authority(root: &Path, summary: &mut ValidateSummary) {

@@ -308,7 +308,7 @@ pub static WORKSPACE_CRATE_BOUNDARIES: &[WorkspaceCrateBoundary] = &[
         path: "crates/forge-core-cli",
         layer: ArchitecturalLayer::Adapter,
         allowed_dependency_layers: ALL_CORE_LAYERS,
-        explicit_exceptions: &[CrateId::Authority],
+        explicit_exceptions: &[CrateId::Authority, CrateId::Kernel],
         dependencies: &[
             CrateId::Authority,
             CrateId::CommandSurface,

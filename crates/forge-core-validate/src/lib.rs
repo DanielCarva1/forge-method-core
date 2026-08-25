@@ -22,8 +22,8 @@ pub use markdown_authority::{
 };
 pub use testkit::*;
 pub use workspace_architecture::{
-    validate_workspace_architecture_contracts, WorkspaceArchitectureIssue,
-    WorkspaceArchitectureReport,
+    validate_cargo_metadata_workspace, validate_workspace_architecture_contracts,
+    WorkspaceArchitectureIssue, WorkspaceArchitectureReport,
 };
 
 use forge_core_contracts::{
@@ -229,6 +229,7 @@ pub enum DiagnosticCode {
     RuntimeCapabilityOutputEvidenceMissing,
     HostConformanceInvalid,
     HostSurfaceContractInvalid,
+    WorkspaceArchitectureInvalid,
     MarkdownPolicyInvalid,
     MarkdownScanFailed,
     MarkdownLocalLinkMissing,
