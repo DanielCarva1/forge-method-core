@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   proofs remain pending.
 
 ### Changed
+- **Start Forge guidance checks now live in the Rust workspace.** The Cargo-owned
+  contract test replaces the standalone Python suite, preserves the same host,
+  documentation, policy, and journey assertions, and keeps a direct
+  `rustc --test` loop available for fast local feedback.
 - **Operational guidance can evolve independently from frozen retirement evidence.**
   The active catalog keeps the exact admitted retirement ID boundary, while the
   manifest-protected legacy snapshot remains historical proof instead of becoming

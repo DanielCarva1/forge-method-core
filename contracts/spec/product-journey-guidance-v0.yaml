@@ -721,7 +721,7 @@ verification_strategy:
       - "pure decisions tests for all seven Phase mappings, funnel equality, eligibility count, stable ordering, and 2048-byte compactness"
       - "guide unit tests for status summaries, one detail success, unknown ID, and retired ID"
       - "workflow resume projection unit test proving journey guidance is independent of selected policy"
-      - "start-forge Python contract test for v7 progressive consumption and v6 compatibility"
+      - "start-forge Rust contract test for progressive v9 consumption and current compatibility"
   integration_once_at_slice_close:
     - "one focused CLI journey from start to resume in Discovery"
     - "one guide status plus guide detail exercise through the installed-style binary"
