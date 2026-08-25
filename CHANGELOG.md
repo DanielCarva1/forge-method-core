@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.42` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.43` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mandatory second pass. Read-only Forge commands no longer trigger another
   continuity refresh.
 ### Fixed
+- **The operational practice catalog now activates at useful journey events.**
+  The host consults the bounded catalog once after resume and again only after
+  meaningful focus, phase, human-direction, or validation changes. It chooses
+  at most one practice without restoring per-message pre-flight, writing Forge
+  state merely for consultation, or creating a gate.
 - **Governed promotion now completes on native Windows without ambiguous writes.**
   Git subprocess paths translate Windows verbatim paths only at the Git boundary,
   Store-owned nested paths keep portable separators, local reversible promotion

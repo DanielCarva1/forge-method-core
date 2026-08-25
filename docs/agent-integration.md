@@ -157,6 +157,18 @@ the larger detail projection. The argv carries the ledger head observed by
 the project again. If the head changed, run `resume` again rather than removing
 or rewriting the expected digest.
 
+The event-driven catalog handoff keeps practice discovery reliable without
+restoring a pre-flight on every message. Once after the first successful resume
+in a chat, execute the published `journey_guidance.catalog.status_argv` and let
+the host choose zero or one plausible practice from the bounded summaries. Open
+only that practice's published detail when it can change the approach. Repeat
+the handoff only for a new or replaced Work Focus, a Phase change, a material
+human redirection or correction, or validation that exposes an earlier
+misunderstanding. Track the consultation in the host session and do not repeat
+the catalog query for ordinary messages, reads, tests, progress, or unchanged
+resume data. Reading guidance is advisory, writes no Forge state, and creates no
+gate or human approval.
+
 The host does not wait for the human to request research. When a doubt may
 change the accepted outcome, expose an unacceptable outcome, alter material
 risk, or make the next action unsafe, it first checks authoritative local

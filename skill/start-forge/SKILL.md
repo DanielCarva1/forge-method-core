@@ -180,12 +180,26 @@ unclear intent, broad impact, an architectural choice, material risk, or a
 validation failure caused by an earlier misunderstanding. Explain the reason
 simply and deepen only the affected stage.
 
-Use `data.journey_guidance.catalog.status_argv` to get the short eligible list.
-Then replace only the published workflow token in
-`data.journey_guidance.catalog.detail_argv.argv` when one or a few plausible
-practices need detail. Do not load every detail or ask the human to browse the
-catalog. The Host Agent chooses what helps; Forge does not turn catalog entries
-into mandatory ceremonies.
+<!-- event-driven-catalog-orchestration:start -->
+Use an event-driven catalog handoff rather than expecting the catalog to activate
+itself. Once after the first successful resume in a chat, execute
+`data.journey_guidance.catalog.status_argv`, choose zero or one plausible practice
+from its bounded summaries, and open at most one
+`data.journey_guidance.catalog.detail_argv.argv` only when its detail may change
+the approach. The same handoff becomes eligible again only when a new
+or replaced Work Focus is accepted, the canonical Phase changes, the human
+materially changes direction, expresses doubt, or gives corrective feedback, or
+validation exposes an earlier misunderstanding.
+
+Track this consultation in the host session, not Forge state. Do not consult
+again for ordinary messages, repository reads, tests, status checks, progress
+narration, or unchanged resume data. A consultation may select no practice. It
+does not write Forge state and never creates a gate, approval, or mandatory
+ceremony. Persist `selected_practice_ref` only as part of an independently
+accepted Work Focus meaning change; never write merely to record that the
+catalog was read. Do not load every detail or ask the human to browse the
+catalog. The Host Agent chooses what helps.
+<!-- event-driven-catalog-orchestration:end -->
 
 For Solo Cooperative work, translate the ranked action into the smallest concrete
 executable step compatible with the active objective and begin that work in the

@@ -24,6 +24,7 @@ RUNTIME_BUNDLE = (
     / "runtime-universal-assurance-candidate-v0.yaml"
 )
 START_E2E = ROOT / "crates" / "forge-core-cli" / "tests" / "start_cli_e2e.rs"
+GUIDANCE_ENGINE = ROOT / "contracts" / "workflows" / "guidance-engine.yaml"
 
 
 def marked_section(text: str, name: str) -> str:
@@ -170,6 +171,45 @@ class GuidedActivationContractTests(unittest.TestCase):
             "stale",
             "read-only advice",
         )
+
+    def test_catalog_orchestration_runs_once_on_material_events(self) -> None:
+        orchestration = normalized(
+            marked_section(self.skill, "event-driven-catalog-orchestration")
+        )
+        for expected in (
+            "once after the first successful resume in a chat",
+            "new or replaced Work Focus",
+            "Phase changes",
+            "human materially changes direction, expresses doubt, or gives corrective feedback",
+            "validation exposes an earlier misunderstanding",
+            "do not consult again for ordinary messages",
+            "choose zero or one plausible practice",
+            "execute `data.journey_guidance.catalog.status_argv`",
+            "open at most one `data.journey_guidance.catalog.detail_argv.argv`",
+            "does not write Forge state",
+            "never creates a gate, approval, or mandatory ceremony",
+        ):
+            with self.subTest(expected=expected):
+                self.assertIn(expected.casefold(), orchestration)
+
+        integration = normalized(AGENT_INTEGRATION.read_text(encoding="utf-8"))
+        for expected in (
+            "event-driven catalog handoff",
+            "once after the first successful resume in a chat",
+            "do not repeat the catalog query for ordinary messages",
+            "zero or one plausible practice",
+        ):
+            with self.subTest(integration=expected):
+                self.assertIn(expected.casefold(), integration)
+
+        guidance_engine = normalized(GUIDANCE_ENGINE.read_text(encoding="utf-8"))
+        for expected in (
+            "user changes direction, expresses doubt, gives feedback",
+            "choose zero or one eligible practice",
+            "do not mutate durable state merely because a practice was recommended",
+        ):
+            with self.subTest(guidance_engine=expected):
+                self.assertIn(expected.casefold(), guidance_engine)
 
     def test_solo_work_uses_concrete_executable_steps_before_human_escalation(self) -> None:
         self.assert_contract_contains(
