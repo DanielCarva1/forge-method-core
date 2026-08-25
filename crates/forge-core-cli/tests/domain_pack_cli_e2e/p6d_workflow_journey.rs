@@ -1260,12 +1260,12 @@ fn write_reference_remove_lifecycle(
     };
     let capability_registry_path = write_typed_yaml(
         &project.operator,
-        "remove-runtime-capability-registry.yaml",
+        "runtime-capability-registry.yaml",
         &capability_registry,
     );
     let sandbox_policy_path = write_typed_yaml(
         &project.operator,
-        "remove-capability-sandbox-policy.yaml",
+        "capability-sandbox-policy.yaml",
         &sandbox_policy,
     );
     let requirements = DomainPackProjectRequirementsDocument {
@@ -1346,8 +1346,6 @@ fn write_reference_remove_lifecycle(
         .generation
         .checked_add(1)
         .expect("reference lifecycle generation remains representable");
-    operator_source_binding.capability_registry_file = path_arg(&capability_registry_path);
-    operator_source_binding.sandbox_policy_file = path_arg(&sandbox_policy_path);
     let expected = DomainPackExpectedLifecycleState::Initialized {
         generation: committed.to_state.generation,
         active_lock_digest: committed.to_state.active_lock_digest.clone(),
@@ -1416,28 +1414,6 @@ fn write_reference_remove_lifecycle(
         capability_registry: capability_registry_path,
         sandbox_policy: sandbox_policy_path,
     }
-}
-
-fn publish_active_runtime_policy(lifecycle: &LifecycleFiles) {
-    let trust_input: DomainPackTrustEvaluationInput = typed(&lifecycle.trust_input);
-    let capability_registry = DomainPackRuntimeCapabilityRegistryDocument {
-        schema_version: DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.to_owned(),
-        domain_pack_runtime_capability_registry: trust_input.capability_registry,
-    };
-    let sandbox_policy = DomainPackCapabilitySandboxPolicyDocument {
-        schema_version: DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.to_owned(),
-        domain_pack_capability_sandbox_policy: trust_input.sandbox_policy,
-    };
-    fs::write(
-        &lifecycle.capability_registry,
-        yaml_serde::to_string(&capability_registry).expect("active capability registry YAML"),
-    )
-    .expect("publish active capability registry");
-    fs::write(
-        &lifecycle.sandbox_policy,
-        yaml_serde::to_string(&sandbox_policy).expect("active sandbox policy YAML"),
-    )
-    .expect("publish active sandbox policy");
 }
 
 fn maybe_export_reference_catalog(
@@ -3518,9 +3494,6 @@ fn p6d_reference_pack_real_journey() {
         args.extend(removal_tail.clone());
         let result = ok(&run(&args), command);
         if subcommand == "apply" {
-            // Lifecycle state commits first; the operator then publishes the
-            // fresh runtime policies whose digests the new exact lock seals.
-            publish_active_runtime_policy(&removal);
             assert_eq!(
                 result["data"]["domain_pack_lifecycle_receipt"]["to_state"]["generation"], 1,
                 "{result:#}"
