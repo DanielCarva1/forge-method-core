@@ -310,6 +310,7 @@ fn assert_both_reject(root: &Path, expected_text: &str) {
 
 fn copy_validation_tree(source: &Path, target: &Path) {
     copy_dir(&source.join("contracts"), &target.join("contracts"));
+    copy_workspace_metadata_skeleton(source, target);
     copy_validation_source(
         source,
         target,
@@ -326,6 +327,14 @@ fn copy_validation_tree(source: &Path, target: &Path) {
         "crates/forge-core-kernel/tests/workflow_retirement_runtime_evidence.rs",
     );
     copy_dir(&source.join("docs"), &target.join("docs"));
+    for relative in [
+        ".github/workflows/ci.yml",
+        ".github/workflows/msrv-policy.yml",
+        ".github/workflows/release-policy.yml",
+        "crates/forge-core-kernel/src/workflow_governance/adapter.rs",
+    ] {
+        copy_validation_placeholder(source, target, relative);
+    }
     for relative in [
         "AGENTS.md",
         "CHANGELOG.md",
@@ -354,6 +363,51 @@ fn copy_validation_tree(source: &Path, target: &Path) {
             .expect("create .forge-method dir");
         fs::copy(&ledger_source, &ledger_target).expect("copy ledger.ndjson");
     }
+}
+
+fn copy_workspace_metadata_skeleton(source: &Path, target: &Path) {
+    // The validator compares Cargo's real package and dependency projection
+    // with the architecture contracts. Cargo metadata needs target roots to
+    // exist, but this fixture never compiles them, so empty regular files keep
+    // the parity test small while preserving the production manifests.
+    for relative in ["Cargo.toml", "Cargo.lock"] {
+        copy_validation_source(source, target, relative);
+    }
+    for entry in fs::read_dir(source.join("crates")).expect("read workspace crates") {
+        let entry = entry.expect("workspace crate entry");
+        if !entry.file_type().expect("workspace crate type").is_dir() {
+            continue;
+        }
+        let crate_name = entry.file_name();
+        let crate_source = entry.path();
+        let crate_target = target.join("crates").join(&crate_name);
+        let manifest_source = crate_source.join("Cargo.toml");
+        if !manifest_source.is_file() {
+            continue;
+        }
+        fs::create_dir_all(&crate_target).expect("create workspace crate skeleton");
+        fs::copy(manifest_source, crate_target.join("Cargo.toml"))
+            .expect("copy workspace crate manifest");
+        for relative in ["src/lib.rs", "src/main.rs", "build.rs"] {
+            if crate_source.join(relative).is_file() {
+                write_empty_regular_file(&crate_target.join(relative));
+            }
+        }
+    }
+}
+
+fn copy_validation_placeholder(source: &Path, target: &Path, relative: &str) {
+    assert!(
+        source.join(relative).is_file(),
+        "validation link target is missing from source: {relative}"
+    );
+    write_empty_regular_file(&target.join(relative));
+}
+
+fn write_empty_regular_file(path: &Path) {
+    fs::create_dir_all(path.parent().expect("placeholder parent"))
+        .expect("create placeholder parent");
+    fs::write(path, []).expect("write regular placeholder");
 }
 
 fn copy_validation_source(source: &Path, target: &Path, relative: &str) {
