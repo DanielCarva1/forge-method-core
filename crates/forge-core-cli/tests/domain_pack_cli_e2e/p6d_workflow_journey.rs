@@ -3064,7 +3064,13 @@ fn p6d_reference_pack_real_journey() {
 
     heartbeat(started, "workflow-discovery");
     let authority = WorkflowAuthority::install(&project);
-    let initialized = ok(&project.workflow("init", &[]), "workflow.init");
+    let initialized = ok(
+        &project.workflow(
+            "init",
+            &command_args(&["--readiness-profile", "strict_external"]),
+        ),
+        "workflow.init",
+    );
     assert_eq!(
         initialized["data"]["effective"]["domain_pack_generation"]["generation"],
         0
