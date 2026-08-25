@@ -1258,6 +1258,16 @@ fn write_reference_remove_lifecycle(
         schema_version: DOMAIN_PACK_LIFECYCLE_SCHEMA_VERSION.to_owned(),
         domain_pack_capability_sandbox_policy: trust_input.sandbox_policy.clone(),
     };
+    let capability_registry_path = write_typed_yaml(
+        &project.operator,
+        "remove-runtime-capability-registry.yaml",
+        &capability_registry,
+    );
+    let sandbox_policy_path = write_typed_yaml(
+        &project.operator,
+        "remove-capability-sandbox-policy.yaml",
+        &sandbox_policy,
+    );
     let requirements = DomainPackProjectRequirementsDocument {
         schema_version: DOMAIN_PACK_SCHEMA_VERSION.to_owned(),
         domain_pack_project_requirements: composition_request
@@ -1336,6 +1346,8 @@ fn write_reference_remove_lifecycle(
         .generation
         .checked_add(1)
         .expect("reference lifecycle generation remains representable");
+    operator_source_binding.capability_registry_file = path_arg(&capability_registry_path);
+    operator_source_binding.sandbox_policy_file = path_arg(&sandbox_policy_path);
     let expected = DomainPackExpectedLifecycleState::Initialized {
         generation: committed.to_state.generation,
         active_lock_digest: committed.to_state.active_lock_digest.clone(),
@@ -1401,8 +1413,8 @@ fn write_reference_remove_lifecycle(
         discovery_request: install.discovery_request.clone(),
         discovery_projection: install.discovery_projection.clone(),
         acquisition_catalog: install.acquisition_catalog.clone(),
-        capability_registry: install.capability_registry.clone(),
-        sandbox_policy: install.sandbox_policy.clone(),
+        capability_registry: capability_registry_path,
+        sandbox_policy: sandbox_policy_path,
     }
 }
 
