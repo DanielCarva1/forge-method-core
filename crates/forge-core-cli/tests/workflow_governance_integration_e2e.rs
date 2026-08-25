@@ -6662,96 +6662,116 @@ fn promotion_recover_rejects_semantically_corrupt_effect_wal_without_writing() {
     assert_eq!(recovered["data"]["status"], "recovered");
 }
 
-#[test]
-fn promotion_recover_converges_across_every_durable_crash_boundary() {
-    const CRASH_POINTS: &[&str] = &[
-        "after_intent",
-        "after_replay_reservation",
-        "after_begin",
-        "after_before_image",
-        "after_bytes_before_marker",
-        "after_commit",
-        "after_replay_consume",
-        "after_readback",
-        "after_receipt",
-    ];
-    for crash_point in CRASH_POINTS {
-        let fixture = PromotionRecoveryFixture::new();
-        let crashed = fixture
-            .command("apply")
-            .env("FORGE_TEST_PROMOTION_CRASH_AT", crash_point)
-            .output()
-            .expect("run crash-injected promotion subprocess");
+fn assert_promotion_recover_converges_at(crash_point: &str) {
+    let fixture = PromotionRecoveryFixture::new();
+    let crashed = fixture
+        .command("apply")
+        .env("FORGE_TEST_PROMOTION_CRASH_AT", crash_point)
+        .output()
+        .expect("run crash-injected promotion subprocess");
+    assert_eq!(
+        crashed.status.code(),
+        Some(86),
+        "crash point {crash_point} did not terminate at its durable boundary\nstdout={}\nstderr={}",
+        String::from_utf8_lossy(&crashed.stdout),
+        String::from_utf8_lossy(&crashed.stderr)
+    );
+    if crash_point == "after_bytes_before_marker" {
+        let current = [
+            fs::read_to_string(fixture.consumer.app.join("README.md")).expect("README partial"),
+            fs::read_to_string(fixture.consumer.app.join("NOTES.md")).expect("NOTES partial"),
+        ];
         assert_eq!(
-            crashed.status.code(),
-            Some(86),
-            "crash point {crash_point} did not terminate at its durable boundary\nstdout={}\nstderr={}",
-            String::from_utf8_lossy(&crashed.stdout),
-            String::from_utf8_lossy(&crashed.stderr)
+            current
+                .iter()
+                .filter(|value| value.contains("recovered"))
+                .count(),
+            1,
+            "partial crash must leave exactly one old and one new file"
         );
-        if *crash_point == "after_bytes_before_marker" {
-            let current = [
-                fs::read_to_string(fixture.consumer.app.join("README.md")).expect("README partial"),
-                fs::read_to_string(fixture.consumer.app.join("NOTES.md")).expect("NOTES partial"),
-            ];
-            assert_eq!(
-                current
-                    .iter()
-                    .filter(|value| value.contains("recovered"))
-                    .count(),
-                1,
-                "partial crash must leave exactly one old and one new file"
-            );
-        }
-        let recovered = assert_ok(
-            &fixture
-                .command("recover")
-                .output()
-                .expect("recover interrupted promotion"),
-        );
-        assert!(
-            matches!(
-                recovered["data"]["status"].as_str(),
-                Some("recovered" | "already_committed")
-            ),
-            "unexpected recovery status at {crash_point}: {recovered}"
-        );
-        if matches!(*crash_point, "after_intent" | "after_replay_reservation") {
-            assert_eq!(
-                recovered["data"]["receipt"]["recovery_execution"]["recovery_kind"],
-                "pre_begin_fresh_execution_v1",
-                "pre-Begin recovery must disclose its fresh execution provenance link"
-            );
-            assert_eq!(
-                recovered["data"]["receipt"]["recovery_execution"]["durable_intent_digest"],
-                recovered["data"]["receipt"]["replay"]["intent_digest"]
-            );
-        }
-        assert_eq!(
-            fs::read_to_string(fixture.consumer.app.join("README.md")).expect("recovered README"),
-            "consumer project\nrecovered readme\n"
-        );
-        assert_eq!(
-            fs::read_to_string(fixture.consumer.app.join("NOTES.md")).expect("recovered NOTES"),
-            "recovered notes\n"
-        );
-        let canonical_once = state_tree_snapshot(&fixture.consumer.app);
-        let state_once = state_tree_snapshot(&fixture.consumer.state);
-        let repeated = assert_ok(
-            &fixture
-                .command("recover")
-                .output()
-                .expect("repeat recovered promotion"),
-        );
-        assert_eq!(repeated["data"]["status"], "already_committed");
-        assert_eq!(
-            repeated["data"]["canonical_mutation_performed"], false,
-            "terminal recovery must not write again"
-        );
-        assert_eq!(state_tree_snapshot(&fixture.consumer.app), canonical_once);
-        assert_eq!(state_tree_snapshot(&fixture.consumer.state), state_once);
     }
+    let recovered = assert_ok(
+        &fixture
+            .command("recover")
+            .output()
+            .expect("recover interrupted promotion"),
+    );
+    assert!(
+        matches!(
+            recovered["data"]["status"].as_str(),
+            Some("recovered" | "already_committed")
+        ),
+        "unexpected recovery status at {crash_point}: {recovered}"
+    );
+    if matches!(crash_point, "after_intent" | "after_replay_reservation") {
+        assert_eq!(
+            recovered["data"]["receipt"]["recovery_execution"]["recovery_kind"],
+            "pre_begin_fresh_execution_v1",
+            "pre-Begin recovery must disclose its fresh execution provenance link"
+        );
+        assert_eq!(
+            recovered["data"]["receipt"]["recovery_execution"]["durable_intent_digest"],
+            recovered["data"]["receipt"]["replay"]["intent_digest"]
+        );
+    }
+    assert_eq!(
+        fs::read_to_string(fixture.consumer.app.join("README.md")).expect("recovered README"),
+        "consumer project\nrecovered readme\n"
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.consumer.app.join("NOTES.md")).expect("recovered NOTES"),
+        "recovered notes\n"
+    );
+    let canonical_once = state_tree_snapshot(&fixture.consumer.app);
+    let state_once = state_tree_snapshot(&fixture.consumer.state);
+    let repeated = assert_ok(
+        &fixture
+            .command("recover")
+            .output()
+            .expect("repeat recovered promotion"),
+    );
+    assert_eq!(repeated["data"]["status"], "already_committed");
+    assert_eq!(
+        repeated["data"]["canonical_mutation_performed"], false,
+        "terminal recovery must not write again"
+    );
+    assert_eq!(state_tree_snapshot(&fixture.consumer.app), canonical_once);
+    assert_eq!(state_tree_snapshot(&fixture.consumer.state), state_once);
 }
+
+macro_rules! promotion_recovery_crash_boundary_test {
+    ($name:ident, $crash_point:literal) => {
+        #[test]
+        fn $name() {
+            assert_promotion_recover_converges_at($crash_point);
+        }
+    };
+}
+
+promotion_recovery_crash_boundary_test!(promotion_recover_converges_after_intent, "after_intent");
+promotion_recovery_crash_boundary_test!(
+    promotion_recover_converges_after_replay_reservation,
+    "after_replay_reservation"
+);
+promotion_recovery_crash_boundary_test!(promotion_recover_converges_after_begin, "after_begin");
+promotion_recovery_crash_boundary_test!(
+    promotion_recover_converges_after_before_image,
+    "after_before_image"
+);
+promotion_recovery_crash_boundary_test!(
+    promotion_recover_converges_after_bytes_before_marker,
+    "after_bytes_before_marker"
+);
+promotion_recovery_crash_boundary_test!(promotion_recover_converges_after_commit, "after_commit");
+promotion_recovery_crash_boundary_test!(
+    promotion_recover_converges_after_replay_consume,
+    "after_replay_consume"
+);
+promotion_recovery_crash_boundary_test!(
+    promotion_recover_converges_after_readback,
+    "after_readback"
+);
+promotion_recovery_crash_boundary_test!(promotion_recover_converges_after_receipt, "after_receipt");
 
 #[test]
 fn replacement_agent_ranks_exact_spaced_root_recovery_then_observes_completion() {
