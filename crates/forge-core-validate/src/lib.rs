@@ -231,6 +231,7 @@ pub enum DiagnosticCode {
     HostSurfaceContractInvalid,
     MarkdownPolicyInvalid,
     MarkdownScanFailed,
+    MarkdownLocalLinkMissing,
     MarkdownPathInvalid,
     MarkdownAllowlistDuplicate,
     MarkdownNotAllowlisted,

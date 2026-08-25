@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   proofs remain pending.
 
 ### Changed
+- **Local documentation links are now checked by the existing Rust validator.**
+  The Markdown authority pass reuses its bounded repository scan, preserves the
+  previous root, `docs/`, and `skill/` scope, and reports missing local targets
+  through `forge-core validate` without adding another runtime or filesystem walk.
 - **Start Forge guidance checks now live in the Rust workspace.** The Cargo-owned
   contract test replaces the standalone Python suite, preserves the same host,
   documentation, policy, and journey assertions, and keeps a direct

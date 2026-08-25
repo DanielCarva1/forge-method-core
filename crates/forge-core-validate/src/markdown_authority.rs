@@ -9,10 +9,12 @@ use forge_core_contracts::{
     MarkdownLoadAudience, MarkdownLoadError, MarkdownRetirementDocument,
 };
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
+use regex::Regex;
 use std::collections::BTreeSet;
 use std::fs;
 use std::io::{self, Read};
 use std::path::Path;
+use std::sync::OnceLock;
 
 pub const MARKDOWN_RETIREMENT_AUTHORITY_PATH: &str =
     "contracts/migration/markdown-debt-inventory.yaml";
@@ -300,6 +302,7 @@ pub fn validate_markdown_retirement(
                     "allowlisted Markdown path does not exist under the declared scan roots",
                 ));
             }
+            report.extend(validate_local_markdown_links(root, &discovered));
         }
         Err(message) => report.push(Diagnostic::error(
             DiagnosticCode::MarkdownScanFailed,
@@ -349,6 +352,132 @@ pub fn validate_markdown_retirement(
     }
 
     report
+}
+
+fn validate_local_markdown_links(
+    root: &Path,
+    markdown_paths: &BTreeSet<String>,
+) -> ValidationReport {
+    let mut report = ValidationReport::new();
+    for relative in markdown_paths
+        .iter()
+        .filter(|path| is_documentation_link_scope(path))
+    {
+        let document = root.join(relative);
+        let content = match fs::read_to_string(&document) {
+            Ok(content) => content,
+            Err(error) => {
+                report.push(Diagnostic::error(
+                    DiagnosticCode::MarkdownScanFailed,
+                    relative,
+                    format!("cannot read Markdown links: {error}"),
+                ));
+                continue;
+            }
+        };
+        let content = content.strip_prefix('\u{feff}').unwrap_or(&content);
+        let mut fenced = false;
+        for (index, line) in content.lines().enumerate() {
+            if is_fence_line(line) {
+                fenced = !fenced;
+                continue;
+            }
+            if fenced {
+                continue;
+            }
+            for captures in markdown_link_pattern().captures_iter(line) {
+                let Some(raw) = captures.get(1).map(|value| value.as_str()) else {
+                    continue;
+                };
+                let Some(destination) = local_link_destination(raw) else {
+                    continue;
+                };
+                if !document
+                    .parent()
+                    .unwrap_or(root)
+                    .join(&destination)
+                    .exists()
+                {
+                    report.push(Diagnostic::error(
+                        DiagnosticCode::MarkdownLocalLinkMissing,
+                        format!("{relative}:{}", index + 1),
+                        format!("missing local link {destination:?}"),
+                    ));
+                }
+            }
+        }
+    }
+    report
+}
+
+fn is_documentation_link_scope(path: &str) -> bool {
+    !path.contains('/') || path.starts_with("docs/") || path.starts_with("skill/")
+}
+
+fn is_fence_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    trimmed.starts_with("```") || trimmed.starts_with("~~~")
+}
+
+fn markdown_link_pattern() -> &'static Regex {
+    static LINK: OnceLock<Regex> = OnceLock::new();
+    LINK.get_or_init(|| Regex::new(r"!?\[[^\]]*\]\(([^)]+)\)").expect("valid Markdown link regex"))
+}
+
+fn local_link_destination(raw: &str) -> Option<String> {
+    const REMOTE_SCHEMES: [&str; 5] = ["http://", "https://", "mailto:", "data:", "ftp://"];
+
+    let mut value = raw.trim();
+    if let Some(angle) = value.strip_prefix('<') {
+        value = angle.split_once('>')?.0;
+    } else if let Some((destination, _title)) = value.split_once(' ') {
+        value = destination;
+    }
+    let lower = value.to_ascii_lowercase();
+    if value.is_empty()
+        || value.starts_with('#')
+        || REMOTE_SCHEMES
+            .iter()
+            .any(|scheme| lower.starts_with(scheme))
+    {
+        return None;
+    }
+    let value = value.split('#').next().unwrap_or_default();
+    let value = value.split('?').next().unwrap_or_default();
+    if value.is_empty() {
+        None
+    } else {
+        Some(percent_decode(value))
+    }
+}
+
+fn percent_decode(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            if let (Some(high), Some(low)) =
+                (hex_value(bytes[index + 1]), hex_value(bytes[index + 2]))
+            {
+                decoded.push((high << 4) | low);
+                index += 3;
+                continue;
+            }
+        }
+        decoded.push(bytes[index]);
+        index += 1;
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
+}
+
+const fn hex_value(value: u8) -> Option<u8> {
+    match value {
+        b'0'..=b'9' => Some(value - b'0'),
+        b'a'..=b'f' => Some(value - b'a' + 10),
+        b'A'..=b'F' => Some(value - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn collect_markdown_paths(root: &Path, scan_roots: &[String]) -> Result<BTreeSet<String>, String> {
@@ -811,6 +940,78 @@ mod tests {
             diagnostic.code == DiagnosticCode::MarkdownEntryInvalid
                 && diagnostic.path == "docs/allowed.md"
         }));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn missing_local_markdown_link_is_reported() {
+        let root = temp_root("missing-local-link");
+        fs::create_dir_all(root.join("docs")).expect("create docs");
+        fs::write(root.join("docs/guide.md"), "[missing](missing.md)\n").expect("write guide");
+        let markdown_paths = BTreeSet::from(["docs/guide.md".to_owned()]);
+
+        let report = validate_local_markdown_links(&root, &markdown_paths);
+
+        assert!(report.diagnostics().iter().any(|diagnostic| {
+            diagnostic.path == "docs/guide.md:1" && diagnostic.message.contains("missing.md")
+        }));
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn supported_markdown_link_forms_resolve_without_noise() {
+        let root = temp_root("supported-local-links");
+        fs::create_dir_all(root.join("docs/assets")).expect("create docs");
+        fs::create_dir_all(root.join("contracts")).expect("create contracts");
+        fs::write(root.join("docs/target file.md"), "target\n").expect("write target");
+        fs::write(root.join("docs/assets/image.png"), b"png").expect("write image");
+        fs::write(
+            root.join("contracts/contract.yaml"),
+            "schema_version: 0.1\n",
+        )
+        .expect("write contract");
+        fs::write(
+            root.join("docs/guide.md"),
+            concat!(
+                "[encoded](target%20file.md)\n",
+                "[title](target%20file.md \"Target\")\n",
+                "[query](target%20file.md?view=1#part)\n",
+                "[angle](<../contracts/contract.yaml>)\n",
+                "![image](assets/image.png)\n",
+                "[anchor](#section)\n",
+                "[remote](https://example.com/missing)\n",
+                "```md\n",
+                "[fenced](missing.md)\n",
+                "```\n",
+            ),
+        )
+        .expect("write guide");
+        let markdown_paths = BTreeSet::from(["docs/guide.md".to_owned()]);
+
+        let report = validate_local_markdown_links(&root, &markdown_paths);
+
+        assert!(
+            report.diagnostics().is_empty(),
+            "{:#?}",
+            report.diagnostics()
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn markdown_outside_documentation_scope_is_not_checked() {
+        let root = temp_root("outside-link-scope");
+        fs::create_dir_all(root.join("contracts/research")).expect("create contracts");
+        fs::write(
+            root.join("contracts/research/note.md"),
+            "[historical](missing.md)\n",
+        )
+        .expect("write note");
+        let markdown_paths = BTreeSet::from(["contracts/research/note.md".to_owned()]);
+
+        let report = validate_local_markdown_links(&root, &markdown_paths);
+
+        assert!(report.diagnostics().is_empty());
         fs::remove_dir_all(root).expect("cleanup");
     }
 }
