@@ -1,5 +1,7 @@
 //! Public, host-neutral solo journey conformance runner.
 
+mod builtin_adapter;
+
 use crate::cli_error::ExitError;
 use crate::cli_util::{command_surface_usage, emit_envelope};
 use forge_core_command_surface::COMMAND_HOST_CONFORMANCE;
@@ -40,16 +42,26 @@ const PROTOCOL_CONTRACT_BYTES: &[u8] =
     include_bytes!("../../../contracts/hosts/solo-host-conformance-v1/protocol-contract.json");
 const RESPONSE_EXAMPLE_BYTES: &[u8] =
     include_bytes!("../../../contracts/hosts/solo-host-conformance-v1/response.example.json");
-const REFERENCE_ADAPTER_BYTES: &[u8] =
-    include_bytes!("../../../contracts/hosts/solo-host-conformance-v1/reference-adapter.py");
-
-const EXPORTED_KIT_FILES: [(&str, &[u8]); 5] = [
+const EXPORTED_KIT_FILES: [(&str, &[u8]); 4] = [
     ("README.md", KIT_README_BYTES),
     ("corpus.json", CORPUS_BYTES),
     ("protocol-contract.json", PROTOCOL_CONTRACT_BYTES),
     ("response.example.json", RESPONSE_EXAMPLE_BYTES),
-    ("reference-adapter.py", REFERENCE_ADAPTER_BYTES),
 ];
+
+#[derive(Debug)]
+enum AdapterSelection {
+    External {
+        program: PathBuf,
+        args: Vec<String>,
+        id: String,
+        version: String,
+    },
+    Builtin {
+        kind: builtin_adapter::Kind,
+        observation_file: Option<PathBuf>,
+    },
+}
 
 #[derive(Debug)]
 enum Args {
@@ -58,12 +70,9 @@ enum Args {
         json: bool,
     },
     Run {
-        adapter: PathBuf,
-        adapter_args: Vec<String>,
+        adapter: Box<AdapterSelection>,
         host_id: String,
         host_version: String,
-        adapter_id: String,
-        adapter_version: String,
         platform_label: String,
         environment_label: String,
         canonical_root: PathBuf,
@@ -84,6 +93,9 @@ enum Args {
 /// Returns an error when arguments, bounded input, adapter execution, evidence
 /// verification, or output emission fail.
 pub fn run_host_conformance_command(args: &[String]) -> Result<(), ExitError> {
+    if args.get(1).map(String::as_str) == Some("__builtin-adapter") {
+        return builtin_adapter::run_process(&args[2..]);
+    }
     if args
         .iter()
         .skip(1)
@@ -103,11 +115,8 @@ pub fn run_host_conformance_command(args: &[String]) -> Result<(), ExitError> {
         }
         Args::Run {
             adapter,
-            adapter_args,
             host_id,
             host_version,
-            adapter_id,
-            adapter_version,
             platform_label,
             environment_label,
             canonical_root,
@@ -115,6 +124,8 @@ pub fn run_host_conformance_command(args: &[String]) -> Result<(), ExitError> {
             output_dir,
             json,
         } => {
+            let (adapter, adapter_args, adapter_id, adapter_version) =
+                resolve_adapter_selection(*adapter).map_err(ExitError::failed)?;
             let result = run_adapter(RunInput {
                 adapter,
                 adapter_args,
@@ -134,6 +145,42 @@ pub fn run_host_conformance_command(args: &[String]) -> Result<(), ExitError> {
         Args::Verify { bundle_dir, json } => {
             let result = verify_bundle(&bundle_dir).map_err(ExitError::failed)?;
             emit_envelope(CliEnvelope::ok("host-conformance.verify", result), json)
+        }
+    }
+}
+
+fn resolve_adapter_selection(
+    selection: AdapterSelection,
+) -> Result<(PathBuf, Vec<String>, String, String), String> {
+    match selection {
+        AdapterSelection::External {
+            program,
+            args,
+            id,
+            version,
+        } => Ok((program, args, id, version)),
+        AdapterSelection::Builtin {
+            kind,
+            observation_file,
+        } => {
+            let executable = std::env::current_exe().map_err(|error| {
+                format!("cannot identify the running Forge executable: {error}")
+            })?;
+            let mut args = vec![
+                "host-conformance".to_owned(),
+                "__builtin-adapter".to_owned(),
+                kind.as_str().to_owned(),
+            ];
+            if let Some(path) = observation_file {
+                args.push("--observation-file".to_owned());
+                args.push(path.to_string_lossy().into_owned());
+            }
+            Ok((
+                executable,
+                args,
+                kind.adapter_id().to_owned(),
+                builtin_adapter::Kind::adapter_version().to_owned(),
+            ))
         }
     }
 }
@@ -876,9 +923,10 @@ fn parse_args(args: &[String]) -> Result<Args, ExitError> {
         match args[index].as_str() {
             "--json" => json = true,
             "--no-json" => json = false,
-            flag @ ("--output-dir" | "--bundle-dir" | "--adapter" | "--host-id"
-            | "--host-version" | "--adapter-id" | "--adapter-version" | "--platform-id"
-            | "--environment-id" | "--canonical-root" | "--timeout-ms") => {
+            flag @ ("--output-dir" | "--bundle-dir" | "--adapter" | "--builtin-adapter"
+            | "--observation-file" | "--host-id" | "--host-version" | "--adapter-id"
+            | "--adapter-version" | "--platform-id" | "--environment-id"
+            | "--canonical-root" | "--timeout-ms") => {
                 index += 1;
                 let value = args
                     .get(index)
@@ -917,13 +965,41 @@ fn parse_args(args: &[String]) -> Result<Args, ExitError> {
             if timeout_ms == 0 || timeout_ms > MAX_SOLO_HOST_ADAPTER_TIMEOUT_MS {
                 return Err(usage());
             }
+            let adapter = match (
+                values.remove("--adapter"),
+                values.remove("--builtin-adapter"),
+            ) {
+                (Some(program), None) => {
+                    if values.contains_key("--observation-file") {
+                        return Err(usage());
+                    }
+                    AdapterSelection::External {
+                        program: PathBuf::from(program),
+                        args: adapter_args,
+                        id: take(&mut values, "--adapter-id")?,
+                        version: take(&mut values, "--adapter-version")?,
+                    }
+                }
+                (None, Some(kind)) if adapter_args.is_empty() => {
+                    let kind = builtin_adapter::Kind::parse(&kind).ok_or_else(usage)?;
+                    let observation_file = values.remove("--observation-file").map(PathBuf::from);
+                    if kind.requires_observation_file() != observation_file.is_some()
+                        || values.contains_key("--adapter-id")
+                        || values.contains_key("--adapter-version")
+                    {
+                        return Err(usage());
+                    }
+                    AdapterSelection::Builtin {
+                        kind,
+                        observation_file,
+                    }
+                }
+                _ => return Err(usage()),
+            };
             Args::Run {
-                adapter: PathBuf::from(take(&mut values, "--adapter")?),
-                adapter_args,
+                adapter: Box::new(adapter),
                 host_id: take(&mut values, "--host-id")?,
                 host_version: take(&mut values, "--host-version")?,
-                adapter_id: take(&mut values, "--adapter-id")?,
-                adapter_version: take(&mut values, "--adapter-version")?,
                 platform_label: take(&mut values, "--platform-id")?,
                 environment_label: take(&mut values, "--environment-id")?,
                 canonical_root: PathBuf::from(take(&mut values, "--canonical-root")?),

@@ -18,46 +18,35 @@ fn temp_dir(label: &str) -> PathBuf {
     ))
 }
 
-fn reference_adapter() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../contracts/hosts/solo-host-conformance-v1/reference-adapter.py")
-}
-
-fn codex_adapter() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../contracts/hosts/codex/solo-host-conformance-v1/adapter.py")
-}
-
-fn python_program() -> &'static str {
-    if cfg!(windows) {
-        "python"
-    } else {
-        "python3"
-    }
-}
-
 fn run_command(bundle: &Path, mode: Option<&str>, timeout_ms: Option<u64>) -> Command {
     let mut command = Command::cargo_bin("forge-core").expect("forge binary");
-    command.args([
-        "host-conformance",
-        "run",
-        "--adapter",
-        python_program(),
-        "--adapter-arg",
-        reference_adapter().to_str().expect("UTF-8 adapter path"),
-    ]);
+    command.args(["host-conformance", "run"]);
     if let Some(mode) = mode {
-        command.args(["--adapter-arg", mode]);
+        let binary = assert_cmd::cargo::cargo_bin("forge-core");
+        command.args([
+            "--adapter",
+            binary.to_str().expect("UTF-8 Forge binary path"),
+            "--adapter-arg",
+            "host-conformance",
+            "--adapter-arg",
+            "__builtin-adapter",
+            "--adapter-arg",
+            "reference",
+            "--adapter-arg",
+            mode,
+            "--adapter-id",
+            "forge.reference.protocol-only",
+            "--adapter-version",
+            "1.0.0",
+        ]);
+    } else {
+        command.args(["--builtin-adapter", "reference"]);
     }
     command.args([
         "--host-id",
         "example.host",
         "--host-version",
         "1.2.3",
-        "--adapter-id",
-        "example.adapter",
-        "--adapter-version",
-        "4.5.6",
         "--platform-id",
         "declared-test-platform",
         "--environment-id",
@@ -100,6 +89,58 @@ fn verify(bundle: &Path) -> assert_cmd::assert::Assert {
             "--json",
         ])
         .assert()
+}
+
+#[test]
+fn builtin_reference_adapter_runs_without_python() {
+    let bundle = temp_dir("builtin-reference");
+    let output = Command::cargo_bin("forge-core")
+        .expect("forge binary")
+        .args([
+            "host-conformance",
+            "run",
+            "--builtin-adapter",
+            "reference",
+            "--host-id",
+            "example.host",
+            "--host-version",
+            "1.2.3",
+            "--platform-id",
+            "declared-test-platform",
+            "--environment-id",
+            "isolated-e2e",
+            "--canonical-root",
+            env!("CARGO_MANIFEST_DIR"),
+            "--output-dir",
+            bundle.to_str().expect("UTF-8 bundle path"),
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let envelope: CliEnvelope<SoloHostConformanceResultDocument> =
+        serde_json::from_slice(&output).expect("run envelope");
+    let result = envelope.data.expect("run result");
+    assert_eq!(
+        result.bindings.declared.adapter_id,
+        "forge.reference.protocol-only"
+    );
+    assert_eq!(result.bindings.declared.adapter_version, "1.0.0");
+    assert!(result
+        .bindings
+        .observed
+        .adapter_invocation
+        .executable
+        .file_name
+        .starts_with("forge-core"));
+    assert!(result.capabilities.iter().all(|capability| {
+        capability.outcome == SoloHostConformanceOutcome::PartiallySupported
+    }));
+    verify(&bundle).success();
+    fs::remove_dir_all(bundle).expect("bundle cleanup");
 }
 
 #[test]
@@ -184,22 +225,14 @@ fn codex_adapter_preserves_partial_observations_and_typed_gaps() {
         .args([
             "host-conformance",
             "run",
-            "--adapter",
-            python_program(),
-            "--adapter-arg",
-            codex_adapter().to_str().expect("UTF-8 adapter path"),
-            "--adapter-arg",
+            "--builtin-adapter",
+            "codex",
             "--observation-file",
-            "--adapter-arg",
             observation_path.to_str().expect("UTF-8 observation path"),
             "--host-id",
             "openai.codex",
             "--host-version",
             "0.144.6",
-            "--adapter-id",
-            "forge.codex.cooperative",
-            "--adapter-version",
-            "1.0.0",
             "--platform-id",
             "windows-10.0.26200",
             "--environment-id",
@@ -285,22 +318,14 @@ fn codex_adapter_rejects_observations_with_unknown_fields() {
         .args([
             "host-conformance",
             "run",
-            "--adapter",
-            python_program(),
-            "--adapter-arg",
-            codex_adapter().to_str().expect("UTF-8 adapter path"),
-            "--adapter-arg",
+            "--builtin-adapter",
+            "codex",
             "--observation-file",
-            "--adapter-arg",
             observation_path.to_str().expect("UTF-8 observation path"),
             "--host-id",
             "openai.codex",
             "--host-version",
             "0.144.6",
-            "--adapter-id",
-            "forge.codex.cooperative",
-            "--adapter-version",
-            "1.0.0",
             "--platform-id",
             "windows-10.0.26200",
             "--environment-id",
@@ -410,7 +435,6 @@ fn public_kit_reference_fabricated_and_unsupported_paths_are_honest() {
         "corpus.json",
         "protocol-contract.json",
         "response.example.json",
-        "reference-adapter.py",
     ] {
         assert!(kit.join(file).is_file(), "missing exported {file}");
     }
@@ -439,7 +463,7 @@ fn public_kit_reference_fabricated_and_unsupported_paths_are_honest() {
         .adapter_invocation
         .executable
         .file_name
-        .contains("python"));
+        .starts_with("forge-core"));
     assert_eq!(
         reference
             .bindings
@@ -447,7 +471,7 @@ fn public_kit_reference_fabricated_and_unsupported_paths_are_honest() {
             .adapter_invocation
             .arguments
             .len(),
-        1
+        3
     );
     let serialized = serde_json::to_string(&reference).expect("serialize result");
     assert!(!serialized.contains(env!("CARGO_MANIFEST_DIR")));

@@ -1,29 +1,28 @@
 # Forge solo host conformance kit v1
 
-This folder is the complete public adapter kit. It is host-neutral: a new agent
-app does not require a product-name branch in Forge.
+This folder is the complete public protocol kit. It is host-neutral: a new
+agent app does not require a product-name branch in Forge.
 
 ## Try the protocol
 
-Run the reference adapter through the Forge runner. Give Forge the real project
-folder that the host is operating:
+Run the built-in reference adapter. Give Forge the real project folder that the
+host is operating:
 
 ```text
 forge-core host-conformance run \
-  --adapter python3 --adapter-arg reference-adapter.py \
+  --builtin-adapter reference \
   --host-id example.host --host-version 1.0.0 \
-  --adapter-id example.adapter --adapter-version 1.0.0 \
   --platform-id example-platform --environment-id local-test \
   --canonical-root <existing-project-folder> \
   --output-dir <new-bundle-folder> --json
 ```
 
-Forge starts the adapter inside the resolved canonical project folder and passes one
-JSON request on stdin. The adapter returns one JSON response on
-stdout. `protocol-contract.json` gives the closed field and safety rules;
-`response.example.json` shows the response shape. An adapter must copy the
-request bindings exactly. It reports assertions and closed fact codes, never a
-final support label.
+Forge starts its Rust reference adapter as a bounded process inside the resolved
+canonical project folder. External adapters still use `--adapter <program>` and
+the same stdin/stdout protocol. `protocol-contract.json` gives the closed field
+and safety rules; `response.example.json` shows the response shape. An adapter
+must copy the request bindings exactly. It reports assertions and closed fact
+codes, never a final support label.
 
 The reference adapter intentionally earns only `partially_supported`. Even an
 all-true adapter response stays partial because this Forge build cannot verify

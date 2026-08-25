@@ -25,8 +25,25 @@ forge-core host-conformance corpus --output-dir <new-folder> --json
 ```
 
 The new folder contains the corpus, plain instructions, a machine-readable
-protocol contract, a response example, and a runnable reference adapter. It is
-enough to build an adapter without reading Forge source code.
+protocol contract, and a response example. The runnable reference adapter is
+built into `forge-core`, so the kit needs no Python runtime or copied script.
+The exported files remain enough to build an external adapter without reading
+Forge source code.
+
+## Run a built-in adapter
+
+```text
+forge-core host-conformance run \
+  --builtin-adapter reference \
+  --host-id <id> --host-version <exact-version> \
+  --platform-id <declared-label> --environment-id <declared-label> \
+  --canonical-root <existing-project-folder> \
+  --output-dir <new-bundle-folder> --json
+```
+
+Use `--builtin-adapter codex --observation-file <json>` for a completed Codex
+journey. Forge supplies the built-in adapter ID and version so the caller cannot
+declare a different implementation than the one that actually ran.
 
 ## Run an adapter
 
@@ -104,14 +121,12 @@ tampered, or unsafe bundle is invalid; Forge never softens that into
 
 ## Codex cooperative adapter
 
-The packaged Codex adapter is
-`contracts/hosts/codex/solo-host-conformance-v1/adapter.py`. Version `1.0.0`
-translates one closed, same-owner observation from an exact, completed Codex
-journey into the public protocol. It is a post-journey evaluation tool invoked
-explicitly with `host-conformance run`; it is not run by every `forge start` or
-chat activation. It rejects unknown fields, validates its declared adapter ID
-and version, remains neutral to the Codex host version, and never claims native
-authenticity.
+The built-in Rust Codex adapter version `1.0.0` translates one closed,
+same-owner observation from an exact, completed Codex journey into the public
+protocol. It is a post-journey evaluation tool invoked explicitly with
+`host-conformance run`; it is not run by every `forge start` or chat activation.
+It rejects unknown fields, binds its own adapter ID and version, remains neutral
+to the Codex host version, and never claims native authenticity.
 
 This is useful for honest dogfood: Forge can bind exact versions, calculate all
 eight results, retain an integrity-checked bundle, and show missing host

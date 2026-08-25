@@ -532,6 +532,8 @@ pub const COMMAND_HOST_CONFORMANCE: CommandSpec = CommandSpec {
     name: "host-conformance",
     usage_lines: &[
         "       forge-core host-conformance corpus --output-dir <new-path> [--json|--no-json]",
+        "       forge-core host-conformance run --builtin-adapter reference --host-id <id> --host-version <version> --platform-id <id> --environment-id <id> --canonical-root <existing-path> [--timeout-ms <1..300000>] --output-dir <new-path> [--json|--no-json]",
+        "       forge-core host-conformance run --builtin-adapter codex --observation-file <json> --host-id <id> --host-version <version> --platform-id <id> --environment-id <id> --canonical-root <existing-path> [--timeout-ms <1..300000>] --output-dir <new-path> [--json|--no-json]",
         "       forge-core host-conformance run --adapter <program> [--adapter-arg <arg>]... --host-id <id> --host-version <version> --adapter-id <id> --adapter-version <version> --platform-id <id> --environment-id <id> --canonical-root <existing-path> [--timeout-ms <1..300000>] --output-dir <new-path> [--json|--no-json]",
         "       forge-core host-conformance verify --bundle-dir <path> [--json|--no-json]",
     ],

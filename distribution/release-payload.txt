@@ -23,10 +23,8 @@ contracts/hosts/host-support-matrix-v0.yaml
 contracts/hosts/solo-host-conformance-v1/README.md
 contracts/hosts/solo-host-conformance-v1/corpus.json
 contracts/hosts/solo-host-conformance-v1/protocol-contract.json
-contracts/hosts/solo-host-conformance-v1/reference-adapter.py
 contracts/hosts/solo-host-conformance-v1/response.example.json
 contracts/hosts/codex/solo-host-conformance-v1/README.md
-contracts/hosts/codex/solo-host-conformance-v1/adapter.py
 contracts/hosts/conformance-results/codex/0.144.6/README.md
 contracts/hosts/conformance-results/codex/0.144.6/run-summary.json
 contracts/hosts/conformance-results/codex/0.144.6/bundle/manifest.json

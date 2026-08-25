@@ -16,11 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.46` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.47` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
 ### Changed
+- **Built-in host conformance adapters now run in Rust without closing the open
+  protocol.** `host-conformance run --builtin-adapter reference|codex` executes
+  the distributed `forge-core` binary through the existing bounded process
+  seam, while `--adapter <program>` remains available for external hosts. The
+  duplicate Python adapters and Python-only tests were removed from source and
+  the release payload.
 - **Real-host evidence verification is now shipped in the Rust binary.** The
   new read-only `forge-core host-evidence verify --bundle-file <path>` command
   preserves the bounded YAML/JSON, safe-path, SHA-256, closed-schema, scenario,

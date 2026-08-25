@@ -1,23 +1,26 @@
 # Codex cooperative conformance adapter
 
-This version `1.0.0` adapter evaluates one completed Codex journey against
-Forge's public eight-part solo host kit. It is an explicitly invoked,
+This version `1.0.0` built-in Rust adapter evaluates one completed Codex journey
+against Forge's public eight-part solo host kit. It is an explicitly invoked,
 post-journey assessment tool: `forge start` does not run it, and it is not part
-of every chat activation. It is intentionally small and does not add
-Codex-specific rules to Forge core.
+of every chat activation.
 
 The adapter accepts one closed observation file:
 
 ```text
-python3 adapter.py --observation-file <observation.json>
+forge-core host-conformance run \
+  --builtin-adapter codex --observation-file <observation.json> \
+  --host-id openai.codex --host-version <exact-version> \
+  --platform-id <declared-platform> --environment-id <declared-environment> \
+  --canonical-root <existing-project-folder> \
+  --output-dir <new-bundle-folder> --json
 ```
 
-Forge supplies the public request on standard input. The adapter requires the
-declared adapter binding `forge.codex.cooperative` version `1.0.0`, remains
-neutral to the declared host version, copies the request bindings exactly, and
-writes one public response on standard output. Unknown fields, missing cases,
-missing assertions, unsafe fact codes, links, oversized files, raw chat, and
-free-form evidence are rejected.
+Forge assigns the adapter binding `forge.codex.cooperative` version `1.0.0`,
+runs the adapter through the same bounded process seam used by external
+adapters, and remains neutral to the declared host version. Unknown fields,
+missing cases, missing assertions, unsafe fact codes, links, oversized files,
+raw chat, and free-form evidence are rejected.
 
 The observation file has this shape:
 
