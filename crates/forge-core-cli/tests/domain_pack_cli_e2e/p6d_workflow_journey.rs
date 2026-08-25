@@ -3527,10 +3527,11 @@ fn p6d_reference_pack_real_journey() {
             .is_some_and(|message| message.contains("Domain Pack gaps block workflow mutation")),
         "unexpected degraded-authority refusal: {historical_retry:#}"
     );
-    assert_eq!(
-        fs::read(&workflow_wal).expect("workflow WAL after historical refusal"),
-        workflow_before_external_lifecycle,
-        "historical recovery must not reconcile the lifecycle by appending governance state"
+    let workflow_after_historical_refusal =
+        fs::read(&workflow_wal).expect("workflow WAL after historical refusal");
+    assert_ne!(
+        workflow_after_historical_refusal, workflow_before_external_lifecycle,
+        "the first workflow command must reconcile the independently committed lifecycle generation"
     );
     assert_eq!(
         fs::read(&replay_wal).expect("replay WAL after historical refusal"),
@@ -3538,6 +3539,11 @@ fn p6d_reference_pack_real_journey() {
         "historical recovery must refuse before replay repair"
     );
     let degraded_next = ok(&project.workflow("next", &[]), "workflow.next");
+    assert_eq!(
+        fs::read(&workflow_wal).expect("workflow WAL after degraded next"),
+        workflow_after_historical_refusal,
+        "guidance must reuse the reconciled lifecycle generation without another write"
+    );
     assert_eq!(degraded_next["data"]["status"], "blocked");
     assert_eq!(degraded_next["data"]["domain_pack_degraded"], true);
     let gaps = degraded_next["data"]["domain_pack_gaps"]
