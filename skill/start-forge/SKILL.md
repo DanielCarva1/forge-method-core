@@ -97,14 +97,14 @@ material risk acceptance, or irreversible/external effect. Before asking,
 explain the context, options, consequences, and recommendation, then ask exactly
 one concise question. If no human input is needed, say so plainly and continue.
 
-Treat the current `workflow_resume_summary_v9` as the working continuity view and
-reuse the same v9 response until durable workflow state changes. Never run two
+Treat the current `workflow_resume_summary_v10` as the working continuity view and
+reuse the same v10 response until durable workflow state changes. Never run two
 resume commands consecutively: a successful operation that can change workflow
 evaluation must intervene. Do not refresh after repository inspection,
 validation, tests, status, report, or help. A read-only command does not make the
 current response stale.
 
-Read `data.journey_guidance` in `workflow_resume_summary_v9` as compact,
+Read `data.journey_guidance` in `workflow_resume_summary_v10` as compact,
 read-only advice about the current product-development stage. Explain its
 objective in the human's language. `contact_density` means how much conversation
 is normally useful: high for active product discussion, medium for focused
@@ -181,17 +181,21 @@ validation failure caused by an earlier misunderstanding. Explain the reason
 simply and deepen only the affected stage.
 
 <!-- event-driven-catalog-orchestration:start -->
-Use an event-driven catalog handoff rather than expecting the catalog to activate
-itself. Once after the first successful resume in a chat, execute
-`data.journey_guidance.catalog.status_argv`, choose zero or one plausible practice
-from its bounded summaries, and open at most one
+Use the machine-readable event handoff in
+`data.journey_guidance.catalog.consultation`. Keep its seen `key` values only in
+the current host session. When a key is unseen and `host_action` is
+`consult_once_when_unseen`, execute `data.journey_guidance.catalog.status_argv`
+once, remember the key, choose zero or one plausible practice from its bounded
+summaries, and open at most one
 `data.journey_guidance.catalog.detail_argv.argv` only when its detail may change
-the approach. The same handoff becomes eligible again only when a new
-or replaced Work Focus is accepted, the canonical Phase changes, the human
-materially changes direction, expresses doubt, or gives corrective feedback, or
-validation exposes an earlier misunderstanding.
+the approach. Forge changes the key only when the project, active objective,
+canonical Phase, or Work Focus identity changes. The `recheck_events` also allow
+one consultation after a material human redirection or validation that exposes
+an earlier misunderstanding, even when the durable key is unchanged.
 
-Track this consultation in the host session, not Forge state. Do not consult
+Track this consultation in the host session, not Forge state. An unseen key in a
+fresh session provides the initial consultation without a per-message pre-flight.
+Do not consult
 again for ordinary messages, repository reads, tests, status checks, progress
 narration, or unchanged resume data. A consultation may select no practice. It
 does not write Forge state and never creates a gate, approval, or mandatory
@@ -416,7 +420,7 @@ proves integrity, not native host authenticity.
 
    `/start-forge` runs once per chat, not once per task. The current activation
    capability is present only when resume returns
-   `data.schema_version=workflow_resume_summary_v9`. V9 contains everything
+   `data.schema_version=workflow_resume_summary_v10`. V10 contains everything
    needed for the current agent step: effective Domain Pack identity, objective,
    autonomy projection, current evaluation, boundary rechecks, human decisions,
    blockers and warnings, ranked actions, active isolations, recoverable

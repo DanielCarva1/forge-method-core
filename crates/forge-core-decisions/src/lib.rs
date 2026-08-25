@@ -121,8 +121,8 @@ pub use post_build_verify_episode::{
 };
 pub use product_journey::{
     derive_product_journey_guidance, load_accepted_product_journey, project_product_stage,
-    validate_product_journey, ProductJourneyIssue, ProductJourneyIssueCode,
-    ProductJourneyRejection,
+    validate_product_journey, ProductJourneyConsultationContext, ProductJourneyIssue,
+    ProductJourneyIssueCode, ProductJourneyRejection,
 };
 pub use promotion::{
     derive_promotion_diff, evaluate_promotion_readiness, promotion_domain_digest,

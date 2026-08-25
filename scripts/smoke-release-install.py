@@ -291,24 +291,31 @@ def resume_summary_and_report(
     data = summary.get("data")
     require(isinstance(data, dict), "workflow resume summary lacks data")
     require(
-        data.get("schema_version") == "workflow_resume_summary_v9",
-        "workflow resume default lacks workflow_resume_summary_v9",
+        data.get("schema_version") == "workflow_resume_summary_v10",
+        "workflow resume default lacks workflow_resume_summary_v10",
     )
     require(
         isinstance(data.get("selected_policy_evidence"), list),
-        "workflow resume v9 lacks selected_policy_evidence",
+        "workflow resume v10 lacks selected_policy_evidence",
     )
     current_work = data.get("current_work")
-    require(isinstance(current_work, dict), "workflow resume v9 lacks current_work")
+    require(isinstance(current_work, dict), "workflow resume v10 lacks current_work")
     require(
         current_work.get("schema_version") == "current_work_context_v3",
-        "workflow resume v9 has unsupported current_work",
+        "workflow resume v10 has unsupported current_work",
     )
     journey = data.get("journey_guidance")
-    require(isinstance(journey, dict), "workflow resume v9 lacks journey_guidance")
+    require(isinstance(journey, dict), "workflow resume v10 lacks journey_guidance")
     require(
-        journey.get("schema_version") == "product_journey_guidance_v1",
-        "workflow resume v9 has unsupported journey guidance",
+        journey.get("schema_version") == "product_journey_guidance_v2",
+        "workflow resume v10 has unsupported journey guidance",
+    )
+    consultation = journey.get("catalog", {}).get("consultation")
+    require(
+        isinstance(consultation, dict)
+        and consultation.get("host_action") == "consult_once_when_unseen"
+        and str(consultation.get("key", "")).startswith("sha256:"),
+        "workflow resume v10 lacks the event-driven catalog consultation handoff",
     )
     require(
         "detail_argv" not in data,

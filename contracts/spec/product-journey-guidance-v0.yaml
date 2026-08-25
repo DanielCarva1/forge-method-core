@@ -292,15 +292,16 @@ authority_split:
     - "selected_policy_ref remains a governance concern and must not be relabeled as the current product-development practice"
 
 resume_interface:
-  containing_schema: "workflow_resume_summary_v9"
+  containing_schema: "workflow_resume_summary_v10"
   migration: >-
     Journey guidance advanced v6 to v7. Current Work advances the containing
-    summary to v8. Quick Cycle progressive readback advances it to v9 while
-    preserving the journey_guidance_v1 field unchanged.
+    summary to v8. Quick Cycle progressive readback advances it to v9. The
+    event-driven catalog consultation handoff advances the containing summary
+    to v10 and journey guidance to v2.
   field: "data.journey_guidance"
-  value_schema: "product_journey_guidance_v1"
+  value_schema: "product_journey_guidance_v2"
   required_shape:
-    schema_version: "product_journey_guidance_v1"
+    schema_version: "product_journey_guidance_v2"
     authority: "advisory_read_only"
     phase: "canonical Phase tag"
     stage:
@@ -310,6 +311,13 @@ resume_interface:
       contact_density: "accepted funnel-autonomy value"
     catalog:
       eligible_count: "count of operational non-retired capabilities eligible in the phase"
+      consultation:
+        schema_version: "catalog_consultation_v1"
+        key: "sha256 over project id, active objective digest, canonical Phase, and Work Focus id"
+        host_action: "consult_once_when_unseen"
+        recheck_events:
+          - "material_human_redirect"
+          - "validation_reveals_misunderstanding"
       status_argv: ["forge-core", "guide", "status", "--root", "<resolved-root>", "--phase", "<current-phase>", "--json"]
       detail_argv:
         argv: ["forge-core", "guide", "detail", "--workflow", "__FORGE_CAPABILITY_ID__", "--json"]
@@ -320,6 +328,8 @@ resume_interface:
     - "Do not embed the full workflow catalog, retirement tombstones, active objective, policy simulation, or evidence again."
     - "Reuse top-level active_objective, current_evaluation, blockers, and actions by reference in host instructions rather than copying their bytes."
     - "The journey_guidance canonical JSON must remain at or below 2048 bytes for every Phase and valid project root."
+    - "The host tracks consultation keys only in its current session; Forge writes no consultation state."
+    - "Routine snapshots, ledger progress, reads, tests, and status checks cannot change the consultation key."
   independence:
     - "Changing selected_policy_ref while Phase, lifecycle descriptor, funnel policy, and catalog remain equal cannot change journey_guidance."
     - "Deleting or replacing an advisory workflow's steps cannot change governance simulation, verdicts, gates, claims, or authority."
@@ -369,7 +379,8 @@ host_adapter_behavior:
     - "Bootstrap and resume exactly once according to the existing durable-state rule."
     - "Read journey_guidance after resume instead of carrying a copied lifecycle or capability catalog."
     - "Use contact_density to decide how much human conversation is expected, not to request procedural confirmation during autonomous stages."
-    - "When stage guidance is needed, execute catalog.status_argv, reason over the latest conversation, then request detail only for plausible capabilities."
+    - "When catalog.consultation.key is unseen in the current host session, execute catalog.status_argv once, remember the key, reason over the latest conversation, then request detail only for a plausible capability."
+    - "A material human redirect or validation that reveals an earlier misunderstanding may trigger one recheck even when the durable key is unchanged."
     - "Explain the selected practice and why it helps in simple language; do not expose catalog browsing as human work."
     - "Do not run research merely because a research capability exists. The host chooses it when uncertainty can change the decision."
     - "Begin with compact stage treatment and expand only when an explicit expansion signal is observed."
@@ -721,7 +732,7 @@ verification_strategy:
       - "pure decisions tests for all seven Phase mappings, funnel equality, eligibility count, stable ordering, and 2048-byte compactness"
       - "guide unit tests for status summaries, one detail success, unknown ID, and retired ID"
       - "workflow resume projection unit test proving journey guidance is independent of selected policy"
-      - "start-forge Rust contract test for progressive v9 consumption and current compatibility"
+      - "start-forge Rust contract test for progressive v10 consumption and current compatibility"
   integration_once_at_slice_close:
     - "one focused CLI journey from start to resume in Discovery"
     - "one guide status plus guide detail exercise through the installed-style binary"

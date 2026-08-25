@@ -374,7 +374,7 @@ forge-core domain-pack status --state-root <sidecar>/.forge-method --json
 forge-core domain-pack recover --state-root <sidecar>/.forge-method --json
 ```
 
-For a replacement agent, inspect the default `workflow_resume_summary_v9`
+For a replacement agent, inspect the default `workflow_resume_summary_v10`
 response first. It carries every current blocker, warning, active work item,
 recoverable promotion, ranked action, and current selected-policy assessment.
 The bounded `data.current_work` block reports `absent`, `current`, `stale`,

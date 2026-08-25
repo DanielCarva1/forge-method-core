@@ -1,11 +1,14 @@
-use forge_core_contracts::{Catalog, Phase};
+use forge_core_contracts::{Catalog, Phase, StableId};
 use forge_core_contracts::{
-    ProductJourneyDetailArgv, ProductJourneyDocument, ProductJourneyGuidance,
-    ProductJourneyGuidanceAuthority, ProductJourneyGuidanceCatalog, ProductJourneyGuidanceStage,
-    ProductJourneyRecommendationOwner, ProductStageDescriptor, PRODUCT_JOURNEY_CONTRACT_REF,
+    ProductJourneyCatalogConsultation, ProductJourneyCatalogHostAction,
+    ProductJourneyCatalogRecheckEvent, ProductJourneyDetailArgv, ProductJourneyDocument,
+    ProductJourneyGuidance, ProductJourneyGuidanceAuthority, ProductJourneyGuidanceCatalog,
+    ProductJourneyGuidanceStage, ProductJourneyRecommendationOwner, ProductStageDescriptor,
+    CATALOG_CONSULTATION_SCHEMA_VERSION, PRODUCT_JOURNEY_CONTRACT_REF,
     PRODUCT_JOURNEY_GUIDANCE_SCHEMA_VERSION, PRODUCT_JOURNEY_SCHEMA_VERSION,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::sync::OnceLock;
 
 const MAX_STAGE_ID_BYTES: usize = 64;
@@ -41,6 +44,14 @@ pub enum ProductJourneyIssueCode {
     InvalidStageDescriptor,
     InvalidTransitionStage,
     GuidanceTooLarge,
+}
+
+/// Durable semantic coordinates for one host-session catalog consultation.
+#[derive(Debug, Clone, Copy)]
+pub struct ProductJourneyConsultationContext<'a> {
+    pub project_id: &'a StableId,
+    pub objective_digest: Option<&'a str>,
+    pub work_focus_id: Option<&'a StableId>,
 }
 
 /// Load and validate the product journey compiled into the binary.
@@ -189,6 +200,7 @@ pub fn derive_product_journey_guidance(
     catalog: &Catalog,
     phase: Phase,
     project_root: &str,
+    consultation_context: ProductJourneyConsultationContext<'_>,
 ) -> Result<ProductJourneyGuidance, ProductJourneyRejection> {
     let stage = project_product_stage(document, phase)?;
     let guidance = ProductJourneyGuidance {
@@ -203,6 +215,15 @@ pub fn derive_product_journey_guidance(
         },
         catalog: ProductJourneyGuidanceCatalog {
             eligible_count: super::eligible_count(catalog, phase),
+            consultation: ProductJourneyCatalogConsultation {
+                schema_version: CATALOG_CONSULTATION_SCHEMA_VERSION.to_owned(),
+                key: catalog_consultation_key(phase, consultation_context),
+                host_action: ProductJourneyCatalogHostAction::ConsultOnceWhenUnseen,
+                recheck_events: vec![
+                    ProductJourneyCatalogRecheckEvent::MaterialHumanRedirect,
+                    ProductJourneyCatalogRecheckEvent::ValidationRevealsMisunderstanding,
+                ],
+            },
             status_argv: vec![
                 "forge-core".to_owned(),
                 "guide".to_owned(),
@@ -249,6 +270,28 @@ pub fn derive_product_journey_guidance(
         });
     }
     Ok(guidance)
+}
+
+fn catalog_consultation_key(
+    phase: Phase,
+    context: ProductJourneyConsultationContext<'_>,
+) -> String {
+    let mut hasher = Sha256::new();
+    let phase = phase.to_string();
+    for component in [
+        "forge.product-journey.catalog-consultation/1",
+        context.project_id.0.as_str(),
+        phase.as_str(),
+        context.objective_digest.unwrap_or("<no-objective>"),
+        context
+            .work_focus_id
+            .map_or("<no-work-focus>", |focus_id| focus_id.0.as_str()),
+    ] {
+        let byte_len = u64::try_from(component.len()).unwrap_or(u64::MAX);
+        hasher.update(byte_len.to_le_bytes());
+        hasher.update(component.as_bytes());
+    }
+    format!("sha256:{:x}", hasher.finalize())
 }
 
 fn validate_stage(stage: &ProductStageDescriptor, issues: &mut Vec<ProductJourneyIssue>) {
@@ -361,11 +404,21 @@ mod tests {
         let journey = load_accepted_product_journey().expect("accepted product journey");
         let catalog = crate::load_embedded_catalog();
         assert!(catalog.is_clean());
+        let project_id = StableId("project.product".to_owned());
 
         for phase in Phase::ALL {
-            let guidance =
-                derive_product_journey_guidance(journey, &catalog.catalog, phase, r"D:\product")
-                    .expect("journey guidance");
+            let guidance = derive_product_journey_guidance(
+                journey,
+                &catalog.catalog,
+                phase,
+                r"D:\product",
+                ProductJourneyConsultationContext {
+                    project_id: &project_id,
+                    objective_digest: None,
+                    work_focus_id: None,
+                },
+            )
+            .expect("journey guidance");
             assert_eq!(guidance.phase, phase);
             assert_eq!(
                 guidance.stage.contact_density,
@@ -390,16 +443,110 @@ mod tests {
     }
 
     #[test]
+    fn catalog_consultation_key_changes_only_with_semantic_journey_context() {
+        let journey = load_accepted_product_journey().expect("accepted product journey");
+        let catalog = crate::load_embedded_catalog();
+        let project_id = StableId("project.product".to_owned());
+        let other_project_id = StableId("project.other".to_owned());
+        let focus_id = StableId("focus.first".to_owned());
+        let other_focus_id = StableId("focus.second".to_owned());
+        let objective = format!("sha256:{}", "a".repeat(64));
+        let other_objective = format!("sha256:{}", "b".repeat(64));
+        let derive = |phase, project_id, objective_digest, work_focus_id, root| {
+            derive_product_journey_guidance(
+                journey,
+                &catalog.catalog,
+                phase,
+                root,
+                ProductJourneyConsultationContext {
+                    project_id,
+                    objective_digest,
+                    work_focus_id,
+                },
+            )
+            .expect("journey guidance")
+            .catalog
+            .consultation
+            .key
+        };
+
+        let baseline = derive(
+            Phase::Discovery,
+            &project_id,
+            Some(&objective),
+            Some(&focus_id),
+            r"D:\product",
+        );
+        assert_eq!(
+            baseline,
+            derive(
+                Phase::Discovery,
+                &project_id,
+                Some(&objective),
+                Some(&focus_id),
+                r"D:\different-checkout",
+            ),
+            "checkout or routine readback location is not a new journey event"
+        );
+        assert_ne!(
+            baseline,
+            derive(
+                Phase::Discovery,
+                &other_project_id,
+                Some(&objective),
+                Some(&focus_id),
+                r"D:\product",
+            )
+        );
+        assert_ne!(
+            baseline,
+            derive(
+                Phase::Discovery,
+                &project_id,
+                Some(&other_objective),
+                Some(&focus_id),
+                r"D:\product",
+            )
+        );
+        assert_ne!(
+            baseline,
+            derive(
+                Phase::Discovery,
+                &project_id,
+                Some(&objective),
+                Some(&other_focus_id),
+                r"D:\product",
+            )
+        );
+        assert_ne!(
+            baseline,
+            derive(
+                Phase::Plan,
+                &project_id,
+                Some(&objective),
+                Some(&focus_id),
+                r"D:\product",
+            )
+        );
+    }
+
+    #[test]
     fn guidance_rejects_a_project_root_that_breaks_the_compactness_budget() {
         let journey = load_accepted_product_journey().expect("accepted product journey");
         let catalog = crate::load_embedded_catalog();
         let oversized_root = format!("D:\\{}", "nested\\".repeat(300));
+        let project_id = StableId("project.product".to_owned());
 
         let rejection = derive_product_journey_guidance(
             journey,
             &catalog.catalog,
             Phase::Discovery,
             &oversized_root,
+            ProductJourneyConsultationContext {
+                project_id: &project_id,
+                objective_digest: None,
+                work_focus_id: None,
+            },
         )
         .expect_err("oversized guidance must fail closed");
 

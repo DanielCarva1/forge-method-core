@@ -129,7 +129,7 @@ clarified the prior objective.
 
 ## Agent autonomy boundary
 
-Once `workflow_resume_summary_v9` exposes an active
+Once `workflow_resume_summary_v10` exposes an active
 `agent_autonomy.binding`, ordinary work inside the accepted objective proceeds
 autonomously. The binding contains the objective id/revision/digest and
 assurance epoch plus current project snapshot, ledger head, and state version.
@@ -158,13 +158,16 @@ the project again. If the head changed, run `resume` again rather than removing
 or rewriting the expected digest.
 
 The event-driven catalog handoff keeps practice discovery reliable without
-restoring a pre-flight on every message. Once after the first successful resume
-in a chat, execute the published `journey_guidance.catalog.status_argv` and let
+restoring a pre-flight on every message. Keep
+`journey_guidance.catalog.consultation.key` values only in the current host
+session. When a key is unseen and `host_action` is `consult_once_when_unseen`,
+execute the published `journey_guidance.catalog.status_argv` once and let
 the host choose zero or one plausible practice from the bounded summaries. Open
-only that practice's published detail when it can change the approach. Repeat
-the handoff only for a new or replaced Work Focus, a Phase change, a material
-human redirection or correction, or validation that exposes an earlier
-misunderstanding. Track the consultation in the host session and do not repeat
+only that practice's published detail when it can change the approach. Forge
+changes the key only for a different project, active objective, Phase, or Work
+Focus identity. A material human redirection or correction, or validation that
+exposes an earlier misunderstanding, permits one recheck even when the durable
+key is unchanged. Do not repeat
 the catalog query for ordinary messages, reads, tests, progress, or unchanged
 resume data. Reading guidance is advisory, writes no Forge state, and creates no
 gate or human approval.
@@ -272,7 +275,7 @@ Domain Pack generation, accepted intent/assurance epoch, all eight lens states,
 governed evidence bindings, blockers, and next action, fail closed.
 
 The current executable returns the concise, versioned
-`workflow_resume_summary_v9` activation view by default. V9 is the complete
+`workflow_resume_summary_v10` activation view by default. V10 is the complete
 current-state contract for the agent: it carries the current objective; the
 full autonomy projection; every current evaluation, blocker, warning, active
 isolation, recoverable promotion, cooperative evidence item, authorization
@@ -280,7 +283,7 @@ packet, and exact gap. Counts identify only older audit history omitted from
 the activation view. `current_work` adds only the bounded accepted work focus;
 it does not copy transcript, issue body, evidence body, or catalog content.
 
-In V9, `current_work` is the accepted product-work continuity. For an active or
+In V10, `current_work` is the accepted product-work continuity. For an active or
 blocked focus, its `next_step` is the product step to continue. For a completed
 or abandoned focus, that field is only a handoff toward a new Work Focus. Its
 blocker count and references are focus-bound; top-level blockers and evaluation
@@ -403,7 +406,7 @@ Completing discovery records the exact grounding anchor in `grounding_anchor_dig
 
 For a `solo_cooperative` objective, agents use the one existing public command,
 `forge-core workflow evidence admit-cooperative`, with the closed packet from
-`workflow_resume_summary_v9.actions.cooperative_evidence_packet`. The offer is
+`workflow_resume_summary_v10.actions.cooperative_evidence_packet`. The offer is
 bound to the active objective, accepted record, effective bundle, project
 snapshot, ledger head, state version, carrying principal, selected policy,
 claim, evaluator, subject, and scenario. Only `solo_cooperative` publishes this

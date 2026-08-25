@@ -440,7 +440,7 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
         serde_json::from_slice(&resume_output.stdout).expect("parse resume envelope");
     assert_eq!(
         resumed["data"]["schema_version"],
-        "workflow_resume_summary_v9"
+        "workflow_resume_summary_v10"
     );
     assert_eq!(resumed["data"]["readiness_profile"], "solo_cooperative");
     assert_eq!(
@@ -476,7 +476,7 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
         .is_some_and(|message| message.contains("no accepted Work Focus")));
     assert_eq!(
         resumed["data"]["journey_guidance"]["schema_version"],
-        "product_journey_guidance_v1"
+        "product_journey_guidance_v2"
     );
     assert_eq!(
         resumed["data"]["journey_guidance"]["stage"]["id"],
@@ -485,6 +485,19 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
     assert_eq!(
         resumed["data"]["journey_guidance"]["catalog"]["status_argv"][0],
         "forge-core"
+    );
+    let consultation = &resumed["data"]["journey_guidance"]["catalog"]["consultation"];
+    assert_eq!(consultation["schema_version"], "catalog_consultation_v1");
+    assert_eq!(consultation["host_action"], "consult_once_when_unseen");
+    assert!(consultation["key"]
+        .as_str()
+        .is_some_and(|key| key.starts_with("sha256:") && key.len() == 71));
+    assert_eq!(
+        consultation["recheck_events"],
+        serde_json::json!([
+            "material_human_redirect",
+            "validation_reveals_misunderstanding"
+        ])
     );
 
     // Dogfood the progressive handoff exactly as a replacement agent does:

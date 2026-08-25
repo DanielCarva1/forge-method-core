@@ -25,7 +25,7 @@ use forge_core_contracts::{
 };
 use forge_core_decisions::{
     derive_product_journey_guidance, load_accepted_product_journey, load_embedded_catalog,
-    AgentAutonomyEvaluationError, WorkflowGovernanceSimulation,
+    AgentAutonomyEvaluationError, ProductJourneyConsultationContext, WorkflowGovernanceSimulation,
 };
 use forge_core_kernel::{
     load_admitted_workflow_retirement_checkpoint, WorkflowActiveCooperativeObjective,
@@ -435,7 +435,7 @@ fn credential_exit_reason(error: &ExitError) -> ExitReason {
     }
 }
 
-const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v9";
+const WORKFLOW_RESUME_SUMMARY_SCHEMA_VERSION: &str = "workflow_resume_summary_v10";
 
 #[derive(Debug, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -691,6 +691,20 @@ fn workflow_resume_summary<'a>(
         &catalog.catalog,
         phase,
         &project_root.to_string_lossy(),
+        ProductJourneyConsultationContext {
+            project_id: &guidance.project_id,
+            objective_digest: guidance
+                .active_cooperative_objective
+                .as_ref()
+                .map(|objective| objective.objective_digest.as_str())
+                .or_else(|| {
+                    current_work
+                        .focus
+                        .as_ref()
+                        .map(|focus| focus.objective.objective_digest.as_str())
+                }),
+            work_focus_id: current_work.focus.as_ref().map(|focus| &focus.focus_id),
+        },
     )
     .map_err(|rejection| {
         format!(

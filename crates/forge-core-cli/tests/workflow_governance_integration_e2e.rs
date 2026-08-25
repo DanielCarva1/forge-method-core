@@ -1299,7 +1299,7 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
     let summary = assert_ok(&summary_output);
     assert_eq!(
         summary["data"]["schema_version"],
-        "workflow_resume_summary_v9"
+        "workflow_resume_summary_v10"
     );
     assert_eq!(summary["data"]["detail_level"], "summary");
     assert_eq!(
@@ -2370,6 +2370,11 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
             .expect("append final Quick Cycle reference")
     };
     let after_reference = assert_ok(&consumer.run(&["resume"]));
+    let before_consultation_key =
+        &before["data"]["journey_guidance"]["catalog"]["consultation"]["key"];
+    let focused_consultation_key =
+        &after_reference["data"]["journey_guidance"]["catalog"]["consultation"]["key"];
+    assert_ne!(before_consultation_key, focused_consultation_key);
     let blocker_digest = blocker_record.record_digest;
     let completion = |validation_summary: Option<&str>, interaction_ref: &str| {
         consumer.write_json(
@@ -2449,7 +2454,7 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
     let completed_resume = assert_ok(&consumer.run(&["resume"]));
     assert_eq!(
         completed_resume["data"]["schema_version"],
-        "workflow_resume_summary_v9"
+        "workflow_resume_summary_v10"
     );
     assert_eq!(
         completed_resume["data"]["current_work"]["focus"]["quick_cycle"],
@@ -2458,6 +2463,11 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
             "stage_closeout_count": 5,
             "expansion_count": 0
         })
+    );
+    assert_eq!(
+        completed_resume["data"]["journey_guidance"]["catalog"]["consultation"]["key"],
+        *focused_consultation_key,
+        "routine progress on the same Work Focus must not retrigger the catalog"
     );
     assert_eq!(
         state_tree_snapshot(&consumer.state),
@@ -2497,7 +2507,7 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
     let resumed = assert_ok(&consumer.run(&["resume"]));
     assert_eq!(
         resumed["data"]["schema_version"],
-        "workflow_resume_summary_v9"
+        "workflow_resume_summary_v10"
     );
     assert_eq!(
         resumed["data"]["current_work"]["schema_version"],
@@ -2506,6 +2516,11 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
     assert!(resumed["data"]["current_work"]["focus"]
         .get("quick_cycle")
         .is_none());
+    assert_ne!(
+        resumed["data"]["journey_guidance"]["catalog"]["consultation"]["key"],
+        *focused_consultation_key,
+        "a successor Work Focus must publish a new catalog consultation key"
+    );
     let current_detail = assert_ok(&run_current_work_detail_record(
         &consumer,
         successor["data"]["ledger_head_digest"]
@@ -3559,7 +3574,7 @@ fn internal_fixture_reaches_investigation_then_public_solo_source_command_supers
     let resumed = assert_ok(&consumer.run(&["resume"]));
     assert_eq!(
         resumed["data"]["schema_version"],
-        "workflow_resume_summary_v9"
+        "workflow_resume_summary_v10"
     );
     let selected_policy_evidence = resumed["data"]["selected_policy_evidence"]
         .as_array()

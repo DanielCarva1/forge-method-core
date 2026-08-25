@@ -169,7 +169,7 @@ fn resume_refresh_is_bounded_by_real_state_changes() {
     assert_contains(
         guided_contract(),
         &[
-            "reuse the same v9 response",
+            "reuse the same v10 response",
             "Never run two resume commands consecutively",
             "a successful operation that can change workflow evaluation must intervene",
             "Do not refresh after repository inspection, validation, tests, status, report, or help",
@@ -186,11 +186,13 @@ fn resume_refresh_is_bounded_by_real_state_changes() {
 }
 
 #[test]
-fn v9_uses_progressive_product_journey_and_current_work() {
+fn v10_uses_progressive_product_journey_and_current_work() {
     assert_contains(
         guided_contract(),
         &[
-            "workflow_resume_summary_v9",
+            "workflow_resume_summary_v10",
+            "catalog.consultation",
+            "consult_once_when_unseen",
             "data.journey_guidance",
             "contact_density",
             "Expansion Signal",
@@ -217,11 +219,14 @@ fn catalog_orchestration_runs_once_on_material_events() {
     assert_contains(
         marked_section(SKILL, "event-driven-catalog-orchestration"),
         &[
-            "once after the first successful resume in a chat",
-            "new or replaced Work Focus",
-            "Phase changes",
-            "human materially changes direction, expresses doubt, or gives corrective feedback",
-            "validation exposes an earlier misunderstanding",
+            "machine-readable event handoff",
+            "host_action",
+            "consult_once_when_unseen",
+            "project, active objective, canonical Phase, or Work Focus identity changes",
+            "recheck_events",
+            "material human redirection",
+            "validation that exposes an earlier misunderstanding",
+            "fresh session",
             "do not consult again for ordinary messages",
             "choose zero or one plausible practice",
             "execute `data.journey_guidance.catalog.status_argv`",
@@ -234,7 +239,9 @@ fn catalog_orchestration_runs_once_on_material_events() {
         AGENT_INTEGRATION,
         &[
             "event-driven catalog handoff",
-            "once after the first successful resume in a chat",
+            "catalog.consultation.key",
+            "consult_once_when_unseen",
+            "different project, active objective, Phase, or Work Focus identity",
             "do not repeat the catalog query for ordinary messages",
             "zero or one plausible practice",
         ],
