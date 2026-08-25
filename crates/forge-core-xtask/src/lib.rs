@@ -682,7 +682,7 @@ fn workspace_metadata(repo: &Path) -> Result<(String, PathBuf)> {
     let output = run_command(
         Command::new("cargo")
             .args(["metadata", "--locked", "--no-deps", "--format-version", "1"])
-            .current_dir(repo),
+            .current_dir(external_process_path(repo)),
     )?;
     require_success(&output, "cargo metadata failed").and_then(|stdout| {
         let metadata: CargoMetadata = serde_json::from_str(&stdout).map_err(|error| {
@@ -721,7 +721,7 @@ fn build_candidate(repo: &Path, target_dir: &Path) -> Result<PathBuf> {
                 "--target-dir",
             ])
             .arg(target_dir)
-            .current_dir(repo),
+            .current_dir(external_process_path(repo)),
     )?;
     require_success(&output, "cargo release build failed")?;
     let name = if cfg!(windows) {
@@ -776,8 +776,16 @@ fn binary_name(candidate: &Path) -> &'static str {
 }
 
 fn git(repo: &Path, arguments: &[&str]) -> Result<String> {
-    let output = run_command(Command::new("git").args(arguments).current_dir(repo))?;
+    let output = run_command(
+        Command::new("git")
+            .args(arguments)
+            .current_dir(external_process_path(repo)),
+    )?;
     require_success(&output, &format!("git {} failed", arguments.join(" ")))
+}
+
+fn external_process_path(path: &Path) -> &Path {
+    dunce::simplified(path)
 }
 
 fn run_command(command: &mut Command) -> Result<Output> {
@@ -1365,7 +1373,7 @@ fn replace_path(source: &Path, destination: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{acquire_install_lock, valid_receipt_id};
+    use super::{acquire_install_lock, external_process_path, valid_receipt_id};
     use std::{fs, path::PathBuf, time::SystemTime};
 
     #[test]
@@ -1398,6 +1406,16 @@ mod tests {
         let value = format!("{}é{}", "a".repeat(39), "b".repeat(64));
         assert_eq!(value.len(), 105);
         assert!(!valid_receipt_id(&value));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn external_processes_receive_a_legacy_windows_path_when_safe() {
+        let canonical = PathBuf::from(r"\\?\D:\Forge-method-core");
+        assert_eq!(
+            external_process_path(&canonical),
+            PathBuf::from(r"D:\Forge-method-core")
+        );
     }
 
     fn cleanup_temp_root(root: PathBuf) {

@@ -1176,6 +1176,7 @@ dependencies = [
 name = "forge-core-xtask"
 version = "0.12.0-alpha.46"
 dependencies = [
+ "dunce",
  "fs4",
  "serde",
  "serde_json",
