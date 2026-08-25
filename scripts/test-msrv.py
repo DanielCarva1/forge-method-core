@@ -238,7 +238,10 @@ class MsrvContractTests(unittest.TestCase):
     def test_rejects_every_omitted_cargo_dimension(self) -> None:
         for flag in ("--locked", "--workspace", "--all-targets", "--all-features"):
             with self.subTest(flag=flag):
-                mutated = self.source.replace(f" {flag}", "", 1)
+                mutated_command = checker.CARGO_COMMAND.replace(f" {flag}", "", 1)
+                mutated = self.source.replace(
+                    checker.CARGO_COMMAND, mutated_command, 1
+                )
                 self.assert_source_rejected(mutated, "exact values")
 
     def test_rejects_toolchain_command_bypass(self) -> None:
