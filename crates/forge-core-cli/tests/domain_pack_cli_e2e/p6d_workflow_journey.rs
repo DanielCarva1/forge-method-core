@@ -2150,7 +2150,7 @@ fn evidence_authority(
 ) {
     match provider {
         WorkflowEvaluatorProvider::ResearchSource => (
-            &[RUNTIME_CREDENTIAL, WORKER_CREDENTIAL],
+            &[WORKER_CREDENTIAL, WORKER_TWO_CREDENTIAL],
             WorkflowEvidenceKind::Research,
             WorkflowEvidenceStrength::IndependentConfirmation,
         ),
@@ -2180,7 +2180,7 @@ fn evidence_authority(
             WorkflowEvidenceStrength::AuthoritativeAcceptance,
         ),
         WorkflowEvaluatorProvider::ExternalAuthority => (
-            &[RUNTIME_CREDENTIAL, WORKER_CREDENTIAL],
+            &[RUNTIME_CREDENTIAL, RUNTIME_TWO_CREDENTIAL],
             WorkflowEvidenceKind::ExternalAuthority,
             WorkflowEvidenceStrength::AuthoritativeAcceptance,
         ),
