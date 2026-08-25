@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   proofs remain pending.
 
 ### Changed
+- **The stale Python operation-fixture generator was retired instead of ported.**
+  It had no live caller, omitted a current fixture, and could overwrite current
+  Rust-validated fixtures with older semantics. The checked-in fixtures remain
+  unchanged and are still owned by the Rust contract and validation tests.
 - **Local documentation links are now checked by the existing Rust validator.**
   The Markdown authority pass reuses its bounded repository scan, preserves the
   previous root, `docs/`, and `skill/` scope, and reports missing local targets
