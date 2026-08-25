@@ -47,7 +47,7 @@ jobs:
       - name: Test CI and evidence tooling failure semantics
         timeout-minutes: 3
         shell: bash
-        run: python scripts/run-ci-tier.py --tier tier-0-evidence-tool-tests --budget-seconds 120 --report target/ci-timing/evidence-tool-tests.json -- bash -c 'python scripts/test-run-ci-tier.py && python scripts/test-check-test-inventory.py && python scripts/test-check-real-host-evidence.py && python scripts/test-release-policy.py && python scripts/test-release-archive.py'
+        run: python scripts/run-ci-tier.py --tier tier-0-evidence-tool-tests --budget-seconds 120 --report target/ci-timing/evidence-tool-tests.json -- bash -c 'python scripts/test-run-ci-tier.py && python scripts/test-check-test-inventory.py && python scripts/test-check-real-host-evidence.py && python scripts/test-release-policy.py && python scripts/test-release-archive.py && python scripts/test-start-forge-guided-contract.py'
 
       - name: Check formatting
         timeout-minutes: 3
