@@ -113,10 +113,10 @@ scheduling_invariants:
 - The selected-host, external human-origin, independent-reviewer, and trusted-runtime prerequisites recorded below do not block solo closure.
 - Every current_records identity retains its existing disposition, status, dependency, checkpoint, and evidence references as strict_external history; no such record is relabeled as solo proof.
 - Every pre_stabilization_source record must be source_complete with no remaining_source_work before C3.2 opens.
-- Every coherent pre_stabilization_source batch must pass a compile-only locked or frozen package-scoped check through
-  /usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py before work moves on, with periodic
-  compile-only locked workspace checks through the same closed-environment launcher; cargo check may execute build scripts
-  and proc macros as compile-time behavior but must not execute project tests or binaries, and non-hermetic direct Cargo fails closed.
+- Every coherent pre_stabilization_source batch must pass the smallest relevant compile-only locked or frozen package-scoped
+  cargo check before work moves on, with periodic compile-only locked workspace checks; cargo check may execute build scripts
+  and proc macros as compile-time behavior but must not execute project tests or binaries. These checks are local feedback;
+  protected CI and MSRV lanes own exact-toolchain, complete-workspace, and hosted qualification.
 - C3.2 is stabilization only; it may execute deferred runtime, full-suite, failure-injection, project-linked-build,
   platform, archive, and hosted gates but may not own missing source implementation.
 - C3.3 is publication only and remains planned until C3.2 passes.

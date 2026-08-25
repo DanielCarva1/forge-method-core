@@ -152,29 +152,15 @@ execution_policy:
   compiler_feedback:
     mode: "compiler_errors_as_work_queue"
     active_before_item: "C3.2"
-    hermetic_launcher_only: true
-    canonical_launcher: "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py"
-    trusted_cargo_path: "/opt/forge-method/rust-1.85.1/bin/cargo"
-    trusted_rustc_path: "/opt/forge-method/rust-1.85.1/bin/rustc"
-    trusted_rustdoc_path: "/opt/forge-method/rust-1.85.1/bin/rustdoc"
-    trusted_path: "/usr/bin"
-    trusted_executable_invariants: "Cargo, rustc, rustdoc, every executable path component, and every PATH directory are root-owned non-symlinks, are not group/world writable, and are not writable by the invoking uid."
-    fixed_environment:
-      HOME: "/nonexistent"
-      CARGO_HOME: "/home/user/.cargo"
-      PATH: "/usr/bin"
-      RUSTC: "/opt/forge-method/rust-1.85.1/bin/rustc"
-      RUSTDOC: "/opt/forge-method/rust-1.85.1/bin/rustdoc"
-      LANG: "C.UTF-8"
-      LC_ALL: "C.UTF-8"
-    execution_boundary: "The canonical launcher rejects any mutable or symlinked Cargo/rustc/rustdoc chain, replaces the inherited environment, and exposes only root-owned /usr/bin for native child discovery. Compile-only cargo check still executes dependency or workspace build scripts and proc macros as necessary compile-time behavior, including building proc-macro artifacts; it must not execute project tests or binaries."
-    requires_structurally_valid_policy: true
-    coherent_batch_requirement: "Every coherent source batch passes a compile-only locked or frozen package-scoped check through the canonical hermetic launcher before work moves on."
-    periodic_workspace_requirement: "Accumulated source batches periodically pass /usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py check --locked --workspace --all-targets."
+    local_feedback_authority: "advisory_only"
+    qualification_authority: "protected_ci_and_msrv_lanes"
+    execution_boundary: "Compile-only cargo check may execute dependency or workspace build scripts and proc macros as necessary compile-time behavior, including building proc-macro artifacts; it must not execute project tests or binaries. Local feedback does not claim trusted-runtime, exact-toolchain, native-platform, or hosted qualification."
+    coherent_batch_requirement: "Every coherent Rust source batch passes the smallest relevant compile-only locked or frozen package-scoped check before work moves on."
+    periodic_workspace_requirement: "Accumulated source batches periodically pass cargo check --locked --workspace --all-targets."
     allowed_command_shapes:
-      - "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py check (--locked|--frozen) (-p|--package) <workspace-package> [reviewed compile-only selectors]"
-      - "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py check (--locked|--frozen) --workspace [reviewed compile-only selectors]"
-      - "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/hermetic-compile-feedback.py metadata (--locked|--frozen) --no-deps --format-version 1"
+      - "cargo check (--locked|--frozen) (-p|--package) <workspace-package> [reviewed compile-only selectors]"
+      - "cargo check (--locked|--frozen) --workspace [reviewed compile-only selectors]"
+      - "cargo metadata (--locked|--frozen) --no-deps --format-version 1"
     allowed_check_flags:
       - "--all-targets"
       - "--all-features"
@@ -194,8 +180,7 @@ execution_policy:
       - "--release or --profile"
       - "--target or --target-dir"
       - "--config or -Z"
-      - "inherited executable, native tool-discovery, config, proxy, shell, Python, Git, or Rust wrapper injection"
-      - "non-hermetic direct Cargo, unknown launchers, shell control operators, pipes, redirects, or substitutions"
+      - "unknown launchers, shell control operators, pipes, redirects, or substitutions"
   deferred_heavy_stabilization:
     applies_to_profile: "strict_external"
     blocks_current_milestone: false
