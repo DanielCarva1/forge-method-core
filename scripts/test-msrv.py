@@ -83,7 +83,7 @@ class MsrvContractTests(unittest.TestCase):
             root=ROOT,
             policy_workflow=POLICY_WORKFLOW,
         )
-        self.assertEqual(len(packages), 23)
+        self.assertEqual(len(packages), 24)
         self.assertEqual(len(packages), len(set(packages)))
 
     def test_static_docs_uses_the_rust_markdown_link_contract(self) -> None:
@@ -170,7 +170,7 @@ class MsrvContractTests(unittest.TestCase):
                 root=ROOT,
                 policy_workflow=POLICY_WORKFLOW,
             )
-            self.assertEqual(len(packages), 23)
+            self.assertEqual(len(packages), 24)
 
     def test_duplicate_safe_structured_parse_preserves_scalars(self) -> None:
         document = checker.parse_workflow(self.source)
