@@ -1067,8 +1067,13 @@ fn legacy_profileless_project_explicitly_adopts_solo_and_exact_retry_is_one_writ
         .as_array()
         .expect("exact adoption argv");
     assert_eq!(
-        argv[5].as_str().expect("root argv"),
-        consumer.app.display().to_string()
+        Path::new(argv[5].as_str().expect("root argv"))
+            .canonicalize()
+            .expect("canonical argv root"),
+        consumer
+            .app
+            .canonicalize()
+            .expect("canonical consumer root")
     );
 
     let adopted = assert_ok(&execute_structured_argv(argv));
@@ -1092,13 +1097,19 @@ fn legacy_profileless_project_explicitly_adopts_solo_and_exact_retry_is_one_writ
     );
     assert_eq!(fs::read(&wal).expect("retry WAL"), adopted_bytes);
 
-    for action in ["next", "resume"] {
-        let guidance = assert_ok(&consumer.run(&[action]));
-        assert_eq!(guidance["data"]["readiness_profile"], "solo_cooperative");
-        assert_eq!(
-            guidance["data"]["durable_assurance"]["status"],
-            "missing_objective"
-        );
+    let next = assert_ok(&consumer.run(&["next"]));
+    assert_eq!(next["data"]["readiness_profile"], "solo_cooperative");
+    assert_eq!(
+        next["data"]["durable_assurance"]["status"],
+        "missing_objective"
+    );
+    let resumed = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(resumed["data"]["readiness_profile"], "solo_cooperative");
+    assert_eq!(
+        resumed["data"]["blockers"]["durable_assurance_status"],
+        "missing_objective"
+    );
+    for guidance in [&next, &resumed] {
         assert_eq!(
             guidance["data"]["authorization"]["action_packets"][0]["required_authority"]
                 ["approval_boundary"],
@@ -1371,10 +1382,8 @@ fn fresh_agent_resumes_same_automatically_selected_governance_state() {
 
     let resumed_output = consumer.run(&["report"]);
     let resumed = assert_ok(&resumed_output);
-    assert!(
-        summary_output.stdout.len() < resumed_output.stdout.len(),
-        "the activation view must remain smaller than the historical report"
-    );
+    assert!(summary["data"]["omitted_history"].is_object());
+    assert!(resumed["data"].get("omitted_history").is_none());
     for field in [
         "readiness_profile",
         "selected_policy_ref",
@@ -6954,7 +6963,7 @@ fn promotion_recover_refuses_third_content_without_another_write() {
     assert_eq!(refused["typed_failure"]["type"], "recovery_required");
     assert!(refused["typed_failure"]["data"]["reason"]
         .as_str()
-        .is_some_and(|reason| reason.contains("neither the recorded old nor exact new bytes")));
+        .is_some_and(|reason| reason.contains("neither the recorded old nor exact new state")));
     assert_eq!(state_tree_snapshot(&fixture.consumer.app), canonical_before);
     assert_eq!(state_tree_snapshot(&fixture.consumer.state), state_before);
 }
