@@ -1373,7 +1373,7 @@ fn replace_path(source: &Path, destination: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{acquire_install_lock, external_process_path, valid_receipt_id};
+    use super::{acquire_install_lock, valid_receipt_id};
     use std::{fs, path::PathBuf, time::SystemTime};
 
     #[test]
@@ -1413,7 +1413,7 @@ mod tests {
     fn external_processes_receive_a_legacy_windows_path_when_safe() {
         let canonical = PathBuf::from(r"\\?\D:\Forge-method-core");
         assert_eq!(
-            external_process_path(&canonical),
+            super::external_process_path(&canonical),
             PathBuf::from(r"D:\Forge-method-core")
         );
     }

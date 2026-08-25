@@ -99,7 +99,8 @@ struct ReleaseIdentity {
 #[serde(deny_unknown_fields)]
 struct Scenario {
     ordinal: u64,
-    scenario_id: String,
+    #[serde(rename = "scenario_id")]
+    id: String,
     session_ids: Vec<String>,
     transcript_ref: String,
     command_log_ref: String,
@@ -393,7 +394,7 @@ fn validate_scenarios<'a>(
                 "{path}.ordinal: scenarios must be ordered 1..3"
             )));
         }
-        if scenario.scenario_id != SCENARIO_IDS[index] {
+        if scenario.id != SCENARIO_IDS[index] {
             return Err(RealHostEvidenceError::new(format!(
                 "{path}.scenario_id: scenario order is fixed"
             )));
@@ -595,7 +596,7 @@ fn validate_command_log(
             "command log {artifact_id}: unsupported schema_version"
         )));
     }
-    if log.scenario_id != scenario.scenario_id {
+    if log.scenario_id != scenario.id {
         return Err(RealHostEvidenceError::new(format!(
             "command log {artifact_id}: scenario_id mismatch"
         )));
@@ -924,7 +925,7 @@ fn reject_yaml_references(raw: &[u8], label: &str) -> Result<(), RealHostEvidenc
     impl Drop for ParserGuard {
         fn drop(&mut self) {
             // SAFETY: the parser was initialized once and is deleted once by this guard.
-            unsafe { yaml_sys::yaml_parser_delete(&mut self.0) };
+            unsafe { yaml_sys::yaml_parser_delete(&raw mut self.0) };
         }
     }
 
@@ -939,13 +940,13 @@ fn reject_yaml_references(raw: &[u8], label: &str) -> Result<(), RealHostEvidenc
     let mut parser = ParserGuard(unsafe { parser.assume_init() });
     // SAFETY: `raw` stays alive for the full parser lifetime and libyaml only reads it.
     unsafe {
-        yaml_sys::yaml_parser_set_encoding(&mut parser.0, yaml_sys::YAML_UTF8_ENCODING);
-        yaml_sys::yaml_parser_set_input_string(&mut parser.0, raw.as_ptr(), raw.len() as u64);
+        yaml_sys::yaml_parser_set_encoding(&raw mut parser.0, yaml_sys::YAML_UTF8_ENCODING);
+        yaml_sys::yaml_parser_set_input_string(&raw mut parser.0, raw.as_ptr(), raw.len() as u64);
     }
     loop {
         let mut token = MaybeUninit::<yaml_sys::yaml_token_t>::uninit();
         // SAFETY: the initialized parser owns the scan state and fills `token` on success.
-        if unsafe { yaml_sys::yaml_parser_scan(&mut parser.0, token.as_mut_ptr()) }.fail {
+        if unsafe { yaml_sys::yaml_parser_scan(&raw mut parser.0, token.as_mut_ptr()) }.fail {
             return Err(RealHostEvidenceError::new(format!("{label}: invalid YAML")));
         }
         // SAFETY: a successful scan initialized the token.
@@ -957,7 +958,7 @@ fn reject_yaml_references(raw: &[u8], label: &str) -> Result<(), RealHostEvidenc
         );
         let done = token_type == yaml_sys::YAML_STREAM_END_TOKEN;
         // SAFETY: the token was initialized by a successful scan and is deleted once.
-        unsafe { yaml_sys::yaml_token_delete(&mut token) };
+        unsafe { yaml_sys::yaml_token_delete(&raw mut token) };
         if forbidden {
             return Err(RealHostEvidenceError::new(format!(
                 "{label}: YAML anchors, aliases, and explicit tags are forbidden"
@@ -1325,7 +1326,10 @@ mod tests {
         let directory = TestDirectory::new();
         let path = directory.0.join("bundle.json");
         let mut raw = b"{}".to_vec();
-        raw.resize(MAX_BUNDLE_BYTES as usize + 1, b' ');
+        raw.resize(
+            usize::try_from(MAX_BUNDLE_BYTES).expect("1 MiB fits usize") + 1,
+            b' ',
+        );
         fs::write(&path, raw).unwrap();
         let error = verify_real_host_evidence(&path).unwrap_err();
         assert!(error.to_string().contains("byte size"));
