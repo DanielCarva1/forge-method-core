@@ -3517,16 +3517,15 @@ fn p6d_reference_pack_real_journey() {
     );
     assert!(
         !historical_retry.status.success(),
-        "historical broker retry must refuse lifecycle/ledger effective-epoch drift"
+        "historical broker retry must refuse while current domain authority is degraded"
     );
     let historical_retry = envelope(&historical_retry);
     assert_eq!(historical_retry["ok"], false, "{historical_retry:#}");
     assert!(
         historical_retry["error"]["message"]
             .as_str()
-            .is_some_and(|message| message
-                .contains("verified human authorization does not match current governance state")),
-        "unexpected lifecycle-ahead refusal: {historical_retry:#}"
+            .is_some_and(|message| message.contains("Domain Pack gaps block workflow mutation")),
+        "unexpected degraded-authority refusal: {historical_retry:#}"
     );
     assert_eq!(
         fs::read(&workflow_wal).expect("workflow WAL after historical refusal"),
