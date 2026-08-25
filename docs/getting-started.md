@@ -33,7 +33,7 @@ checkout or from tag text alone.
 ```bash
 git clone https://github.com/DanielCarva1/forge-method-core.git
 cd forge-method-core
-python scripts/install-source-checkpoint.py install
+cargo run --locked -p forge-core-xtask -- source-install
 ```
 
 The workspace package version and latest published binary tag can differ. The
@@ -42,8 +42,9 @@ canonical [four-identity table](../README.md#four-identitiesdo-not-collapse-them
 select an exact source commit/tag, and verify the installed path returned by the
 command. The source-install receipt binds that executable's SHA-256 to the clean
 Git commit and package version. One rollback is retained; installer-owned staging
-and older installer receipts are removed. Set `CARGO_TARGET_DIR` to keep the
-reusable build cache on another drive.
+and older installer receipts are removed. The repository tool reuses Cargo's
+effective target directory, including `.cargo/config.toml`; set
+`CARGO_TARGET_DIR` only when that cache needs an explicit override.
 
 ## Install the host skill
 
@@ -175,7 +176,7 @@ Source installs:
 
 ```bash
 git pull --ff-only
-python scripts/install-source-checkpoint.py install
+cargo run --locked -p forge-core-xtask -- source-install
 ```
 
 The checkout must be clean. An exact retry is idempotent, while a newer commit

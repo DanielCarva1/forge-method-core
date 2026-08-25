@@ -168,3 +168,10 @@ crates:
     does_not_own: "host selection or external private broker key custody"
     authority_boundary: "core"
     reviewed_authority_dependencies: []
+  - name: "forge-core-xtask"
+    manifest_path: "crates/forge-core-xtask/Cargo.toml"
+    depends_on: []
+    owns: "runs repository automation and source-checkpoint bootstrap outside the installed Forge process"
+    does_not_own: "runtime policy authority, trusted prebuilt release verification, or host selection"
+    authority_boundary: "tooling"
+    reviewed_authority_dependencies: []

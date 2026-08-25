@@ -581,7 +581,7 @@ fn ownership_map(
                 || crate_policy.does_not_own.trim().is_empty()
                 || !matches!(
                     crate_policy.authority_boundary.as_str(),
-                    "core" | "host_client" | "compatibility"
+                    "core" | "host_client" | "compatibility" | "tooling"
                 )
             {
                 issues.push(issue(

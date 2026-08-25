@@ -16,11 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.44` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.45` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
 ### Changed
+- **Source-checkpoint installation is now owned end to end by Rust.** The
+  external `forge-core-xtask` process preserves clean-checkout binding,
+  commit-and-hash receipts, one rollback, interruption recovery, and native
+  Windows executable replacement while sharing the workspace lockfile and
+  Cargo-selected target cache. The Python installer and its duplicate test suite were removed;
+  trusted prebuilt releases remain owned separately by `forge-core lifecycle`.
 - **Catalog consultation is now connected to runtime journey events.** Resume
   publishes a compact stable key derived from the project, objective, Phase,
   and Work Focus identity. The host consults the catalog once for an unseen key

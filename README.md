@@ -4,7 +4,7 @@ Forge Method Core is a local, model-agnostic governance runtime for agent-led
 product work. A human stays in chat, a host agent drives `forge-core`, and Forge
 persists typed obligations, authority, evidence, and continuity.
 
-The active source line is **`0.12.0-alpha.44`**. `Cargo.toml` is the single
+The active source line is **`0.12.0-alpha.45`**. `Cargo.toml` is the single
 package-version authority; live documentation does not use older prerelease
 numbers to describe the current product. Historical versions remain only in
 `CHANGELOG.md` and retained audit evidence. Verify the selected executable with
@@ -42,7 +42,7 @@ turning prose into runtime authority.
 
 | Identity | Current source fact | How to verify |
 |---|---|---|
-| **Source checkpoint** | Workspace package SemVer `0.12.0-alpha.44` plus the exact Git commit/working-tree state. A dirty checkout is not immutable. | `git rev-parse HEAD`, `git status --short`, and `[workspace.package].version` in `Cargo.toml` |
+| **Source checkpoint** | Workspace package SemVer `0.12.0-alpha.45` plus the exact Git commit/working-tree state. A dirty checkout is not immutable. | `git rev-parse HEAD`, `git status --short`, and `[workspace.package].version` in `Cargo.toml` |
 | **Installed executable** | The binary actually selected by `PATH`; it may differ from the checkout until reinstalled. | `command -v forge-core` and `forge-core --version` |
 | **Workflow release identity** | Compiled append-only successor `workflow-governance.release.universal-assurance-v0` / `0.5.0` (six releases, 43 policies). Each project has its own durable pin. | `forge-core workflow release-status --root <project> --json` and only its exact returned upgrade argv |
 | **Domain Pack effective epoch** | Project-local digest joining the admitted workflow release with the active immutable Domain Pack generation. It has no global package SemVer and does not rewrite core identity. | `workflow next|resume` and `domain-pack status` against the Project Link-resolved state |
@@ -57,15 +57,15 @@ For the current source checkpoint:
 ```bash
 git clone https://github.com/DanielCarva1/forge-method-core.git
 cd forge-method-core
-python scripts/install-source-checkpoint.py install
+cargo run --locked -p forge-core-xtask -- source-install
 ```
 
-The command requires a clean checkout, builds the release binary, and reports
+The Rust repository tool requires a clean checkout, builds the release binary, and reports
 its exact installed path, Git commit, package version, and SHA-256. It keeps one
 rollback and removes its own staging files instead of accumulating timestamped
 backup copies. Add the reported `bin` directory to `PATH`, then verify with
-`forge-core --version`. Set `CARGO_TARGET_DIR` when the build cache must live on
-another drive.
+`forge-core --version`. It reuses Cargo's effective target directory, including
+`.cargo/config.toml`; set `CARGO_TARGET_DIR` to override that cache location.
 
 For a prebuilt, select one verified release and follow
 [Getting started](docs/getting-started.md). Do not infer source features from a

@@ -23,23 +23,29 @@ publication nor source alone establishes full P7 completion.
 
 ### Install the current source checkpoint
 
-Prerequisites: Git, Python 3.11 or newer, and Rust 1.85 or newer.
+Prerequisites: Git and Rust 1.85 or newer.
 
 ```bash
 git clone https://github.com/DanielCarva1/forge-method-core.git
 cd forge-method-core
 git pull --ff-only
-python scripts/install-source-checkpoint.py install
+cargo run --locked -p forge-core-xtask -- source-install
 ```
 
 This builds and installs the real `forge-core` executable from one clean source
 checkpoint. The JSON report gives the exact installed path, full Git commit,
 package version, and binary SHA-256. The installer owns only its `bin` and
-`source-install` paths, keeps one rollback, uses an external process so Windows
-does not ask the running executable to replace itself, and removes its own
-staging files after success. Add the reported `bin` directory to `PATH`. Set
-`CARGO_TARGET_DIR` to reuse a build cache outside the checkout. A custom root is
+`source-install` paths, keeps one rollback, uses the external Rust `forge-xtask`
+process so Windows does not ask the running executable to replace itself, and removes its own
+staging files after success. Add the reported `bin` directory to `PATH`. It
+reuses Cargo's effective target directory, including `.cargo/config.toml`;
+`CARGO_TARGET_DIR` remains an explicit override. A custom install root is
 available through `--install-root <path>`.
+
+This source-checkpoint bootstrap is intentionally separate from `forge-core
+lifecycle`. The bootstrap compiles one local clean checkout; `lifecycle`
+installs prebuilt releases only after their trusted release material is
+verified. Neither path weakens or silently takes ownership of the other.
 
 An existing binary without a matching source-install receipt is not silently
 claimed. Inspect it, then use `--adopt-current` once if it should become the

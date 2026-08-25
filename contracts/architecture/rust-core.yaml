@@ -98,3 +98,7 @@ crates:
     owns: "enforces workflow-governance trusted-computing-base invariants"
     does_not_own: "host selection or external private broker key custody"
     authority_boundary: "core"
+  - name: "forge-core-xtask"
+    owns: "runs repository automation and source-checkpoint bootstrap outside the installed Forge process"
+    does_not_own: "runtime policy authority, trusted prebuilt release verification, or host selection"
+    authority_boundary: "tooling"

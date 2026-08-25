@@ -73,6 +73,9 @@ workspace_crate_boundary:
     - name: "forge-core-workflow-governance-tcb"
       manifest_path: "crates/forge-core-workflow-governance-tcb/Cargo.toml"
       depends_on: ["forge-core-contracts", "forge-core-store"]
+    - name: "forge-core-xtask"
+      manifest_path: "crates/forge-core-xtask/Cargo.toml"
+      depends_on: []
   reviewed_authority_edges:
     - from: "forge-core-decisions"
       to: "forge-core-authority"

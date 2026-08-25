@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path};
 
-pub const WORKSPACE_CRATE_COUNT: usize = 23;
+pub const WORKSPACE_CRATE_COUNT: usize = 24;
 
 /// A candidate document is inert metadata. It cannot select a host.
 pub struct CandidateDocumentBoundary;
@@ -52,6 +52,7 @@ pub enum CrateId {
     Trace,
     Validate,
     WorkflowGovernanceTcb,
+    Xtask,
 }
 
 impl CrateId {
@@ -79,6 +80,7 @@ impl CrateId {
         Self::Trace,
         Self::Validate,
         Self::WorkflowGovernanceTcb,
+        Self::Xtask,
     ];
 
     #[must_use]
@@ -107,6 +109,7 @@ impl CrateId {
             Self::Trace => "forge-core-trace",
             Self::Validate => "forge-core-validate",
             Self::WorkflowGovernanceTcb => "forge-core-workflow-governance-tcb",
+            Self::Xtask => "forge-core-xtask",
         }
     }
 
@@ -622,6 +625,19 @@ pub static WORKSPACE_CRATE_BOUNDARIES: &[WorkspaceCrateBoundary] = &[
         authority_class: AuthorityClass::TrustedComputingBase,
         mutation_class: MutationClass::DurableState,
         public_api_role: PublicApiRole::DomainService,
+        source_test_expectations: INTEGRATION_TESTS,
+    },
+    WorkspaceCrateBoundary {
+        id: CrateId::Xtask,
+        path: "crates/forge-core-xtask",
+        layer: ArchitecturalLayer::Adapter,
+        allowed_dependency_layers: NONE,
+        explicit_exceptions: &[],
+        dependencies: &[],
+        feature_boundary: FeatureBoundary::NoOptionalFeatures,
+        authority_class: AuthorityClass::None,
+        mutation_class: MutationClass::HostAdapter,
+        public_api_role: PublicApiRole::CommandAdapter,
         source_test_expectations: INTEGRATION_TESTS,
     },
 ];
