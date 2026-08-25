@@ -27,7 +27,7 @@ trust_rule: >-
 states:
   - id: phase-1-bootstrap-trust-root
     must_land_first: true
-    ci_workflow_digest: sha256:395ed0da560d68809556406b27cb29e17a05946a285562fbb929ae02c082735c
+    ci_workflow_digest: sha256:22d63c7f271a732a104b3282664980caa69880db619c9e5d04f734496933c140
     ci_topology: legacy_without_ci_verdict
     lands:
       - scripts/check-msrv.py
@@ -64,7 +64,7 @@ states:
       checker, verdict tool, and regression suite.
   - id: phase-2-activate-protected-topology
     must_follow: phase-1-bootstrap-trust-root
-    ci_workflow_digest: sha256:471aa5c6c19efdef298315054db2ab8700301d4c9bc7b6561931552a4637ebb0
+    ci_workflow_digest: sha256:98a7dae249d9c3a683bbf998f0ae1c1b5c3630ea3380471ef4a0a9b8224cde6a
     ci_topology: final_ci_verdict_and_protected_regressions
     lands:
       - .github/workflows/ci.yml

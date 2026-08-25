@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   proofs remain pending.
 
 ### Changed
+- **Documentation-link checks now have one Rust owner.** The checked-in
+  Markdown authority integration test replaces the standalone Python checker
+  in Tier 0, the green loop, and contributor guidance while reusing the same
+  validator exercised by `forge-core validate`.
 - **Workspace crate-boundary validation is now connected end to end in Rust.**
   `forge-core validate` compares full Cargo metadata with the checked-in
   workspace policy, checks production-only edges against the authority boundary,

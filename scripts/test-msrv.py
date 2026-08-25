@@ -86,6 +86,10 @@ class MsrvContractTests(unittest.TestCase):
         self.assertEqual(len(packages), 23)
         self.assertEqual(len(packages), len(set(packages)))
 
+    def test_static_docs_uses_the_rust_markdown_link_contract(self) -> None:
+        self.assertNotIn("scripts/check-doc-links.py", self.source)
+        self.assertEqual(self.source.count(checker.RUST_MARKDOWN_LINK_COMMAND), 1)
+
     def test_two_phase_rollout_contract_is_explicit_and_non_claiming(self) -> None:
         document = checker.parse_workflow(ROLLOUT.read_text(encoding="utf-8"))
         self.assertEqual(document["status"], "immutable_procedure")

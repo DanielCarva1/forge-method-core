@@ -113,8 +113,10 @@ from a failure message without recomputing the full subject.
   core bootstrap exception, a sidecar, or an operator-owned directory.
 - Keep local Markdown links valid and do not link to private sibling checkouts.
 
-Documentation-only changes run `python scripts/check-doc-links.py` and
-`git diff --check`; do not run unrelated Rust gates merely to inflate evidence.
+Documentation-only changes run
+`cargo test --locked -p forge-core-validate --test checked_in_markdown_links`
+and `git diff --check`; do not run unrelated Rust gates merely to inflate
+evidence.
 
 ## Pull request evidence
 

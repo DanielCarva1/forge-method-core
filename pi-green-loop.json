@@ -2,7 +2,7 @@
   "timeoutMs": 600000,
   "checks": [
     { "name": "structured-text", "kind": "lint", "command": "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/check-static-structured-text.py" },
-    { "name": "doc-links", "kind": "lint", "command": "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/check-doc-links.py" },
+    { "name": "markdown-authority", "kind": "test", "command": "/home/user/.cargo/bin/cargo test --locked -p forge-core-validate --test checked_in_markdown_links" },
     { "name": "msrv-policy", "kind": "lint", "command": "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/check-msrv.py" },
     { "name": "release-locking", "kind": "lint", "command": "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/check-release-locking.py" },
     { "name": "diff-check", "kind": "lint", "command": "/usr/bin/git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false -c diff.external= -c core.attributesFile=/dev/null diff --no-ext-diff --no-textconv --check 137b3cf43b123d4b15c45b544a3e3060e714ffb9" },

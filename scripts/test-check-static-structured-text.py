@@ -43,7 +43,7 @@ class StaticCheckInventoryTests(unittest.TestCase):
             [check["name"] for check in static_checks],
             [
                 "structured-text",
-                "doc-links",
+                "markdown-authority",
                 "msrv-policy",
                 "release-locking",
                 "diff-check",

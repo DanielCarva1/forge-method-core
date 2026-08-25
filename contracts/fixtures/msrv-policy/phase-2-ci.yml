@@ -40,9 +40,9 @@ jobs:
         timeout-minutes: 3
         run: python scripts/run-ci-tier.py --tier tier-0-workspace-layout --budget-seconds 120 --report target/ci-timing/workspace-layout.json -- python scripts/generate-workspace-layout.py --check
 
-      - name: Check local documentation links
+      - name: Check Markdown authority and local links in Rust
         timeout-minutes: 3
-        run: python scripts/run-ci-tier.py --tier tier-0-documentation-links --budget-seconds 120 --report target/ci-timing/documentation-links.json -- python scripts/check-doc-links.py
+        run: python scripts/run-ci-tier.py --tier tier-0-markdown-authority --budget-seconds 120 --report target/ci-timing/markdown-authority.json -- cargo test --locked -p forge-core-validate --test checked_in_markdown_links
 
       - name: Provision exact YAML parser for protected policy regressions
         run: python -m pip install --disable-pip-version-check --no-deps PyYAML==6.0.3

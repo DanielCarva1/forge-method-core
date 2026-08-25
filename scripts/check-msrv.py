@@ -53,6 +53,11 @@ CARGO_COMMAND = (
     "cargo +1.85.1 check --manifest-path candidate/Cargo.toml --locked "
     "--workspace --all-targets --all-features"
 )
+RUST_MARKDOWN_LINK_COMMAND = (
+    "python scripts/run-ci-tier.py --tier tier-0-markdown-authority "
+    "--budget-seconds 120 --report target/ci-timing/markdown-authority.json -- "
+    "cargo test --locked -p forge-core-validate --test checked_in_markdown_links"
+)
 STATIC_TOOL_TEST_COMMAND = (
     "python scripts/run-ci-tier.py --tier tier-0-evidence-tool-tests "
     "--budget-seconds 120 --report target/ci-timing/evidence-tool-tests.json -- "
@@ -84,10 +89,10 @@ CI_VERDICT_COMMAND = (
 
 POLICY_COMMAND = TRUSTED_CHECK_COMMAND
 LEGACY_WORKFLOW_DIGEST = (
-    "395ed0da560d68809556406b27cb29e17a05946a285562fbb929ae02c082735c"
+    "22d63c7f271a732a104b3282664980caa69880db619c9e5d04f734496933c140"
 )
 FINAL_WORKFLOW_DIGEST = (
-    "471aa5c6c19efdef298315054db2ab8700301d4c9bc7b6561931552a4637ebb0"
+    "98a7dae249d9c3a683bbf998f0ae1c1b5c3630ea3380471ef4a0a9b8224cde6a"
 )
 FOCUSED_JOB_DIGEST = (
     "cfd44e3bd628c0bf848048e9012eb7ce0d59dcd310eb8254d6b79702f1ef2fa7"
@@ -428,8 +433,12 @@ def _check_static_docs_job(value: Any) -> None:
             {"name", "timeout-minutes", "run"},
         ),
         (
-            "Check local documentation links",
-            {"name", "timeout-minutes", "run"},
+            "Check Markdown authority and local links in Rust",
+            {
+                "name": "Check Markdown authority and local links in Rust",
+                "timeout-minutes": "3",
+                "run": RUST_MARKDOWN_LINK_COMMAND,
+            },
         ),
         (
             "Provision exact YAML parser for protected policy regressions",

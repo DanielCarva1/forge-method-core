@@ -528,7 +528,6 @@ GIT_SAFE_CONFIG_PREFIX = [
 ]
 REVIEWED_STATIC_SCRIPTS = {
     "scripts/check-static-structured-text.py",
-    "scripts/check-doc-links.py",
     "scripts/check-msrv.py",
     "scripts/check-release-locking.py",
 }

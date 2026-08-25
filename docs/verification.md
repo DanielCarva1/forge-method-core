@@ -124,7 +124,7 @@ the story's consecutive-run evidence); workflow text alone is insufficient.
 Documentation-only changes:
 
 ```bash
-python scripts/check-doc-links.py
+cargo test --locked -p forge-core-validate --test checked_in_markdown_links
 git diff --check
 ```
 
@@ -132,9 +132,9 @@ Tier 0 parity when static/generated surfaces are affected:
 
 ```bash
 python scripts/generate-workspace-layout.py --check
-python scripts/check-doc-links.py
-```
+cargo test --locked -p forge-core-validate --test checked_in_markdown_links
 cargo fmt --all -- --check
+```
 
 MSRV topology and exact-toolchain parity:
 

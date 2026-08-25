@@ -29,7 +29,7 @@ results, generated artifacts, compatibility impact, and residual risks.
 For documentation-only changes, the local minimum is:
 
 ```bash
-python scripts/check-doc-links.py
+cargo test --locked -p forge-core-validate --test checked_in_markdown_links
 git diff --check
 ```
 

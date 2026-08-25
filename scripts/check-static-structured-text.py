@@ -540,10 +540,11 @@ REQUIRED_PI_CHECK_DESCRIPTORS = (
         ),
     },
     {
-        "name": "doc-links",
-        "kind": "lint",
+        "name": "markdown-authority",
+        "kind": "test",
         "command": (
-            f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-doc-links.py"
+            "/home/user/.cargo/bin/cargo test --locked -p "
+            "forge-core-validate --test checked_in_markdown_links"
         ),
     },
     {
@@ -583,7 +584,8 @@ REQUIRED_PI_CHECK_DESCRIPTORS = (
 )
 PI_COMMANDS = [
     f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-static-structured-text.py",
-    f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-doc-links.py",
+    "/home/user/.cargo/bin/cargo test --locked -p forge-core-validate "
+    "--test checked_in_markdown_links",
     f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-msrv.py",
     f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-release-locking.py",
     f"/usr/bin/git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false -c diff.external= "
@@ -593,7 +595,7 @@ PI_COMMANDS = [
 ]
 PI_CHECK_REFERENCES = [
     {"name": "structured-text", "kind": "lint", "command_index": 0},
-    {"name": "doc-links", "kind": "lint", "command_index": 1},
+    {"name": "markdown-authority", "kind": "test", "command_index": 1},
     {"name": "msrv-policy", "kind": "lint", "command_index": 2},
     {"name": "release-locking", "kind": "lint", "command_index": 3},
     {"name": "diff-check", "kind": "lint", "command_index": 4},
@@ -603,7 +605,15 @@ PI_CHECK_REFERENCES = [
         "command_index": 5,
     },
 ]
-STATIC_COMMANDS = PI_COMMANDS[:-1]
+C22_HISTORICAL_STATIC_COMMANDS = [
+    f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-static-structured-text.py",
+    f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-doc-links.py",
+    f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-msrv.py",
+    f"/usr/bin/python3 -I {CANONICAL_ROOT_TEXT}/scripts/check-release-locking.py",
+    f"/usr/bin/git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false -c diff.external= "
+    f"-c core.attributesFile=/dev/null diff --no-ext-diff --no-textconv --check {BASE_COMMIT}",
+]
+ACTIVE_STATIC_COMMANDS = PI_COMMANDS[:-1]
 
 
 def pi_check_inventory() -> list[dict[str, str]]:
@@ -2395,7 +2405,7 @@ def validate_continuity(value: Any) -> None:
         )
     ):
         fail("C2.2 compiler-feedback policy drifted")
-    if document.get("static_checks") != STATIC_COMMANDS:
+    if document.get("static_checks") != C22_HISTORICAL_STATIC_COMMANDS:
         fail("C2.2 static command list drifted")
 
     checkpoint = mapping(document.get("checkpoint"), "checkpoint")
@@ -2509,7 +2519,16 @@ def validate_local_settings() -> None:
     allows = set(unique_string_list(permissions.get("allow"), "settings.permissions.allow"))
     denies = set(unique_string_list(permissions.get("deny"), "settings.permissions.deny"))
     required_compile_allows = {f"Bash({HERMETIC_COMPILE_PREFIX} *)"}
-    required_static_allows = {f"Bash({command})" for command in STATIC_COMMANDS[:5]}
+    required_python_static_allows = {
+        f"Bash({command})"
+        for command in ACTIVE_STATIC_COMMANDS
+        if command.startswith("/usr/bin/python3 ")
+    }
+    required_rust_static_allows = {
+        f"Bash({command})"
+        for command in ACTIVE_STATIC_COMMANDS
+        if command.startswith("/home/user/.cargo/bin/cargo ")
+    }
     required_read_only_allows = {
         "Bash(/usr/bin/git --no-pager -c core.fsmonitor=false -c core.untrackedCache=false -c diff.external= -c core.attributesFile=/dev/null *)",
         "Bash(/usr/bin/rg --no-config *)",
@@ -2520,11 +2539,20 @@ def validate_local_settings() -> None:
         if rule.startswith(("Bash(/home/user/.cargo/bin/cargo", "Bash(/opt/forge-method/rust-1.85.1/bin/cargo"))
     }
     python_allows = {rule for rule in allows if rule.startswith("Bash(/usr/bin/python3")}
-    if cargo_allows or any(rule.startswith("Bash(cargo") for rule in allows):
+    if (
+        any(rule not in required_rust_static_allows for rule in cargo_allows)
+        or any(rule.startswith("Bash(cargo") for rule in allows)
+        or not required_rust_static_allows <= allows
+    ):
         fail("local settings must not allow non-hermetic direct Cargo")
-    if not (required_compile_allows | required_static_allows) <= python_allows or "Bash(/usr/bin/python3 *)" in allows:
+    if not (
+        required_compile_allows | required_python_static_allows
+    ) <= python_allows or "Bash(/usr/bin/python3 *)" in allows:
         fail("local settings must allow only the hermetic compile launcher and exact reviewed static scripts")
-    if any(rule not in required_compile_allows | required_static_allows for rule in python_allows):
+    if any(
+        rule not in required_compile_allows | required_python_static_allows
+        for rule in python_allows
+    ):
         fail("local settings contain an unreviewed Python allow")
     if not required_read_only_allows <= allows:
         fail("local settings must allow exact trusted read-only Git and ripgrep prefixes")
@@ -2892,12 +2920,12 @@ def validate_command_gate(
         fail("strict_external authority must remain entirely closed in this revision")
 
     for command in (
-        "/usr/bin/python3 -I /home/user/Forge-method-core/scripts/check-doc-links.py",
+        "/home/user/.cargo/bin/cargo test --locked -p forge-core-validate --test checked_in_markdown_links",
         "/usr/bin/rg --no-config -n 'cargo test' scripts contracts",
     ):
         reason = gate.blocked_reason(command, current)
         if reason is not None:
-            fail(f"read-only/reviewed-static command was blocked: {command!r}: {reason}")
+            fail(f"reviewed development command was blocked: {command!r}: {reason}")
 
 def validate_local_ticket_boundary() -> None:
     ignore_source = read_strict_utf8_text(
