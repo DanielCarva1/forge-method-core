@@ -99,8 +99,6 @@ PROTECTED_TRUST_FILES = (
     "scripts/check-msrv.py",
     "scripts/check-ci-verdict.py",
     "scripts/test-msrv.py",
-    "scripts/check-static-structured-text.py",
-    "scripts/test-check-static-structured-text.py",
 )
 
 

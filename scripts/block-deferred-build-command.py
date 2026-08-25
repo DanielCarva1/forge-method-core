@@ -527,7 +527,6 @@ GIT_SAFE_CONFIG_PREFIX = [
     "-c", "core.attributesFile=/dev/null",
 ]
 REVIEWED_STATIC_SCRIPTS = {
-    "scripts/check-static-structured-text.py",
     "scripts/check-msrv.py",
     "scripts/check-release-locking.py",
 }
