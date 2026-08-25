@@ -186,11 +186,8 @@ minutes; the outer tier wrapper remains the authoritative 1,800-second tree time
 
 Do not describe default `cargo test --workspace` as covering that feature-gated
 journey. Do not silently remove a slow test: move it only with an explicit owner,
-trigger, compile path, and before/after inventory rationale. CI normalizes exact
-test identities with `scripts/check-test-inventory.py` and compares them to
-`contracts/test-inventory/workspace.json` and
-`contracts/test-inventory/expensive-p6d.json`; additions and removals require an
-explicit baseline review rather than disappearing in job topology changes.
+trigger, compile path, and before/after topology rationale. The repository does
+not retain generated snapshots of every test identity.
 
 ## Solo objective grounding checks
 

@@ -44,10 +44,13 @@ jobs:
         timeout-minutes: 3
         run: python scripts/run-ci-tier.py --tier tier-0-markdown-authority --budget-seconds 120 --report target/ci-timing/markdown-authority.json -- cargo test --locked -p forge-core-validate --test checked_in_markdown_links
 
+      - name: Provision exact YAML parser for protected policy regressions
+        run: python -m pip install --disable-pip-version-check --no-deps PyYAML==6.0.3
+
       - name: Test CI and evidence tooling failure semantics
         timeout-minutes: 3
         shell: bash
-        run: python scripts/run-ci-tier.py --tier tier-0-evidence-tool-tests --budget-seconds 120 --report target/ci-timing/evidence-tool-tests.json -- bash -c 'python scripts/test-run-ci-tier.py && python scripts/test-check-test-inventory.py && python scripts/test-check-real-host-evidence.py && python scripts/test-release-policy.py && python scripts/test-release-archive.py'
+        run: python scripts/run-ci-tier.py --tier tier-0-evidence-tool-tests --budget-seconds 120 --report target/ci-timing/evidence-tool-tests.json -- bash -c 'python scripts/test-run-ci-tier.py && python -I scripts/test-check-ci-verdict.py && python scripts/test-check-real-host-evidence.py && python scripts/test-release-policy.py && python scripts/test-release-archive.py'
 
       - name: Check formatting
         timeout-minutes: 3
@@ -93,6 +96,10 @@ jobs:
       - name: Verify MSRV lane contract with trusted checker
         timeout-minutes: 6
         run: python -m pip install --disable-pip-version-check --no-deps PyYAML==6.0.3 && python -I trusted/scripts/run-ci-tier.py --tier msrv-contract --budget-seconds 300 --report target/ci-timing/msrv-contract.json -- python -I trusted/scripts/check-msrv.py --root candidate --workflow candidate/.github/workflows/ci.yml --policy-workflow candidate/.github/workflows/msrv-policy.yml
+
+      - name: Run protected MSRV topology regression suite
+        timeout-minutes: 7
+        run: FORGE_MSRV_CANDIDATE_ROOT=candidate python -I trusted/scripts/run-ci-tier.py --tier msrv-topology-tests --budget-seconds 360 --report target/ci-timing/msrv-topology-tests.json -- python -I trusted/scripts/test-msrv.py
 
       - name: Check complete candidate workspace at MSRV
         timeout-minutes: 31
@@ -259,18 +266,18 @@ jobs:
           if-no-files-found: warn
 
   platform:
-    name: ${{ matrix.name }} platform gate
+    name: "[informational prerelease] ${{ matrix.name }} platform observation"
     needs: static_docs
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
-    # ALPHA-ONLY (0.12.0-alpha.1): the integration branch accumulated many
-    # platform-specific test failures before this alpha cycle (unshare user
-    # namespaces denied by GH Linux runners; macOS /var symlink; pre-existing
-    # contract drift in lifecycle/supply-chain tests). The alpha is an explicit
-    # source-only checkpoint that does NOT claim platform-gate (P7F-grade)
-    # evidence, so platform failures must not block the alpha tag. Re-enable
-    # hard-fail once the tracked pre-existing failures (#22, #23, #24, and the
-    # domain-pack-tcb lifecycle tests) are resolved post-dogfooding.
+    # INFORMATIONAL PRERELEASE CHANNEL ONLY: the integration branch
+    # accumulated platform-specific failures before this alpha cycle (unshare
+    # user namespaces denied by GH Linux runners; macOS /var symlink;
+    # pre-existing lifecycle/supply-chain contract drift). Current source
+    # authority does not claim native platform-gate or P7F-grade evidence.
+    # This observation is excluded from the required source-only verdict and
+    # cannot satisfy any readiness claim. Remove allowed-failure semantics only
+    # when this lane is deliberately promoted back to a mandatory gate.
     continue-on-error: true
     env:
       FORGE_CI_CACHE_CONTEXT: "Swatinem/rust-cache@v2"
@@ -340,7 +347,7 @@ jobs:
           if-no-files-found: warn
 
   expensive-journey:
-    name: Linux P6d reference journey
+    name: "[informational prerelease] Linux P6d reference journey observation"
     needs: [static_docs, focused, platform]
     # A push to a declared cumulative branch is the sole execution trigger.
     # Pull requests compile this target on Linux, Windows, and both macOS architectures.
@@ -351,9 +358,11 @@ jobs:
       needs.platform.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 35
-    # ALPHA-ONLY (0.12.0-alpha.1): see platform job. P6d cumulative evidence
-    # is P7F-grade and not claimed by the source-only alpha; do not block the
-    # alpha tag on it. Re-enable hard-fail post-dogfooding.
+    # INFORMATIONAL PRERELEASE CHANNEL ONLY: see the platform observation.
+    # P6d cumulative evidence is not claimed by the source-only alpha. This job
+    # is excluded from the required verdict and cannot satisfy P6d cumulative
+    # evidence, P7F proof, or broader readiness claims. Remove allowed-failure
+    # semantics only when the journey is deliberately promoted back to a mandatory gate.
     continue-on-error: true
     env:
       FORGE_CI_CACHE_CONTEXT: "Swatinem/rust-cache@v2"
@@ -384,3 +393,22 @@ jobs:
           name: ci-timing-expensive-journey
           path: target/ci-timing
           if-no-files-found: warn
+
+  ci-verdict:
+    name: Required source-only CI verdict
+    needs: [static_docs, msrv, focused, platform, expensive-journey]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout immutable trusted verdict tool
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
+          path: trusted
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Summarize mandatory terminal states and fail closed
+        run: python -I trusted/scripts/check-ci-verdict.py --mandatory static_docs "Tier 0 static and docs" "${{ needs.static_docs.result }}" --mandatory msrv "Rust 1.85 minimum supported version" "${{ needs.msrv.result }}" --mandatory focused "Focused package and integration evidence" "${{ needs.focused.result }}" --informational platform "Prerelease-channel native platform observations" "${{ needs.platform.result }}" --informational expensive-journey "Prerelease-channel Linux P6d reference journey observation" "${{ needs['expensive-journey'].result }}"

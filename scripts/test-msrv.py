@@ -649,7 +649,7 @@ class MsrvContractTests(unittest.TestCase):
             "focused job topology, conditions, and commands",
         )
         self.assert_workflow_rejected(
-            " && python -I scripts/test-check-static-structured-text.py",
+            " && python -I scripts/test-check-ci-verdict.py",
             "",
             "static_docs step .* fields must match reviewed exact values",
         )

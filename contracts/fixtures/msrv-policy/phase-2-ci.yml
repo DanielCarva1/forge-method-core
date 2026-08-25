@@ -38,7 +38,7 @@ jobs:
 
       - name: Check generated workspace layout
         timeout-minutes: 3
-        run: python scripts/run-ci-tier.py --tier tier-0-workspace-layout --budget-seconds 120 --report target/ci-timing/workspace-layout.json -- python scripts/generate-workspace-layout.py --check
+        run: python scripts/run-ci-tier.py --tier tier-0-workspace-layout --budget-seconds 120 --report target/ci-timing/workspace-layout.json -- cargo run --locked -p forge-core-validate --example generate_workspace_layout -- --check
 
       - name: Check Markdown authority and local links in Rust
         timeout-minutes: 3
@@ -50,7 +50,7 @@ jobs:
       - name: Test CI and evidence tooling failure semantics
         timeout-minutes: 3
         shell: bash
-        run: python scripts/run-ci-tier.py --tier tier-0-evidence-tool-tests --budget-seconds 120 --report target/ci-timing/evidence-tool-tests.json -- bash -c 'python scripts/test-run-ci-tier.py && python -I scripts/test-check-static-structured-text.py && python -I scripts/test-check-ci-verdict.py && python scripts/test-check-test-inventory.py && python scripts/test-check-real-host-evidence.py && python scripts/test-release-policy.py && python scripts/test-release-archive.py'
+        run: python scripts/run-ci-tier.py --tier tier-0-evidence-tool-tests --budget-seconds 120 --report target/ci-timing/evidence-tool-tests.json -- bash -c 'python scripts/test-run-ci-tier.py && python -I scripts/test-check-ci-verdict.py && python scripts/test-check-real-host-evidence.py && python scripts/test-release-policy.py && python scripts/test-release-archive.py'
 
       - name: Check formatting
         timeout-minutes: 3
