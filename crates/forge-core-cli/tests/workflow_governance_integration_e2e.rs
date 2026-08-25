@@ -202,16 +202,28 @@ fn assert_ok(output: &Output) -> Value {
 }
 
 fn assert_report_preserves_next(resumed: &Value, next: &Value, expected_readiness_profile: &str) {
-    let mut resumed_base = resumed["data"].clone();
-    let replacement = resumed_base
+    let mut report_base = resumed["data"].clone();
+    let replacement = report_base
         .as_object_mut()
-        .expect("resume data object")
+        .expect("report data object")
         .remove("replacement_continuity")
-        .expect("full resume replacement continuity");
+        .expect("report replacement continuity");
+    let report_current_work = report_base
+        .as_object_mut()
+        .expect("report data object")
+        .remove("current_work")
+        .expect("report Current Work context");
+    let mut next_base = next["data"].clone();
+    let next_current_work = next_base
+        .as_object_mut()
+        .expect("next data object")
+        .remove("current_work");
     assert_eq!(
-        resumed_base, next["data"],
-        "full resume must preserve ordinary guidance and add continuity separately"
+        report_base, next_base,
+        "report must preserve ordinary guidance and add recovery context separately"
     );
+    assert!(next_current_work.is_none());
+    assert_eq!(report_current_work["status"], "absent");
     assert_eq!(replacement["status"], "ready");
     assert_eq!(
         replacement["binding"]["readiness_profile"],
