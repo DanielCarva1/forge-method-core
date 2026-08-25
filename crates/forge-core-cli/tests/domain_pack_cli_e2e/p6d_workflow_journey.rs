@@ -3069,7 +3069,7 @@ fn p6d_reference_pack_real_journey() {
         initialized["data"]["effective"]["domain_pack_generation"]["generation"],
         0
     );
-    let installed_summary = ok(&project.workflow("resume", &[]), "workflow.resume summary");
+    let installed_summary = ok(&project.workflow("resume", &[]), "workflow.resume");
     assert_eq!(
         installed_summary["data"]["effective"],
         initialized["data"]["effective"]
@@ -3571,7 +3571,7 @@ fn p6d_reference_pack_real_journey() {
                 .as_str()
                 .is_some_and(|message| !message.is_empty())
     }));
-    let degraded_summary = ok(&project.workflow("resume", &[]), "workflow.resume summary");
+    let degraded_summary = ok(&project.workflow("resume", &[]), "workflow.resume");
     assert_ne!(
         degraded_summary["data"]["effective"], installed_effective,
         "a changed Domain Pack generation must be visible in the concise summary"
