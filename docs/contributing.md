@@ -93,7 +93,7 @@ part of tests, builds, or installation.
 CI checks at least:
 
 ```bash
-python scripts/generate-workspace-layout.py --check
+cargo run --locked -p forge-core-validate --example generate_workspace_layout -- --check
 cargo run -p forge-core-command-surface --example generate_command_surface_docs -- --check
 ```
 

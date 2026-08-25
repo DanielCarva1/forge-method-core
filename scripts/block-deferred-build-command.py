@@ -532,7 +532,6 @@ REVIEWED_STATIC_SCRIPTS = {
     "scripts/check-release-locking.py",
 }
 HEAVY_SCRIPTS = {
-    "scripts/generate-workspace-layout.py",
     "scripts/check-test-inventory.py",
     "scripts/run-ci-tier.py",
     "scripts/build-release-archive.py",

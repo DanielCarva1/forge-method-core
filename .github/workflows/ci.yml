@@ -38,7 +38,7 @@ jobs:
 
       - name: Check generated workspace layout
         timeout-minutes: 3
-        run: python scripts/run-ci-tier.py --tier tier-0-workspace-layout --budget-seconds 120 --report target/ci-timing/workspace-layout.json -- python scripts/generate-workspace-layout.py --check
+        run: python scripts/run-ci-tier.py --tier tier-0-workspace-layout --budget-seconds 120 --report target/ci-timing/workspace-layout.json -- cargo run --locked -p forge-core-validate --example generate_workspace_layout -- --check
 
       - name: Check Markdown authority and local links in Rust
         timeout-minutes: 3

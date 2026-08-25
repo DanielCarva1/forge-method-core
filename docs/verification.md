@@ -131,7 +131,7 @@ git diff --check
 Tier 0 parity when static/generated surfaces are affected:
 
 ```bash
-python scripts/generate-workspace-layout.py --check
+cargo run --locked -p forge-core-validate --example generate_workspace_layout -- --check
 cargo test --locked -p forge-core-validate --test checked_in_markdown_links
 cargo fmt --all -- --check
 ```
