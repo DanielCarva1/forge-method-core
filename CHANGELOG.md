@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   proofs remain pending.
 
 ### Changed
+- **The historical Python workflow migrator was retired.** Its Markdown inputs
+  and sibling-repository destination no longer exist, while the active and
+  frozen catalogs are owned and verified by Rust. Stale test messages no longer
+  tell maintainers to run the obsolete script.
 - **The stale Python operation-fixture generator was retired instead of ported.**
   It had no live caller, omitted a current fixture, and could overwrite current
   Rust-validated fixtures with older semantics. The checked-in fixtures remain

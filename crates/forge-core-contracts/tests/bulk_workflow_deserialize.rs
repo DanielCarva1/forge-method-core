@@ -13,7 +13,7 @@ fn workflows_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../contracts/workflows")
         .canonicalize()
-        .expect("contracts/workflows dir must exist (run scripts/migrate_workflows.py)")
+        .expect("the checked-in operational workflow catalog must exist")
 }
 
 fn frozen_workflows_dir() -> PathBuf {
@@ -34,7 +34,7 @@ fn all_migrated_workflows_deserialize_into_typed_schema() {
         .collect();
     assert!(
         !files.is_empty(),
-        "no workflow YAML found under {dir:?} — did the migration run?"
+        "the frozen workflow retirement snapshot is empty under {dir:?}"
     );
     files.sort();
 

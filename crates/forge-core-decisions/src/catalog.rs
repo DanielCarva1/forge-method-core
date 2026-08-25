@@ -400,12 +400,12 @@ mod tests {
     use super::*;
     use forge_core_contracts::phase::Phase;
 
-    /// The real migrated catalog lives at <workspace>/contracts/workflows.
+    /// The active operational catalog lives at <workspace>/contracts/workflows.
     fn real_catalog_dir() -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../contracts/workflows")
             .canonicalize()
-            .expect("contracts/workflows must exist (run scripts/migrate_workflows.py)")
+            .expect("the checked-in operational workflow catalog must exist")
     }
 
     #[test]
