@@ -1790,7 +1790,7 @@ fn product_markdown_loader_denies_unknown_path() {
 
 #[test]
 fn validate_library_passes_current_repo() {
-    let root = merged_validation_root("validate-library-current-repo");
+    let root = repo_root();
     let summary = run_validate(&root);
     assert_eq!(
         summary.status,
@@ -2457,7 +2457,7 @@ fn behavioral_validation_rejects_checkpoint_substitution_and_baseline_history_dr
 
 #[test]
 fn validate_binary_outputs_json_summary() {
-    let root = merged_validation_root("validate-binary-json-summary");
+    let root = repo_root();
     let output = Command::new(env!("CARGO_BIN_EXE_forge-core"))
         .args(["validate", "--root"])
         .arg(&root)
