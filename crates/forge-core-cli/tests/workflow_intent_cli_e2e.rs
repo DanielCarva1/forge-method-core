@@ -300,7 +300,10 @@ fn human_intent_record_is_external_origin_bound_durable_and_fail_closed() {
             .as_str()
             .expect("state root"),
     );
-    ok(&run(&app_arg, &["init"]));
+    ok(&run(
+        &app_arg,
+        &["init", "--readiness-profile", "strict_external"],
+    ));
 
     let key = SigningKey::from_bytes(&[42; 32]);
     let project_id = started["data"]["project"]["project_id"]
