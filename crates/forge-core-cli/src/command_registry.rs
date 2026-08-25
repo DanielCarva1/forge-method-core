@@ -107,6 +107,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     CommandSpec::from_surface(&surface::COMMAND_LIFECYCLE, crate::product_lifecycle_cmd::run_product_lifecycle_command),
     CommandSpec::from_surface(&surface::COMMAND_HOST_SUPPORT_MATRIX, crate::host_support_matrix_cmd::run_host_support_matrix_command),
     CommandSpec::from_surface(&surface::COMMAND_HOST_CONFORMANCE, crate::host_conformance_cmd::run_host_conformance_command),
+    CommandSpec::from_surface(&surface::COMMAND_HOST_EVIDENCE, crate::host_evidence_cmd::run_host_evidence_command),
     CommandSpec::from_surface(&surface::COMMAND_PROJECT, crate::project_cmd::run_project_command),
     CommandSpec::from_surface(&surface::COMMAND_GRAPH, crate::graph_cmd::run_graph_command),
     CommandSpec::from_surface(&surface::COMMAND_EVAL, crate::eval_cmd::run_eval_command),

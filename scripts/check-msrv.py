@@ -63,7 +63,7 @@ STATIC_TOOL_TEST_COMMAND = (
     "--budget-seconds 120 --report target/ci-timing/evidence-tool-tests.json -- "
     "bash -c 'python scripts/test-run-ci-tier.py && "
     "python -I scripts/test-check-ci-verdict.py && "
-    "python scripts/test-check-real-host-evidence.py && "
+    "cargo test --locked -p forge-core-validate --lib real_host_evidence::tests && "
     "python scripts/test-release-policy.py && "
     "python scripts/test-release-archive.py'"
 )
@@ -90,7 +90,7 @@ LEGACY_WORKFLOW_DIGEST = (
     "22d63c7f271a732a104b3282664980caa69880db619c9e5d04f734496933c140"
 )
 FINAL_WORKFLOW_DIGEST = (
-    "42e055586589778a43d7d8d09c1a378c0eee3fc598b3070e3b5a91d88bfbe4f7"
+    "bf023ee71572196ffbcb02ff28008e60a9ce6fcc22320d528199ffb9d116ebfc"
 )
 FOCUSED_JOB_DIGEST = (
     "cfd44e3bd628c0bf848048e9012eb7ce0d59dcd310eb8254d6b79702f1ef2fa7"

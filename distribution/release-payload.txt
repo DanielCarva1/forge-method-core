@@ -80,7 +80,6 @@ docs/fixtures/domain-pack-reference-v0/projections/agent-built-game.expected.yam
 docs/fixtures/domain-pack-reference-v0/requests/agent-built-game.yaml
 docs/fixtures/domain-pack-reference-v0/requirements/agent-built-game.yaml
 docs/generated/command-surface.md
-scripts/check-real-host-evidence.py
 docs/generated/workspace-layout.md
 CONTRIBUTING.md
 SECURITY.md

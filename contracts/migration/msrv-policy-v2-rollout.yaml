@@ -64,7 +64,7 @@ states:
       checker, verdict tool, and regression suite.
   - id: phase-2-activate-protected-topology
     must_follow: phase-1-bootstrap-trust-root
-    ci_workflow_digest: sha256:42e055586589778a43d7d8d09c1a378c0eee3fc598b3070e3b5a91d88bfbe4f7
+    ci_workflow_digest: sha256:bf023ee71572196ffbcb02ff28008e60a9ce6fcc22320d528199ffb9d116ebfc
     ci_topology: final_ci_verdict_and_protected_regressions
     lands:
       - .github/workflows/ci.yml

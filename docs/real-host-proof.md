@@ -7,8 +7,7 @@ run and not a P7F completion claim.
 
 ## What the checker can establish
 
-[`check-real-host-evidence.py`](../scripts/check-real-host-evidence.py) performs a
-closed, local check of:
+`forge-core host-evidence verify` performs a closed, local check of:
 
 - byte and parser bounds;
 - alias-free YAML/JSON, duplicate keys, closed fields, and safe relative paths;
@@ -101,13 +100,12 @@ the arguments or that an invocation used a public release interface.
 
 From the repository root:
 
-```bash
-python3 scripts/check-real-host-evidence.py path/to/evidence/bundle.json
+```console
+forge-core host-evidence verify --bundle-file path/to/evidence/bundle.json
 ```
 
-JSON uses only the Python standard library and therefore works from the release
-payload without installing dependencies. Alias-free YAML is also accepted when
-PyYAML is installed.
+The installed Forge binary accepts alias-free YAML and JSON directly. Python,
+PyYAML, and a source checkout are not required.
 
 Success prints both the narrow verdict and this mandatory warning:
 

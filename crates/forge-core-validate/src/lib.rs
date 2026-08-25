@@ -9,6 +9,7 @@ pub mod codes;
 pub mod failure;
 pub mod host_conformance;
 pub mod markdown_authority;
+pub mod real_host_evidence;
 pub mod risk_audit;
 pub mod solo_host_conformance;
 pub mod testkit;

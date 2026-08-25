@@ -540,6 +540,17 @@ pub const COMMAND_HOST_CONFORMANCE: CommandSpec = CommandSpec {
     mcp_visibility: McpVisibility::AllowlistOnly,
 };
 
+/// Read-only structural and content-integrity verification of real-host evidence.
+pub const COMMAND_HOST_EVIDENCE: CommandSpec = CommandSpec {
+    name: "host-evidence",
+    usage_lines: &[
+        "       forge-core host-evidence verify --bundle-file <yaml-or-json> [--json|--no-json]",
+    ],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
 pub const COMMAND_PROJECT: CommandSpec = CommandSpec {
     name: "project",
     usage_lines:     &[
@@ -904,6 +915,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     COMMAND_LIFECYCLE,
     COMMAND_HOST_SUPPORT_MATRIX,
     COMMAND_HOST_CONFORMANCE,
+    COMMAND_HOST_EVIDENCE,
     COMMAND_PROJECT,
     COMMAND_GRAPH,
     COMMAND_EVAL,

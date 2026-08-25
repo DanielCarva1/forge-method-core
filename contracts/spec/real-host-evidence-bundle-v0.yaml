@@ -243,8 +243,8 @@ template_semantics:
       review_record_ref: "<artifact-id>"
 
 checker:
-  implementation: "scripts/check-real-host-evidence.py"
-  invocation: "python3 scripts/check-real-host-evidence.py <bundle.yaml-or-json>"
+  implementation: "forge-core-validate::real_host_evidence"
+  invocation: "forge-core host-evidence verify --bundle-file <bundle.yaml-or-json>"
   successful_wording: "structurally/content-integrity valid"
   mandatory_disclaimer: >-
     This result validates only structure and content integrity; it does not

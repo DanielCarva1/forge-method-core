@@ -16,11 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.45` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.46` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
 ### Changed
+- **Real-host evidence verification is now shipped in the Rust binary.** The
+  new read-only `forge-core host-evidence verify --bundle-file <path>` command
+  preserves the bounded YAML/JSON, safe-path, SHA-256, closed-schema, scenario,
+  disclosure, and non-authoritative checks. The Python checker and its duplicate
+  tests were removed from source, CI, and the release payload.
 - **Source-checkpoint installation is now owned end to end by Rust.** The
   external `forge-core-xtask` process preserves clean-checkout binding,
   commit-and-hash receipts, one rollback, interruption recovery, and native
