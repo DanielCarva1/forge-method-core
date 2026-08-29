@@ -201,6 +201,10 @@ jobs:
         timeout-minutes: 16
         run: python scripts/run-ci-tier.py --tier focused-clippy --budget-seconds 900 --report target/ci-timing/clippy.json -- cargo clippy --workspace --all-targets --all-features -- -D clippy::pedantic
 
+      - name: Verify strict universal assurance runtime journey
+        timeout-minutes: 11
+        run: python scripts/run-ci-tier.py --tier focused-universal-assurance-runtime --budget-seconds 600 --report target/ci-timing/universal-assurance-runtime.json -- cargo test -p forge-core-cli --test workflow_universal_assurance_cli_e2e reviewed_definition_and_separate_complete_runtime_verify_universal_lenses -- --exact --nocapture
+
       - name: Validate contracts
         timeout-minutes: 16
         run: python scripts/run-ci-tier.py --tier focused-contract-validation --budget-seconds 900 --report target/ci-timing/contract-validation.json -- cargo run -p forge-core-cli -- validate --root .
