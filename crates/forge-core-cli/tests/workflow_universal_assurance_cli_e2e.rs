@@ -408,7 +408,10 @@ fn reviewed_definition_and_separate_complete_runtime_verify_universal_lenses() {
     let initial_project_id = started["data"]["project"]["project_id"]
         .as_str()
         .expect("project id");
-    ok(&workflow(&app_arg, &["init"]));
+    ok(&workflow(
+        &app_arg,
+        &["init", "--readiness-profile", "strict_external"],
+    ));
     upgrade_to_latest(&app_arg);
 
     let human_key = SigningKey::from_bytes(&[31; 32]);
