@@ -956,12 +956,10 @@ mod tests {
     }
 
     fn yaml_optional_string(value: Option<&String>) -> String {
-        value
-            .map(|item| format!("\"{item}\""))
-            .unwrap_or_else(|| "null".to_string())
+        value.map_or_else(|| "null".to_string(), |item| format!("\"{item}\""))
     }
 
-    fn replace_once(text: String, from: &str, to: &str, label: &str) -> String {
+    fn replace_once(text: &str, from: &str, to: &str, label: &str) -> String {
         let changed = text.replacen(from, to, 1);
         assert_ne!(changed, text, "{label} must change the fixture");
         changed
@@ -984,8 +982,7 @@ mod tests {
         let current_next = current
             .next_item_id
             .as_ref()
-            .map(|item| format!("\"{item}\""))
-            .unwrap_or_else(|| "null".to_string());
+            .map_or_else(|| "null".to_string(), |item| format!("\"{item}\""));
         let terminal = text
             .replacen(
                 &format!(
@@ -1093,7 +1090,7 @@ mod tests {
             .expect("an executable item different from the current next item");
         let spec = fs::read_to_string(&spec_path).expect("read Solo specification");
         let stale = replace_once(
-            spec,
+            &spec,
             &format!(
                 "    next_item_id: {}",
                 yaml_optional_string(summary.next_item_id.as_ref())
@@ -1134,7 +1131,7 @@ mod tests {
             .expect("an executable item different from the active slice");
         let plan = fs::read_to_string(&plan_path).expect("read product plan");
         let stale = replace_once(
-            plan,
+            &plan,
             &format!("  first_item: \"{}\"", active_slice.first_item),
             &format!("  first_item: \"{divergent_item}\""),
             "stale plan order",
@@ -1224,7 +1221,7 @@ mod tests {
         let campaign = fs::read_to_string(&campaign_path).expect("read campaign");
         let expected = format!("{PRODUCT_CAMPAIGN_PATH}#solo_execution");
         let divergent = replace_once(
-            campaign,
+            &campaign,
             &format!("  authority: \"{expected}\""),
             "  authority: \"contracts/plan/not-the-campaign.yaml#solo_execution\"",
             "divergent Solo execution authority",
