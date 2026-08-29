@@ -1,0 +1,298 @@
+{
+  "schema_version": "solo_host_conformance_protocol_v1",
+  "bindings": {
+    "declared": {
+      "host_id": "openai.codex",
+      "host_version": "0.150.0-alpha.8",
+      "adapter_id": "forge.codex.cooperative",
+      "adapter_version": "1.0.0",
+      "platform_label": "windows-10.0.26200-x86_64",
+      "environment_label": "codex-desktop-26.820.10647.0-native-windows-forge-head-03a8742b"
+    },
+    "observed": {
+      "forge_package": "forge-core-cli",
+      "forge_version": "0.12.0-alpha.47",
+      "forge_executable_sha256": "sha256:d83011873f9037db8f6a834b3ae73c95552f788e605c8b2e1065794bc249ae75",
+      "platform": {
+        "os": "windows",
+        "architecture": "x86_64"
+      },
+      "canonical_root": {
+        "resolved_path_sha256": "sha256:5831c599a910ff912f8e91ec180e4a2bbffb4504faa67dd7551700bc16857d14",
+        "kind": "native_or_other",
+        "exists": true,
+        "is_directory": true,
+        "windows_to_wsl_bridge": "not_applicable"
+      },
+      "adapter_invocation": {
+        "executable": {
+          "file_name": "forge-core.exe",
+          "sha256": "sha256:d83011873f9037db8f6a834b3ae73c95552f788e605c8b2e1065794bc249ae75",
+          "byte_length": 93824512
+        },
+        "arguments": [
+          {
+            "position": 0,
+            "kind": "literal_digest",
+            "safe_display": "<literal-digest>",
+            "argument_sha256": "sha256:34b42c12ceca3191cbac755aa2119f57813492adc74945a4e7cd19725fd27243",
+            "file_identity": null
+          },
+          {
+            "position": 1,
+            "kind": "literal_digest",
+            "safe_display": "<literal-digest>",
+            "argument_sha256": "sha256:7ba003668287e08b988f7a80e14d759b8034724b363a50c41f18ce22e5509fde",
+            "file_identity": null
+          },
+          {
+            "position": 2,
+            "kind": "literal_digest",
+            "safe_display": "<literal-digest>",
+            "argument_sha256": "sha256:57de4cf40144bdf7d00010f2f5557a7d642c2b9705309bfade167dd313e2ca93",
+            "file_identity": null
+          },
+          {
+            "position": 3,
+            "kind": "literal_digest",
+            "safe_display": "<literal-digest>",
+            "argument_sha256": "sha256:6d3357119d99a3077f6e0ec1a5c221c13b81667348d323d2ce1ad5ed8e23f741",
+            "file_identity": null
+          },
+          {
+            "position": 4,
+            "kind": "file",
+            "safe_display": "codex-0.150.0-alpha.8-observation.json",
+            "argument_sha256": "sha256:8f518f6c091f311f2114047bbc37ace43f52384a03682300ce8a2ec21913aa53",
+            "file_identity": {
+              "file_name": "codex-0.150.0-alpha.8-observation.json",
+              "sha256": "sha256:94d34ff0d0ed967c27d9896137e3bada3382721d8fd7247745a203a2096b55b7",
+              "byte_length": 3838
+            }
+          }
+        ],
+        "argv_sha256": "sha256:9acae18090a6f121d3604fa356bfb84946e0250be0db755f833ae5834107e485",
+        "timeout_ms": 30000,
+        "output_limit_bytes": 4194304
+      }
+    },
+    "corpus_sha256": "sha256:860470b2df3cfa5cdb267a251750327f4a5bdb28327c6ccc7b6f3fef35c55647"
+  },
+  "cases": [
+    {
+      "case_id": "activation",
+      "assertions": {
+        "forge_invoked_by_argv": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "one_chat_activation_observed": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "versioned_json_preserved": {
+          "passed": true,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [],
+      "evidence": {
+        "fact_codes": [
+          "forge_cli_versioned_json_readback",
+          "start_forge_once_current_desktop"
+        ]
+      }
+    },
+    {
+      "case_id": "canonical-project-root",
+      "assertions": {
+        "ambiguous_roots_rejected": {
+          "passed": false,
+          "native_proof_claim": null
+        },
+        "exact_existing_root_resolved": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "windows_wsl_bridge_applied_only_when_required": {
+          "passed": true,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [
+        {
+          "kind": "canonical_root_unavailable",
+          "code": "ambiguous_root_rejection_not_exercised_current_desktop"
+        }
+      ],
+      "evidence": {
+        "fact_codes": [
+          "native_windows_project_root_resolved",
+          "windows_wsl_bridge_not_required"
+        ]
+      }
+    },
+    {
+      "case_id": "read-only-guidance",
+      "assertions": {
+        "before_after_state_equal": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "guidance_is_plain_language": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "no_hidden_recovery_or_write": {
+          "passed": true,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [],
+      "evidence": {
+        "fact_codes": [
+          "current_work_detail_state_digest_unchanged",
+          "plain_language_resume_recovered_current_focus"
+        ]
+      }
+    },
+    {
+      "case_id": "conversation-derived-intent",
+      "assertions": {
+        "accepted_intent_read_back": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "agent_proposal_separated": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "human_message_source_preserved": {
+          "passed": true,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [],
+      "evidence": {
+        "fact_codes": [
+          "human_issue66_acceptance_preserved",
+          "work_focus_issue66_read_back"
+        ]
+      }
+    },
+    {
+      "case_id": "cooperative-evidence",
+      "assertions": {
+        "admission_result_read_back": {
+          "passed": false,
+          "native_proof_claim": null
+        },
+        "evidence_source_preserved": {
+          "passed": false,
+          "native_proof_claim": null
+        },
+        "rejected_evidence_stays_rejected": {
+          "passed": false,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [
+        {
+          "kind": "evidence_unavailable",
+          "code": "test_or_review_evidence_not_admitted_in_current_story"
+        }
+      ],
+      "evidence": {
+        "fact_codes": [
+          "focused_tests_executed_outside_forge_evidence_admission"
+        ]
+      }
+    },
+    {
+      "case_id": "isolated-work",
+      "assertions": {
+        "isolation_exists_and_is_linked": {
+          "passed": false,
+          "native_proof_claim": null
+        },
+        "missing_isolation_stops": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "ownership_mismatch_stops": {
+          "passed": false,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [
+        {
+          "kind": "isolation_unavailable",
+          "code": "active_isolation_not_used_in_current_story"
+        },
+        {
+          "kind": "isolation_unavailable",
+          "code": "ownership_mismatch_not_exercised_current_story"
+        }
+      ],
+      "evidence": {
+        "fact_codes": [
+          "missing_isolation_rejected_without_state_change",
+          "shared_worktree_subagents_observed"
+        ]
+      }
+    },
+    {
+      "case_id": "governed-promotion",
+      "assertions": {
+        "apply_read_back_matches": {
+          "passed": false,
+          "native_proof_claim": null
+        },
+        "exact_retry_is_idempotent": {
+          "passed": false,
+          "native_proof_claim": null
+        },
+        "preview_bound_to_exact_change": {
+          "passed": false,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [
+        {
+          "kind": "promotion_unavailable",
+          "code": "governed_promotion_not_exercised_current_story"
+        }
+      ],
+      "evidence": {
+        "fact_codes": [
+          "canonical_changes_not_applied_through_forge_promotion"
+        ]
+      }
+    },
+    {
+      "case_id": "replacement-agent-recovery",
+      "assertions": {
+        "durable_state_reconstructed": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "fresh_agent_has_no_transcript_dependency": {
+          "passed": true,
+          "native_proof_claim": null
+        },
+        "recovery_ranked_before_new_work": {
+          "passed": true,
+          "native_proof_claim": null
+        }
+      },
+      "gaps": [],
+      "evidence": {
+        "fact_codes": [
+          "fresh_agent_no_transcript_dependency",
+          "recovery_ranked_before_new_work",
+          "work_focus_issue66_reconstructed"
+        ]
+      }
+    }
+  ]
+}

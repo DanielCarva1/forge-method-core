@@ -138,8 +138,11 @@ Linux runner can verify the canonical WSL project but cannot independently
 observe the Windows side of that bridge. The result must keep that limitation
 visible.
 
-The retained candidate result for Codex CLI `0.144.6` is documented at
-`contracts/hosts/conformance-results/codex/0.144.6/README.md`; its
-`run-summary.json` and `bundle/` preserve the exact partial results and typed
-gaps. Re-verifying that bundle establishes file integrity and result
-consistency only, not the truth of the adapter-reported host actions.
+The current retained candidate result covers Codex CLI `0.150.0-alpha.8` on
+Codex Desktop `26.820.10647.0` and native Windows. It is documented at
+`contracts/hosts/conformance-results/codex/0.150.0-alpha.8/README.md`; its
+`run-summary.json` and `bundle/` preserve six partially supported capabilities,
+two unsupported capabilities, and every typed gap from that exact journey.
+The earlier CLI `0.144.6` WSL result remains beside it as historical evidence.
+Re-verifying either bundle establishes file integrity and result consistency
+only, not the truth of the adapter-reported host actions.

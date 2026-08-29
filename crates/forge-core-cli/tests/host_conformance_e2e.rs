@@ -344,9 +344,9 @@ fn codex_adapter_rejects_observations_with_unknown_fields() {
 }
 
 #[test]
-fn retained_codex_run_summary_matches_bundle_manifest_and_result() {
+fn retained_current_codex_run_summary_matches_bundle_manifest_and_result() {
     let retained = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../contracts/hosts/conformance-results/codex/0.144.6");
+        .join("../../contracts/hosts/conformance-results/codex/0.150.0-alpha.8");
     let read_json = |path: &Path| -> serde_json::Value {
         serde_json::from_slice(&fs::read(path).expect("read retained JSON"))
             .expect("parse retained JSON")
@@ -378,6 +378,56 @@ fn retained_codex_run_summary_matches_bundle_manifest_and_result() {
         .expect("result Forge hash");
     assert_eq!(summary_forge_hash, manifest_forge_hash);
     assert_eq!(summary_forge_hash, result_forge_hash);
+
+    for (summary_path, manifest_path) in [
+        (
+            "/identities/codex_cli_declared",
+            "/bindings/declared/host_version",
+        ),
+        ("/identities/adapter_id", "/bindings/declared/adapter_id"),
+        (
+            "/identities/adapter_version",
+            "/bindings/declared/adapter_version",
+        ),
+        (
+            "/identities/forge_package_measured",
+            "/bindings/observed/forge_package",
+        ),
+        (
+            "/identities/forge_version_measured",
+            "/bindings/observed/forge_version",
+        ),
+        (
+            "/identities/platform_label_declared",
+            "/bindings/declared/platform_label",
+        ),
+        (
+            "/identities/environment_label_declared",
+            "/bindings/declared/environment_label",
+        ),
+    ] {
+        assert_eq!(
+            summary.pointer(summary_path),
+            manifest.pointer(manifest_path),
+            "retained identity {summary_path} must match the verified bundle binding"
+        );
+    }
+    let desktop_version = summary
+        .pointer("/identities/codex_desktop_declared")
+        .and_then(serde_json::Value::as_str)
+        .expect("declared Codex Desktop version");
+    let environment_label = manifest
+        .pointer("/bindings/declared/environment_label")
+        .and_then(serde_json::Value::as_str)
+        .expect("declared environment label");
+    assert!(
+        environment_label.contains(desktop_version),
+        "the exact Desktop version must remain visible in the bundle binding"
+    );
+    assert_eq!(
+        summary["identities"]["repository_source_commit"],
+        "03a8742bc655285c1ee580e0cd4b0b61ad78e6ea"
+    );
 
     let capabilities = result["capabilities"]
         .as_array()
@@ -412,7 +462,7 @@ fn retained_codex_run_summary_matches_bundle_manifest_and_result() {
             .as_u64()
             .expect("summary not-applicable count"),
     );
-    assert_eq!(derived_counts, (8, 21, 2, 1));
+    assert_eq!(derived_counts, (8, 14, 9, 1));
     assert_eq!(summary_counts, derived_counts);
 }
 

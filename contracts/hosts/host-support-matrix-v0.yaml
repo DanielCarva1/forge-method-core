@@ -15,7 +15,7 @@ host_support_matrix:
   records:
     - runtime:
         kind: "codex"
-        version: "0.144.6"
+        version: "0.150.0-alpha.8"
       status: "candidate"
       recognition:
         status: "candidate"

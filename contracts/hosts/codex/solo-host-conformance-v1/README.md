@@ -73,11 +73,12 @@ runner can prove the WSL project root but cannot independently see the Windows
 side of the bridge. Keep that as a typed platform gap; do not convert Linux
 `not_applicable` into a bridge pass.
 
-## Retained exact result
+## Retained exact results
 
-The candidate result for the exact Codex CLI `0.144.6` journey is retained at
-`contracts/hosts/conformance-results/codex/0.144.6/README.md`, with its
-`run-summary.json` and integrity-checkable `bundle/`. The adapter-reported
-successes remain `partially_supported`; the Windows side of the bridge remains
-a typed gap. Bundle verification checks the retained files and derived result,
-not whether Codex performed the reported actions.
+The current candidate result covers Codex CLI `0.150.0-alpha.8` on Codex
+Desktop `26.820.10647.0` and native Windows. It is retained at
+`contracts/hosts/conformance-results/codex/0.150.0-alpha.8/README.md`, with its
+`run-summary.json` and integrity-checkable `bundle/`. The earlier CLI `0.144.6`
+WSL result remains beside it as historical evidence. Every result applies only
+to its exact versions and environment. Bundle verification checks the retained
+files and derived result, not whether Codex performed the reported actions.

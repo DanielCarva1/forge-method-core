@@ -1,0 +1,28 @@
+{
+  "case_id": "cooperative-evidence",
+  "assertions": {
+    "admission_result_read_back": {
+      "passed": false,
+      "native_proof_claim": null
+    },
+    "evidence_source_preserved": {
+      "passed": false,
+      "native_proof_claim": null
+    },
+    "rejected_evidence_stays_rejected": {
+      "passed": false,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [
+    {
+      "kind": "evidence_unavailable",
+      "code": "test_or_review_evidence_not_admitted_in_current_story"
+    }
+  ],
+  "evidence": {
+    "fact_codes": [
+      "focused_tests_executed_outside_forge_evidence_admission"
+    ]
+  }
+}

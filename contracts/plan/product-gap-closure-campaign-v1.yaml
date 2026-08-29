@@ -206,11 +206,13 @@ solo_execution:
         state_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-06]"
         evidence_refs:
           - "contracts/hosts/host-support-matrix-v0.yaml"
-          - "contracts/hosts/conformance-results/codex/0.144.6/run-summary.json"
+          - "contracts/hosts/conformance-results/codex/0.150.0-alpha.8/bundle/manifest.json"
+          - "contracts/hosts/conformance-results/codex/0.150.0-alpha.8/bundle/result.json"
+          - "contracts/hosts/conformance-results/codex/0.150.0-alpha.8/run-summary.json"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/66"
         remaining_work:
-          - "Refresh the Codex result against the current public corpus and record exact current host and adapter versions."
           - "Run the same public corpus for ZCode, OpenCode, Claude, Pi.dev, and Cursor, recording a capability result or typed gap for each."
-        base_commit: "ed4d1e35ed1263a580e46bd255a2aea14dfafa05"
+        base_commit: "03a8742bc655285c1ee580e0cd4b0b61ad78e6ea"
         updated_at: "2026-08-29"
     - id: "SD-07"
       title: "Gate the packaged journey"

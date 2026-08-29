@@ -1,0 +1,24 @@
+{
+  "case_id": "activation",
+  "assertions": {
+    "forge_invoked_by_argv": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "one_chat_activation_observed": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "versioned_json_preserved": {
+      "passed": true,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [],
+  "evidence": {
+    "fact_codes": [
+      "forge_cli_versioned_json_readback",
+      "start_forge_once_current_desktop"
+    ]
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "schema_version": "forge_host_conformance_run_summary_v1",
+  "recorded_on": "2026-08-29",
+  "authority": "same_owner_cooperative_candidate_only",
+  "identities": {
+    "codex_cli_declared": "0.150.0-alpha.8",
+    "codex_cli_executable_sha256": "sha256:3b0d465bfd109f04f2bbbd44b1be2727f19d275d4962954ab5d2a54896366e38",
+    "codex_desktop_declared": "26.820.10647.0",
+    "adapter_id": "forge.codex.cooperative",
+    "adapter_version": "1.0.0",
+    "forge_package_measured": "forge-core-cli",
+    "forge_version_measured": "0.12.0-alpha.47",
+    "forge_executable_sha256": "sha256:d83011873f9037db8f6a834b3ae73c95552f788e605c8b2e1065794bc249ae75",
+    "repository_source_commit": "03a8742bc655285c1ee580e0cd4b0b61ad78e6ea",
+    "source_to_binary_binding": "same_owner_clean_head_build_observation",
+    "platform_label_declared": "windows-10.0.26200-x86_64",
+    "environment_label_declared": "codex-desktop-26.820.10647.0-native-windows-forge-head-03a8742b"
+  },
+  "journey": {
+    "external_work_item": "https://github.com/DanielCarva1/forge-method-core/issues/66",
+    "work_focus_id": "focus.issue-66.codex-host-conformance",
+    "canonical_root": {
+      "kind": "native_windows",
+      "resolved_path_sha256": "sha256:5831c599a910ff912f8e91ec180e4a2bbffb4504faa67dd7551700bc16857d14",
+      "windows_to_wsl_bridge": "not_applicable"
+    },
+    "read_only_state_digest": {
+      "before": "sha256:3f229553188ad46eeff857601bea71b459f62e60a3d2dc85bc5037bdfbd9912d",
+      "after": "sha256:3f229553188ad46eeff857601bea71b459f62e60a3d2dc85bc5037bdfbd9912d",
+      "equal": true
+    },
+    "missing_isolation_rejection": "passed_without_state_change",
+    "replacement_agent_recovery": "passed_without_transcript_dependency"
+  },
+  "result": {
+    "overall": "candidate",
+    "capabilities": 8,
+    "partially_supported": 6,
+    "unsupported": 2,
+    "supported": 0,
+    "assertions_passed": 14,
+    "assertions_failed": 9,
+    "assertions_not_applicable": 1,
+    "integrity_proves_host_authenticity": false
+  },
+  "unexercised_checks": [
+    "ambiguous_root_rejection",
+    "forge_evidence_admission_and_rejection",
+    "linked_active_isolation",
+    "ownership_mismatch_rejection",
+    "governed_promotion_preview_apply_retry"
+  ],
+  "bundle": {
+    "relative_path": "bundle",
+    "bundle_digest": "sha256:504112939327d622f1d5dadc5585812c14963109eeeb54d17cef513fc954dc88",
+    "bundle_integrity_verification": "passed",
+    "verification_scope": "closed_bundle_structure_completeness_derived_result_and_digests_only",
+    "reported_host_actions_verified": false
+  }
+}

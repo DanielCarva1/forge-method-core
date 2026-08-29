@@ -1,0 +1,150 @@
+{
+  "schema_version": "solo_host_conformance_bundle_v1",
+  "bindings": {
+    "declared": {
+      "host_id": "openai.codex",
+      "host_version": "0.150.0-alpha.8",
+      "adapter_id": "forge.codex.cooperative",
+      "adapter_version": "1.0.0",
+      "platform_label": "windows-10.0.26200-x86_64",
+      "environment_label": "codex-desktop-26.820.10647.0-native-windows-forge-head-03a8742b"
+    },
+    "observed": {
+      "forge_package": "forge-core-cli",
+      "forge_version": "0.12.0-alpha.47",
+      "forge_executable_sha256": "sha256:d83011873f9037db8f6a834b3ae73c95552f788e605c8b2e1065794bc249ae75",
+      "platform": {
+        "os": "windows",
+        "architecture": "x86_64"
+      },
+      "canonical_root": {
+        "resolved_path_sha256": "sha256:5831c599a910ff912f8e91ec180e4a2bbffb4504faa67dd7551700bc16857d14",
+        "kind": "native_or_other",
+        "exists": true,
+        "is_directory": true,
+        "windows_to_wsl_bridge": "not_applicable"
+      },
+      "adapter_invocation": {
+        "executable": {
+          "file_name": "forge-core.exe",
+          "sha256": "sha256:d83011873f9037db8f6a834b3ae73c95552f788e605c8b2e1065794bc249ae75",
+          "byte_length": 93824512
+        },
+        "arguments": [
+          {
+            "position": 0,
+            "kind": "literal_digest",
+            "safe_display": "<literal-digest>",
+            "argument_sha256": "sha256:34b42c12ceca3191cbac755aa2119f57813492adc74945a4e7cd19725fd27243",
+            "file_identity": null
+          },
+          {
+            "position": 1,
+            "kind": "literal_digest",
+            "safe_display": "<literal-digest>",
+            "argument_sha256": "sha256:7ba003668287e08b988f7a80e14d759b8034724b363a50c41f18ce22e5509fde",
+            "file_identity": null
+          },
+          {
+            "position": 2,
+            "kind": "literal_digest",
+            "safe_display": "<literal-digest>",
+            "argument_sha256": "sha256:57de4cf40144bdf7d00010f2f5557a7d642c2b9705309bfade167dd313e2ca93",
+            "file_identity": null
+          },
+          {
+            "position": 3,
+            "kind": "literal_digest",
+            "safe_display": "<literal-digest>",
+            "argument_sha256": "sha256:6d3357119d99a3077f6e0ec1a5c221c13b81667348d323d2ce1ad5ed8e23f741",
+            "file_identity": null
+          },
+          {
+            "position": 4,
+            "kind": "file",
+            "safe_display": "codex-0.150.0-alpha.8-observation.json",
+            "argument_sha256": "sha256:8f518f6c091f311f2114047bbc37ace43f52384a03682300ce8a2ec21913aa53",
+            "file_identity": {
+              "file_name": "codex-0.150.0-alpha.8-observation.json",
+              "sha256": "sha256:94d34ff0d0ed967c27d9896137e3bada3382721d8fd7247745a203a2096b55b7",
+              "byte_length": 3838
+            }
+          }
+        ],
+        "argv_sha256": "sha256:9acae18090a6f121d3604fa356bfb84946e0250be0db755f833ae5834107e485",
+        "timeout_ms": 30000,
+        "output_limit_bytes": 4194304
+      }
+    },
+    "corpus_sha256": "sha256:860470b2df3cfa5cdb267a251750327f4a5bdb28327c6ccc7b6f3fef35c55647"
+  },
+  "bundle_digest": "sha256:504112939327d622f1d5dadc5585812c14963109eeeb54d17cef513fc954dc88",
+  "files": [
+    {
+      "path": "artifacts/activation.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:9c0f6b4d241e8d0416e0b0a568eb400e1728c80f178dc663bab19c017170ae0b",
+      "byte_length": 486
+    },
+    {
+      "path": "artifacts/canonical-project-root.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:33e16e90d4afe1787589242a894970d248487a9bb55858ca6194b291771df5dc",
+      "byte_length": 655
+    },
+    {
+      "path": "artifacts/conversation-derived-intent.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:9134290c6993a60f1c79b7124f72e94bbaf808a5dbd16610c9e22e72e1b6adbd",
+      "byte_length": 506
+    },
+    {
+      "path": "artifacts/cooperative-evidence.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:f1664b473a735a2575d47bca0f2609e2c8cf0104dbf76edd61ea4d7cf5e05ad8",
+      "byte_length": 612
+    },
+    {
+      "path": "artifacts/governed-promotion.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:f90425945a8b0c06acd680988566b14dfc4ae67bf06c72707535d9a5a7ee0ad2",
+      "byte_length": 596
+    },
+    {
+      "path": "artifacts/isolated-work.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:dccc2b6158e327d78320de970c86fb382317bf5a6699fabb5f418c0cc3ef84bd",
+      "byte_length": 739
+    },
+    {
+      "path": "artifacts/read-only-guidance.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:33c0ca1bdb11f474c992d7d7a9647230969b9cc45523a590997fdd222c46063e",
+      "byte_length": 520
+    },
+    {
+      "path": "artifacts/replacement-agent-recovery.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:d20f77d083615f221ce1a9f146ed0ef9a08a12356b092943ef1ba38d378453a2",
+      "byte_length": 571
+    },
+    {
+      "path": "request.json",
+      "role": "protocol_request",
+      "sha256": "sha256:3ca2a15a986bc4796d791fabc513a0b3709e58c4c14eb8d76df2d97d90d84c4f",
+      "byte_length": 6241
+    },
+    {
+      "path": "response.json",
+      "role": "protocol_response",
+      "sha256": "sha256:e9a927bb5e9debf456baa51b29258a2890754c9e9a550eeff58143eb72049582",
+      "byte_length": 8712
+    },
+    {
+      "path": "result.json",
+      "role": "derived_result",
+      "sha256": "sha256:1b21fb010fd0bbd7f865b8d58c4895da5ed91b60286d4697e605a94d3cc6211f",
+      "byte_length": 10604
+    }
+  ]
+}
