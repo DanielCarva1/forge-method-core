@@ -379,6 +379,49 @@ fn retained_current_codex_run_summary_matches_bundle_manifest_and_result() {
     assert_eq!(summary_forge_hash, manifest_forge_hash);
     assert_eq!(summary_forge_hash, result_forge_hash);
 
+    assert_current_codex_identities_match(&summary, &manifest);
+
+    let capabilities = result["capabilities"]
+        .as_array()
+        .expect("retained capabilities");
+    let mut passed = 0_u64;
+    let mut failed = 0_u64;
+    let mut not_applicable = 0_u64;
+    for assertion in capabilities.iter().flat_map(|capability| {
+        capability["assertions"]
+            .as_array()
+            .expect("retained assertions")
+    }) {
+        match assertion["status"].as_str().expect("assertion status") {
+            "passed" => passed += 1,
+            "failed" => failed += 1,
+            "not_applicable" => not_applicable += 1,
+            other => panic!("unexpected retained assertion status: {other}"),
+        }
+    }
+    let derived_counts = (capabilities.len() as u64, passed, failed, not_applicable);
+    let summary_counts = (
+        summary["result"]["capabilities"]
+            .as_u64()
+            .expect("summary capability count"),
+        summary["result"]["assertions_passed"]
+            .as_u64()
+            .expect("summary passed count"),
+        summary["result"]["assertions_failed"]
+            .as_u64()
+            .expect("summary failed count"),
+        summary["result"]["assertions_not_applicable"]
+            .as_u64()
+            .expect("summary not-applicable count"),
+    );
+    assert_eq!(derived_counts, (8, 14, 9, 1));
+    assert_eq!(summary_counts, derived_counts);
+}
+
+fn assert_current_codex_identities_match(
+    summary: &serde_json::Value,
+    manifest: &serde_json::Value,
+) {
     for (summary_path, manifest_path) in [
         (
             "/identities/codex_cli_declared",
@@ -428,42 +471,6 @@ fn retained_current_codex_run_summary_matches_bundle_manifest_and_result() {
         summary["identities"]["repository_source_commit"],
         "03a8742bc655285c1ee580e0cd4b0b61ad78e6ea"
     );
-
-    let capabilities = result["capabilities"]
-        .as_array()
-        .expect("retained capabilities");
-    let mut passed = 0_u64;
-    let mut failed = 0_u64;
-    let mut not_applicable = 0_u64;
-    for assertion in capabilities.iter().flat_map(|capability| {
-        capability["assertions"]
-            .as_array()
-            .expect("retained assertions")
-    }) {
-        match assertion["status"].as_str().expect("assertion status") {
-            "passed" => passed += 1,
-            "failed" => failed += 1,
-            "not_applicable" => not_applicable += 1,
-            other => panic!("unexpected retained assertion status: {other}"),
-        }
-    }
-    let derived_counts = (capabilities.len() as u64, passed, failed, not_applicable);
-    let summary_counts = (
-        summary["result"]["capabilities"]
-            .as_u64()
-            .expect("summary capability count"),
-        summary["result"]["assertions_passed"]
-            .as_u64()
-            .expect("summary passed count"),
-        summary["result"]["assertions_failed"]
-            .as_u64()
-            .expect("summary failed count"),
-        summary["result"]["assertions_not_applicable"]
-            .as_u64()
-            .expect("summary not-applicable count"),
-    );
-    assert_eq!(derived_counts, (8, 14, 9, 1));
-    assert_eq!(summary_counts, derived_counts);
 }
 
 #[test]
