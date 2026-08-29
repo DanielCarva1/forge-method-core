@@ -8,12 +8,16 @@ base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
 source_checkpoint: "0.12.0"
 current_product_authority:
   authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#current_product_authority"
-  authority_revision: 2
+  authority_revision: 3
   milestone_id: "solo-dogfood-ready"
   milestone: "Solo Dogfood Ready"
   milestone_state: "active_implementation"
   milestone_qualified: false
   readiness_profile: "solo_cooperative"
+  current_summary:
+    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05"]
+    next_item_id: "SD-06"
+    remaining_item_ids: ["SD-06", "SD-07", "SD-08"]
   executable_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
   strict_external_state: "later_stage_closed"
 
@@ -104,6 +108,144 @@ campaign_scope:
     SD-00 through SD-08 execute in specification order under solo_cooperative
     authority. C3.2, C3.3, and C3.4 remain strict_external stabilization,
     publication, and field gates and do not block solo progression.
+
+solo_execution:
+  authority: "contracts/plan/product-gap-closure-campaign-v1.yaml#solo_execution"
+  items:
+    - id: "SD-00"
+      title: "Make readiness and CI claims honest"
+      status: "completed"
+      depends_on: []
+      checkpoint:
+        kind: "campaign-item-checkpoint"
+        state_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-00]"
+        evidence_refs:
+          - "contracts/spec/solo-dogfood-readiness-v0.yaml#current_product_authority"
+          - ".github/workflows/ci.yml"
+          - "https://github.com/DanielCarva1/forge-method-core/actions/runs/33236302012"
+        remaining_work: []
+        base_commit: "ed4d1e35ed1263a580e46bd255a2aea14dfafa05"
+        updated_at: "2026-08-29"
+    - id: "SD-01"
+      title: "Bind one objective from chat"
+      status: "completed"
+      depends_on: ["SD-00"]
+      checkpoint:
+        kind: "campaign-item-checkpoint"
+        state_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-01]"
+        evidence_refs:
+          - "crates/forge-core-cli/tests/workflow_governance_integration_e2e.rs"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/32"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/35"
+        remaining_work: []
+        base_commit: "ed4d1e35ed1263a580e46bd255a2aea14dfafa05"
+        updated_at: "2026-08-29"
+    - id: "SD-02"
+      title: "Admit one representative solo evidence set"
+      status: "completed"
+      depends_on: ["SD-01"]
+      checkpoint:
+        kind: "campaign-item-checkpoint"
+        state_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-02]"
+        evidence_refs:
+          - "contracts/hosts/conformance-results/codex/0.144.6/bundle/artifacts/cooperative-evidence.json"
+          - "contracts/hosts/conformance-results/codex/0.144.6/run-summary.json"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/45"
+        remaining_work: []
+        base_commit: "ed4d1e35ed1263a580e46bd255a2aea14dfafa05"
+        updated_at: "2026-08-29"
+    - id: "SD-03"
+      title: "Promote one isolated change"
+      status: "completed"
+      depends_on: ["SD-02"]
+      checkpoint:
+        kind: "campaign-item-checkpoint"
+        state_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-03]"
+        evidence_refs:
+          - "crates/forge-core-cli/tests/workflow_governance_integration_e2e.rs"
+          - "crates/forge-core-kernel/src/workflow_governance/promotion.rs"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/45"
+        remaining_work: []
+        base_commit: "ed4d1e35ed1263a580e46bd255a2aea14dfafa05"
+        updated_at: "2026-08-29"
+    - id: "SD-04"
+      title: "Resume with a replacement agent"
+      status: "completed"
+      depends_on: ["SD-03"]
+      checkpoint:
+        kind: "campaign-item-checkpoint"
+        state_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-04]"
+        evidence_refs:
+          - "crates/forge-core-cli/tests/workflow_governance_integration_e2e.rs"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/35"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/45"
+        remaining_work: []
+        base_commit: "ed4d1e35ed1263a580e46bd255a2aea14dfafa05"
+        updated_at: "2026-08-29"
+    - id: "SD-05"
+      title: "Ship the host-neutral conformance kit"
+      status: "completed"
+      depends_on: ["SD-04"]
+      checkpoint:
+        kind: "campaign-item-checkpoint"
+        state_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-05]"
+        evidence_refs:
+          - "contracts/hosts/solo-host-conformance-v1/corpus.json"
+          - "contracts/hosts/solo-host-conformance-v1/protocol-contract.json"
+          - "crates/forge-core-cli/tests/host_conformance_e2e.rs"
+          - "docs/host-conformance.md"
+        remaining_work: []
+        base_commit: "ed4d1e35ed1263a580e46bd255a2aea14dfafa05"
+        updated_at: "2026-08-29"
+    - id: "SD-06"
+      title: "Conform the initial host candidates"
+      status: "in_progress"
+      depends_on: ["SD-05"]
+      checkpoint:
+        kind: "campaign-item-checkpoint"
+        state_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-06]"
+        evidence_refs:
+          - "contracts/hosts/host-support-matrix-v0.yaml"
+          - "contracts/hosts/conformance-results/codex/0.144.6/run-summary.json"
+        remaining_work:
+          - "Refresh the Codex result against the current public corpus and record exact current host and adapter versions."
+          - "Run the same public corpus for ZCode, OpenCode, Claude, Pi.dev, and Cursor, recording a capability result or typed gap for each."
+        base_commit: "ed4d1e35ed1263a580e46bd255a2aea14dfafa05"
+        updated_at: "2026-08-29"
+    - id: "SD-07"
+      title: "Gate the packaged journey"
+      status: "implemented_pending_evidence"
+      depends_on: ["SD-06"]
+      checkpoint:
+        kind: "campaign-item-checkpoint"
+        state_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-07]"
+        evidence_refs:
+          - ".github/workflows/ci.yml"
+          - "scripts/smoke-release-install.py"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/51"
+          - "https://github.com/DanielCarva1/forge-method-core/actions/runs/33236302012"
+        remaining_work:
+          - "Make every advertised supported package, platform boundary, conditional WSL bridge, and recovery proof a hard-fail gate."
+          - "Resolve or explicitly narrow the failing informational Linux, macOS, and Windows platform observations before qualification."
+        base_commit: "ed4d1e35ed1263a580e46bd255a2aea14dfafa05"
+        updated_at: "2026-08-29"
+    - id: "SD-08"
+      title: "Sustain real dogfood"
+      status: "implemented_pending_evidence"
+      depends_on: ["SD-07"]
+      checkpoint:
+        kind: "campaign-item-checkpoint"
+        state_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-08]"
+        evidence_refs:
+          - "https://github.com/DanielCarva1/forge-method-core/issues/35"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/41"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/45"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/64"
+        remaining_work:
+          - "Complete multiple non-trivial Forge changes through the same matching released public path after SD-07 closes."
+          - "Convert observed friction into bounded governed work and retain cleanup, timing, and continuation evidence."
+        base_commit: "ed4d1e35ed1263a580e46bd255a2aea14dfafa05"
+        updated_at: "2026-08-29"
 
 
 status_vocabulary:

@@ -4,12 +4,16 @@ inventory_id: forge-product-gap-closure-story-inventory-v1
 status: active
 current_product_authority:
   authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#current_product_authority"
-  authority_revision: 2
+  authority_revision: 3
   milestone_id: "solo-dogfood-ready"
   milestone: "Solo Dogfood Ready"
   milestone_state: "active_implementation"
   milestone_qualified: false
   readiness_profile: "solo_cooperative"
+  current_summary:
+    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05"]
+    next_item_id: "SD-06"
+    remaining_item_ids: ["SD-06", "SD-07", "SD-08"]
   executable_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
   strict_external_state: "later_stage_closed"
 

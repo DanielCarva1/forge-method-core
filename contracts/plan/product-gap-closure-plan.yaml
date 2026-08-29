@@ -7,12 +7,16 @@ source_checkpoint: "0.12.0"
 
 current_product_authority:
   authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#current_product_authority"
-  authority_revision: 2
+  authority_revision: 3
   milestone_id: "solo-dogfood-ready"
   milestone: "Solo Dogfood Ready"
   milestone_state: "active_implementation"
   milestone_qualified: false
   readiness_profile: "solo_cooperative"
+  current_summary:
+    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05"]
+    next_item_id: "SD-06"
+    remaining_item_ids: ["SD-06", "SD-07", "SD-08"]
   executable_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
   strict_external_state: "later_stage_closed"
 
@@ -378,14 +382,13 @@ first_executable_slice:
   milestone: "Solo Dogfood Ready"
   readiness_profile: "solo_cooperative"
   phase: "solo-dogfood-ready"
-  first_item: "SD-00"
+  first_item: "SD-06"
   status: "in_progress"
-  authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-00]"
+  authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-06]"
   rationale: >-
-    Honest milestone/profile projection must land before product implementation.
-    Solo progression uses cooperative evidence and therefore does not wait for
-    a selected host, external human-origin broker, independent reviewer, or
-    trusted runtime.
+    The host-neutral conformance kit and the first five journey items are
+    complete. The next bounded step is to run the public corpus for each initial
+    host candidate and record an honest capability result or typed gap.
   stop_conditions:
     - "Any artifact marks Solo Dogfood Ready qualified before SD-00 through SD-08 close."
     - "Cooperative evidence is relabeled as human-origin, independent-review, trusted-runtime, publication, or field proof."

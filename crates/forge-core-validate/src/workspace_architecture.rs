@@ -172,6 +172,48 @@ struct CurrentProductAuthorityDocument {
     current_product_authority: CurrentProductAuthorityProjection,
 }
 
+#[derive(Debug, Deserialize)]
+struct ProductPlanDocument {
+    current_product_authority: CurrentProductAuthorityProjection,
+    first_executable_slice: Option<FirstExecutableSlice>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FirstExecutableSlice {
+    first_item: String,
+    status: String,
+    authority_ref: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProductCampaignDocument {
+    current_product_authority: CurrentProductAuthorityProjection,
+    solo_execution: SoloExecution,
+}
+
+#[derive(Debug, Deserialize)]
+struct SoloExecution {
+    authority: String,
+    items: Vec<SoloExecutionItem>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SoloExecutionItem {
+    id: String,
+    status: String,
+    checkpoint: CampaignCheckpoint,
+}
+
+#[derive(Debug, Deserialize)]
+struct CampaignCheckpoint {
+    kind: String,
+    state_ref: String,
+    evidence_refs: Vec<String>,
+    remaining_work: Vec<String>,
+    base_commit: String,
+    updated_at: String,
+}
+
 #[derive(Debug, PartialEq, Eq, Deserialize)]
 struct CurrentProductAuthorityProjection {
     authority_ref: String,
@@ -183,6 +225,14 @@ struct CurrentProductAuthorityProjection {
     readiness_profile: String,
     executable_item_ids: Vec<String>,
     strict_external_state: String,
+    current_summary: CurrentProductSummary,
+}
+
+#[derive(Debug, PartialEq, Eq, Deserialize)]
+struct CurrentProductSummary {
+    completed_item_ids: Vec<String>,
+    next_item_id: Option<String>,
+    remaining_item_ids: Vec<String>,
 }
 
 /// Load all canonical workspace-architecture contracts and reject partial,
@@ -522,22 +572,160 @@ fn validate_current_product_authority(
     issues: &mut Vec<WorkspaceArchitectureIssue>,
 ) -> Result<(), String> {
     let spec: CurrentProductAuthorityDocument = load(root, SOLO_SPEC_PATH)?;
-    for (label, path) in [
-        ("plan", PRODUCT_PLAN_PATH),
-        ("campaign", PRODUCT_CAMPAIGN_PATH),
-        ("inventory", PRODUCT_INVENTORY_PATH),
-    ] {
-        let document: CurrentProductAuthorityDocument = load(root, path)?;
-        if document.current_product_authority != spec.current_product_authority {
+    let summary = &spec.current_product_authority.current_summary;
+    let mut projected = summary.completed_item_ids.clone();
+    projected.extend(summary.remaining_item_ids.iter().cloned());
+    let expected_next = summary.remaining_item_ids.first();
+    if projected != spec.current_product_authority.executable_item_ids
+        || summary.next_item_id.as_ref() != expected_next
+        || (spec.current_product_authority.milestone_qualified
+            && !summary.remaining_item_ids.is_empty())
+    {
+        issues.push(issue(
+            "current_product_summary_invalid",
+            "completed plus remaining items must preserve executable order, the next item must be the first remaining item, and an incomplete milestone cannot be qualified",
+        ));
+    }
+    let plan: ProductPlanDocument = load(root, PRODUCT_PLAN_PATH)?;
+    if plan.current_product_authority != spec.current_product_authority {
+        issues.push(issue(
+            "current_product_authority_mismatch",
+            "plan.current_product_authority diverges from the rank-1 Solo specification",
+        ));
+    }
+    let plan_slice_is_valid = match (&summary.next_item_id, &plan.first_executable_slice) {
+        (Some(next_item), Some(first_slice)) => {
+            let expected_ref = format!(
+                "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[{next_item}]"
+            );
+            first_slice.first_item == *next_item
+                && first_slice.status == "in_progress"
+                && first_slice.authority_ref == expected_ref
+        }
+        (None, None) => true,
+        _ => false,
+    };
+    if !plan_slice_is_valid {
+        let detail = if summary.next_item_id.is_none() {
+            "the terminal summary cannot retain an active first executable slice"
+        } else {
+            "the plan's active first slice must identify the current summary's next item, remain in progress, and bind its exact specification entry"
+        };
+        issues.push(issue("current_product_plan_order_mismatch", detail));
+    }
+    let campaign: ProductCampaignDocument = load(root, PRODUCT_CAMPAIGN_PATH)?;
+    if campaign.current_product_authority != spec.current_product_authority {
+        issues.push(issue(
+            "current_product_authority_mismatch",
+            "campaign.current_product_authority diverges from the rank-1 Solo specification",
+        ));
+    }
+    validate_solo_campaign(&spec.current_product_authority, &campaign, issues);
+
+    let inventory: CurrentProductAuthorityDocument = load(root, PRODUCT_INVENTORY_PATH)?;
+    if inventory.current_product_authority != spec.current_product_authority {
+        issues.push(issue(
+            "current_product_authority_mismatch",
+            "inventory.current_product_authority diverges from the rank-1 Solo specification",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_solo_campaign(
+    authority: &CurrentProductAuthorityProjection,
+    campaign: &ProductCampaignDocument,
+    issues: &mut Vec<WorkspaceArchitectureIssue>,
+) {
+    let expected_authority = format!("{PRODUCT_CAMPAIGN_PATH}#solo_execution");
+    if campaign.solo_execution.authority != expected_authority {
+        issues.push(issue(
+            "current_product_campaign_authority_mismatch",
+            "solo_execution.authority must point to the canonical campaign execution block",
+        ));
+    }
+    let item_ids = campaign
+        .solo_execution
+        .items
+        .iter()
+        .map(|item| item.id.clone())
+        .collect::<Vec<_>>();
+    if item_ids != authority.executable_item_ids {
+        issues.push(issue(
+            "current_product_campaign_order_mismatch",
+            "the Solo campaign must contain every executable item exactly once in specification order",
+        ));
+    }
+
+    for item in &campaign.solo_execution.items {
+        let expected_status = if authority
+            .current_summary
+            .completed_item_ids
+            .contains(&item.id)
+        {
+            Some("completed")
+        } else if authority.current_summary.next_item_id.as_ref() == Some(&item.id) {
+            Some("in_progress")
+        } else {
+            None
+        };
+        if expected_status.is_some_and(|expected| item.status != expected)
+            || (!authority
+                .current_summary
+                .remaining_item_ids
+                .contains(&item.id)
+                && expected_status.is_none())
+        {
             issues.push(issue(
-                "current_product_authority_mismatch",
+                "current_product_campaign_state_mismatch",
                 format!(
-                    "{label}.current_product_authority diverges from the rank-1 Solo specification"
+                    "{} campaign state diverges from the completed/next/remaining summary",
+                    item.id
                 ),
             ));
         }
+        if expected_status.is_none()
+            && !matches!(
+                item.status.as_str(),
+                "planned" | "implemented_pending_evidence"
+            )
+        {
+            issues.push(issue(
+                "current_product_campaign_state_mismatch",
+                format!(
+                    "{} is remaining after the next item and must be planned or implemented_pending_evidence",
+                    item.id
+                ),
+            ));
+        }
+
+        let expected_ref = format!(
+            "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[{}]",
+            item.id
+        );
+        let checkpoint = &item.checkpoint;
+        let base_commit_is_valid = checkpoint.base_commit.len() == 40
+            && checkpoint
+                .base_commit
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
+        let updated_at_is_valid = checkpoint.updated_at.len() == 10
+            && checkpoint.updated_at.as_bytes().get(4) == Some(&b'-')
+            && checkpoint.updated_at.as_bytes().get(7) == Some(&b'-');
+        if checkpoint.kind != "campaign-item-checkpoint"
+            || checkpoint.state_ref != expected_ref
+            || checkpoint.evidence_refs.is_empty()
+            || !base_commit_is_valid
+            || !updated_at_is_valid
+            || (item.status == "completed" && !checkpoint.remaining_work.is_empty())
+            || (item.status != "completed" && checkpoint.remaining_work.is_empty())
+        {
+            issues.push(issue(
+                "current_product_campaign_checkpoint_invalid",
+                format!("{} has an incomplete or inconsistent checkpoint", item.id),
+            ));
+        }
     }
-    Ok(())
 }
 
 fn load<T: for<'de> Deserialize<'de>>(root: &Path, relative: &str) -> Result<T, String> {
@@ -721,6 +909,112 @@ fn issue(code: impl Into<String>, detail: impl Into<String>) -> WorkspaceArchite
 mod tests {
     use super::*;
 
+    struct ScratchRoot(PathBuf);
+
+    impl Drop for ScratchRoot {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn workspace_contract_fixture(label: &str) -> ScratchRoot {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "forge-workspace-architecture-{label}-{}-{nonce}",
+            std::process::id()
+        ));
+        let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for relative in [
+            RUST_CORE_PATH,
+            BOUNDARIES_PATH,
+            POLICY_PATH,
+            SOLO_SPEC_PATH,
+            PRODUCT_PLAN_PATH,
+            PRODUCT_CAMPAIGN_PATH,
+            PRODUCT_INVENTORY_PATH,
+        ] {
+            let destination = root.join(relative);
+            fs::create_dir_all(destination.parent().expect("fixture parent"))
+                .expect("create fixture directory");
+            fs::copy(source.join(relative), destination).expect("copy workspace contract");
+        }
+        ScratchRoot(root)
+    }
+
+    fn yaml_inline_strings(values: &[String]) -> String {
+        format!(
+            "[{}]",
+            values
+                .iter()
+                .map(|value| format!("\"{value}\""))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    }
+
+    fn yaml_optional_string(value: Option<&String>) -> String {
+        value
+            .map(|item| format!("\"{item}\""))
+            .unwrap_or_else(|| "null".to_string())
+    }
+
+    fn replace_once(text: String, from: &str, to: &str, label: &str) -> String {
+        let changed = text.replacen(from, to, 1);
+        assert_ne!(changed, text, "{label} must change the fixture");
+        changed
+    }
+
+    fn replace_first_after(text: String, anchor: &str, from: &str, to: &str) -> String {
+        let anchor_offset = text.find(anchor).expect("fixture anchor");
+        let value_offset = text[anchor_offset..]
+            .find(from)
+            .map(|offset| anchor_offset + offset)
+            .expect("fixture value after anchor");
+        let mut changed = text;
+        changed.replace_range(value_offset..value_offset + from.len(), to);
+        changed
+    }
+
+    fn write_terminal_summary(path: &Path, authority: &CurrentProductAuthorityProjection) {
+        let text = fs::read_to_string(path).expect("read authority projection");
+        let current = &authority.current_summary;
+        let current_next = current
+            .next_item_id
+            .as_ref()
+            .map(|item| format!("\"{item}\""))
+            .unwrap_or_else(|| "null".to_string());
+        let terminal = text
+            .replacen(
+                &format!(
+                    "    completed_item_ids: {}",
+                    yaml_inline_strings(&current.completed_item_ids)
+                ),
+                &format!(
+                    "    completed_item_ids: {}",
+                    yaml_inline_strings(&authority.executable_item_ids)
+                ),
+                1,
+            )
+            .replacen(
+                &format!("    next_item_id: {current_next}"),
+                "    next_item_id: null",
+                1,
+            )
+            .replacen(
+                &format!(
+                    "    remaining_item_ids: {}",
+                    yaml_inline_strings(&current.remaining_item_ids)
+                ),
+                "    remaining_item_ids: []",
+                1,
+            );
+        assert_ne!(terminal, text, "fixture authority summary must change");
+        fs::write(path, terminal).expect("write terminal authority projection");
+    }
+
     fn cargo_metadata_fixture(root: &Path, extra_dependency: Option<(&str, &str)>) -> Vec<u8> {
         let policy: PolicyDocument = load(root, POLICY_PATH).expect("policy fixture");
         let declared = policy
@@ -782,6 +1076,170 @@ mod tests {
         assert!(report.is_clean(), "{:?}", report.issues);
         assert_eq!(report.selected_host, "none");
         assert_eq!(report.declared_crates.len(), EXPECTED_CRATE_COUNT);
+    }
+
+    #[test]
+    fn current_product_authority_rejects_an_internally_stale_summary() {
+        let fixture = workspace_contract_fixture("stale-summary");
+        let spec_path = fixture.0.join(SOLO_SPEC_PATH);
+        let authority: CurrentProductAuthorityDocument =
+            load(&fixture.0, SOLO_SPEC_PATH).expect("load Solo authority");
+        let summary = &authority.current_product_authority.current_summary;
+        let divergent_next = authority
+            .current_product_authority
+            .executable_item_ids
+            .iter()
+            .find(|item| Some(*item) != summary.next_item_id.as_ref())
+            .expect("an executable item different from the current next item");
+        let spec = fs::read_to_string(&spec_path).expect("read Solo specification");
+        let stale = replace_once(
+            spec,
+            &format!(
+                "    next_item_id: {}",
+                yaml_optional_string(summary.next_item_id.as_ref())
+            ),
+            &format!("    next_item_id: \"{divergent_next}\""),
+            "stale next item",
+        );
+        fs::write(spec_path, stale).expect("write stale Solo summary");
+
+        let report = validate_workspace_architecture_contracts(&fixture.0).expect("contracts load");
+        assert!(
+            report.issues.iter().any(|issue| {
+                issue.code == "current_product_summary_invalid"
+                    && issue.detail.contains("next item")
+            }),
+            "{:?}",
+            report.issues
+        );
+    }
+
+    #[test]
+    fn current_product_authority_rejects_stale_plan_order() {
+        let fixture = workspace_contract_fixture("stale-plan-order");
+        let plan_path = fixture.0.join(PRODUCT_PLAN_PATH);
+        let authority: CurrentProductAuthorityDocument =
+            load(&fixture.0, SOLO_SPEC_PATH).expect("load Solo authority");
+        let plan_document: ProductPlanDocument =
+            load(&fixture.0, PRODUCT_PLAN_PATH).expect("load product plan");
+        let active_slice = plan_document
+            .first_executable_slice
+            .as_ref()
+            .expect("current fixture has an active slice");
+        let divergent_item = authority
+            .current_product_authority
+            .executable_item_ids
+            .iter()
+            .find(|item| **item != active_slice.first_item)
+            .expect("an executable item different from the active slice");
+        let plan = fs::read_to_string(&plan_path).expect("read product plan");
+        let stale = replace_once(
+            plan,
+            &format!("  first_item: \"{}\"", active_slice.first_item),
+            &format!("  first_item: \"{divergent_item}\""),
+            "stale plan order",
+        );
+        fs::write(plan_path, stale).expect("write stale product plan");
+
+        let report = validate_workspace_architecture_contracts(&fixture.0).expect("contracts load");
+        assert!(
+            report.issues.iter().any(|issue| {
+                issue.code == "current_product_plan_order_mismatch"
+                    && issue.detail.contains("next item")
+            }),
+            "{:?}",
+            report.issues
+        );
+    }
+
+    #[test]
+    fn current_product_authority_rejects_active_plan_after_terminal_summary() {
+        let fixture = workspace_contract_fixture("terminal-active-plan");
+        let spec: CurrentProductAuthorityDocument =
+            load(&fixture.0, SOLO_SPEC_PATH).expect("load Solo authority");
+        for relative in [
+            SOLO_SPEC_PATH,
+            PRODUCT_PLAN_PATH,
+            PRODUCT_CAMPAIGN_PATH,
+            PRODUCT_INVENTORY_PATH,
+        ] {
+            write_terminal_summary(&fixture.0.join(relative), &spec.current_product_authority);
+        }
+
+        let report = validate_workspace_architecture_contracts(&fixture.0).expect("contracts load");
+        assert!(
+            report.issues.iter().any(|issue| {
+                issue.code == "current_product_plan_order_mismatch"
+                    && issue.detail.contains("terminal")
+            }),
+            "{:?}",
+            report.issues
+        );
+    }
+
+    #[test]
+    fn current_product_authority_rejects_campaign_state_that_diverges_from_summary() {
+        let fixture = workspace_contract_fixture("campaign-state");
+        let campaign_path = fixture.0.join(PRODUCT_CAMPAIGN_PATH);
+        let authority: CurrentProductAuthorityDocument =
+            load(&fixture.0, SOLO_SPEC_PATH).expect("load Solo authority");
+        let campaign_document: ProductCampaignDocument =
+            load(&fixture.0, PRODUCT_CAMPAIGN_PATH).expect("load campaign");
+        let next_item = authority
+            .current_product_authority
+            .current_summary
+            .next_item_id
+            .as_ref()
+            .expect("current fixture has a next item");
+        let active_item = campaign_document
+            .solo_execution
+            .items
+            .iter()
+            .find(|item| &item.id == next_item)
+            .expect("campaign item for the current next item");
+        let campaign = fs::read_to_string(&campaign_path).expect("read campaign");
+        let divergent = replace_first_after(
+            campaign,
+            &format!("    - id: \"{}\"", active_item.id),
+            &format!("      status: \"{}\"", active_item.status),
+            "      status: \"completed\"",
+        );
+        fs::write(campaign_path, divergent).expect("write divergent campaign");
+
+        let report = validate_workspace_architecture_contracts(&fixture.0).expect("contracts load");
+        assert!(
+            report.issues.iter().any(|issue| {
+                issue.code == "current_product_campaign_state_mismatch"
+                    && issue.detail.contains(&active_item.id)
+            }),
+            "{:?}",
+            report.issues
+        );
+    }
+
+    #[test]
+    fn current_product_authority_rejects_divergent_solo_execution_authority() {
+        let fixture = workspace_contract_fixture("campaign-authority");
+        let campaign_path = fixture.0.join(PRODUCT_CAMPAIGN_PATH);
+        let campaign = fs::read_to_string(&campaign_path).expect("read campaign");
+        let expected = format!("{PRODUCT_CAMPAIGN_PATH}#solo_execution");
+        let divergent = replace_once(
+            campaign,
+            &format!("  authority: \"{expected}\""),
+            "  authority: \"contracts/plan/not-the-campaign.yaml#solo_execution\"",
+            "divergent Solo execution authority",
+        );
+        fs::write(campaign_path, divergent).expect("write divergent campaign authority");
+
+        let report = validate_workspace_architecture_contracts(&fixture.0).expect("contracts load");
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| { issue.code == "current_product_campaign_authority_mismatch" }),
+            "{:?}",
+            report.issues
+        );
     }
 
     #[test]
