@@ -1339,8 +1339,10 @@ impl ProjectLinkCas for RetainedProjectLinkCas {
         }
         let anchor = self
             .state_root()?
-            .retain_file_lifetime_anchor(
+            .retain_named_file_lifetime_anchor(
                 Path::new(PROJECT_LINK_ANCHORS),
+                &self.project_root,
+                Path::new(PROJECT_LINK_NAME),
                 &project_link_file,
                 &project_link_identity,
                 &self.plan.expected_project_link.sha256,

@@ -528,6 +528,79 @@ impl RetainedDirectory {
         expected_content_digest: &str,
         expected_byte_length: u64,
     ) -> io::Result<RetainedFileLifetimeAnchor> {
+        self.retain_file_lifetime_anchor_with_source(
+            anchor_directory,
+            None,
+            retained,
+            expected_identity,
+            expected_content_digest,
+            expected_byte_length,
+            |_| Ok(()),
+        )
+    }
+
+    /// macOS fallback for a source that must still have a live, validated name.
+    /// Other platforms keep selecting the source through the retained handle.
+    pub(crate) fn retain_named_file_lifetime_anchor(
+        &self,
+        anchor_directory: &Path,
+        source_root: &RetainedDirectory,
+        source_path: &Path,
+        retained: &File,
+        expected_identity: &RetainedFileIdentity,
+        expected_content_digest: &str,
+        expected_byte_length: u64,
+    ) -> io::Result<RetainedFileLifetimeAnchor> {
+        self.retain_named_file_lifetime_anchor_with_hook(
+            anchor_directory,
+            source_root,
+            source_path,
+            retained,
+            expected_identity,
+            expected_content_digest,
+            expected_byte_length,
+            |_| Ok(()),
+        )
+    }
+
+    fn retain_named_file_lifetime_anchor_with_hook<H>(
+        &self,
+        anchor_directory: &Path,
+        source_root: &RetainedDirectory,
+        source_path: &Path,
+        retained: &File,
+        expected_identity: &RetainedFileIdentity,
+        expected_content_digest: &str,
+        expected_byte_length: u64,
+        mut before_named_publish: H,
+    ) -> io::Result<RetainedFileLifetimeAnchor>
+    where
+        H: FnMut(&Path) -> io::Result<()>,
+    {
+        self.retain_file_lifetime_anchor_with_source(
+            anchor_directory,
+            Some((source_root, source_path)),
+            retained,
+            expected_identity,
+            expected_content_digest,
+            expected_byte_length,
+            &mut before_named_publish,
+        )
+    }
+
+    fn retain_file_lifetime_anchor_with_source<H>(
+        &self,
+        anchor_directory: &Path,
+        named_source: Option<(&RetainedDirectory, &Path)>,
+        retained: &File,
+        expected_identity: &RetainedFileIdentity,
+        expected_content_digest: &str,
+        expected_byte_length: u64,
+        mut before_named_publish: H,
+    ) -> io::Result<RetainedFileLifetimeAnchor>
+    where
+        H: FnMut(&Path) -> io::Result<()>,
+    {
         if anchor_directory.as_os_str().is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -554,20 +627,77 @@ impl RetainedDirectory {
             .0;
         self.verify_parent_binding(&parent)?;
 
+        #[cfg(target_os = "macos")]
+        let named_source = match named_source {
+            Some((source_root, source_path)) => {
+                let (source_parent, source_leaf) =
+                    source_root.open_parent_bound(source_path, false)?;
+                Some((source_root, source_path, source_parent, source_leaf))
+            }
+            None => None,
+        };
+        #[cfg(not(target_os = "macos"))]
+        let _ = (named_source, &mut before_named_publish);
+
         for _ in 0..RETAINED_FILE_ANCHOR_ATTEMPTS {
             let nonce = random_hex_nonce(RETAINED_FILE_ANCHOR_NONCE_BYTES)?;
             let leaf = OsString::from(format!(".forge-retained-file-{nonce}.anchor"));
             let path = anchor_directory.join(&leaf);
-            match platform::link_lifetime_anchor_noreplace(retained, &parent.handle, &leaf) {
+
+            #[cfg(target_os = "macos")]
+            let publication = if let Some((source_root, source_path, source_parent, source_leaf)) =
+                &named_source
+            {
+                source_root.verify_parent_binding(source_parent)?;
+                source_root.verify_retained_authority_binding(
+                    source_path,
+                    retained,
+                    expected_identity,
+                )?;
+                before_named_publish(&path)?;
+                platform::link_named_lifetime_anchor_noreplace(
+                    &source_parent.handle,
+                    source_leaf,
+                    &parent.handle,
+                    &leaf,
+                )
+            } else {
+                platform::link_lifetime_anchor_noreplace(retained, &parent.handle, &leaf)
+            };
+            #[cfg(not(target_os = "macos"))]
+            let publication =
+                platform::link_lifetime_anchor_noreplace(retained, &parent.handle, &leaf);
+
+            match publication {
                 Ok(()) => {
                     let anchor_file =
                         platform::open_file(&parent.handle, &leaf, platform::FileMode::Read)?;
                     Self::validate_leaf(&anchor_file, RetainedLeafPolicy::AnchoredAuthority)?;
                     let anchor_identity = Self::identity_of(&anchor_file)?;
                     if anchor_identity != *expected_identity {
-                        return Err(Self::authority_identity_changed(
-                            "lifetime anchor publication",
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!(
+                                "lifetime anchor publication selected another file; private residue preserved at {}",
+                                path.display()
+                            ),
                         ));
+                    }
+                    #[cfg(target_os = "macos")]
+                    if let Some((source_root, source_path, _, _)) = &named_source {
+                        if let Err(error) = source_root.verify_retained_authority_binding(
+                            source_path,
+                            retained,
+                            expected_identity,
+                        ) {
+                            return Err(io::Error::new(
+                                error.kind(),
+                                format!(
+                                    "{error}; source changed after lifetime anchor publication; exact private anchor preserved at {}",
+                                    path.display()
+                                ),
+                            ));
+                        }
                     }
                     let binding = RetainedFileAnchorBinding {
                         schema_version: RETAINED_FILE_ANCHOR_SCHEMA_VERSION.to_owned(),
@@ -3268,6 +3398,33 @@ mod platform {
         link_exact_noreplace(retained_source, to_parent, to)
     }
 
+    #[cfg(target_os = "macos")]
+    pub fn link_named_lifetime_anchor_noreplace(
+        from_parent: &File,
+        from: &OsStr,
+        to_parent: &File,
+        to: &OsStr,
+    ) -> io::Result<()> {
+        let from = name(from)?;
+        let to = name(to)?;
+        // SAFETY: both retained parent descriptors and both C strings remain
+        // live for the call. A zero flag refuses to follow a source symlink.
+        let result = unsafe {
+            libc::linkat(
+                from_parent.as_raw_fd(),
+                from.as_ptr(),
+                to_parent.as_raw_fd(),
+                to.as_ptr(),
+                0,
+            )
+        };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+
     /// Name move used only for quarantine or verified rollback after exact
     /// publication. It is never the publication linearization primitive.
     pub fn rename_noreplace(
@@ -4204,6 +4361,62 @@ mod tests {
         assert_eq!(error.kind(), io::ErrorKind::InvalidData);
         drop(reopened);
         drop(anchor);
+        drop(file);
+        drop(root);
+        fs::remove_dir_all(root_path).unwrap();
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn named_lifetime_anchor_rejects_source_swap_without_removing_raced_link() {
+        let root_path = test_root_path("named-lifetime-anchor-source-swap");
+        fs::create_dir_all(&root_path).unwrap();
+        let target = Path::new("selected");
+        fs::write(root_path.join(target), b"authority").unwrap();
+        let root = RetainedDirectory::open_root(&root_path).unwrap();
+        let file = root
+            .open_leaf_read(target, RetainedLeafPolicy::Authority)
+            .unwrap();
+        let identity = RetainedDirectory::identity_of(&file).unwrap();
+        let digest = crate::sha256_content_hash(b"authority");
+
+        let error = root
+            .retain_named_file_lifetime_anchor_with_hook(
+                Path::new("private/anchors"),
+                &root,
+                target,
+                &file,
+                &identity,
+                &digest,
+                9,
+                |_| {
+                    fs::remove_file(root_path.join(target))?;
+                    fs::write(root_path.join(target), b"authority")
+                },
+            )
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(error
+            .to_string()
+            .contains("lifetime anchor publication selected another file"));
+
+        let replacement = File::open(root_path.join(target)).unwrap();
+        let replacement_identity = RetainedDirectory::identity_of(&replacement).unwrap();
+        assert_ne!(replacement_identity, identity);
+        let residues = fs::read_dir(root_path.join("private/anchors"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect::<Vec<_>>();
+        assert_eq!(residues.len(), 1);
+        let residue = File::open(&residues[0]).unwrap();
+        assert_eq!(
+            RetainedDirectory::identity_of(&residue).unwrap(),
+            replacement_identity
+        );
+        assert_eq!(fs::read(&residues[0]).unwrap(), b"authority");
+
+        drop(residue);
+        drop(replacement);
         drop(file);
         drop(root);
         fs::remove_dir_all(root_path).unwrap();
