@@ -37,8 +37,20 @@ fn source_digest() -> String {
     format!("sha256:{}", "0".repeat(64))
 }
 
+fn physical_temporary_directory() -> PathBuf {
+    let temporary_directory = std::env::temp_dir();
+    #[cfg(target_os = "macos")]
+    {
+        fs::canonicalize(temporary_directory).expect("physical temporary directory")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        temporary_directory
+    }
+}
+
 fn temporary_root(label: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!(
+    let root = physical_temporary_directory().join(format!(
         "forge-domain-pack-author-{label}-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
@@ -415,15 +427,24 @@ fn author_skeleton_refuses_collisions_and_unsafe_output_roots() {
             .next()
             .is_none());
 
-        let socket_root = root.join("socket-output");
+        let socket_root = physical_temporary_directory().join(format!(
+            "fda-{:x}-{:x}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+                % u128::from(u32::MAX)
+        ));
         let socket =
             std::os::unix::net::UnixListener::bind(&socket_root).expect("output-root special file");
         let special = author_skeleton_output(&request_file, &socket_root);
+        drop(socket);
+        fs::remove_file(socket_root).expect("remove output-root special file");
         assert!(
             !special.status.success(),
             "special output root must be refused"
         );
-        drop(socket);
     }
 
     assert!(!root.join(".forge-method").exists());
