@@ -1025,7 +1025,19 @@ mod tests {
         .unwrap();
         let mut locked = lock_heads(&root).unwrap();
         let moved = root.with_extension("retained");
-        std::fs::rename(&root, &moved).unwrap();
+        if let Err(error) = std::fs::rename(&root, &moved) {
+            if crate::io_util::is_windows_kernel_parent_swap_denial(&error) {
+                // Windows can block the parent swap while the retained learning
+                // handles are open. The trusted head must remain readable.
+                assert!(root.exists());
+                assert!(!moved.exists());
+                assert_eq!(load_head(&mut locked).unwrap(), expected);
+                drop(locked);
+                let _ = std::fs::remove_dir_all(root);
+                return;
+            }
+            panic!("swap retained learning-head parent: {error}");
+        }
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join(HEAD_PATH), b"attacker: true\n").unwrap();
 

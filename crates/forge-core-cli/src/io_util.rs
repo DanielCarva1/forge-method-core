@@ -1510,6 +1510,19 @@ fn process_may_be_alive_platform(_pid: u32) -> bool {
 }
 
 #[cfg(test)]
+pub(crate) fn is_windows_kernel_parent_swap_denial(error: &std::io::Error) -> bool {
+    #[cfg(windows)]
+    {
+        error.kind() == std::io::ErrorKind::PermissionDenied && error.raw_os_error() == Some(5)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = error;
+        false
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -1687,9 +1700,27 @@ mod tests {
         )
         .unwrap();
         std::fs::rename(&dir, &replacement).unwrap();
-        std::fs::rename(&moved, &dir).unwrap();
+        if let Err(error) = std::fs::rename(&moved, &dir) {
+            if is_windows_kernel_parent_swap_denial(&error) {
+                // Windows can reject the restore while a retained child handle
+                // is open. The namespace attack was blocked before it could
+                // substitute the already-open trusted bytes.
+                assert!(!dir.exists());
+                assert!(moved.exists());
+                let bytes =
+                    read_open_regular_file_bounded(file, &moved.join("registry.yaml"), 1024)
+                        .unwrap();
+                assert_eq!(bytes, b"trusted: true\n");
+                drop(identity);
+                let _ = std::fs::remove_dir_all(moved);
+                let _ = std::fs::remove_dir_all(replacement);
+                return;
+            }
+            panic!("restore retained parent after attacker swap: {error}");
+        }
         let bytes = read_open_regular_file_bounded(file, &dir.join("registry.yaml"), 1024).unwrap();
         assert_eq!(bytes, b"trusted: true\n");
+        drop(identity);
         let _ = std::fs::remove_dir_all(dir);
         let _ = std::fs::remove_dir_all(replacement);
     }
@@ -1700,7 +1731,27 @@ mod tests {
         let moved = dir.with_extension("retained");
         let replacement = dir.with_extension("replacement");
         let retained_root = forge_core_store::RetainedEffectStoreRoot::acquire(&dir).unwrap();
-        std::fs::rename(&dir, &moved).unwrap();
+        if let Err(error) = std::fs::rename(&dir, &moved) {
+            if is_windows_kernel_parent_swap_denial(&error) {
+                // Windows can keep the retained producer root from moving at
+                // all. Verify that the original namespace and lock are intact.
+                assert!(dir.exists());
+                assert!(!moved.exists());
+                let retained =
+                    acquire_effect_store_lock_retained(&retained_root, ".producer.lock").unwrap();
+                let error = forge_core_store::try_acquire_effect_store_lock(&dir, ".producer.lock")
+                    .expect_err("kernel-blocked producer path must remain locked");
+                assert!(matches!(
+                    error,
+                    forge_core_store::EffectStoreLockError::WouldBlock { .. }
+                ));
+                drop(retained);
+                drop(retained_root);
+                let _ = std::fs::remove_dir_all(dir);
+                return;
+            }
+            panic!("swap retained producer parent: {error}");
+        }
         std::fs::create_dir_all(&dir).unwrap();
 
         let retained =
