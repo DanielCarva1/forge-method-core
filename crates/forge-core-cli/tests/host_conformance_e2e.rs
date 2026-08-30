@@ -395,11 +395,14 @@ fn retained_current_opencode_run_summary_matches_bundle_manifest_and_result() {
     }
 }
 
+type AssertionCounts = (u64, u64, u64, u64);
+type OutcomeCounts = (u64, u64, u64);
+
 fn assert_retained_run_matches_bundle(
     retained: &Path,
     host_version_summary_path: &str,
-    expected_counts: (u64, u64, u64, u64),
-    expected_outcomes: (u64, u64, u64),
+    expected_counts: AssertionCounts,
+    expected_outcomes: OutcomeCounts,
     expected_source_commit: &str,
 ) -> (serde_json::Value, serde_json::Value) {
     Command::cargo_bin("forge-core")
@@ -425,6 +428,51 @@ fn assert_retained_run_matches_bundle(
     let manifest = read_json(&retained.join("bundle/manifest.json"));
     let result = read_json(&retained.join("bundle/result.json"));
 
+    assert_retained_identity_bindings(&summary, &manifest, &result, host_version_summary_path);
+    let (derived_counts, derived_outcomes) = derive_retained_counts(&result);
+    let summary_counts = (
+        summary["result"]["capabilities"]
+            .as_u64()
+            .expect("summary capability count"),
+        summary["result"]["assertions_passed"]
+            .as_u64()
+            .expect("summary passed count"),
+        summary["result"]["assertions_failed"]
+            .as_u64()
+            .expect("summary failed count"),
+        summary["result"]["assertions_not_applicable"]
+            .as_u64()
+            .expect("summary not-applicable count"),
+    );
+    let summary_outcomes = (
+        summary["result"]["partially_supported"]
+            .as_u64()
+            .expect("summary partially-supported count"),
+        summary["result"]["unsupported"]
+            .as_u64()
+            .expect("summary unsupported count"),
+        summary["result"]["supported"]
+            .as_u64()
+            .expect("summary supported count"),
+    );
+    assert_eq!(derived_counts, expected_counts);
+    assert_eq!(summary_counts, derived_counts);
+    assert_eq!(derived_outcomes, expected_outcomes);
+    assert_eq!(summary_outcomes, derived_outcomes);
+    assert_eq!(
+        summary["identities"]["repository_source_commit"],
+        expected_source_commit
+    );
+
+    (summary, manifest)
+}
+
+fn assert_retained_identity_bindings(
+    summary: &serde_json::Value,
+    manifest: &serde_json::Value,
+    result: &serde_json::Value,
+    host_version_summary_path: &str,
+) {
     let summary_bundle_digest = summary
         .pointer("/bundle/bundle_digest")
         .and_then(serde_json::Value::as_str)
@@ -479,7 +527,9 @@ fn assert_retained_run_matches_bundle(
             "retained identity {summary_path} must match the verified bundle binding"
         );
     }
+}
 
+fn derive_retained_counts(result: &serde_json::Value) -> (AssertionCounts, OutcomeCounts) {
     let capabilities = result["capabilities"]
         .as_array()
         .expect("retained capabilities");
@@ -510,42 +560,8 @@ fn assert_retained_run_matches_bundle(
         }
     }
     let derived_counts = (capabilities.len() as u64, passed, failed, not_applicable);
-    let summary_counts = (
-        summary["result"]["capabilities"]
-            .as_u64()
-            .expect("summary capability count"),
-        summary["result"]["assertions_passed"]
-            .as_u64()
-            .expect("summary passed count"),
-        summary["result"]["assertions_failed"]
-            .as_u64()
-            .expect("summary failed count"),
-        summary["result"]["assertions_not_applicable"]
-            .as_u64()
-            .expect("summary not-applicable count"),
-    );
     let derived_outcomes = (partially_supported, unsupported, supported);
-    let summary_outcomes = (
-        summary["result"]["partially_supported"]
-            .as_u64()
-            .expect("summary partially-supported count"),
-        summary["result"]["unsupported"]
-            .as_u64()
-            .expect("summary unsupported count"),
-        summary["result"]["supported"]
-            .as_u64()
-            .expect("summary supported count"),
-    );
-    assert_eq!(derived_counts, expected_counts);
-    assert_eq!(summary_counts, derived_counts);
-    assert_eq!(derived_outcomes, expected_outcomes);
-    assert_eq!(summary_outcomes, derived_outcomes);
-    assert_eq!(
-        summary["identities"]["repository_source_commit"],
-        expected_source_commit
-    );
-
-    (summary, manifest)
+    (derived_counts, derived_outcomes)
 }
 
 #[test]
