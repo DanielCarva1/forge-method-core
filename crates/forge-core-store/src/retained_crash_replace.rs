@@ -147,6 +147,16 @@ impl<'lock> RetainedCrashReplaceTarget<'lock> {
         expected_identity: Option<&RetainedFileIdentity>,
         maximum: u64,
     ) -> io::Result<RetainedDigest> {
+        if cfg!(target_os = "macos") {
+            return self.move_file_if_digest_noreplace(
+                from,
+                to,
+                expected_digest,
+                expected_identity,
+                maximum,
+            );
+        }
+
         self.validate()?;
         let authority = self.directory.retain_authority()?;
         let mut retained_source = None;
@@ -187,6 +197,56 @@ impl<'lock> RetainedCrashReplaceTarget<'lock> {
         // Publication may add a Store-owned cleanup-debt alias on Unix. Bind the
         // installed witness to that post-publication link shape so later aliases
         // created outside this operation are still detected.
+        retained.link_count = retained_link_count(&retained.file)?;
+        self.revalidate_digest(to, &mut retained, maximum)?;
+        self.validate()?;
+        Ok(retained)
+    }
+
+    fn move_file_if_digest_noreplace(
+        &self,
+        from: &Path,
+        to: &Path,
+        expected_digest: &str,
+        expected_identity: Option<&RetainedFileIdentity>,
+        maximum: u64,
+    ) -> io::Result<RetainedDigest> {
+        self.validate()?;
+        let authority = self.directory.retain_authority()?;
+        let mut file = self
+            .directory
+            .open_leaf_read_delete_rename_authority(from)?;
+        let identity = RetainedDirectory::identity_of(&file)?;
+        self.directory
+            .verify_mutable_authority_binding(from, &file, &identity)?;
+        if expected_identity.is_some_and(|expected| expected != &identity) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "retained crash-replacement source identity differs from the expected exact leaf",
+            ));
+        }
+        let digest = read_retained_digest(&mut file, maximum)?;
+        if digest != expected_digest {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "retained crash-replacement source digest changed before publication",
+            ));
+        }
+        self.directory
+            .verify_mutable_authority_binding(from, &file, &identity)?;
+        let link_count = retained_link_count(&file)?;
+        let mut retained = RetainedDigest {
+            file,
+            identity,
+            digest,
+            link_count,
+        };
+
+        // Apple does not support hard-linking the object behind /dev/fd/N.
+        // Crash-replace source names are Store-owned, singly linked, and still
+        // bound to this exact retained handle. An atomic no-replace name move is
+        // the supported publication primitive without weakening identity checks.
+        authority.move_retained_file_noreplace(from, &retained.file, &retained.identity, to)?;
         retained.link_count = retained_link_count(&retained.file)?;
         self.revalidate_digest(to, &mut retained, maximum)?;
         self.validate()?;
@@ -3122,6 +3182,53 @@ mod tests {
             None,
         )
         .expect("install initial target");
+    }
+
+    #[test]
+    fn store_owned_staging_move_preserves_exact_identity_without_alias() {
+        let root = temp_root("staging-move");
+        let lock = acquire_effect_store_lock(&root, LOCK).expect("lifecycle lock");
+        let target = bind_target(&lock, Path::new(TARGET)).expect("bind target");
+        let source = Path::new(".active.lock.yaml.forge-next");
+        let destination = Path::new("active.lock.yaml");
+        let content = b"revision: 1\n";
+        let digest = sha256_content_hash(content);
+        target
+            .write_new_file_synced(source, content)
+            .expect("write Store staging file");
+        let source_file = File::open(root.join("packs").join(source)).expect("open staging file");
+        let source_identity =
+            RetainedDirectory::identity_of(&source_file).expect("staging identity");
+
+        let retained = target
+            .move_file_if_digest_noreplace(
+                source,
+                destination,
+                &digest,
+                Some(&source_identity),
+                MAX_BYTES,
+            )
+            .expect("publish exact Store staging file");
+
+        assert!(!root.join("packs").join(source).exists());
+        assert_eq!(
+            fs::read(root.join("packs").join(destination)).expect("published bytes"),
+            content
+        );
+        assert_eq!(retained.identity, source_identity);
+        assert_eq!(
+            RetainedDirectory::identity_of(&retained.file).expect("retained published identity"),
+            source_identity
+        );
+        assert_eq!(
+            retained_link_count(&retained.file).expect("published link count"),
+            1
+        );
+        drop(retained);
+        drop(source_file);
+        drop(target);
+        drop(lock);
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
