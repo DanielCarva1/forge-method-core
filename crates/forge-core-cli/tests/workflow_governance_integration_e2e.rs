@@ -52,6 +52,18 @@ fn bin() -> Command {
     Command::cargo_bin("forge-core").expect("forge-core binary")
 }
 
+fn physical_temporary_directory() -> PathBuf {
+    let temporary_directory = std::env::temp_dir();
+    #[cfg(target_os = "macos")]
+    {
+        fs::canonicalize(temporary_directory).expect("physical workflow test temporary directory")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        temporary_directory
+    }
+}
+
 struct Consumer {
     parent: PathBuf,
     app: PathBuf,
@@ -66,8 +78,8 @@ impl Consumer {
     fn new_with_prefix(prefix: &str) -> Self {
         static SEQ: AtomicUsize = AtomicUsize::new(0);
         let sequence = SEQ.fetch_add(1, Ordering::SeqCst);
-        let parent =
-            std::env::temp_dir().join(format!("{prefix}-{}-{sequence}", std::process::id()));
+        let parent = physical_temporary_directory()
+            .join(format!("{prefix}-{}-{sequence}", std::process::id()));
         let _ = fs::remove_dir_all(&parent);
         let app = parent.join("app");
         let sidecar = parent.join("forge-app");
@@ -93,7 +105,7 @@ impl Consumer {
     fn new_start_ready_with_prefix(prefix: &str) -> Self {
         static SEQ: AtomicUsize = AtomicUsize::new(0);
         let sequence = SEQ.fetch_add(1, Ordering::SeqCst);
-        let parent = std::env::temp_dir().join(format!(
+        let parent = physical_temporary_directory().join(format!(
             "{prefix}-start-ready-{}-{sequence}",
             std::process::id()
         ));
