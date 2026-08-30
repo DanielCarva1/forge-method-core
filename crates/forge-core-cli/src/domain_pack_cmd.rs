@@ -4652,7 +4652,7 @@ mod backup_seam_tests {
 
     fn state_root() -> PathBuf {
         static SEQUENCE: AtomicU64 = AtomicU64::new(0);
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::io_util::canonical_test_temp_dir().join(format!(
             "forge-domain-pack-lock-seam-{}-{}",
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::SeqCst)
@@ -4679,8 +4679,6 @@ mod backup_seam_tests {
     }
 
     #[test]
-    #[ignore = "pre-existing macOS failure (pre-alpha): tempdir resolves under /var which is a symlink to /private/var on macOS; Forge lifecycle I/O rejects symlink path components. Tracked in issue #24. Passes on Linux/WSL."]
-
     fn rebase_plan_persistence_rejects_late_creation_after_recovered_absence() {
         let root = state_root();
         let target = root.join(DOMAIN_PACK_REBASE_PLAN_RELATIVE_PATH);

@@ -1522,6 +1522,27 @@ pub(crate) fn is_windows_kernel_parent_swap_denial(error: &std::io::Error) -> bo
     }
 }
 
+/// Return the physical temporary directory used by path-security tests.
+///
+/// macOS commonly exposes the same directory through `/var`, which is a
+/// symbolic link to `/private/var`. Tests that exercise Forge's strict
+/// no-alias boundary must start from the physical path instead of weakening
+/// the production check for a platform-provided alias.
+#[cfg(test)]
+pub(crate) fn canonical_test_temp_dir() -> PathBuf {
+    let temp_dir = std::env::temp_dir();
+
+    #[cfg(target_os = "macos")]
+    {
+        std::fs::canonicalize(temp_dir).expect("canonicalize test temporary directory")
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        temp_dir
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1530,7 +1551,7 @@ mod tests {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos());
-        let dir = std::env::temp_dir().join(format!(
+        let dir = canonical_test_temp_dir().join(format!(
             "forge-core-cli-io-util-{name}-{}-{nonce}",
             std::process::id()
         ));

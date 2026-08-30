@@ -1955,7 +1955,7 @@ mod tests {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |duration| duration.as_nanos());
-        let root = std::env::temp_dir().join(format!(
+        let root = crate::io_util::canonical_test_temp_dir().join(format!(
             "forge-project-resolve-{label}-{}-{nanos}",
             std::process::id()
         ));

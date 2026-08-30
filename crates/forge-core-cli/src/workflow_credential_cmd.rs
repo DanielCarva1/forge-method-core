@@ -934,7 +934,7 @@ mod backup_seam_tests {
     #[test]
     fn retained_credential_authority_snapshots_only_exact_public_registry() {
         static SEQUENCE: AtomicU64 = AtomicU64::new(0);
-        let base = std::env::temp_dir().join(format!(
+        let base = crate::io_util::canonical_test_temp_dir().join(format!(
             "forge-credential-lock-seam-{}-{}",
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::SeqCst)
@@ -993,7 +993,7 @@ principal_registry:
     #[test]
     fn retained_credential_snapshot_stays_bound_after_operator_parent_swap() {
         static SEQUENCE: AtomicU64 = AtomicU64::new(0);
-        let base = std::env::temp_dir().join(format!(
+        let base = crate::io_util::canonical_test_temp_dir().join(format!(
             "forge-credential-parent-swap-{}-{}",
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::SeqCst)
