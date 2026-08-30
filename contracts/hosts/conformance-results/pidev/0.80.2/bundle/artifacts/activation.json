@@ -1,0 +1,31 @@
+{
+  "case_id": "activation",
+  "assertions": {
+    "forge_invoked_by_argv": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "one_chat_activation_observed": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "versioned_json_preserved": {
+      "passed": true,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [
+    {
+      "kind": "invocation_unavailable",
+      "code": "activation_required_explicit_single_bash_route"
+    }
+  ],
+  "evidence": {
+    "fact_codes": [
+      "forge_start_and_resume_tool_results_exist",
+      "pi_session_activated_in_one_chat",
+      "start_invoked_twice_by_host",
+      "workflow_resume_summary_v10_preserved"
+    ]
+  }
+}

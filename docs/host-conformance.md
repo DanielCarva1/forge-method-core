@@ -153,3 +153,11 @@ with model `zai-coding-plan/glm-5.3` on native Windows. It is documented at
 journey used the existing external-adapter seam through a temporary closed
 observation bridge. The bridge is bound by file hash in the bundle and is not a
 new built-in adapter or a claim of host-native proof.
+
+The current retained Pi.dev candidate result covers Pi `0.80.2` with model
+`zai/glm-4.7` and a single Bash tool route on native Windows. It is documented
+at `contracts/hosts/conformance-results/pidev/0.80.2/README.md`. The run observed
+activation, read-only guidance, accepted-intent recovery, and durable recovery
+in that exact environment, but it did not exercise cooperative evidence,
+isolated work, or governed promotion. The retained bundle records those missing
+parts as typed gaps instead of treating an incomplete journey as support.

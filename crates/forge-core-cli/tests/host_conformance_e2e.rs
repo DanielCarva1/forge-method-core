@@ -395,6 +395,40 @@ fn retained_current_opencode_run_summary_matches_bundle_manifest_and_result() {
     }
 }
 
+#[test]
+fn retained_current_pidev_run_summary_matches_bundle_manifest_and_result() {
+    let retained = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../contracts/hosts/conformance-results/pidev/0.80.2");
+    let (summary, manifest) = assert_retained_run_matches_bundle(
+        &retained,
+        "/identities/pidev_cli_declared",
+        (8, 13, 10, 1),
+        (5, 3, 0),
+        "f23a7ce676e38e9ca688fc701bf025e85db36280",
+    );
+
+    assert_eq!(
+        manifest
+            .pointer("/bindings/declared/host_id")
+            .and_then(|value| value.as_str()),
+        Some("pidev"),
+        "retained Pi.dev result must use the canonical pidev host id"
+    );
+
+    for (summary_path, argument_index) in [
+        ("/identities/bridge_source_sha256", 0_usize),
+        ("/identities/closed_observation_sha256", 1_usize),
+    ] {
+        assert_eq!(
+            summary.pointer(summary_path),
+            manifest.pointer(&format!(
+                "/bindings/observed/adapter_invocation/arguments/{argument_index}/file_identity/sha256"
+            )),
+            "retained bridge input {summary_path} must match the measured file"
+        );
+    }
+}
+
 type AssertionCounts = (u64, u64, u64, u64);
 type OutcomeCounts = (u64, u64, u64);
 

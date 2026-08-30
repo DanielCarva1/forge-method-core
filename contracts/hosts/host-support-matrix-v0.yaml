@@ -77,3 +77,56 @@ host_support_matrix:
         status: "unknown"
         limits: []
         disclosure_evidence: null
+    - runtime:
+        kind: "pidev"
+        version: "0.80.2"
+      status: "candidate"
+      recognition:
+        status: "candidate"
+        evidence: null
+      installability:
+        status: "unknown"
+        evidence: null
+      read_only_mcp:
+        status: "unknown"
+        evidence: null
+      native_human_origin_assurance:
+        status: "unknown"
+        evidence: null
+      governed_mutation:
+        status: "unknown"
+        evidence: null
+      conformance:
+        status: "candidate"
+        evidence:
+          evidence_id: "evidence.pidev-0.80.2.conformance-result"
+          observed_runtime:
+            kind: "pidev"
+            version: "0.80.2"
+          evidence_ref: "contracts/hosts/conformance-results/pidev/0.80.2/bundle/result.json"
+          evidence_digest: "sha256:c5275da4b9344f2090e479c5662cf378da57d3dc5963c851a513af4a7d63c831"
+      release_asset:
+        status: "unknown"
+        evidence: null
+      field_evidence:
+        status: "candidate"
+        evidence:
+          evidence_id: "evidence.pidev-0.80.2.run-summary"
+          observed_runtime:
+            kind: "pidev"
+            version: "0.80.2"
+          evidence_ref: "contracts/hosts/conformance-results/pidev/0.80.2/run-summary.json"
+          evidence_digest: "sha256:39beeb6eb71da1b0b342a73e4ae0ad56f5b05fd4561785de3edda34bec14b3da"
+      known_limits:
+        status: "known"
+        limits:
+          - "single_bash_tool_route_required"
+          - "bounded_followup_scope_not_honored"
+          - "evidence_isolation_and_promotion_not_exercised"
+        disclosure_evidence:
+          evidence_id: "evidence.pidev-0.80.2.known-limits"
+          observed_runtime:
+            kind: "pidev"
+            version: "0.80.2"
+          evidence_ref: "contracts/hosts/conformance-results/pidev/0.80.2/README.md"
+          evidence_digest: "sha256:aa8e3a7c5fb2a56363aaec1fac7c29e2dcf070227c89c48476c72ade241bd21b"

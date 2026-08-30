@@ -1,0 +1,28 @@
+{
+  "case_id": "cooperative-evidence",
+  "assertions": {
+    "admission_result_read_back": {
+      "passed": false,
+      "native_proof_claim": null
+    },
+    "evidence_source_preserved": {
+      "passed": false,
+      "native_proof_claim": null
+    },
+    "rejected_evidence_stays_rejected": {
+      "passed": false,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [
+    {
+      "kind": "evidence_unavailable",
+      "code": "cooperative_evidence_not_exercised_pi"
+    }
+  ],
+  "evidence": {
+    "fact_codes": [
+      "pi_session_stopped_before_evidence_admission"
+    ]
+  }
+}

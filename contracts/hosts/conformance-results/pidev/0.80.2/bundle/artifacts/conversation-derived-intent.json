@@ -1,0 +1,25 @@
+{
+  "case_id": "conversation-derived-intent",
+  "assertions": {
+    "accepted_intent_read_back": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "agent_proposal_separated": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "human_message_source_preserved": {
+      "passed": true,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [],
+  "evidence": {
+    "fact_codes": [
+      "agent_policy_inference_not_treated_as_acceptance",
+      "human_issue68_source_read_from_github",
+      "work_focus_issue68_read_back"
+    ]
+  }
+}
