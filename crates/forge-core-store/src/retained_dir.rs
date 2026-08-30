@@ -2196,6 +2196,24 @@ impl RetainedDirectory {
             ));
         }
 
+        #[cfg(target_os = "macos")]
+        if destination.is_none() {
+            if let Err(error) =
+                self.move_retained_file_noreplace(&temp.path, &temp.file, &temp.identity, path)
+            {
+                return Err(self.fail_publication_after_move(&temp.path, path, error));
+            }
+            let commit = (|| {
+                self.verify_mutable_authority_binding(path, &temp.file, &temp.identity)?;
+                Self::verify_exact_bytes(&mut temp.file, bytes)?;
+                self.verify_mutable_authority_binding(path, &temp.file, &temp.identity)
+            })();
+            if let Err(error) = commit {
+                return Err(self.fail_publication_after_move(&temp.path, path, error));
+            }
+            return Ok(RetainedCleanupDebt::none());
+        }
+
         if let Some((destination_file, destination_identity)) = destination {
             Self::verify_retained_handle(&destination_file, &destination_identity)?;
             #[cfg(windows)]
@@ -4251,9 +4269,9 @@ mod tests {
                 |_, _, _| Ok(()),
             )
             .unwrap();
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         assert!(debt.paths().is_empty());
-        #[cfg(unix)]
+        #[cfg(all(unix, not(target_os = "macos")))]
         {
             assert_eq!(debt.paths().len(), 2);
             let mut debt_bytes = debt
@@ -4270,6 +4288,11 @@ mod tests {
         );
         assert_eq!(fs::read(root_path.join(&first)).unwrap(), b"sentinel");
         assert!(!root_path.join(&second).exists());
+        #[cfg(target_os = "macos")]
+        {
+            let published = File::open(root_path.join("authority")).unwrap();
+            assert_eq!(retained_test_link_count(&published), 1);
+        }
         drop(root);
         fs::remove_dir_all(root_path).unwrap();
     }

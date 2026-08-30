@@ -588,7 +588,10 @@ async fn run_generated_config_fixture(
         .and_then(|content| content.as_text())
         .expect("mutation text result");
     let envelope: Value = serde_json::from_str(&text.text).expect("mutation envelope JSON");
-    assert_eq!(envelope["status"], "applied");
+    assert_eq!(
+        envelope["status"], "applied",
+        "unexpected mutation envelope: {envelope:#}"
+    );
     assert_eq!(
         envelope["result"]["receipt"]["execution_principal"]["principal_id"],
         "principal.agent"
