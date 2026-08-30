@@ -1337,9 +1337,12 @@ fn reinitialize_resumes_reserved_wal_in_a_fresh_process() {
     );
     let interrupted = output_envelope(&interrupted, "interrupted reinitialize apply");
     assert_eq!(interrupted["ok"], false);
-    assert!(interrupted["error"]["message"].as_str().is_some_and(
-        |message| message.contains("state-loss diagnosis bytes changed after planning")
-    ));
+    assert!(
+        interrupted["error"]["message"].as_str().is_some_and(
+            |message| message.contains("state-loss diagnosis bytes changed after planning")
+        ),
+        "unexpected interrupted reinitialize envelope: {interrupted:#}"
+    );
     assert_eq!(
         fs::read(app.join(PROJECT_LINK_FILE_NAME)).expect("read predecessor after interruption"),
         predecessor_link
