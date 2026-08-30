@@ -132,7 +132,11 @@ impl TempFixture {
     fn new(case_id: &str) -> Self {
         static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
         let sequence = SEQUENCE.fetch_add(1, Ordering::SeqCst);
-        let root = std::env::temp_dir().join(format!(
+        let temporary_directory = std::env::temp_dir();
+        #[cfg(target_os = "macos")]
+        let temporary_directory = fs::canonicalize(temporary_directory)
+            .expect("canonicalize lifecycle recovery temporary directory");
+        let root = temporary_directory.join(format!(
             "forge-product-lifecycle-recovery-{case_id}-{}-{sequence}",
             std::process::id()
         ));
