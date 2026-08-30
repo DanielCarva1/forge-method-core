@@ -1686,6 +1686,26 @@ pub struct RetainedStateRoot<'a> {
     lock_relative_path: &'a Path,
 }
 
+const WRITABLE_EVENTLOG_MEMBER_BINDINGS: &[(&str, &str)] = &[
+    ("locks/memory.log.lock", "memory/events.ndjson"),
+    ("locks/research.sources.lock", "research/sources.ndjson"),
+    (
+        "locks/governance.conflicts.lock",
+        "governance/conflicts.ndjson",
+    ),
+];
+
+const ADDITIONAL_READ_MEMBER_BINDINGS: &[(&str, &str)] = &[(
+    "locks/workflow-governance.lock",
+    "wal/workflow-governance.ndjson",
+)];
+
+fn matches_member_binding(lock: &Path, member: &Path, bindings: &[(&str, &str)]) -> bool {
+    bindings.iter().any(|(allowed_lock, allowed_member)| {
+        lock == Path::new(allowed_lock) && member == Path::new(allowed_member)
+    })
+}
+
 impl RetainedStateRoot<'_> {
     #[must_use]
     pub fn display_path(&self) -> &Path {
@@ -1693,21 +1713,14 @@ impl RetainedStateRoot<'_> {
     }
 
     fn validate_member_path(&self, path: &Path) -> io::Result<()> {
-        let permitted = matches!(
-            (self.lock_relative_path.to_str(), path.to_str()),
-            (Some("locks/memory.log.lock"), Some("memory/events.ndjson"))
-                | (
-                    Some("locks/research.sources.lock"),
-                    Some("research/sources.ndjson")
-                )
-                | (
-                    Some("locks/governance.conflicts.lock"),
-                    Some("governance/conflicts.ndjson")
-                )
-                | (
-                    Some("locks/workflow-governance.lock"),
-                    Some("wal/workflow-governance.ndjson")
-                )
+        let permitted = matches_member_binding(
+            self.lock_relative_path,
+            path,
+            WRITABLE_EVENTLOG_MEMBER_BINDINGS,
+        ) || matches_member_binding(
+            self.lock_relative_path,
+            path,
+            ADDITIONAL_READ_MEMBER_BINDINGS,
         );
         if permitted {
             Ok(())
@@ -1720,17 +1733,10 @@ impl RetainedStateRoot<'_> {
     }
 
     fn validate_writable_eventlog_path(&self, path: &Path) -> io::Result<()> {
-        let permitted = matches!(
-            (self.lock_relative_path.to_str(), path.to_str()),
-            (Some("locks/memory.log.lock"), Some("memory/events.ndjson"))
-                | (
-                    Some("locks/research.sources.lock"),
-                    Some("research/sources.ndjson")
-                )
-                | (
-                    Some("locks/governance.conflicts.lock"),
-                    Some("governance/conflicts.ndjson")
-                )
+        let permitted = matches_member_binding(
+            self.lock_relative_path,
+            path,
+            WRITABLE_EVENTLOG_MEMBER_BINDINGS,
         );
         if permitted {
             Ok(())
@@ -10765,6 +10771,56 @@ mod tests {
         }
         fs::remove_dir_all(root).expect("cleanup temp root");
     }
+
+    #[test]
+    fn retained_member_bindings_use_native_paths_and_reject_mismatches() {
+        let writable_bindings = [
+            (
+                PathBuf::from("locks").join("memory.log.lock"),
+                PathBuf::from("memory").join("events.ndjson"),
+            ),
+            (
+                PathBuf::from("locks").join("research.sources.lock"),
+                PathBuf::from("research").join("sources.ndjson"),
+            ),
+            (
+                PathBuf::from("locks").join("governance.conflicts.lock"),
+                PathBuf::from("governance").join("conflicts.ndjson"),
+            ),
+        ];
+
+        for (lock, member) in writable_bindings {
+            assert!(matches_member_binding(
+                &lock,
+                &member,
+                WRITABLE_EVENTLOG_MEMBER_BINDINGS
+            ));
+            assert!(!matches_member_binding(
+                &lock,
+                Path::new("extra/events.ndjson"),
+                WRITABLE_EVENTLOG_MEMBER_BINDINGS
+            ));
+        }
+
+        let workflow_lock = PathBuf::from("locks").join("workflow-governance.lock");
+        let workflow_member = PathBuf::from("wal").join("workflow-governance.ndjson");
+        assert!(matches_member_binding(
+            &workflow_lock,
+            &workflow_member,
+            ADDITIONAL_READ_MEMBER_BINDINGS
+        ));
+        assert!(!matches_member_binding(
+            &workflow_lock,
+            &workflow_member,
+            WRITABLE_EVENTLOG_MEMBER_BINDINGS
+        ));
+        assert!(!matches_member_binding(
+            Path::new("locks/governance.conflicts.lock"),
+            Path::new("memory/events.ndjson"),
+            WRITABLE_EVENTLOG_MEMBER_BINDINGS
+        ));
+    }
+
     #[test]
     fn wal_durability_default_is_sync_on_append() {
         // The default MUST be the durable variant; this is the load-bearing
