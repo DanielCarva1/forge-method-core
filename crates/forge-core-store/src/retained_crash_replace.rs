@@ -666,23 +666,30 @@ impl RetainedCrashReplaceTarget<'_> {
         };
         self.directory.sync_root()?;
         let authority = self.directory.retain_authority()?;
+        let validate_move = |directory: &RetainedDirectory, source: &Path, destination: &Path| {
+            if destination != self.target_name {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "retained absence claim destination changed",
+                ));
+            }
+            directory.verify_retained_authority_binding(source, &claim.file, &claim.identity)?;
+            validate_absence_claim_handle(&claim.file, &claim.identity)
+        };
+        #[cfg(target_os = "macos")]
+        rename_store_owned_file_noreplace_with_validation(
+            &authority,
+            &staging,
+            &claim.file,
+            &claim.identity,
+            &self.target_name,
+            validate_move,
+        )?;
+        #[cfg(not(target_os = "macos"))]
         let _cleanup_debt = authority.rename_file_noreplace_with_validation(
             &staging,
             &self.target_name,
-            |directory, source, destination| {
-                if destination != self.target_name {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        "retained absence claim destination changed",
-                    ));
-                }
-                directory.verify_retained_authority_binding(
-                    source,
-                    &claim.file,
-                    &claim.identity,
-                )?;
-                validate_absence_claim_handle(&claim.file, &claim.identity)
-            },
+            validate_move,
         )?;
         claim.target_name.clone_from(&self.target_name);
         self.validate_absence_claim(&claim)?;
@@ -1179,19 +1186,46 @@ fn quarantine_marker_after_revalidation(
         .map_err(|error| recovery_mismatch_error(target, names, error))?;
     let nonce =
         marker_quarantine_nonce().map_err(|error| recovery_mismatch_error(target, names, error))?;
+    #[cfg(target_os = "macos")]
+    let (transaction_file, transaction_identity) = {
+        let transaction = witness.transaction.as_ref().ok_or_else(|| {
+            recovery_mismatch_error(
+                target,
+                names,
+                "retained recovery transaction witness disappeared before quarantine",
+            )
+        })?;
+        (
+            transaction
+                .file
+                .try_clone()
+                .map_err(|error| recovery_mismatch_error(target, names, error))?,
+            transaction.identity.clone(),
+        )
+    };
 
     let mut quarantined = None;
     for attempt in 0..MARKER_QUARANTINE_ATTEMPTS {
         let quarantine = marker_quarantine_path(names, nonce, attempt);
-        match authority.rename_file_noreplace_with_validation(
+        let validate_move = |directory: &RetainedDirectory, source: &Path, _: &Path| {
+            validate_expected_digest(directory, source, &marker_digest, MARKER_MAX_BYTES)?;
+            witness.revalidate(target, names, maximum)
+        };
+        #[cfg(target_os = "macos")]
+        let rename_result = rename_store_owned_file_noreplace_with_validation(
+            &authority,
             &names.transaction,
+            &transaction_file,
+            &transaction_identity,
             &quarantine,
-            |directory, source, _| {
-                validate_expected_digest(directory, source, &marker_digest, MARKER_MAX_BYTES)?;
-                witness.revalidate(target, names, maximum)
-            },
-        ) {
-            Ok(cleanup_debt) => {
+            validate_move,
+        );
+        #[cfg(not(target_os = "macos"))]
+        let rename_result = authority
+            .rename_file_noreplace_with_validation(&names.transaction, &quarantine, validate_move)
+            .map(|_cleanup_debt| ());
+        match rename_result {
+            Ok(()) => {
                 let Some(transaction) = witness.transaction.as_mut() else {
                     return Err(recovery_mismatch_error(
                         target,
@@ -1201,7 +1235,7 @@ fn quarantine_marker_after_revalidation(
                 };
                 transaction.link_count = retained_link_count(&transaction.file)
                     .map_err(|error| recovery_mismatch_error(target, names, error))?;
-                quarantined = Some((quarantine, cleanup_debt));
+                quarantined = Some(quarantine);
                 break;
             }
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
@@ -1222,7 +1256,7 @@ fn quarantine_marker_after_revalidation(
             }
         }
     }
-    let Some((quarantine, _cleanup_debt)) = quarantined else {
+    let Some(quarantine) = quarantined else {
         return Err(recovery_mismatch_error(
             target,
             names,
@@ -1327,6 +1361,21 @@ fn marker_quarantine_path(names: &Names, nonce: u128, attempt: usize) -> PathBuf
     ))
 }
 
+#[cfg(target_os = "macos")]
+fn rename_store_owned_file_noreplace_with_validation<H>(
+    authority: &crate::retained_dir::RetainedAuthorityDirectory<'_>,
+    from: &Path,
+    retained: &File,
+    expected: &RetainedFileIdentity,
+    to: &Path,
+    validation: H,
+) -> io::Result<()>
+where
+    H: FnMut(&RetainedDirectory, &Path, &Path) -> io::Result<()>,
+{
+    authority.move_retained_file_noreplace_with_validation(from, retained, expected, to, validation)
+}
+
 fn restore_quarantined_marker(
     target: &RetainedCrashReplaceTarget<'_>,
     names: &Names,
@@ -1341,18 +1390,32 @@ fn restore_quarantined_marker(
             "retained quarantined marker handle is absent",
         )
     })?;
+    #[cfg(target_os = "macos")]
+    let retained_file = retained_marker.file.try_clone()?;
+    #[cfg(target_os = "macos")]
+    let retained_identity = retained_marker.identity.clone();
     const RESTORE_ATTEMPTS: usize = 32;
     for _ in 0..RESTORE_ATTEMPTS {
         target.isolate_authoritative_name(&names.transaction)?;
-        match authority.rename_file_noreplace_with_validation(
+        let validate_move = |directory: &RetainedDirectory, source: &Path, _: &Path| {
+            validate_expected_digest(directory, source, marker_digest, MARKER_MAX_BYTES)?;
+            revalidate_retained_digest_handle(retained_marker, MARKER_MAX_BYTES)
+        };
+        #[cfg(target_os = "macos")]
+        let rename_result = rename_store_owned_file_noreplace_with_validation(
+            authority,
             quarantine,
+            &retained_file,
+            &retained_identity,
             &names.transaction,
-            |directory, source, _| {
-                validate_expected_digest(directory, source, marker_digest, MARKER_MAX_BYTES)?;
-                revalidate_retained_digest_handle(retained_marker, MARKER_MAX_BYTES)
-            },
-        ) {
-            Ok(_cleanup_debt) => {
+            validate_move,
+        );
+        #[cfg(not(target_os = "macos"))]
+        let rename_result = authority
+            .rename_file_noreplace_with_validation(quarantine, &names.transaction, validate_move)
+            .map(|_cleanup_debt| ());
+        match rename_result {
+            Ok(()) => {
                 retained_marker.link_count = retained_link_count(&retained_marker.file)?;
                 target.revalidate_digest(&names.transaction, retained_marker, MARKER_MAX_BYTES)?;
                 return Ok(());

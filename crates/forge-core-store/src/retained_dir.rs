@@ -2755,6 +2755,31 @@ impl RetainedAuthorityDirectory<'_> {
         result
     }
 
+    #[cfg(target_os = "macos")]
+    pub(crate) fn move_retained_file_noreplace_with_validation<H>(
+        &self,
+        from: &Path,
+        retained: &File,
+        expected: &RetainedFileIdentity,
+        to: &Path,
+        validation: H,
+    ) -> io::Result<()>
+    where
+        H: FnMut(&RetainedDirectory, &Path, &Path) -> io::Result<()>,
+    {
+        self.validate()?;
+        let result = self.directory.move_retained_file_noreplace_with_hooks(
+            from,
+            retained,
+            expected,
+            to,
+            validation,
+            |_, _, _| Ok(()),
+        );
+        self.validate()?;
+        result
+    }
+
     pub(crate) fn move_mutable_file_noreplace(&self, from: &Path, to: &Path) -> io::Result<()> {
         self.validate()?;
         let source = self.directory.open_leaf_bound(
