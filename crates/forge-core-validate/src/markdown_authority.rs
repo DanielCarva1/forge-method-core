@@ -143,22 +143,7 @@ pub fn load_authorized_markdown(
     })
 }
 
-#[must_use]
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn read_file_beneath_no_follow(root: &Path, path: &str) -> io::Result<Vec<u8>> {
-    use std::ffi::CString;
-    use std::os::fd::{AsRawFd, FromRawFd};
-
-    const O_RDONLY: i32 = 0;
-    const O_NONBLOCK: i32 = 0o4000;
-    const O_DIRECTORY: i32 = 0o200_000;
-    const O_NOFOLLOW: i32 = 0o400_000;
-    const O_CLOEXEC: i32 = 0o2_000_000;
-
-    unsafe extern "C" {
-        fn openat(dirfd: i32, pathname: *const std::ffi::c_char, flags: i32, mode: u32) -> i32;
-    }
-
+fn markdown_path_components(path: &str) -> io::Result<Vec<&str>> {
     if path.is_empty()
         || path.contains('\\')
         || path.starts_with('/')
@@ -172,28 +157,40 @@ fn read_file_beneath_no_follow(root: &Path, path: &str) -> io::Result<Vec<u8>> {
             "path must use its canonical repository-relative spelling",
         ));
     }
+    Ok(path.split('/').collect())
+}
 
-    let mut directory = fs::File::open(root)?;
+#[must_use]
+#[cfg(any(target_os = "linux", target_os = "android", target_os = "macos"))]
+fn read_file_beneath_no_follow(root: &Path, path: &str) -> io::Result<Vec<u8>> {
+    use std::ffi::CString;
+    use std::os::fd::{AsRawFd, FromRawFd};
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let mut directory = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(root)?;
     if !directory.metadata()?.is_dir() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "repository root is not a directory",
         ));
     }
-    let components = path.split('/').collect::<Vec<_>>();
+    let components = markdown_path_components(path)?;
     for (index, component) in components.iter().enumerate() {
         let component = CString::new(*component).map_err(|_| {
             io::Error::new(io::ErrorKind::InvalidInput, "path component contains NUL")
         })?;
         let is_final = index + 1 == components.len();
         let flags = if is_final {
-            O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC
+            libc::O_RDONLY | libc::O_NONBLOCK | libc::O_NOFOLLOW | libc::O_CLOEXEC
         } else {
-            O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC
         };
         // SAFETY: the retained directory descriptor and NUL-terminated direct
         // child name are valid, and a successful descriptor is owned once.
-        let fd = unsafe { openat(directory.as_raw_fd(), component.as_ptr(), flags, 0) };
+        let fd = unsafe { libc::openat(directory.as_raw_fd(), component.as_ptr(), flags, 0) };
         if fd < 0 {
             return Err(io::Error::last_os_error());
         }
@@ -220,7 +217,181 @@ fn read_file_beneath_no_follow(root: &Path, path: &str) -> io::Result<Vec<u8>> {
     ))
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
+#[must_use]
+#[cfg(windows)]
+fn read_file_beneath_no_follow(root: &Path, path: &str) -> io::Result<Vec<u8>> {
+    use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0000_0400;
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    const FILE_SHARE_ALL: u32 = 0x0000_0001 | 0x0000_0002 | 0x0000_0004;
+
+    let components = markdown_path_components(path)?;
+    let mut directory = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_ALL)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(root)?;
+    let root_metadata = directory.metadata()?;
+    if !root_metadata.is_dir()
+        || root_metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "repository root is not a no-follow directory",
+        ));
+    }
+
+    for (index, component) in components.iter().enumerate() {
+        let is_final = index + 1 == components.len();
+        let opened = open_windows_markdown_child(&directory, component, !is_final)?;
+        let metadata = opened.metadata()?;
+        if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "authorized Markdown path contains a reparse point",
+            ));
+        }
+        if is_final {
+            if !metadata.is_file() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "authorized Markdown path is not a regular file",
+                ));
+            }
+            let mut bytes = Vec::new();
+            let mut opened = opened;
+            opened.read_to_end(&mut bytes)?;
+            return Ok(bytes);
+        }
+        if !metadata.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "authorized Markdown path ancestor is not a directory",
+            ));
+        }
+        directory = opened;
+    }
+
+    Err(io::Error::new(
+        io::ErrorKind::InvalidInput,
+        "authorized Markdown path is empty",
+    ))
+}
+
+#[cfg(windows)]
+fn open_windows_markdown_child(
+    directory: &fs::File,
+    component: &str,
+    expect_directory: bool,
+) -> io::Result<fs::File> {
+    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::io::{AsRawHandle, FromRawHandle};
+    use std::{ffi::c_void, ptr};
+
+    #[repr(C)]
+    struct UnicodeString {
+        length: u16,
+        maximum_length: u16,
+        buffer: *mut u16,
+    }
+    #[repr(C)]
+    struct ObjectAttributes {
+        length: u32,
+        root_directory: *mut c_void,
+        object_name: *mut UnicodeString,
+        attributes: u32,
+        security_descriptor: *mut c_void,
+        security_quality_of_service: *mut c_void,
+    }
+    #[repr(C)]
+    struct IoStatusBlock {
+        status: isize,
+        information: usize,
+    }
+    #[link(name = "ntdll")]
+    unsafe extern "system" {
+        fn NtCreateFile(
+            file_handle: *mut *mut c_void,
+            desired_access: u32,
+            object_attributes: *mut ObjectAttributes,
+            io_status_block: *mut IoStatusBlock,
+            allocation_size: *mut i64,
+            file_attributes: u32,
+            share_access: u32,
+            create_disposition: u32,
+            create_options: u32,
+            ea_buffer: *mut c_void,
+            ea_length: u32,
+        ) -> i32;
+        fn RtlNtStatusToDosError(status: i32) -> u32;
+    }
+
+    let mut name = std::ffi::OsStr::new(component)
+        .encode_wide()
+        .collect::<Vec<_>>();
+    let byte_len = name
+        .len()
+        .checked_mul(2)
+        .and_then(|value| u16::try_from(value).ok())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "file name too long"))?;
+    let mut unicode = UnicodeString {
+        length: byte_len,
+        maximum_length: byte_len,
+        buffer: name.as_mut_ptr(),
+    };
+    let mut attributes = ObjectAttributes {
+        length: u32::try_from(std::mem::size_of::<ObjectAttributes>()).expect("size fits u32"),
+        root_directory: directory.as_raw_handle(),
+        object_name: ptr::addr_of_mut!(unicode),
+        attributes: 0x0000_0040,
+        security_descriptor: ptr::null_mut(),
+        security_quality_of_service: ptr::null_mut(),
+    };
+    let mut handle = ptr::null_mut();
+    let mut io_status = IoStatusBlock {
+        status: 0,
+        information: 0,
+    };
+    let type_option = if expect_directory {
+        0x0000_0001
+    } else {
+        0x0000_0040
+    };
+    // SAFETY: all pointers refer to initialized storage for this synchronous
+    // call. `RootDirectory` is the retained parent handle, and a successful
+    // result transfers exactly one owned handle to `File` below.
+    let status = unsafe {
+        NtCreateFile(
+            ptr::addr_of_mut!(handle),
+            0x0012_0089,
+            ptr::addr_of_mut!(attributes),
+            ptr::addr_of_mut!(io_status),
+            ptr::null_mut(),
+            0x0000_0080,
+            0x0000_0001 | 0x0000_0002 | 0x0000_0004,
+            1,
+            type_option | 0x0000_0020 | 0x0020_0000,
+            ptr::null_mut(),
+            0,
+        )
+    };
+    if status < 0 {
+        let code = unsafe { RtlNtStatusToDosError(status) };
+        return Err(io::Error::from_raw_os_error(
+            i32::try_from(code).unwrap_or(i32::MAX),
+        ));
+    }
+    Ok(unsafe { fs::File::from_raw_handle(handle) })
+}
+
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "macos",
+    windows
+)))]
 fn read_file_beneath_no_follow(_root: &Path, _path: &str) -> io::Result<Vec<u8>> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
@@ -624,6 +795,37 @@ mod tests {
         .expect("write authority");
     }
 
+    #[cfg(unix)]
+    fn create_directory_link(link: &Path, target: &Path) {
+        std::os::unix::fs::symlink(target, link).expect("create directory symlink");
+    }
+
+    #[cfg(windows)]
+    fn create_directory_link(link: &Path, target: &Path) {
+        let output = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .output()
+            .expect("create directory junction");
+        assert!(
+            output.status.success(),
+            "mklink /J failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[cfg(unix)]
+    fn remove_directory_link(link: &Path) {
+        fs::remove_file(link).expect("remove directory symlink");
+    }
+
+    #[cfg(windows)]
+    fn remove_directory_link(link: &Path) {
+        fs::remove_dir(link).expect("remove directory junction");
+    }
+
     #[test]
     fn newly_introduced_markdown_is_rejected() {
         let root = temp_root("unknown");
@@ -864,31 +1066,46 @@ mod tests {
         fs::remove_dir_all(outside).expect("cleanup outside");
     }
 
-    #[cfg(any(target_os = "linux", target_os = "android"))]
     #[test]
-    fn authorized_load_rejects_symlink_component_outside_root() {
-        use std::os::unix::fs::symlink;
-
-        let root = temp_root("authorized-symlink");
-        let outside = temp_root("authorized-symlink-outside");
+    fn authorized_load_reads_regular_file() {
+        let root = temp_root("authorized-regular");
         let document = document();
         write_authority(&root, &document);
         write_allowed(&root);
+
         assert_eq!(
             load_authorized_markdown(&root, "docs/allowed.md", MarkdownLoadAudience::Agent)
                 .expect("load regular Markdown"),
             b"allowed"
         );
+
+        fs::remove_dir_all(root).expect("cleanup root");
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        windows
+    ))]
+    #[test]
+    fn authorized_load_rejects_symlink_component_outside_root() {
+        let root = temp_root("authorized-symlink");
+        let outside = temp_root("authorized-symlink-outside");
+        let document = document();
+        write_authority(&root, &document);
+        write_allowed(&root);
         fs::remove_dir_all(root.join("docs")).expect("remove regular docs");
         fs::create_dir_all(&outside).expect("create outside");
         fs::write(outside.join("allowed.md"), "outside").expect("write outside Markdown");
-        symlink(&outside, root.join("docs")).expect("create docs symlink");
+        create_directory_link(&root.join("docs"), &outside);
 
         assert!(matches!(
             load_authorized_markdown(&root, "docs/allowed.md", MarkdownLoadAudience::Agent),
             Err(MarkdownFileLoadError::ContentRead(_))
         ));
 
+        remove_directory_link(&root.join("docs"));
         fs::remove_dir_all(root).expect("cleanup root");
         fs::remove_dir_all(outside).expect("cleanup outside");
     }
