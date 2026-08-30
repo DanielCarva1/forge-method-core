@@ -9,3 +9,4 @@
 *.ndjson text eol=lf
 *.toml text eol=lf
 *.rs text eol=lf
+distribution/release-payload.txt text eol=lf

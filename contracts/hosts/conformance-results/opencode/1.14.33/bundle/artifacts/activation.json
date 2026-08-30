@@ -1,0 +1,31 @@
+{
+  "case_id": "activation",
+  "assertions": {
+    "forge_invoked_by_argv": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "one_chat_activation_observed": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "versioned_json_preserved": {
+      "passed": true,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [
+    {
+      "kind": "invocation_unavailable",
+      "code": "initial_activation_required_human_correction"
+    }
+  ],
+  "evidence": {
+    "fact_codes": [
+      "activation_completed_after_followup",
+      "forge_start_and_resume_invoked",
+      "initial_unverified_refusal_observed",
+      "workflow_resume_summary_v10_parsed"
+    ]
+  }
+}

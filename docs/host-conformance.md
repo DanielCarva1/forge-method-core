@@ -146,3 +146,10 @@ two unsupported capabilities, and every typed gap from that exact journey.
 The earlier CLI `0.144.6` WSL result remains beside it as historical evidence.
 Re-verifying either bundle establishes file integrity and result consistency
 only, not the truth of the adapter-reported host actions.
+
+The current retained OpenCode candidate result covers OpenCode CLI `1.14.33`
+with model `zai-coding-plan/glm-5.3` on native Windows. It is documented at
+`contracts/hosts/conformance-results/opencode/1.14.33/README.md`. The real
+journey used the existing external-adapter seam through a temporary closed
+observation bridge. The bridge is bound by file hash in the bundle and is not a
+new built-in adapter or a claim of host-native proof.

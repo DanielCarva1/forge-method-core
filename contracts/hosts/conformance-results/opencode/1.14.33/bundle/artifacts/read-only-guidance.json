@@ -1,0 +1,25 @@
+{
+  "case_id": "read-only-guidance",
+  "assertions": {
+    "before_after_state_equal": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "guidance_is_plain_language": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "no_hidden_recovery_or_write": {
+      "passed": true,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [],
+  "evidence": {
+    "fact_codes": [
+      "forge_sidecar_digest_unchanged",
+      "git_clean_after_read_only_slice",
+      "plain_language_current_focus_returned"
+    ]
+  }
+}

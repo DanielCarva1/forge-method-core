@@ -1,0 +1,31 @@
+{
+  "case_id": "replacement-agent-recovery",
+  "assertions": {
+    "durable_state_reconstructed": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "fresh_agent_has_no_transcript_dependency": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "recovery_ranked_before_new_work": {
+      "passed": false,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [
+    {
+      "kind": "recovery_unavailable",
+      "code": "recovery_required_followup_and_broad_preflight"
+    }
+  ],
+  "evidence": {
+    "fact_codes": [
+      "bounded_tool_call_limit_not_honored",
+      "durable_work_focus_reconstructed_after_followup",
+      "fresh_session_without_prior_transcript",
+      "initial_response_preceded_durable_recovery"
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "case_id": "isolated-work",
+  "assertions": {
+    "isolation_exists_and_is_linked": {
+      "passed": false,
+      "native_proof_claim": null
+    },
+    "missing_isolation_stops": {
+      "passed": false,
+      "native_proof_claim": null
+    },
+    "ownership_mismatch_stops": {
+      "passed": false,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [
+    {
+      "kind": "isolation_unavailable",
+      "code": "isolation_not_used_by_opencode_session"
+    },
+    {
+      "kind": "isolation_unavailable",
+      "code": "missing_isolation_rejection_not_exercised_opencode"
+    },
+    {
+      "kind": "isolation_unavailable",
+      "code": "ownership_mismatch_not_exercised_opencode"
+    }
+  ],
+  "evidence": {
+    "fact_codes": [
+      "coordinator_isolation_excluded_from_host_claim",
+      "opencode_session_ended_before_isolation_use"
+    ]
+  }
+}

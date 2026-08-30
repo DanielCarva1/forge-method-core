@@ -347,6 +347,76 @@ fn codex_adapter_rejects_observations_with_unknown_fields() {
 fn retained_current_codex_run_summary_matches_bundle_manifest_and_result() {
     let retained = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../contracts/hosts/conformance-results/codex/0.150.0-alpha.8");
+    let (summary, manifest) = assert_retained_run_matches_bundle(
+        &retained,
+        "/identities/codex_cli_declared",
+        (8, 14, 9, 1),
+        (6, 2, 0),
+        "03a8742bc655285c1ee580e0cd4b0b61ad78e6ea",
+    );
+
+    let desktop_version = summary
+        .pointer("/identities/codex_desktop_declared")
+        .and_then(serde_json::Value::as_str)
+        .expect("declared Codex Desktop version");
+    let environment_label = manifest
+        .pointer("/bindings/declared/environment_label")
+        .and_then(serde_json::Value::as_str)
+        .expect("declared environment label");
+    assert!(
+        environment_label.contains(desktop_version),
+        "the exact Desktop version must remain visible in the bundle binding"
+    );
+}
+
+#[test]
+fn retained_current_opencode_run_summary_matches_bundle_manifest_and_result() {
+    let retained = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../contracts/hosts/conformance-results/opencode/1.14.33");
+    let (summary, manifest) = assert_retained_run_matches_bundle(
+        &retained,
+        "/identities/opencode_cli_declared",
+        (8, 15, 8, 1),
+        (6, 2, 0),
+        "f08e7d33a7b23c90db105ebc4268be357bf3241d",
+    );
+
+    for (summary_path, argument_index) in [
+        ("/identities/bridge_source_sha256", 0_usize),
+        ("/identities/closed_observation_sha256", 1_usize),
+    ] {
+        assert_eq!(
+            summary.pointer(summary_path),
+            manifest.pointer(&format!(
+                "/bindings/observed/adapter_invocation/arguments/{argument_index}/file_identity/sha256"
+            )),
+            "retained bridge input {summary_path} must match the measured file"
+        );
+    }
+}
+
+fn assert_retained_run_matches_bundle(
+    retained: &Path,
+    host_version_summary_path: &str,
+    expected_counts: (u64, u64, u64, u64),
+    expected_outcomes: (u64, u64, u64),
+    expected_source_commit: &str,
+) -> (serde_json::Value, serde_json::Value) {
+    Command::cargo_bin("forge-core")
+        .expect("forge binary")
+        .args([
+            "host-conformance",
+            "verify",
+            "--bundle-dir",
+            retained
+                .join("bundle")
+                .to_str()
+                .expect("UTF-8 retained bundle path"),
+            "--json",
+        ])
+        .assert()
+        .success();
+
     let read_json = |path: &Path| -> serde_json::Value {
         serde_json::from_slice(&fs::read(path).expect("read retained JSON"))
             .expect("parse retained JSON")
@@ -379,54 +449,8 @@ fn retained_current_codex_run_summary_matches_bundle_manifest_and_result() {
     assert_eq!(summary_forge_hash, manifest_forge_hash);
     assert_eq!(summary_forge_hash, result_forge_hash);
 
-    assert_current_codex_identities_match(&summary, &manifest);
-
-    let capabilities = result["capabilities"]
-        .as_array()
-        .expect("retained capabilities");
-    let mut passed = 0_u64;
-    let mut failed = 0_u64;
-    let mut not_applicable = 0_u64;
-    for assertion in capabilities.iter().flat_map(|capability| {
-        capability["assertions"]
-            .as_array()
-            .expect("retained assertions")
-    }) {
-        match assertion["status"].as_str().expect("assertion status") {
-            "passed" => passed += 1,
-            "failed" => failed += 1,
-            "not_applicable" => not_applicable += 1,
-            other => panic!("unexpected retained assertion status: {other}"),
-        }
-    }
-    let derived_counts = (capabilities.len() as u64, passed, failed, not_applicable);
-    let summary_counts = (
-        summary["result"]["capabilities"]
-            .as_u64()
-            .expect("summary capability count"),
-        summary["result"]["assertions_passed"]
-            .as_u64()
-            .expect("summary passed count"),
-        summary["result"]["assertions_failed"]
-            .as_u64()
-            .expect("summary failed count"),
-        summary["result"]["assertions_not_applicable"]
-            .as_u64()
-            .expect("summary not-applicable count"),
-    );
-    assert_eq!(derived_counts, (8, 14, 9, 1));
-    assert_eq!(summary_counts, derived_counts);
-}
-
-fn assert_current_codex_identities_match(
-    summary: &serde_json::Value,
-    manifest: &serde_json::Value,
-) {
     for (summary_path, manifest_path) in [
-        (
-            "/identities/codex_cli_declared",
-            "/bindings/declared/host_version",
-        ),
+        (host_version_summary_path, "/bindings/declared/host_version"),
         ("/identities/adapter_id", "/bindings/declared/adapter_id"),
         (
             "/identities/adapter_version",
@@ -455,22 +479,73 @@ fn assert_current_codex_identities_match(
             "retained identity {summary_path} must match the verified bundle binding"
         );
     }
-    let desktop_version = summary
-        .pointer("/identities/codex_desktop_declared")
-        .and_then(serde_json::Value::as_str)
-        .expect("declared Codex Desktop version");
-    let environment_label = manifest
-        .pointer("/bindings/declared/environment_label")
-        .and_then(serde_json::Value::as_str)
-        .expect("declared environment label");
-    assert!(
-        environment_label.contains(desktop_version),
-        "the exact Desktop version must remain visible in the bundle binding"
+
+    let capabilities = result["capabilities"]
+        .as_array()
+        .expect("retained capabilities");
+    let mut partially_supported = 0_u64;
+    let mut unsupported = 0_u64;
+    let mut supported = 0_u64;
+    let mut passed = 0_u64;
+    let mut failed = 0_u64;
+    let mut not_applicable = 0_u64;
+    for capability in capabilities {
+        match capability["outcome"].as_str().expect("capability outcome") {
+            "partially_supported" => partially_supported += 1,
+            "unsupported" => unsupported += 1,
+            "supported" => supported += 1,
+            other => panic!("unexpected retained capability outcome: {other}"),
+        }
+    }
+    for assertion in capabilities.iter().flat_map(|capability| {
+        capability["assertions"]
+            .as_array()
+            .expect("retained assertions")
+    }) {
+        match assertion["status"].as_str().expect("assertion status") {
+            "passed" => passed += 1,
+            "failed" => failed += 1,
+            "not_applicable" => not_applicable += 1,
+            other => panic!("unexpected retained assertion status: {other}"),
+        }
+    }
+    let derived_counts = (capabilities.len() as u64, passed, failed, not_applicable);
+    let summary_counts = (
+        summary["result"]["capabilities"]
+            .as_u64()
+            .expect("summary capability count"),
+        summary["result"]["assertions_passed"]
+            .as_u64()
+            .expect("summary passed count"),
+        summary["result"]["assertions_failed"]
+            .as_u64()
+            .expect("summary failed count"),
+        summary["result"]["assertions_not_applicable"]
+            .as_u64()
+            .expect("summary not-applicable count"),
     );
+    let derived_outcomes = (partially_supported, unsupported, supported);
+    let summary_outcomes = (
+        summary["result"]["partially_supported"]
+            .as_u64()
+            .expect("summary partially-supported count"),
+        summary["result"]["unsupported"]
+            .as_u64()
+            .expect("summary unsupported count"),
+        summary["result"]["supported"]
+            .as_u64()
+            .expect("summary supported count"),
+    );
+    assert_eq!(derived_counts, expected_counts);
+    assert_eq!(summary_counts, derived_counts);
+    assert_eq!(derived_outcomes, expected_outcomes);
+    assert_eq!(summary_outcomes, derived_outcomes);
     assert_eq!(
         summary["identities"]["repository_source_commit"],
-        "03a8742bc655285c1ee580e0cd4b0b61ad78e6ea"
+        expected_source_commit
     );
+
+    (summary, manifest)
 }
 
 #[test]

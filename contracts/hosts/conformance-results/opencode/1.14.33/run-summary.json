@@ -1,0 +1,67 @@
+{
+  "schema_version": "forge_host_conformance_run_summary_v1",
+  "recorded_on": "2026-08-29",
+  "authority": "same_owner_cooperative_candidate_only",
+  "identities": {
+    "opencode_cli_declared": "1.14.33",
+    "opencode_wrapper_sha256": "sha256:20de2c645b49ea89e8e9448932e8fcdfadf978f2b00bb661d6f6b1fbadb8a2a7",
+    "opencode_executable_sha256": "sha256:4d50477624aca51649f703bbc90183c9e402f0d8157fc9ef6fd568c1481f74d9",
+    "model_declared": "zai-coding-plan/glm-5.3",
+    "adapter_id": "forge.closed-observation-bridge",
+    "adapter_version": "1.0.0",
+    "bridge_source_sha256": "sha256:7b29108f3c19789ad24394a1e3512aaef77d11100190589a66c277292f6e1a33",
+    "closed_observation_sha256": "sha256:5b2d561653c2b4b9f0d2385b5bd4f7abf9392d12a3f949429a3460e921ca3cd0",
+    "forge_package_measured": "forge-core-cli",
+    "forge_version_measured": "0.12.0-alpha.47",
+    "forge_executable_sha256": "sha256:8b0cf2cb68278480138afb34ad176c18134df38978b157b65fffe6638e7d109c",
+    "repository_source_commit": "f08e7d33a7b23c90db105ebc4268be357bf3241d",
+    "source_to_binary_binding": "installed_package_version_and_executable_hash_only",
+    "platform_label_declared": "windows-10.0.26200-x86_64",
+    "environment_label_declared": "opencode-1.14.33-zai-coding-plan-glm-5.3"
+  },
+  "journey": {
+    "external_work_item": "https://github.com/DanielCarva1/forge-method-core/issues/67",
+    "work_focus_id": "focus.issue-67.opencode-host-conformance",
+    "opencode_session": "fresh_same_chat_with_followup",
+    "canonical_root": {
+      "kind": "native_windows",
+      "resolved_path_sha256": "sha256:5831c599a910ff912f8e91ec180e4a2bbffb4504faa67dd7551700bc16857d14",
+      "windows_to_wsl_bridge": "not_applicable"
+    },
+    "read_only_state_digest": {
+      "before": "sha256:4eb778e0fc604f7402d43cd4d5fd02706b2f4d9cf827fb3db328ec3a53b764e7",
+      "after": "sha256:4eb778e0fc604f7402d43cd4d5fd02706b2f4d9cf827fb3db328ec3a53b764e7",
+      "equal": true
+    },
+    "valid_evidence_record_digest": "sha256:3de832f7db06edb702c4bb1f5a61c945526fb58512fe27653fde79030d6641cc",
+    "rejected_evidence_record_digest": "sha256:f58ba6a796a48bd437afb52881c70bc75035e1b019314d1ec26c027e8a207c8f",
+    "isolated_work_by_host": "not_completed",
+    "governed_promotion_by_host": "not_exercised",
+    "replacement_agent_recovery": "reconstructed_after_followup"
+  },
+  "result": {
+    "overall": "candidate",
+    "capabilities": 8,
+    "partially_supported": 6,
+    "unsupported": 2,
+    "supported": 0,
+    "assertions_passed": 15,
+    "assertions_failed": 8,
+    "assertions_not_applicable": 1,
+    "integrity_proves_host_authenticity": false
+  },
+  "observed_ux_limits": [
+    "initial_unverified_refusal",
+    "explicit_model_required_after_default_model_timeout",
+    "bounded_tool_call_limit_not_honored",
+    "broad_repository_scan_before_resume",
+    "isolated_work_and_promotion_not_exercised"
+  ],
+  "bundle": {
+    "relative_path": "bundle",
+    "bundle_digest": "sha256:2cb146f8765ac597a709be95e1e7a723727b652d6d71d1abb4d9f0c54098bb8b",
+    "bundle_integrity_verification": "passed",
+    "verification_scope": "closed_bundle_structure_completeness_derived_result_and_digests_only",
+    "reported_host_actions_verified": false
+  }
+}

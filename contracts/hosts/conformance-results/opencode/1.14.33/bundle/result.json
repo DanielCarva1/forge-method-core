@@ -1,0 +1,328 @@
+{
+  "schema_version": "solo_host_conformance_v1",
+  "bindings": {
+    "declared": {
+      "host_id": "opencode",
+      "host_version": "1.14.33",
+      "adapter_id": "forge.closed-observation-bridge",
+      "adapter_version": "1.0.0",
+      "platform_label": "windows-10.0.26200-x86_64",
+      "environment_label": "opencode-1.14.33-zai-coding-plan-glm-5.3"
+    },
+    "observed": {
+      "forge_package": "forge-core-cli",
+      "forge_version": "0.12.0-alpha.47",
+      "forge_executable_sha256": "sha256:8b0cf2cb68278480138afb34ad176c18134df38978b157b65fffe6638e7d109c",
+      "platform": {
+        "os": "windows",
+        "architecture": "x86_64"
+      },
+      "canonical_root": {
+        "resolved_path_sha256": "sha256:5831c599a910ff912f8e91ec180e4a2bbffb4504faa67dd7551700bc16857d14",
+        "kind": "native_or_other",
+        "exists": true,
+        "is_directory": true,
+        "windows_to_wsl_bridge": "not_applicable"
+      },
+      "adapter_invocation": {
+        "executable": {
+          "file_name": "python.exe",
+          "sha256": "sha256:4d6f5f81a4bca11191c4c7c6b43632694d0a4ce74e068619d8fdc161d469859a",
+          "byte_length": 104952
+        },
+        "arguments": [
+          {
+            "position": 0,
+            "kind": "file",
+            "safe_display": "forge-closed-observation-bridge-v1.py",
+            "argument_sha256": "sha256:81e80f9f4fcd0ed6a6c194f64e73ef2d979c20ba6095681e5f4008535788fd4a",
+            "file_identity": {
+              "file_name": "forge-closed-observation-bridge-v1.py",
+              "sha256": "sha256:7b29108f3c19789ad24394a1e3512aaef77d11100190589a66c277292f6e1a33",
+              "byte_length": 4914
+            }
+          },
+          {
+            "position": 1,
+            "kind": "file",
+            "safe_display": "rd003-opencode-1.14.33-observation.json",
+            "argument_sha256": "sha256:8e7a542ec66f0f45cc64468acdf6a93a67e19c5b0e79ac2d3035baf5c0f82e8e",
+            "file_identity": {
+              "file_name": "rd003-opencode-1.14.33-observation.json",
+              "sha256": "sha256:5b2d561653c2b4b9f0d2385b5bd4f7abf9392d12a3f949429a3460e921ca3cd0",
+              "byte_length": 3963
+            }
+          }
+        ],
+        "argv_sha256": "sha256:8df192b663aef23a6b1b016eeea96a0be8e87949ccb7db199c4d94aaa6d4990a",
+        "timeout_ms": 30000,
+        "output_limit_bytes": 4194304
+      }
+    },
+    "corpus_sha256": "sha256:860470b2df3cfa5cdb267a251750327f4a5bdb28327c6ccc7b6f3fef35c55647"
+  },
+  "capabilities": [
+    {
+      "capability": "activation",
+      "outcome": "partially_supported",
+      "assertions": [
+        {
+          "assertion": "forge_invoked_by_argv",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "one_chat_activation_observed",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "versioned_json_preserved",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        }
+      ],
+      "gaps": [
+        {
+          "kind": "invocation_unavailable",
+          "code": "initial_activation_required_human_correction"
+        },
+        {
+          "kind": "native_authenticity_unavailable",
+          "code": "forge_native_verifier_unavailable"
+        }
+      ],
+      "artifact_paths": [
+        "artifacts/activation.json"
+      ]
+    },
+    {
+      "capability": "canonical_project_root",
+      "outcome": "partially_supported",
+      "assertions": [
+        {
+          "assertion": "exact_existing_root_resolved",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "ambiguous_roots_rejected",
+          "status": "failed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "windows_wsl_bridge_applied_only_when_required",
+          "status": "not_applicable",
+          "proof_state": "forge_observed"
+        }
+      ],
+      "gaps": [
+        {
+          "kind": "canonical_root_unavailable",
+          "code": "ambiguous_root_rejection_not_exercised_opencode"
+        },
+        {
+          "kind": "native_authenticity_unavailable",
+          "code": "forge_native_verifier_unavailable"
+        }
+      ],
+      "artifact_paths": [
+        "artifacts/canonical-project-root.json"
+      ]
+    },
+    {
+      "capability": "read_only_guidance",
+      "outcome": "partially_supported",
+      "assertions": [
+        {
+          "assertion": "before_after_state_equal",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "guidance_is_plain_language",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "no_hidden_recovery_or_write",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        }
+      ],
+      "gaps": [
+        {
+          "kind": "native_authenticity_unavailable",
+          "code": "forge_native_verifier_unavailable"
+        }
+      ],
+      "artifact_paths": [
+        "artifacts/read-only-guidance.json"
+      ]
+    },
+    {
+      "capability": "conversation_derived_intent",
+      "outcome": "partially_supported",
+      "assertions": [
+        {
+          "assertion": "human_message_source_preserved",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "agent_proposal_separated",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "accepted_intent_read_back",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        }
+      ],
+      "gaps": [
+        {
+          "kind": "native_authenticity_unavailable",
+          "code": "forge_native_verifier_unavailable"
+        }
+      ],
+      "artifact_paths": [
+        "artifacts/conversation-derived-intent.json"
+      ]
+    },
+    {
+      "capability": "cooperative_evidence",
+      "outcome": "partially_supported",
+      "assertions": [
+        {
+          "assertion": "evidence_source_preserved",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "admission_result_read_back",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "rejected_evidence_stays_rejected",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        }
+      ],
+      "gaps": [
+        {
+          "kind": "native_authenticity_unavailable",
+          "code": "forge_native_verifier_unavailable"
+        }
+      ],
+      "artifact_paths": [
+        "artifacts/cooperative-evidence.json"
+      ]
+    },
+    {
+      "capability": "isolated_work",
+      "outcome": "unsupported",
+      "assertions": [
+        {
+          "assertion": "isolation_exists_and_is_linked",
+          "status": "failed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "ownership_mismatch_stops",
+          "status": "failed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "missing_isolation_stops",
+          "status": "failed",
+          "proof_state": "adapter_reported_unverified"
+        }
+      ],
+      "gaps": [
+        {
+          "kind": "isolation_unavailable",
+          "code": "isolation_not_used_by_opencode_session"
+        },
+        {
+          "kind": "isolation_unavailable",
+          "code": "missing_isolation_rejection_not_exercised_opencode"
+        },
+        {
+          "kind": "isolation_unavailable",
+          "code": "ownership_mismatch_not_exercised_opencode"
+        }
+      ],
+      "artifact_paths": [
+        "artifacts/isolated-work.json"
+      ]
+    },
+    {
+      "capability": "governed_promotion",
+      "outcome": "unsupported",
+      "assertions": [
+        {
+          "assertion": "preview_bound_to_exact_change",
+          "status": "failed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "apply_read_back_matches",
+          "status": "failed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "exact_retry_is_idempotent",
+          "status": "failed",
+          "proof_state": "adapter_reported_unverified"
+        }
+      ],
+      "gaps": [
+        {
+          "kind": "promotion_unavailable",
+          "code": "governed_promotion_not_exercised_opencode"
+        }
+      ],
+      "artifact_paths": [
+        "artifacts/governed-promotion.json"
+      ]
+    },
+    {
+      "capability": "replacement_agent_recovery",
+      "outcome": "partially_supported",
+      "assertions": [
+        {
+          "assertion": "fresh_agent_has_no_transcript_dependency",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "durable_state_reconstructed",
+          "status": "passed",
+          "proof_state": "adapter_reported_unverified"
+        },
+        {
+          "assertion": "recovery_ranked_before_new_work",
+          "status": "failed",
+          "proof_state": "adapter_reported_unverified"
+        }
+      ],
+      "gaps": [
+        {
+          "kind": "recovery_unavailable",
+          "code": "recovery_required_followup_and_broad_preflight"
+        },
+        {
+          "kind": "native_authenticity_unavailable",
+          "code": "forge_native_verifier_unavailable"
+        }
+      ],
+      "artifact_paths": [
+        "artifacts/replacement-agent-recovery.json"
+      ]
+    }
+  ],
+  "integrity_proves_authenticity": false,
+  "authenticity_note": "Forge verified this bundle's structure, completeness, and digests. This build has no trusted host-native proof verifier, so adapter-reported success remains unverified and can be at most partially_supported. Integrity is not proof that the host really performed an action."
+}
