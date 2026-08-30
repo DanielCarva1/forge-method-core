@@ -23,8 +23,11 @@ fn repo_root() -> PathBuf {
 }
 
 fn fresh_parent(label: &str) -> PathBuf {
-    let path =
-        std::env::temp_dir().join(format!("mcp-snapshot-cli-{label}-{}", std::process::id()));
+    let temporary_directory = std::env::temp_dir();
+    #[cfg(target_os = "macos")]
+    let temporary_directory =
+        fs::canonicalize(temporary_directory).expect("physical temporary directory");
+    let path = temporary_directory.join(format!("mcp-snapshot-cli-{label}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&path);
     fs::create_dir_all(&path).expect("fresh parent");
     path

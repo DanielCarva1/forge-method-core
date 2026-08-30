@@ -24,8 +24,15 @@ impl FreshParent {
         // foreign git repo, and target/ is inside the forge core repo — so the
         // test's sibling sidecar would be rejected. std::env::temp_dir()
         // returns a Windows path (D:\Temp\...) on this host, which avoids the
-        // WSL→Windows /tmp mangling the old DD46 comment warned about.
-        let path = std::env::temp_dir().join(format!(
+        // WSL→Windows /tmp mangling the old DD46 comment warned about. On
+        // macOS, canonicalize the system-provided /var alias so path-security
+        // checks receive its physical /private/var path.
+        #[cfg(target_os = "macos")]
+        let temp_dir =
+            fs::canonicalize(std::env::temp_dir()).expect("canonicalize test temporary directory");
+        #[cfg(not(target_os = "macos"))]
+        let temp_dir = std::env::temp_dir();
+        let path = temp_dir.join(format!(
             "project-init-e2e-{label}-{}-{n}",
             std::process::id()
         ));

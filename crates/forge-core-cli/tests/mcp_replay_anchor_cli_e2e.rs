@@ -15,7 +15,12 @@ fn fixture() -> (PathBuf, PathBuf, PathBuf, PathBuf) {
         .duration_since(UNIX_EPOCH)
         .expect("time after epoch")
         .as_nanos();
-    let parent = std::env::temp_dir().join(format!(
+    let temporary_directory = std::env::temp_dir();
+    #[cfg(target_os = "macos")]
+    let temporary_directory = temporary_directory
+        .canonicalize()
+        .expect("physical temporary directory");
+    let parent = temporary_directory.join(format!(
         "forge-mcp-replay-anchor-{}-{unique}",
         std::process::id()
     ));

@@ -32,12 +32,24 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+fn physical_temporary_directory() -> PathBuf {
+    let temporary_directory = std::env::temp_dir();
+    #[cfg(target_os = "macos")]
+    {
+        fs::canonicalize(temporary_directory).expect("physical temporary directory")
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        temporary_directory
+    }
+}
+
 fn fresh_parent(label: &str) -> PathBuf {
     let unique = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("time after epoch")
         .as_nanos();
-    let path = std::env::temp_dir().join(format!(
+    let path = physical_temporary_directory().join(format!(
         "forge-mcp-real-client-{label}-{}-{unique}",
         std::process::id()
     ));
