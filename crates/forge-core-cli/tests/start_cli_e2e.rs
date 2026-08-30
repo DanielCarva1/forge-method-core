@@ -53,9 +53,15 @@ impl FreshParent {
         // foreign git repo, and target/ is inside the forge core repo — so the
         // test's bootstrap sidecar would be rejected. std::env::temp_dir()
         // returns a Windows path (D:\Temp\...) on this host, which avoids the
-        // WSL→Windows /tmp mangling the old DD46 comment warned about.
+        // WSL→Windows /tmp mangling the old DD46 comment warned about. On
+        // macOS, use the physical /private/var path so canonical project roots
+        // and no-follow storage checks observe the same fixture identity.
+        let temporary_directory = std::env::temp_dir();
+        #[cfg(target_os = "macos")]
+        let temporary_directory = fs::canonicalize(temporary_directory)
+            .expect("canonicalize start test temporary directory");
         let path =
-            std::env::temp_dir().join(format!("start-e2e-{label}-{}-{n}", std::process::id()));
+            temporary_directory.join(format!("start-e2e-{label}-{}-{n}", std::process::id()));
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).expect("create fresh parent");
         Self { path }
