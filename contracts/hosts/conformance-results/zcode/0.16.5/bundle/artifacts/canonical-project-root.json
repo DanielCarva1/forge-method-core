@@ -1,0 +1,32 @@
+{
+  "case_id": "canonical-project-root",
+  "assertions": {
+    "ambiguous_roots_rejected": {
+      "passed": false,
+      "native_proof_claim": null
+    },
+    "exact_existing_root_resolved": {
+      "passed": false,
+      "native_proof_claim": null
+    },
+    "windows_wsl_bridge_applied_only_when_required": {
+      "passed": false,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [
+    {
+      "kind": "adapter_failure",
+      "code": "zcode_cli_unauthorized_before_first_turn"
+    }
+  ],
+  "evidence": {
+    "fact_codes": [
+      "capability_not_started",
+      "headless_prompt_reached_model_endpoint",
+      "isolated_storage_used",
+      "model_request_unauthorized",
+      "zcode_cli_0_16_5_invoked"
+    ]
+  }
+}

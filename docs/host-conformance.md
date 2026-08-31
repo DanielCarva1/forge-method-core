@@ -161,3 +161,13 @@ activation, read-only guidance, accepted-intent recovery, and durable recovery
 in that exact environment, but it did not exercise cooperative evidence,
 isolated work, or governed promotion. The retained bundle records those missing
 parts as typed gaps instead of treating an incomplete journey as support.
+
+The current retained ZCode result covers the public CLI `0.16.5` bundled with
+ZCode Desktop `3.10.1` (file version `3.10.1.6272`) on native Windows. It is
+documented at
+`contracts/hosts/conformance-results/zcode/0.16.5/README.md`. The isolated CLI
+reached the model service but was unauthorized before the first agent turn, so
+all eight capabilities are `unsupported` with one typed gap. No GUI automation,
+private hook, persistent adapter, credential, or raw CLI output was retained.
+The result proves that the generic protocol can preserve this failure honestly;
+it does not qualify ZCode as supported.

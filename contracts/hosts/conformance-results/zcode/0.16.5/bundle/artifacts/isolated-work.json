@@ -1,0 +1,32 @@
+{
+  "case_id": "isolated-work",
+  "assertions": {
+    "isolation_exists_and_is_linked": {
+      "passed": false,
+      "native_proof_claim": null
+    },
+    "missing_isolation_stops": {
+      "passed": false,
+      "native_proof_claim": null
+    },
+    "ownership_mismatch_stops": {
+      "passed": false,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [
+    {
+      "kind": "adapter_failure",
+      "code": "zcode_cli_unauthorized_before_first_turn"
+    }
+  ],
+  "evidence": {
+    "fact_codes": [
+      "capability_not_started",
+      "headless_prompt_reached_model_endpoint",
+      "isolated_storage_used",
+      "model_request_unauthorized",
+      "zcode_cli_0_16_5_invoked"
+    ]
+  }
+}

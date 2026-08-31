@@ -69,8 +69,9 @@ problem_statement: >-
   explain the next action yet blocks before durably accepting the objective,
   admitting ordinary development evidence, or promoting agent changes. The
   human is exposed to broker and registry concerns that belong to later
-  multi-owner or enterprise trust boundaries. Named integrations such as
-  Codex, ZCode, OpenCode, Claude, Pi.dev, and Cursor are only candidates. The
+  multi-owner or enterprise trust boundaries. Codex and ZCode are the initial
+  Windows release hosts. OpenCode, Claude, Pi.dev, Cursor, and other hosts remain
+  future open-world candidates rather than blockers for that first release. The
   current dogfood runtime is installed natively on Windows, while WSL remains a
   conditional project-root and runner boundary. The current CI presentation can
   report overall success while important platform or journey jobs fail. This
@@ -102,6 +103,7 @@ success_definition:
   initial_host_candidates:
     - "Codex"
     - "ZCode"
+  future_host_candidates:
     - "OpenCode"
     - "Claude"
     - "Pi.dev"
@@ -493,6 +495,7 @@ implementation_decisions:
     initial_candidates:
       - "Codex"
       - "ZCode"
+    future_candidates:
       - "OpenCode"
       - "Claude"
       - "Pi.dev"
@@ -547,11 +550,13 @@ implementation_decisions:
         Any host can execute the same clean packaged solo journey and produce a
         capability-scoped evidence bundle without Forge core changes.
     - id: "SD-06"
-      title: "Conform the initial host candidates"
+      title: "Conform the initial Windows hosts"
       outcome: >-
-        Codex, ZCode, OpenCode, Claude, Pi.dev, and Cursor each complete the
-        public corpus or receive an honest typed gap for every unsupported
-        capability.
+        Codex and ZCode each complete the public corpus on native Windows and
+        provide evidence for every capability required by the initial product
+        journey. Typed gaps remain honest results but keep release qualification
+        incomplete when they affect a required capability. Other hosts can add
+        versioned evidence later without changing Forge core.
     - id: "SD-07"
       title: "Gate the packaged journey"
       outcome: >-

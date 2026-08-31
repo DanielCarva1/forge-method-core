@@ -130,3 +130,57 @@ host_support_matrix:
             version: "0.80.2"
           evidence_ref: "contracts/hosts/conformance-results/pidev/0.80.2/README.md"
           evidence_digest: "sha256:aa8e3a7c5fb2a56363aaec1fac7c29e2dcf070227c89c48476c72ade241bd21b"
+    - runtime:
+        kind: "zcode"
+        version: "0.16.5"
+      status: "unsupported"
+      recognition:
+        status: "candidate"
+        evidence: null
+      installability:
+        status: "candidate"
+        evidence: null
+      read_only_mcp:
+        status: "unknown"
+        evidence: null
+      native_human_origin_assurance:
+        status: "unknown"
+        evidence: null
+      governed_mutation:
+        status: "unknown"
+        evidence: null
+      conformance:
+        status: "unsupported"
+        evidence:
+          evidence_id: "evidence.zcode-0.16.5.conformance-result"
+          observed_runtime:
+            kind: "zcode"
+            version: "0.16.5"
+          evidence_ref: "contracts/hosts/conformance-results/zcode/0.16.5/bundle/result.json"
+          evidence_digest: "sha256:560be58e80eadc91322f92cb480abb962010f0f4329eb69bf502d31b96ca5fcd"
+      release_asset:
+        status: "unknown"
+        evidence: null
+      field_evidence:
+        status: "unsupported"
+        evidence:
+          evidence_id: "evidence.zcode-0.16.5.run-summary"
+          observed_runtime:
+            kind: "zcode"
+            version: "0.16.5"
+          evidence_ref: "contracts/hosts/conformance-results/zcode/0.16.5/run-summary.json"
+          evidence_digest: "sha256:753bdf7940918cb3069cd8896569cc7bb4883b30d8df4c21357c73bc46e9aaa8"
+      known_limits:
+        status: "known"
+        limits:
+          - "isolated_cli_authentication_unavailable"
+          - "journey_stopped_before_first_agent_turn"
+          - "advertised_max_turns_option_rejected_by_cli_parser"
+          - "no_public_cli_capability_observed"
+        disclosure_evidence:
+          evidence_id: "evidence.zcode-0.16.5.known-limits"
+          observed_runtime:
+            kind: "zcode"
+            version: "0.16.5"
+          evidence_ref: "contracts/hosts/conformance-results/zcode/0.16.5/README.md"
+          evidence_digest: "sha256:09da2d10a152464efbb32fe0d218afcc2603a809fc162a9db764964fee2de68d"

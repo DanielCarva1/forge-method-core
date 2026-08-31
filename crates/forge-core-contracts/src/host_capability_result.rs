@@ -589,16 +589,7 @@ fn validate_stable_id(
     field: &'static str,
     stable_id: &StableId,
 ) -> Result<(), HostCapabilityResultValidationError> {
-    let value = &stable_id.0;
-    let valid = !value.is_empty()
-        && value.len() <= 128
-        && value.bytes().enumerate().all(|(index, byte)| {
-            byte.is_ascii_lowercase()
-                || byte.is_ascii_digit()
-                || matches!(byte, b'.' | b'_' | b'-')
-                || (index > 0 && byte == b':')
-        });
-    if valid {
+    if crate::common::is_valid_stable_id(stable_id) {
         Ok(())
     } else {
         Err(HostCapabilityResultValidationError::InvalidStableId(field))

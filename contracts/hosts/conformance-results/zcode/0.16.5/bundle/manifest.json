@@ -1,0 +1,133 @@
+{
+  "schema_version": "solo_host_conformance_bundle_v1",
+  "bindings": {
+    "declared": {
+      "host_id": "zcode",
+      "host_version": "0.16.5",
+      "adapter_id": "forge.closed-observation-bridge",
+      "adapter_version": "1.0.0",
+      "platform_label": "windows-10.0.26200-x86_64",
+      "environment_label": "zcode-desktop-3.10.1.6272-cli-0.16.5-isolated-storage"
+    },
+    "observed": {
+      "forge_package": "forge-core-cli",
+      "forge_version": "0.12.0-alpha.47",
+      "forge_executable_sha256": "sha256:8b0cf2cb68278480138afb34ad176c18134df38978b157b65fffe6638e7d109c",
+      "platform": {
+        "os": "windows",
+        "architecture": "x86_64"
+      },
+      "canonical_root": {
+        "resolved_path_sha256": "sha256:e156b4b0fccaddf86ef6f449396ac3cb7f12962a5e50a1342beff7ad1aaa8054",
+        "kind": "native_or_other",
+        "exists": true,
+        "is_directory": true,
+        "windows_to_wsl_bridge": "not_applicable"
+      },
+      "adapter_invocation": {
+        "executable": {
+          "file_name": "python.exe",
+          "sha256": "sha256:4d6f5f81a4bca11191c4c7c6b43632694d0a4ce74e068619d8fdc161d469859a",
+          "byte_length": 104952
+        },
+        "arguments": [
+          {
+            "position": 0,
+            "kind": "file",
+            "safe_display": "forge-closed-observation-bridge-v1.py",
+            "argument_sha256": "sha256:9987ce5d3349cc9aa13ab0aa7c2d367a4f9fe2e3dcd27a0a03af2d7c22f0cfb9",
+            "file_identity": {
+              "file_name": "forge-closed-observation-bridge-v1.py",
+              "sha256": "sha256:901fb38415d4a2ac6d60d4a6523294ba1a4c7aa743f612cdc4a2e7270ab25e00",
+              "byte_length": 338
+            }
+          },
+          {
+            "position": 1,
+            "kind": "file",
+            "safe_display": "rd005-zcode-0.16.5-observation.json",
+            "argument_sha256": "sha256:69604ae140d9d21b9c47ebe3987d8c494fbf3b39befba12c6478ab3a68180fd7",
+            "file_identity": {
+              "file_name": "rd005-zcode-0.16.5-observation.json",
+              "sha256": "sha256:b998062c34c6cdb731fc6f8c246e854b8168fa292415a96425262679f7d3559b",
+              "byte_length": 7039
+            }
+          }
+        ],
+        "argv_sha256": "sha256:e313196f871e086ab151cfb565de76b1e782b75b14b770cbc3f1055d33046a07",
+        "timeout_ms": 30000,
+        "output_limit_bytes": 4194304
+      }
+    },
+    "corpus_sha256": "sha256:860470b2df3cfa5cdb267a251750327f4a5bdb28327c6ccc7b6f3fef35c55647"
+  },
+  "bundle_digest": "sha256:88a098962650148ba1fc1d42c4a0ca5d092f9d824f9df2246200855ee9af59be",
+  "files": [
+    {
+      "path": "artifacts/activation.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:a6524e10d7ec871453802afdf3fe38fba42322b26dfaf7174a4dc2f9dc7540b3",
+      "byte_length": 690
+    },
+    {
+      "path": "artifacts/canonical-project-root.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:731809302ccfcf11dcdd0cc11acd7a6633e457a86437390dea855ca390d7f19e",
+      "byte_length": 726
+    },
+    {
+      "path": "artifacts/conversation-derived-intent.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:54e08f88accd58d8182a8df96cbdff338711ebfa1e0091073abb1afae9743c47",
+      "byte_length": 713
+    },
+    {
+      "path": "artifacts/cooperative-evidence.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:6062d11a10e61e043218d5dd398a1a03fcc07d6ea880cc8c135f87cb088e5153",
+      "byte_length": 710
+    },
+    {
+      "path": "artifacts/governed-promotion.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:5ff7116b232ad41c9962f02b0b13aab43ce71095cd0f5103cb2e1d8eaea7f5bb",
+      "byte_length": 702
+    },
+    {
+      "path": "artifacts/isolated-work.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:e7af32d5cb50de7c6817d6576df7ddca2624651a9a8b49da3dd08f24c709d339",
+      "byte_length": 697
+    },
+    {
+      "path": "artifacts/read-only-guidance.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:c18e9bbeaaba60ed5d575d5fc26513214dcca864d60679284bc233c2b0d81564",
+      "byte_length": 702
+    },
+    {
+      "path": "artifacts/replacement-agent-recovery.json",
+      "role": "evidence_artifact",
+      "sha256": "sha256:b3ff37778915613781926f1d102bebceb516891390e514a1ef8fa7ea7d20d82b",
+      "byte_length": 731
+    },
+    {
+      "path": "request.json",
+      "role": "protocol_request",
+      "sha256": "sha256:e13cbdad01b400b6b55ee8b1fc242b76969d49c9692b392048031d669a2c9d87",
+      "byte_length": 5599
+    },
+    {
+      "path": "response.json",
+      "role": "protocol_response",
+      "sha256": "sha256:b48b25e97f6e926b75682ed84ee06e4cd08c378bbab6ff1b9f0a14dea9352e62",
+      "byte_length": 9220
+    },
+    {
+      "path": "result.json",
+      "role": "derived_result",
+      "sha256": "sha256:560be58e80eadc91322f92cb480abb962010f0f4329eb69bf502d31b96ca5fcd",
+      "byte_length": 9428
+    }
+  ]
+}

@@ -429,6 +429,97 @@ fn retained_current_pidev_run_summary_matches_bundle_manifest_and_result() {
     }
 }
 
+#[test]
+fn retained_current_zcode_run_summary_matches_bundle_manifest_and_result() {
+    let retained = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../contracts/hosts/conformance-results/zcode/0.16.5");
+    let (summary, manifest) = assert_retained_run_matches_bundle(
+        &retained,
+        "/identities/zcode_cli_declared",
+        (8, 0, 23, 1),
+        (0, 8, 0),
+        "776c5f3fcf462f523e194fa9a5e82c1381bb0d41",
+    );
+
+    assert_eq!(
+        manifest
+            .pointer("/bindings/declared/host_id")
+            .and_then(|value| value.as_str()),
+        Some("zcode"),
+        "retained ZCode result must use the canonical zcode host id"
+    );
+
+    assert_eq!(
+        summary["identities"]["zcode_desktop_declared"],
+        "3.10.1.6272"
+    );
+    assert_eq!(summary["identities"]["zcode_cli_declared"], "0.16.5");
+    assert_eq!(
+        summary["identities"]["zcode_desktop_sha256"],
+        "sha256:e7c4fa61d2142c36b9b2720e6ebfd613173261de12c42375abde1936df08af3c"
+    );
+    assert_eq!(
+        summary["identities"]["zcode_cli_sha256"],
+        "sha256:3597160465b67da248fa3fb919920ca30d4e093003a4d70cde2a2e33903cbabc"
+    );
+    assert_eq!(
+        summary["retention"]["temporary_material_cleanup"],
+        "completed"
+    );
+    assert_eq!(summary["retention"]["temporary_roots_removed"], 4);
+    assert_eq!(summary["retention"]["temporary_bytes_removed"], 38_097_147);
+
+    let environment_label = manifest
+        .pointer("/bindings/declared/environment_label")
+        .and_then(serde_json::Value::as_str)
+        .expect("declared environment label");
+    assert_eq!(
+        environment_label,
+        "zcode-desktop-3.10.1.6272-cli-0.16.5-isolated-storage"
+    );
+
+    for (summary_path, argument_index) in [
+        ("/identities/bridge_source_sha256", 0_usize),
+        ("/identities/closed_observation_sha256", 1_usize),
+    ] {
+        assert_eq!(
+            summary.pointer(summary_path),
+            manifest.pointer(&format!(
+                "/bindings/observed/adapter_invocation/arguments/{argument_index}/file_identity/sha256"
+            )),
+            "retained bridge input {summary_path} must match the measured file"
+        );
+    }
+
+    let read_json = |path: &Path| -> serde_json::Value {
+        serde_json::from_slice(&fs::read(path).expect("read retained ZCode JSON"))
+            .expect("parse retained ZCode JSON")
+    };
+    let result = read_json(&retained.join("bundle/result.json"));
+    for capability in result["capabilities"]
+        .as_array()
+        .expect("retained ZCode capabilities")
+    {
+        assert_eq!(capability["outcome"], "unsupported");
+        let gaps = capability["gaps"]
+            .as_array()
+            .expect("retained ZCode capability gaps");
+        assert_eq!(gaps.len(), 1);
+        assert_eq!(gaps[0]["kind"], "adapter_failure");
+        assert_eq!(gaps[0]["code"], "zcode_cli_unauthorized_before_first_turn");
+
+        let artifact_path = capability["artifact_paths"][0]
+            .as_str()
+            .expect("retained ZCode artifact path");
+        let artifact = read_json(&retained.join("bundle").join(artifact_path));
+        assert!(artifact["evidence"]["fact_codes"]
+            .as_array()
+            .expect("retained ZCode fact codes")
+            .iter()
+            .any(|fact| fact == "capability_not_started"));
+    }
+}
+
 type AssertionCounts = (u64, u64, u64, u64);
 type OutcomeCounts = (u64, u64, u64);
 

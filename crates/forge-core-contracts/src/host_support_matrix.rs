@@ -7,7 +7,7 @@
 //! particular, serializing this document cannot grant support, release,
 //! install, mutation, signing, trust, or host-selection authority.
 
-use crate::RuntimeKind;
+use crate::StableId;
 use schemars::JsonSchema;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::collections::BTreeSet;
@@ -60,7 +60,7 @@ impl HostSupportMatrixDocument {
 pub struct HostSupportMatrix {
     pub matrix_id: String,
     pub authority: HostSupportMatrixAuthority,
-    pub selected_host: Option<RuntimeKind>,
+    pub selected_host: Option<StableId>,
     pub serialization_boundary: SerializationAuthorityBoundary,
     pub records: Vec<HostSupportRecord>,
 }
@@ -83,7 +83,7 @@ impl HostSupportMatrix {
         let mut targets = BTreeSet::new();
         for record in &self.records {
             record.validate()?;
-            let key = format!("{:?}\u{0}{}", record.runtime.kind, record.runtime.version);
+            let key = format!("{}\u{0}{}", record.runtime.kind.0, record.runtime.version);
             if !targets.insert(key) {
                 return Err(HostSupportMatrixValidationError::DuplicateRuntime);
             }
@@ -207,17 +207,24 @@ impl HostSupportRecord {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ExactRuntime {
-    pub kind: RuntimeKind,
+    pub kind: StableId,
     pub version: String,
 }
 
 impl ExactRuntime {
     fn validate(&self) -> Result<(), HostSupportMatrixValidationError> {
+        if !is_valid_runtime_kind(&self.kind) {
+            return Err(HostSupportMatrixValidationError::InvalidRuntimeKind);
+        }
         if !crate::is_exact_host_version(&self.version) {
             return Err(HostSupportMatrixValidationError::NonExactVersion);
         }
         Ok(())
     }
+}
+
+fn is_valid_runtime_kind(kind: &StableId) -> bool {
+    crate::common::is_valid_stable_id(kind)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -347,6 +354,7 @@ pub enum HostSupportMatrixValidationError {
     SelectedHostMustBeNone,
     SerializationAuthority,
     DuplicateRuntime,
+    InvalidRuntimeKind,
     NonExactVersion,
     SupportedWithoutDimensionEvidence,
     SupportedWithoutCompleteEvidence,
@@ -367,6 +375,9 @@ impl fmt::Display for HostSupportMatrixValidationError {
             Self::SelectedHostMustBeNone => "host support matrix selected_host must be none",
             Self::SerializationAuthority => "serialization must not grant host authority",
             Self::DuplicateRuntime => "host support matrix has a duplicate exact runtime",
+            Self::InvalidRuntimeKind => {
+                "runtime kind must be a non-empty stable lowercase identifier"
+            }
             Self::NonExactVersion => "runtime version must be an exact version",
             Self::SupportedWithoutDimensionEvidence => {
                 "a supported dimension requires exact host evidence"
@@ -395,7 +406,7 @@ mod tests {
 
     fn target() -> ExactRuntime {
         ExactRuntime {
-            kind: RuntimeKind::Claude,
+            kind: StableId("claude".to_owned()),
             version: "1.2.3".to_owned(),
         }
     }
@@ -503,6 +514,29 @@ mod tests {
     }
 
     #[test]
+    fn runtime_kind_is_open_world_but_stable() {
+        for kind in ["zcode", "future.host", "vendor:agent-2"] {
+            let runtime = ExactRuntime {
+                kind: StableId(kind.to_owned()),
+                version: "1.2.3".to_owned(),
+            };
+            assert_eq!(runtime.validate(), Ok(()), "{kind} should be accepted");
+        }
+
+        for kind in ["", "ZCode", " spaced ", ":leading"] {
+            let runtime = ExactRuntime {
+                kind: StableId(kind.to_owned()),
+                version: "1.2.3".to_owned(),
+            };
+            assert_eq!(
+                runtime.validate(),
+                Err(HostSupportMatrixValidationError::InvalidRuntimeKind),
+                "{kind:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
     fn evidence_requires_canonical_lowercase_sha256() {
         let mut candidate = record(HostSupportStatus::Candidate);
         candidate
@@ -523,7 +557,7 @@ mod tests {
     #[test]
     fn selected_host_cannot_be_serialized_as_a_matrix_decision() {
         let mut document = document(record(HostSupportStatus::Unknown));
-        document.host_support_matrix.selected_host = Some(RuntimeKind::Claude);
+        document.host_support_matrix.selected_host = Some(StableId("claude".to_owned()));
         let error = document.validate().expect_err("selection must fail closed");
         assert_eq!(
             error,

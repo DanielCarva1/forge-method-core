@@ -12,6 +12,18 @@ use serde::{Deserialize, Serialize};
 #[serde(transparent)]
 pub struct StableId(pub String);
 
+pub(crate) fn is_valid_stable_id(stable_id: &StableId) -> bool {
+    let value = &stable_id.0;
+    !value.is_empty()
+        && value.len() <= 128
+        && value.bytes().enumerate().all(|(index, byte)| {
+            byte.is_ascii_lowercase()
+                || byte.is_ascii_digit()
+                || matches!(byte, b'.' | b'_' | b'-')
+                || (index > 0 && byte == b':')
+        })
+}
+
 /// The id of a CLAIM SCOPE — what the operator types at acquire time (e.g. `s1`).
 ///
 /// R8 (slice-5 live demo): `scope.id` and `claim.id` shared the same `StableId`

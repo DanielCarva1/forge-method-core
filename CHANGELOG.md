@@ -16,11 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.47` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.48` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
 ### Changed
+- **Host support records now accept stable open-world runtime identifiers.**
+  The matrix can retain an honest result for ZCode or a future host without a
+  brand-specific Rust enum or core branch, while lowercase identifier and exact
+  version validation remain mandatory. The first retained ZCode CLI result
+  records its pre-agent authentication failure without claiming host support.
 - **Built-in host conformance adapters now run in Rust without closing the open
   protocol.** `host-conformance run --builtin-adapter reference|codex` executes
   the distributed `forge-core` binary through the existing bounded process

@@ -1,0 +1,32 @@
+{
+  "case_id": "conversation-derived-intent",
+  "assertions": {
+    "accepted_intent_read_back": {
+      "passed": false,
+      "native_proof_claim": null
+    },
+    "agent_proposal_separated": {
+      "passed": false,
+      "native_proof_claim": null
+    },
+    "human_message_source_preserved": {
+      "passed": false,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [
+    {
+      "kind": "adapter_failure",
+      "code": "zcode_cli_unauthorized_before_first_turn"
+    }
+  ],
+  "evidence": {
+    "fact_codes": [
+      "capability_not_started",
+      "headless_prompt_reached_model_endpoint",
+      "isolated_storage_used",
+      "model_request_unauthorized",
+      "zcode_cli_0_16_5_invoked"
+    ]
+  }
+}
