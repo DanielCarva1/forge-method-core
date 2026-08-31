@@ -695,19 +695,13 @@ fn state_two_link_without_sidecar_fails_closed_without_mutation() {
         .as_str()
         .expect("state-loss diagnosis has a deterministic digest");
     assert_eq!(diagnosis_digest.len(), 64);
+    let root = resolved_project_root(&env, &app, "missing sidecar state-loss diagnosis");
     let choices = &env["data"]["state_loss"]["choices"];
     assert_eq!(choices["inspect"]["availability"], "available_read_only");
     assert_eq!(choices["inspect"]["mutates_authority"], false);
     assert_eq!(
         choices["inspect"]["argv"],
-        serde_json::json!([
-            "forge-core",
-            "project",
-            "resolve",
-            "--root",
-            app.display().to_string(),
-            "--json"
-        ])
+        serde_json::json!(["forge-core", "project", "resolve", "--root", root, "--json"])
     );
     assert_eq!(
         choices["restore_verified_backup"]["authority_effect"],
