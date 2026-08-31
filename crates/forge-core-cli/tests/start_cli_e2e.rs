@@ -295,8 +295,24 @@ fn crash_replace_residue_paths(root: &Path) -> Vec<PathBuf> {
     found
 }
 
+fn resolved_project_root<'a>(env: &'a Value, app: &Path, state: &str) -> &'a str {
+    let root = env["data"]["project"]["project_root"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{state} should publish the resolved project root"));
+    assert!(
+        Path::new(root).is_absolute(),
+        "{state} should publish an absolute project root"
+    );
+    assert_eq!(
+        fs::canonicalize(root).expect("canonicalize published project root"),
+        fs::canonicalize(app).expect("canonicalize fixture project root"),
+        "{state} should publish the physical project root selected by start"
+    );
+    root
+}
+
 fn assert_agent_native_init_handoff(env: &Value, app: &Path, state: &str) {
-    let root = app.display().to_string();
+    let root = resolved_project_root(env, app, state);
     assert_eq!(
         env["data"]["next_step"]["argv"],
         serde_json::json!(["forge-core", "workflow", "init", "--root", root]),
@@ -318,14 +334,14 @@ fn assert_agent_native_init_handoff(env: &Value, app: &Path, state: &str) {
             .and_then(Value::as_str)
             .is_some_and(|reference| {
                 reference.contains("next: forge-core workflow resume --root")
-                    && reference.contains(&app.display().to_string())
+                    && reference.contains(root)
             }),
         "{state} should make workflow resume for the same root the first reference"
     );
 }
 
 fn assert_agent_native_resume_handoff(env: &Value, app: &Path, state: &str) {
-    let root = app.display().to_string();
+    let root = resolved_project_root(env, app, state);
     assert_eq!(
         env["data"]["next_step"]["argv"],
         serde_json::json!(["forge-core", "workflow", "resume", "--root", root, "--json"]),
@@ -774,18 +790,12 @@ fn state_loss_inspection_argv_uses_canonical_root_for_relative_input() {
         .output()
         .expect("run start with relative root");
     let env: Value = serde_json::from_slice(&output.stdout).expect("parse start envelope");
+    let root = resolved_project_root(&env, &app, "relative state-loss diagnosis");
 
     assert!(!output.status.success());
     assert_eq!(
         env["data"]["state_loss"]["choices"]["inspect"]["argv"],
-        serde_json::json!([
-            "forge-core",
-            "project",
-            "resolve",
-            "--root",
-            app.canonicalize().unwrap().display().to_string(),
-            "--json"
-        ])
+        serde_json::json!(["forge-core", "project", "resolve", "--root", root, "--json"])
     );
 }
 #[test]
@@ -803,17 +813,12 @@ fn healthy_handoff_argv_uses_canonical_root_for_relative_input() {
         .output()
         .expect("run healthy start with relative root");
     let env: Value = serde_json::from_slice(&output.stdout).expect("parse start envelope");
+    let root = resolved_project_root(&env, &app, "relative healthy handoff");
 
     assert!(output.status.success());
     assert_eq!(
         env["data"]["next_step"]["argv"],
-        serde_json::json!([
-            "forge-core",
-            "workflow",
-            "init",
-            "--root",
-            app.canonicalize().unwrap().display().to_string()
-        ])
+        serde_json::json!(["forge-core", "workflow", "init", "--root", root])
     );
 }
 #[test]
