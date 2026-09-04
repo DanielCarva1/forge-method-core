@@ -16,11 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.48` for `master`.** This
+- **Source candidate version advanced to `0.12.0-alpha.49` for `master`.** This
   does not claim hosted CI, an exact tag, or a GitHub Release; those release
   proofs remain pending.
 
 ### Changed
+- **Isolation creation now checks claim ownership before saving any state.** A
+  host agent cannot attach another agent's claim to a new isolation; matching
+  ownership keeps the existing Solo Cooperative flow unchanged.
 - **Host support records now accept stable open-world runtime identifiers.**
   The matrix can retain an honest result for ZCode or a future host without a
   brand-specific Rust enum or core branch, while lowercase identifier and exact

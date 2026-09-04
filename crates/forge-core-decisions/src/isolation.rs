@@ -71,6 +71,33 @@ pub fn validate_isolation_contract(c: &IsolationContract) -> Result<(), Isolatio
     Ok(())
 }
 
+/// Check that a linked claim belongs to the agent named by the isolation.
+///
+/// The caller resolves the exact `claim_id` from authoritative claim state and
+/// passes that claim's `claimant_agent_id`. An isolation without a linked claim
+/// has no cross-contract owner to validate.
+///
+/// # Errors
+///
+/// Returns [`IsolationError::ClaimAgentMismatch`] when the linked claim belongs
+/// to a different agent.
+pub fn validate_isolation_claim_agent(
+    isolation: &IsolationContract,
+    claimant_agent_id: &StableId,
+) -> Result<(), IsolationError> {
+    let Some(claim_id) = isolation.claim_id.as_ref() else {
+        return Ok(());
+    };
+    if claimant_agent_id == &isolation.agent_id {
+        return Ok(());
+    }
+    Err(IsolationError::ClaimAgentMismatch {
+        claim_id: claim_id.clone(),
+        expected: claimant_agent_id.clone(),
+        actual: isolation.agent_id.clone(),
+    })
+}
+
 /// Check a newly-proposed contract against the existing set. Returns the first
 /// collision or `Ok(())`. Only NON-TERMINAL contracts (Proposed/Active/Merging)
 /// can collide — a Merged/Abandoned isolation has released its branch and path.

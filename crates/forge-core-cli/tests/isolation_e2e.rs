@@ -134,6 +134,7 @@ fn propose(
 ) -> forge_core_contracts::CliEnvelope<forge_core_cli::isolation::IsolationProposePayload> {
     run_propose(
         d,
+        None,
         &StableId(agent.into()),
         branch,
         path,
@@ -201,6 +202,114 @@ fn isolation_propose_defaults_to_resolved_sidecar_isolations_dir() {
         !fixture.app.join(".forge-method").exists(),
         "default isolation propose must not create consumer-local .forge-method"
     );
+}
+
+#[test]
+fn isolation_propose_rejects_foreign_claim_before_persistence() {
+    let fixture = consumer_app("foreign-claim");
+    let app_arg = fixture.app.display().to_string();
+    let now = NOW.to_string();
+
+    let acquire = bin()
+        .args([
+            "claim",
+            "acquire",
+            "--root",
+            &app_arg,
+            "--scope",
+            "product_area",
+            "--id",
+            "readme",
+            "--principal-id",
+            "daniel",
+            "--agent",
+            "zcode",
+            "--role",
+            "worker",
+            "--path",
+            "README.md",
+            "--now-unix",
+            &now,
+            "--no-sync",
+            "--json",
+        ])
+        .output()
+        .expect("acquire claim through public CLI");
+    let claim = assert_cli_success(&acquire, "claim acquire for isolation");
+    let claim_id = claim["data"]["claim_id"]
+        .as_str()
+        .expect("claim id")
+        .to_string();
+
+    let mismatch = bin()
+        .args([
+            "isolation",
+            "propose",
+            "--root",
+            &app_arg,
+            "--agent",
+            "other-agent",
+            "--branch",
+            "other-agent/readme",
+            "--worktree-path",
+            "../.forge-worktrees/other-agent/readme",
+            "--base-ref",
+            "main",
+            "--claim",
+            &claim_id,
+            "--id",
+            "iso-other-agent-readme",
+            "--now-unix",
+            &now,
+            "--json",
+        ])
+        .output()
+        .expect("propose isolation with foreign claim");
+    let mismatch_json = assert_cli_failure(&mismatch, "foreign claim isolation proposal");
+    assert_eq!(mismatch_json["exit_reason"], "rejected_by_gate");
+    assert!(
+        mismatch_json["error"]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("claim_agent_mismatch")),
+        "rejection should expose the stable mismatch reason: {mismatch_json:#}"
+    );
+
+    let isolation_dir = fixture.state_root.join("contracts").join("isolations");
+    assert_eq!(
+        isolation_dir
+            .exists()
+            .then(|| yaml_file_count(&isolation_dir))
+            .unwrap_or_default(),
+        0,
+        "foreign claim proposal must not persist an isolation contract"
+    );
+
+    let matching = bin()
+        .args([
+            "isolation",
+            "propose",
+            "--root",
+            &app_arg,
+            "--agent",
+            "zcode",
+            "--branch",
+            "zcode/readme",
+            "--worktree-path",
+            "../.forge-worktrees/zcode/readme",
+            "--base-ref",
+            "main",
+            "--claim",
+            &claim_id,
+            "--id",
+            "iso-zcode-readme",
+            "--now-unix",
+            &now,
+            "--json",
+        ])
+        .output()
+        .expect("propose isolation with matching claim");
+    assert_cli_success(&matching, "matching claim isolation proposal");
+    assert_eq!(yaml_file_count(&isolation_dir), 1);
 }
 
 #[test]

@@ -24,7 +24,8 @@ use forge_core_contracts::isolation::{
 };
 use forge_core_contracts::{CliEnvelope, ExitReason, RepoPath, ENVELOPE_SCHEMA_VERSION};
 use forge_core_decisions::isolation::{
-    detect_isolation_conflict, propose_merge, transition_status, validate_isolation_contract,
+    detect_isolation_conflict, propose_merge, transition_status, validate_isolation_claim_agent,
+    validate_isolation_contract,
 };
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -170,6 +171,7 @@ pub struct IsolationStatusPayload {
 #[allow(clippy::too_many_arguments)]
 pub fn run_propose(
     isolation_dir: &Path,
+    claims_dir: Option<&Path>,
     agent_id: &StableId,
     branch_name: &str,
     worktree_path: &str,
@@ -195,7 +197,67 @@ pub fn run_propose(
     if let Err(e) = validate_isolation_contract(&contract) {
         return rejection("propose", e, &contract.id);
     }
-    // 2) collision against existing live contracts (under lock)
+
+    // 2) Resolve and retain the linked claim authority before taking the
+    // isolation lock. This matches the repository-wide claim -> isolation lock
+    // order and prevents the claim owner changing between validation and save.
+    let _claim_lock = if let Some(claim_id) = contract.claim_id.as_ref() {
+        let Some(claims_dir) = claims_dir else {
+            return CliEnvelope::err(
+                "isolation propose",
+                ExitReason::EnvConfig,
+                format!(
+                    "linked claim '{}' requires an authoritative claims directory",
+                    claim_id.0
+                ),
+            );
+        };
+        let lock = match crate::claim::acquire_claim_cache_authority(claims_dir) {
+            Ok(lock) => lock,
+            Err(error) => {
+                return CliEnvelope::err(
+                    "isolation propose",
+                    ExitReason::EnvConfig,
+                    format!(
+                        "cannot lock authoritative claims directory {}: {error}",
+                        claims_dir.display()
+                    ),
+                );
+            }
+        };
+        let (claims, errors) = crate::claim::load_claims(claims_dir);
+        if !errors.is_empty() {
+            return CliEnvelope::err(
+                "isolation propose",
+                ExitReason::EnvConfig,
+                format!(
+                    "authoritative claims state has {} error(s): {}",
+                    errors.len(),
+                    errors.join("; ")
+                ),
+            );
+        }
+        let Some(claim) = claims.iter().find(|claim| claim.id.0 == claim_id.0) else {
+            return CliEnvelope::err(
+                "isolation propose",
+                ExitReason::InvalidDecisionShape,
+                format!(
+                    "linked claim '{}' was not found in authoritative claim state",
+                    claim_id.0
+                ),
+            );
+        };
+        if let Err(error) =
+            validate_isolation_claim_agent(&contract, &claim.claim.claimant_agent_id)
+        {
+            return rejection("propose", error, &contract.id);
+        }
+        Some(lock)
+    } else {
+        None
+    };
+
+    // 3) collision against existing live contracts (under lock)
     let lock = match acquire_isolation_contracts_authority(isolation_dir) {
         Ok(l) => l,
         Err(e) => return env_config("propose", isolation_dir, &e.to_string()),
@@ -209,7 +271,7 @@ pub fn run_propose(
     if let Err(e) = detect_isolation_conflict(&contract, &refs) {
         return rejection("propose", e, &contract.id);
     }
-    // 3) persist
+    // 4) persist
     let path = match save_isolation(isolation_dir, &contract) {
         Ok(p) => p,
         Err(e) => return env_config("propose", isolation_dir, &e.to_string()),
@@ -866,8 +928,19 @@ pub fn run_isolation_propose(args: &[String]) -> Result<(), ExitError> {
     let id = isolation_id.unwrap_or_else(|| format!("iso-{}-{}", slug_for_file(&branch), now));
     let isolation_dir =
         resolve_isolation_dir_or_err("isolation.propose", isolation_dir, &root, want_json)?;
+    let claims_dir = if claim_id.is_some() {
+        Some(crate::claim::resolve_claims_dir_or_err(
+            "isolation.propose",
+            None,
+            &root,
+            want_json,
+        )?)
+    } else {
+        None
+    };
     let env = run_propose(
         &isolation_dir,
+        claims_dir.as_deref(),
         &StableId(agent),
         &branch,
         &worktree_path,
@@ -1107,6 +1180,7 @@ mod tests {
     ) -> CliEnvelope<IsolationProposePayload> {
         run_propose(
             d,
+            None,
             &StableId(agent.into()),
             branch,
             path,
