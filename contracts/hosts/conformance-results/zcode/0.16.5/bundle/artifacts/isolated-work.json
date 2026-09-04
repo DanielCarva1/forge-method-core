@@ -2,7 +2,7 @@
   "case_id": "isolated-work",
   "assertions": {
     "isolation_exists_and_is_linked": {
-      "passed": false,
+      "passed": true,
       "native_proof_claim": null
     },
     "missing_isolation_stops": {
@@ -10,23 +10,20 @@
       "native_proof_claim": null
     },
     "ownership_mismatch_stops": {
-      "passed": false,
+      "passed": true,
       "native_proof_claim": null
     }
   },
   "gaps": [
     {
-      "kind": "adapter_failure",
-      "code": "zcode_cli_unauthorized_before_first_turn"
+      "kind": "isolation_unavailable",
+      "code": "missing_isolation_rejection_not_exercised_current_journey"
     }
   ],
   "evidence": {
     "fact_codes": [
-      "capability_not_started",
-      "headless_prompt_reached_model_endpoint",
-      "isolated_storage_used",
-      "model_request_unauthorized",
-      "zcode_cli_0_16_5_invoked"
+      "claim_owner_mismatch_rejected_before_persistence",
+      "linked_isolation_used"
     ]
   }
 }

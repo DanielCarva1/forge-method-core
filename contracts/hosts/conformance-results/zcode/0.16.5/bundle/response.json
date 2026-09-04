@@ -7,18 +7,18 @@
       "adapter_id": "forge.closed-observation-bridge",
       "adapter_version": "1.0.0",
       "platform_label": "windows-10.0.26200-x86_64",
-      "environment_label": "zcode-desktop-3.10.1.6272-cli-0.16.5-isolated-storage"
+      "environment_label": "zcode-desktop-3.10.1.6272-cli-0.16.5-native-windows-yolo"
     },
     "observed": {
       "forge_package": "forge-core-cli",
-      "forge_version": "0.12.0-alpha.47",
-      "forge_executable_sha256": "sha256:8b0cf2cb68278480138afb34ad176c18134df38978b157b65fffe6638e7d109c",
+      "forge_version": "0.12.0-alpha.49",
+      "forge_executable_sha256": "sha256:245bbc8e4354c1e2ce09edecf54be9fd40c16b2bc7638268d45dc97bb0964cad",
       "platform": {
         "os": "windows",
         "architecture": "x86_64"
       },
       "canonical_root": {
-        "resolved_path_sha256": "sha256:e156b4b0fccaddf86ef6f449396ac3cb7f12962a5e50a1342beff7ad1aaa8054",
+        "resolved_path_sha256": "sha256:75b1826d0bc56e242cd915ae9eaf4da95385732d66e0a8d9c2c38ffd7bb49d50",
         "kind": "native_or_other",
         "exists": true,
         "is_directory": true,
@@ -34,27 +34,27 @@
           {
             "position": 0,
             "kind": "file",
-            "safe_display": "forge-closed-observation-bridge-v1.py",
-            "argument_sha256": "sha256:9987ce5d3349cc9aa13ab0aa7c2d367a4f9fe2e3dcd27a0a03af2d7c22f0cfb9",
+            "safe_display": "forge-closed-observation-bridge-zcode-v1.py",
+            "argument_sha256": "sha256:0e768f3ce95db75fc8c652be3d3fb02ef5b802169289528b1791efaf32d2765e",
             "file_identity": {
-              "file_name": "forge-closed-observation-bridge-v1.py",
-              "sha256": "sha256:901fb38415d4a2ac6d60d4a6523294ba1a4c7aa743f612cdc4a2e7270ab25e00",
-              "byte_length": 338
+              "file_name": "forge-closed-observation-bridge-zcode-v1.py",
+              "sha256": "sha256:6329d768ddb0afca83eebc7afc461fb592fb265f7cbdd7fd16f4484ce5e3a04a",
+              "byte_length": 347
             }
           },
           {
             "position": 1,
             "kind": "file",
-            "safe_display": "rd005-zcode-0.16.5-observation.json",
-            "argument_sha256": "sha256:69604ae140d9d21b9c47ebe3987d8c494fbf3b39befba12c6478ab3a68180fd7",
+            "safe_display": "zcode-0.16.5-authenticated-yolo-observation.json",
+            "argument_sha256": "sha256:971a38f5f403353ef75c3e025eb8157143418e078c3fdf4a7a264103232d7bbe",
             "file_identity": {
-              "file_name": "rd005-zcode-0.16.5-observation.json",
-              "sha256": "sha256:b998062c34c6cdb731fc6f8c246e854b8168fa292415a96425262679f7d3559b",
-              "byte_length": 7039
+              "file_name": "zcode-0.16.5-authenticated-yolo-observation.json",
+              "sha256": "sha256:18f0b384acfa8cf5a0c32282a4011aa5322f96e4bc29e2e23481925bddda2ffc",
+              "byte_length": 4667
             }
           }
         ],
-        "argv_sha256": "sha256:e313196f871e086ab151cfb565de76b1e782b75b14b770cbc3f1055d33046a07",
+        "argv_sha256": "sha256:e689d0308e0a068c69883f27189a0d902aed9bfe9e95a85927b057224eef4f80",
         "timeout_ms": 30000,
         "output_limit_bytes": 4194304
       }
@@ -66,31 +66,24 @@
       "case_id": "activation",
       "assertions": {
         "forge_invoked_by_argv": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         },
         "one_chat_activation_observed": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         },
         "versioned_json_preserved": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         }
       },
-      "gaps": [
-        {
-          "kind": "adapter_failure",
-          "code": "zcode_cli_unauthorized_before_first_turn"
-        }
-      ],
+      "gaps": [],
       "evidence": {
         "fact_codes": [
-          "capability_not_started",
-          "headless_prompt_reached_model_endpoint",
-          "isolated_storage_used",
-          "model_request_unauthorized",
-          "zcode_cli_0_16_5_invoked"
+          "forge_cli_versioned_json_readback",
+          "yolo_mode_without_host_permission_prompt",
+          "zcode_authenticated_agent_turn"
         ]
       }
     },
@@ -102,27 +95,24 @@
           "native_proof_claim": null
         },
         "exact_existing_root_resolved": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         },
         "windows_wsl_bridge_applied_only_when_required": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         }
       },
       "gaps": [
         {
-          "kind": "adapter_failure",
-          "code": "zcode_cli_unauthorized_before_first_turn"
+          "kind": "canonical_root_unavailable",
+          "code": "ambiguous_root_rejection_not_exercised_current_journey"
         }
       ],
       "evidence": {
         "fact_codes": [
-          "capability_not_started",
-          "headless_prompt_reached_model_endpoint",
-          "isolated_storage_used",
-          "model_request_unauthorized",
-          "zcode_cli_0_16_5_invoked"
+          "native_windows_project_root_resolved",
+          "windows_wsl_bridge_not_required"
         ]
       }
     },
@@ -130,31 +120,23 @@
       "case_id": "read-only-guidance",
       "assertions": {
         "before_after_state_equal": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         },
         "guidance_is_plain_language": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         },
         "no_hidden_recovery_or_write": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         }
       },
-      "gaps": [
-        {
-          "kind": "adapter_failure",
-          "code": "zcode_cli_unauthorized_before_first_turn"
-        }
-      ],
+      "gaps": [],
       "evidence": {
         "fact_codes": [
-          "capability_not_started",
-          "headless_prompt_reached_model_endpoint",
-          "isolated_storage_used",
-          "model_request_unauthorized",
-          "zcode_cli_0_16_5_invoked"
+          "plain_language_resume_guidance",
+          "project_and_forge_state_digest_unchanged"
         ]
       }
     },
@@ -162,31 +144,24 @@
       "case_id": "conversation-derived-intent",
       "assertions": {
         "accepted_intent_read_back": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         },
         "agent_proposal_separated": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         },
         "human_message_source_preserved": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         }
       },
-      "gaps": [
-        {
-          "kind": "adapter_failure",
-          "code": "zcode_cli_unauthorized_before_first_turn"
-        }
-      ],
+      "gaps": [],
       "evidence": {
         "fact_codes": [
-          "capability_not_started",
-          "headless_prompt_reached_model_endpoint",
-          "isolated_storage_used",
-          "model_request_unauthorized",
-          "zcode_cli_0_16_5_invoked"
+          "accepted_objective_read_back",
+          "agent_proposal_separated",
+          "human_objective_preserved"
         ]
       }
     },
@@ -194,31 +169,24 @@
       "case_id": "cooperative-evidence",
       "assertions": {
         "admission_result_read_back": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         },
         "evidence_source_preserved": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         },
         "rejected_evidence_stays_rejected": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         }
       },
-      "gaps": [
-        {
-          "kind": "adapter_failure",
-          "code": "zcode_cli_unauthorized_before_first_turn"
-        }
-      ],
+      "gaps": [],
       "evidence": {
         "fact_codes": [
-          "capability_not_started",
-          "headless_prompt_reached_model_endpoint",
-          "isolated_storage_used",
-          "model_request_unauthorized",
-          "zcode_cli_0_16_5_invoked"
+          "cooperative_evidence_admitted_and_read_back",
+          "evidence_basis_preserved",
+          "tampered_binding_rejected"
         ]
       }
     },
@@ -226,7 +194,7 @@
       "case_id": "isolated-work",
       "assertions": {
         "isolation_exists_and_is_linked": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         },
         "missing_isolation_stops": {
@@ -234,23 +202,20 @@
           "native_proof_claim": null
         },
         "ownership_mismatch_stops": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         }
       },
       "gaps": [
         {
-          "kind": "adapter_failure",
-          "code": "zcode_cli_unauthorized_before_first_turn"
+          "kind": "isolation_unavailable",
+          "code": "missing_isolation_rejection_not_exercised_current_journey"
         }
       ],
       "evidence": {
         "fact_codes": [
-          "capability_not_started",
-          "headless_prompt_reached_model_endpoint",
-          "isolated_storage_used",
-          "model_request_unauthorized",
-          "zcode_cli_0_16_5_invoked"
+          "claim_owner_mismatch_rejected_before_persistence",
+          "linked_isolation_used"
         ]
       }
     },
@@ -258,31 +223,24 @@
       "case_id": "governed-promotion",
       "assertions": {
         "apply_read_back_matches": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         },
         "exact_retry_is_idempotent": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         },
         "preview_bound_to_exact_change": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         }
       },
-      "gaps": [
-        {
-          "kind": "adapter_failure",
-          "code": "zcode_cli_unauthorized_before_first_turn"
-        }
-      ],
+      "gaps": [],
       "evidence": {
         "fact_codes": [
-          "capability_not_started",
-          "headless_prompt_reached_model_endpoint",
-          "isolated_storage_used",
-          "model_request_unauthorized",
-          "zcode_cli_0_16_5_invoked"
+          "apply_read_back_verified",
+          "exact_apply_retry_already_committed",
+          "preview_bound_to_readme_only"
         ]
       }
     },
@@ -290,31 +248,24 @@
       "case_id": "replacement-agent-recovery",
       "assertions": {
         "durable_state_reconstructed": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         },
         "fresh_agent_has_no_transcript_dependency": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         },
         "recovery_ranked_before_new_work": {
-          "passed": false,
+          "passed": true,
           "native_proof_claim": null
         }
       },
-      "gaps": [
-        {
-          "kind": "adapter_failure",
-          "code": "zcode_cli_unauthorized_before_first_turn"
-        }
-      ],
+      "gaps": [],
       "evidence": {
         "fact_codes": [
-          "capability_not_started",
-          "headless_prompt_reached_model_endpoint",
-          "isolated_storage_used",
-          "model_request_unauthorized",
-          "zcode_cli_0_16_5_invoked"
+          "durable_state_reconstructed",
+          "fresh_zcode_session_without_continue",
+          "next_safe_action_recovered"
         ]
       }
     }

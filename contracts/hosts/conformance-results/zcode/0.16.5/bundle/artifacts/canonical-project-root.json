@@ -6,27 +6,24 @@
       "native_proof_claim": null
     },
     "exact_existing_root_resolved": {
-      "passed": false,
+      "passed": true,
       "native_proof_claim": null
     },
     "windows_wsl_bridge_applied_only_when_required": {
-      "passed": false,
+      "passed": true,
       "native_proof_claim": null
     }
   },
   "gaps": [
     {
-      "kind": "adapter_failure",
-      "code": "zcode_cli_unauthorized_before_first_turn"
+      "kind": "canonical_root_unavailable",
+      "code": "ambiguous_root_rejection_not_exercised_current_journey"
     }
   ],
   "evidence": {
     "fact_codes": [
-      "capability_not_started",
-      "headless_prompt_reached_model_endpoint",
-      "isolated_storage_used",
-      "model_request_unauthorized",
-      "zcode_cli_0_16_5_invoked"
+      "native_windows_project_root_resolved",
+      "windows_wsl_bridge_not_required"
     ]
   }
 }

@@ -1,6 +1,6 @@
 {
   "schema_version": "forge_host_conformance_run_summary_v1",
-  "recorded_on": "2026-08-31",
+  "recorded_on": "2026-09-04",
   "authority": "same_owner_cooperative_candidate_only",
   "identities": {
     "zcode_desktop_declared": "3.10.1.6272",
@@ -12,51 +12,58 @@
     "node_runtime_sha256": "sha256:47cd67453da180a39cdf5daedb89862667b8e627e60c116607874633450cd30d",
     "adapter_id": "forge.closed-observation-bridge",
     "adapter_version": "1.0.0",
-    "bridge_source_sha256": "sha256:901fb38415d4a2ac6d60d4a6523294ba1a4c7aa743f612cdc4a2e7270ab25e00",
-    "closed_observation_sha256": "sha256:b998062c34c6cdb731fc6f8c246e854b8168fa292415a96425262679f7d3559b",
+    "bridge_source_sha256": "sha256:6329d768ddb0afca83eebc7afc461fb592fb265f7cbdd7fd16f4484ce5e3a04a",
+    "closed_observation_sha256": "sha256:18f0b384acfa8cf5a0c32282a4011aa5322f96e4bc29e2e23481925bddda2ffc",
     "forge_package_measured": "forge-core-cli",
-    "forge_version_measured": "0.12.0-alpha.47",
-    "forge_executable_sha256": "sha256:8b0cf2cb68278480138afb34ad176c18134df38978b157b65fffe6638e7d109c",
-    "repository_source_commit": "776c5f3fcf462f523e194fa9a5e82c1381bb0d41",
-    "source_to_binary_binding": "installed_package_version_and_executable_hash_only",
+    "forge_version_measured": "0.12.0-alpha.49",
+    "forge_executable_sha256": "sha256:245bbc8e4354c1e2ce09edecf54be9fd40c16b2bc7638268d45dc97bb0964cad",
+    "repository_source_commit": "a5a6aa507828d433b9c986074b2c37692d46cceb",
+    "source_to_binary_binding": "installed_package_version_commit_and_executable_hash",
     "platform_label_declared": "windows-10.0.26200-x86_64",
-    "environment_label_declared": "zcode-desktop-3.10.1.6272-cli-0.16.5-isolated-storage"
+    "environment_label_declared": "zcode-desktop-3.10.1.6272-cli-0.16.5-native-windows-yolo"
   },
   "journey": {
     "external_work_item": "https://github.com/DanielCarva1/forge-method-core/issues/69",
-    "work_focus_id": "focus.sd06.windows-codex-zcode-product",
-    "zcode_session": "fresh_noninteractive_cli_with_isolated_storage",
+    "work_focus_id": "wf-001-readme-decisoes",
+    "zcode_session": "authenticated_public_cli_yolo",
     "canonical_root": {
       "kind": "native_windows_disposable_project",
-      "resolved_path_sha256": "sha256:e156b4b0fccaddf86ef6f449396ac3cb7f12962a5e50a1342beff7ad1aaa8054",
+      "resolved_path_sha256": "sha256:75b1826d0bc56e242cd915ae9eaf4da95385732d66e0a8d9c2c38ffd7bb49d50",
       "windows_to_wsl_bridge": "not_applicable"
     },
+    "host_permission_mode": "yolo",
+    "host_permission_prompt_used": false,
+    "forge_governance_remained_active": true,
     "ordinary_task_intent_submitted": true,
     "forge_state_preloaded_by_prompt": false,
-    "cli_model_request": "reached_endpoint_then_unauthorized_before_first_agent_turn",
-    "isolated_storage": "used",
     "persistent_user_state_copied": false,
     "computer_use_or_gui_automation": "not_used",
-    "capability_execution": "not_started_due_to_cli_authentication_failure"
+    "canonical_delivery_commit": "a127e078b6a959fd66f7aba4412f627038d80a00",
+    "isolated_work_commit": "6c09a1502236f4afe85d8a07dd62dac98debd65f",
+    "replacement_session_used_transcript_continuation": false
   },
   "result": {
-    "overall": "unsupported",
+    "overall": "partially_supported",
     "capabilities": 8,
-    "partially_supported": 0,
-    "unsupported": 8,
+    "partially_supported": 8,
+    "unsupported": 0,
     "supported": 0,
-    "assertions_passed": 0,
-    "assertions_failed": 23,
+    "assertions_passed": 21,
+    "assertions_failed": 2,
     "assertions_not_applicable": 1,
-    "typed_gap": "zcode_cli_unauthorized_before_first_turn",
+    "typed_gaps": [
+      "ambiguous_root_rejection_not_exercised_current_journey",
+      "missing_isolation_rejection_not_exercised_current_journey",
+      "forge_native_verifier_unavailable"
+    ],
     "integrity_proves_host_authenticity": false
   },
-  "observed_ux_limits": [
-    "desktop_session_did_not_supply_a_usable_isolated_cli_session",
-    "cli_model_request_unauthorized_before_first_agent_turn",
-    "advertised_max_turns_option_rejected_by_cli_parser",
-    "no_public_cli_capability_could_be_observed",
-    "setup_attempt_user_cli_config_restored_before_execution"
+  "observed_ux": [
+    "authenticated_cli_completed_the_full_product_journey",
+    "yolo_mode_avoided_host_permission_buttons",
+    "forge_governance_remained_visible_and_active",
+    "fresh_cli_session_recovered_without_transcript",
+    "advertised_max_turns_option_rejected_by_cli_parser"
   ],
   "retention": {
     "raw_cli_output_retained": false,
@@ -64,13 +71,13 @@
     "temporary_adapter_or_observation_retained": false,
     "user_zcode_state_in_retained_material": false,
     "temporary_material_cleanup": "completed",
-    "temporary_roots_removed": 4,
-    "temporary_bytes_removed": 38097147,
+    "temporary_roots_removed": 7,
+    "temporary_bytes_removed": 162328,
     "persistent_user_state_cleanup_scope": "excluded"
   },
   "bundle": {
     "relative_path": "bundle",
-    "bundle_digest": "sha256:88a098962650148ba1fc1d42c4a0ca5d092f9d824f9df2246200855ee9af59be",
+    "bundle_digest": "sha256:7aef8f6d99d836541ee1bb80de633b83154f1bee19f66e1c6a8bc748f3639028",
     "bundle_integrity_verification": "passed",
     "verification_scope": "closed_bundle_structure_completeness_derived_result_and_digests_only",
     "reported_host_actions_verified": false

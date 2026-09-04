@@ -436,9 +436,9 @@ fn retained_current_zcode_run_summary_matches_bundle_manifest_and_result() {
     let (summary, manifest) = assert_retained_run_matches_bundle(
         &retained,
         "/identities/zcode_cli_declared",
-        (8, 0, 23, 1),
-        (0, 8, 0),
-        "776c5f3fcf462f523e194fa9a5e82c1381bb0d41",
+        (8, 21, 2, 1),
+        (8, 0, 0),
+        "a5a6aa507828d433b9c986074b2c37692d46cceb",
     );
 
     assert_eq!(
@@ -462,12 +462,20 @@ fn retained_current_zcode_run_summary_matches_bundle_manifest_and_result() {
         summary["identities"]["zcode_cli_sha256"],
         "sha256:3597160465b67da248fa3fb919920ca30d4e093003a4d70cde2a2e33903cbabc"
     );
+    assert_eq!(summary["journey"]["host_permission_mode"], "yolo");
+    assert_eq!(summary["journey"]["host_permission_prompt_used"], false);
+    assert_eq!(summary["journey"]["forge_governance_remained_active"], true);
+    assert_eq!(summary["retention"]["raw_cli_output_retained"], false);
+    assert_eq!(
+        summary["retention"]["credentials_or_tokens_retained"],
+        false
+    );
     assert_eq!(
         summary["retention"]["temporary_material_cleanup"],
         "completed"
     );
-    assert_eq!(summary["retention"]["temporary_roots_removed"], 4);
-    assert_eq!(summary["retention"]["temporary_bytes_removed"], 38_097_147);
+    assert_eq!(summary["retention"]["temporary_roots_removed"], 7);
+    assert_eq!(summary["retention"]["temporary_bytes_removed"], 162_328);
 
     let environment_label = manifest
         .pointer("/bindings/declared/environment_label")
@@ -475,7 +483,7 @@ fn retained_current_zcode_run_summary_matches_bundle_manifest_and_result() {
         .expect("declared environment label");
     assert_eq!(
         environment_label,
-        "zcode-desktop-3.10.1.6272-cli-0.16.5-isolated-storage"
+        "zcode-desktop-3.10.1.6272-cli-0.16.5-native-windows-yolo"
     );
 
     for (summary_path, argument_index) in [
@@ -500,24 +508,42 @@ fn retained_current_zcode_run_summary_matches_bundle_manifest_and_result() {
         .as_array()
         .expect("retained ZCode capabilities")
     {
-        assert_eq!(capability["outcome"], "unsupported");
+        assert_eq!(capability["outcome"], "partially_supported");
         let gaps = capability["gaps"]
             .as_array()
             .expect("retained ZCode capability gaps");
-        assert_eq!(gaps.len(), 1);
-        assert_eq!(gaps[0]["kind"], "adapter_failure");
-        assert_eq!(gaps[0]["code"], "zcode_cli_unauthorized_before_first_turn");
+        assert!(gaps.iter().any(|gap| {
+            gap["kind"] == "native_authenticity_unavailable"
+                && gap["code"] == "forge_native_verifier_unavailable"
+        }));
 
         let artifact_path = capability["artifact_paths"][0]
             .as_str()
             .expect("retained ZCode artifact path");
         let artifact = read_json(&retained.join("bundle").join(artifact_path));
-        assert!(artifact["evidence"]["fact_codes"]
+        assert!(!artifact["evidence"]["fact_codes"]
             .as_array()
             .expect("retained ZCode fact codes")
-            .iter()
-            .any(|fact| fact == "capability_not_started"));
+            .is_empty());
     }
+
+    let activation = read_json(&retained.join("bundle/artifacts/activation.json"));
+    assert!(activation["evidence"]["fact_codes"]
+        .as_array()
+        .expect("retained activation facts")
+        .iter()
+        .any(|fact| fact == "yolo_mode_without_host_permission_prompt"));
+
+    let canonical = read_json(&retained.join("bundle/artifacts/canonical-project-root.json"));
+    assert_eq!(
+        canonical["gaps"][0]["code"],
+        "ambiguous_root_rejection_not_exercised_current_journey"
+    );
+    let isolated = read_json(&retained.join("bundle/artifacts/isolated-work.json"));
+    assert_eq!(
+        isolated["gaps"][0]["code"],
+        "missing_isolation_rejection_not_exercised_current_journey"
+    );
 }
 
 type AssertionCounts = (u64, u64, u64, u64);

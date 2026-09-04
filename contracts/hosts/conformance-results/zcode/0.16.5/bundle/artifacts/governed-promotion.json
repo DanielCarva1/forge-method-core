@@ -2,31 +2,24 @@
   "case_id": "governed-promotion",
   "assertions": {
     "apply_read_back_matches": {
-      "passed": false,
+      "passed": true,
       "native_proof_claim": null
     },
     "exact_retry_is_idempotent": {
-      "passed": false,
+      "passed": true,
       "native_proof_claim": null
     },
     "preview_bound_to_exact_change": {
-      "passed": false,
+      "passed": true,
       "native_proof_claim": null
     }
   },
-  "gaps": [
-    {
-      "kind": "adapter_failure",
-      "code": "zcode_cli_unauthorized_before_first_turn"
-    }
-  ],
+  "gaps": [],
   "evidence": {
     "fact_codes": [
-      "capability_not_started",
-      "headless_prompt_reached_model_endpoint",
-      "isolated_storage_used",
-      "model_request_unauthorized",
-      "zcode_cli_0_16_5_invoked"
+      "apply_read_back_verified",
+      "exact_apply_retry_already_committed",
+      "preview_bound_to_readme_only"
     ]
   }
 }

@@ -2,31 +2,24 @@
   "case_id": "replacement-agent-recovery",
   "assertions": {
     "durable_state_reconstructed": {
-      "passed": false,
+      "passed": true,
       "native_proof_claim": null
     },
     "fresh_agent_has_no_transcript_dependency": {
-      "passed": false,
+      "passed": true,
       "native_proof_claim": null
     },
     "recovery_ranked_before_new_work": {
-      "passed": false,
+      "passed": true,
       "native_proof_claim": null
     }
   },
-  "gaps": [
-    {
-      "kind": "adapter_failure",
-      "code": "zcode_cli_unauthorized_before_first_turn"
-    }
-  ],
+  "gaps": [],
   "evidence": {
     "fact_codes": [
-      "capability_not_started",
-      "headless_prompt_reached_model_endpoint",
-      "isolated_storage_used",
-      "model_request_unauthorized",
-      "zcode_cli_0_16_5_invoked"
+      "durable_state_reconstructed",
+      "fresh_zcode_session_without_continue",
+      "next_safe_action_recovered"
     ]
   }
 }

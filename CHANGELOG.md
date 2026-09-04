@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   proofs remain pending.
 
 ### Changed
+- **ZCode now has an authenticated public-CLI candidate journey on native
+  Windows.** The retained `0.16.5` result replaces the earlier pre-turn login
+  failure with a `yolo`-mode Solo Cooperative run: 21 assertions passed, two
+  unexercised checks remain explicit, and all eight capabilities stay
+  `partially_supported` because Forge cannot verify ZCode-native authenticity.
 - **Isolation creation now checks claim ownership before saving any state.** A
   host agent cannot attach another agent's claim to a new isolation; matching
   ownership keeps the existing Solo Cooperative flow unchanged.

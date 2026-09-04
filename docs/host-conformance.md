@@ -165,9 +165,13 @@ parts as typed gaps instead of treating an incomplete journey as support.
 The current retained ZCode result covers the public CLI `0.16.5` bundled with
 ZCode Desktop `3.10.1` (file version `3.10.1.6272`) on native Windows. It is
 documented at
-`contracts/hosts/conformance-results/zcode/0.16.5/README.md`. The isolated CLI
-reached the model service but was unauthorized before the first agent turn, so
-all eight capabilities are `unsupported` with one typed gap. No GUI automation,
-private hook, persistent adapter, credential, or raw CLI output was retained.
-The result proves that the generic protocol can preserve this failure honestly;
-it does not qualify ZCode as supported.
+`contracts/hosts/conformance-results/zcode/0.16.5/README.md`. The authenticated
+public CLI completed one disposable Solo Cooperative journey on Forge
+`0.12.0-alpha.49` in ZCode `yolo` mode, without host permission buttons. Forge
+still governed accepted intent, evidence, isolation ownership, promotion, and
+replacement recovery. All eight capabilities are `partially_supported`: 21
+assertions passed, two unexercised checks remain visible, and the native-Windows
+bridge assertion was not applicable. No GUI automation, private hook, permanent
+adapter, credential, transcript, or raw CLI output was retained. Bundle
+integrity still does not prove ZCode-native authenticity, so this is candidate
+evidence rather than official host support.
