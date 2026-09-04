@@ -499,6 +499,32 @@ fn retained_current_zcode_run_summary_matches_bundle_manifest_and_result() {
         );
     }
 
+    assert_zcode_capability_evidence(&retained);
+
+    let read_json = |path: &Path| -> serde_json::Value {
+        serde_json::from_slice(&fs::read(path).expect("read retained ZCode JSON"))
+            .expect("parse retained ZCode JSON")
+    };
+    let activation = read_json(&retained.join("bundle/artifacts/activation.json"));
+    assert!(activation["evidence"]["fact_codes"]
+        .as_array()
+        .expect("retained activation facts")
+        .iter()
+        .any(|fact| fact == "yolo_mode_without_host_permission_prompt"));
+
+    let canonical = read_json(&retained.join("bundle/artifacts/canonical-project-root.json"));
+    assert_eq!(
+        canonical["gaps"][0]["code"],
+        "ambiguous_root_rejection_not_exercised_current_journey"
+    );
+    let isolated = read_json(&retained.join("bundle/artifacts/isolated-work.json"));
+    assert_eq!(
+        isolated["gaps"][0]["code"],
+        "missing_isolation_rejection_not_exercised_current_journey"
+    );
+}
+
+fn assert_zcode_capability_evidence(retained: &Path) {
     let read_json = |path: &Path| -> serde_json::Value {
         serde_json::from_slice(&fs::read(path).expect("read retained ZCode JSON"))
             .expect("parse retained ZCode JSON")
@@ -526,24 +552,6 @@ fn retained_current_zcode_run_summary_matches_bundle_manifest_and_result() {
             .expect("retained ZCode fact codes")
             .is_empty());
     }
-
-    let activation = read_json(&retained.join("bundle/artifacts/activation.json"));
-    assert!(activation["evidence"]["fact_codes"]
-        .as_array()
-        .expect("retained activation facts")
-        .iter()
-        .any(|fact| fact == "yolo_mode_without_host_permission_prompt"));
-
-    let canonical = read_json(&retained.join("bundle/artifacts/canonical-project-root.json"));
-    assert_eq!(
-        canonical["gaps"][0]["code"],
-        "ambiguous_root_rejection_not_exercised_current_journey"
-    );
-    let isolated = read_json(&retained.join("bundle/artifacts/isolated-work.json"));
-    assert_eq!(
-        isolated["gaps"][0]["code"],
-        "missing_isolation_rejection_not_exercised_current_journey"
-    );
 }
 
 type AssertionCounts = (u64, u64, u64, u64);
