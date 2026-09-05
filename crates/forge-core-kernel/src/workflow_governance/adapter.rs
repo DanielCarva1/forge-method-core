@@ -2574,10 +2574,24 @@ impl WorkflowGovernanceProjectAdapter {
             admission_state_version: state_version,
             observed_at_unix: now,
         };
+        let assess_phase_boundary = decision.disposition
+            == WorkflowCooperativeEvidenceDisposition::Admitted
+            && offered_target == WorkflowCooperativeEvidenceTarget::PolicyApplicability;
+        let mut batch = ledger.begin_unchecked_tcb_batch(&head, &identity)?;
+        let record = batch.push_cooperative_evidence_unchecked_tcb(state_version, event)?;
+        if assess_phase_boundary {
+            if let Some((state_version, event)) = self.plan_phase_advance_with_snapshot(
+                &effective,
+                batch.projection(),
+                now,
+                &snapshot,
+            )? {
+                batch.push_event(state_version, event)?;
+            }
+        }
         snapshot.revalidate()?;
-        ledger
-            .record_cooperative_evidence_unchecked_tcb(&head, &identity, state_version, event)
-            .map_err(WorkflowGovernanceAdapterError::from)
+        batch.commit()?;
+        Ok(record)
     }
     /// Project the currently admissible authority-bearing actions without
     /// accepting an answer or constructing a signed authorization request.

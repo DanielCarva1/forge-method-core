@@ -374,6 +374,76 @@ fn advance_fixture_to_policy(consumer: &Consumer, target_policy: &str) -> Value 
     panic!("fixture did not reach {target_policy}");
 }
 
+#[test]
+fn cooperative_not_applicable_closes_discovery_without_a_dead_end() {
+    let consumer = Consumer::new();
+    assert_ok(&consumer.run(&["init"]));
+    let next = assert_ok(&consumer.run(&["next"]));
+    let digest = next["data"]["authorization"]["action_packets"][0]["packet_digest"]
+        .as_str()
+        .expect("objective packet");
+    let input = consumer.write_json(
+        "objective.json",
+        &serde_json::json!({
+            "kind": "unambiguous",
+            "proposal": {
+                "outcome": "Add a Decisions paragraph to the README",
+                "constraints": ["documentation only"],
+                "unacceptable_outcomes": ["change executable behavior"],
+                "open_uncertainties": []
+            },
+            "carrying_principal": "principal.agent.cli-e2e",
+            "host_provenance": {
+                "host_id": "host.cli-e2e", "host_version": "test",
+                "session_ref": "session.discovery-exclusions", "interaction_ref": "turn.readme",
+                "conversation_digest": format!("sha256:{}", "d".repeat(64)),
+                "observed_at_unix": 1
+            }
+        }),
+    );
+    assert_ok(&run_cooperative_input(&consumer, digest, &input));
+    let next = assert_ok(&consumer.run(&["next"]));
+    assert_eq!(next["data"]["status"], "ready_to_complete");
+    assert_ok(&consumer.run(&[
+        "complete",
+        "--if-snapshot",
+        next["data"]["snapshot_digest"].as_str().unwrap(),
+    ]));
+    for index in 0..2 {
+        let next = assert_ok(&consumer.run(&["next"]));
+        assert_eq!(next["data"]["status"], "applicability_required");
+        let packet = &next["data"]["cooperative_evidence_action_packet"];
+        let mut offer = packet["offer_template"].clone();
+        offer["offer_id"] = serde_json::json!(format!("offer.discovery.exclusion.{index}"));
+        offer["attestation"]["applicability_assessment"] = serde_json::json!({
+            "outcome": "not_applicable",
+            "summary": "This change only adds a README paragraph; no domain or technical promises",
+            "basis_paths": ["README.md"], "limitations": ["same-owner inspection"]
+        });
+        let input = consumer.write_json(&format!("exclusion-{index}.json"), &offer);
+        assert_ok(&execute_cooperative_packet(packet, &input));
+        let state = state_tree_snapshot(&consumer.state);
+        assert_ok(&execute_cooperative_packet(packet, &input));
+        assert_eq!(
+            state_tree_snapshot(&consumer.state),
+            state,
+            "exact retry is read-only"
+        );
+    }
+    let state = state_tree_snapshot(&consumer.state);
+    let resumed = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(resumed["data"]["current_phase"], "2-specification");
+    assert!(
+        resumed["data"]["actions"]["cooperative_evidence_packet"]["argv"].is_array(),
+        "specification must publish an executable continuation, not merely a new phase: {resumed}"
+    );
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        state,
+        "resume must not advance phases"
+    );
+}
+
 fn execute_structured_argv(argv: &[Value]) -> Output {
     let tokens = argv
         .iter()
@@ -3096,7 +3166,10 @@ fn solo_applicability_assessment_is_public_honest_and_basis_scoped() {
             .expect("published project root"),
     );
     assert!(published_root.is_absolute());
-    assert_eq!(published_root, consumer.app);
+    assert_eq!(
+        fs::canonicalize(published_root).expect("published root exists"),
+        fs::canonicalize(&consumer.app).expect("consumer root exists")
+    );
     assert!(next["data"]["authorization"]["action_packets"]
         .as_array()
         .is_some_and(Vec::is_empty));
