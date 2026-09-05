@@ -48,6 +48,14 @@ roles:
       - "next-best-action guidance"
 
 principles:
+  - id: "project_companion"
+    rule: "Forge accompanies work in consumer projects from discovery through delivery and human-directed evolution; developing Forge itself is dogfooding, not its primary user journey."
+  - id: "improve_agent_work"
+    rule: "Help the agent investigate broadly enough, select relevant practices, verify outcomes, and recover decisions; helping the human alone is insufficient."
+  - id: "scale_with_agent_capability"
+    rule: "Stronger models and agents must remain free to use better strategies without new scripted procedures or redundant governance layers. Preserve bounded effect safety without constraining reasoning or tool choice."
+  - id: "progressive_context_not_project_size"
+    rule: "Expose the smallest relevant guidance and authoritative state on demand; agents must not need to understand the entire Forge codebase or catalog to deliver a small consumer-project improvement."
   - id: "chat_is_the_human_interface"
     rule: "The normal human experience is conversation with the host agent, not direct manipulation of Forge files or commands."
   - id: "govern_truth_not_speech"
