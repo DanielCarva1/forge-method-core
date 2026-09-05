@@ -3334,10 +3334,12 @@ impl WorkflowGovernanceProjectAdapter {
         let admitted = self.resolve_active_release(&registry, &projection)?;
         domain.with_effective_project_observation(admitted, |effective| {
             self.require_effective_epoch_current(admitted, &effective, &projection)
-                .map_err(|_| {
-                    WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
+                .map_err(|error| match error {
+                    WorkflowGovernanceAdapterError::AuthorizationBindingMismatch =>
+                        WorkflowGovernanceAdapterError::ReplacementContinuityUnavailable(
                         "the Domain Pack generation or pending release rebase requires an explicit mutating workflow command before continuation can be projected",
-                    )
+                        ),
+                    other => other,
                 })?;
             let mut guidance = self.guidance_from_projection_with_enclosing_snapshot_validation(
                 &registry,

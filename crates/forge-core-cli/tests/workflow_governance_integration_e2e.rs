@@ -1552,6 +1552,35 @@ fn workflow_resume_does_not_create_a_missing_domain_pack_lock() {
 }
 
 #[test]
+fn copied_project_link_reports_identity_conflict_without_changing_state() {
+    let consumer = Consumer::new_start_ready_with_prefix("copied-project-link");
+    assert_ok(&consumer.run(&["init"]));
+    let copy = consumer.parent.join("copy");
+    fs::create_dir(&copy).expect("copied project directory");
+    for name in ["README.md", ".forge-method.yaml"] {
+        fs::copy(consumer.app.join(name), copy.join(name)).expect("copy project file");
+    }
+    let before = state_tree_snapshot(&consumer.state);
+    for command in ["resume", "report"] {
+        let output = bin()
+            .args(["workflow", command, "--root"])
+            .arg(&copy)
+            .arg("--json")
+            .output()
+            .expect("observe copied project");
+        let envelope = json(&output);
+        assert_eq!(envelope["exit_reason"], "conflict", "{envelope:#}");
+        assert!(envelope["error"]["message"]
+            .as_str()
+            .expect("identity diagnostic")
+            .contains("ledger identity does not match"));
+        assert_eq!(state_tree_snapshot(&consumer.state), before);
+    }
+    assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(state_tree_snapshot(&consumer.state), before);
+}
+
+#[test]
 fn cooperative_objective_cli_commits_once_and_fresh_next_reads_the_ledger() {
     let consumer = Consumer::new();
     assert_ok(&consumer.run(&["init"]));
