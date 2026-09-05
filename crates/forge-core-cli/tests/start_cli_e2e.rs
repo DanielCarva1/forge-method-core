@@ -412,6 +412,7 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
     for behavior in [
         "not run `start` or `project init` in any candidate until the intended root is",
         "A copied Project Link can point to the original project's sidecar",
+        "Identical or empty copies do not resolve the user's choice",
         "keep all explanatory prose consistently in that language",
         "Technical detail is welcome, but it must never be the whole explanation",
         "Orientation is a checkpoint, not a stopping point",

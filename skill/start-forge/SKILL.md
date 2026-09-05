@@ -240,6 +240,9 @@ recommended project step.
    Links read-only. Do not choose by listing order or modification time, and do
    not run `start` or `project init` in any candidate until the intended root is
    clear. If the evidence cannot resolve the choice, ask one concise question.
+   Identical or empty copies do not resolve the user's choice: ask which folder
+   to use, then wait for the answer before activation. A request to resume does
+   not authorize choosing a copy arbitrarily, even if initialization is reversible.
    A copied Project Link can point to the original project's sidecar; it is not
    permission to take over that state. Never recreate, rewrite, or relink state
    to make a candidate fit. Once the root is clear, follow normal activation.
