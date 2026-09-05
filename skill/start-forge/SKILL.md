@@ -235,7 +235,14 @@ recommended project step.
 ## Workflow
 
 1. **Resolve the project root.** Default to the current working directory. If
-   the user names a path, use it as `--root`.
+   the user names one unambiguous path, use it as `--root`. If the user is unsure
+   which project copy to use, inspect the candidate folders and existing Project
+   Links read-only. Do not choose by listing order or modification time, and do
+   not run `start` or `project init` in any candidate until the intended root is
+   clear. If the evidence cannot resolve the choice, ask one concise question.
+   A copied Project Link can point to the original project's sidecar; it is not
+   permission to take over that state. Never recreate, rewrite, or relink state
+   to make a candidate fit. Once the root is clear, follow normal activation.
 
 2. **Locate `forge-core`** from supported native candidates.
 
