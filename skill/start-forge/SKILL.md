@@ -180,6 +180,11 @@ Parallelize only independent lanes. Before active work begins, run
 `../.forge-worktrees/<agent>/<task>`. Never run `git worktree add` first: Forge
 must reject an incompatible path before it persists a contract or the agent
 starts work.
+Acquire the scope claim first and pass its exact ID to `isolation propose --claim`.
+If an existing Proposed or Active isolation was created without a claim, use
+`forge-core isolation link-claim --root <project> --id <isolation-id> --claim <claim-id>`.
+This only attaches a live claim owned by the isolation agent; an identical link
+is a no-op. Do not repropose the isolation or replace a different existing link.
 
 Keep signal scope and priority clear. `data.current_work.focus.blocker_count`
 and its blocker references are focus-bound: they describe only blockers

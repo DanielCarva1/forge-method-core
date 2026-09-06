@@ -288,6 +288,113 @@ pub fn run_propose(
     )
 }
 
+/// Attach an explicitly selected live claim without reproposing an isolation.
+/// Claim authority precedes isolation authority, matching `run_propose`.
+fn run_link_claim(
+    isolation_dir: &Path,
+    claims_dir: &Path,
+    isolation_id: &StableId,
+    claim_id: &StableId,
+    now_unix: Option<i64>,
+) -> CliEnvelope<IsolationProposePayload> {
+    let _claim_lock = match crate::claim::acquire_claim_cache_authority(claims_dir) {
+        Ok(lock) => lock,
+        Err(error) => return env_config("link-claim", claims_dir, &error.to_string()),
+    };
+    let isolation_lock = match acquire_isolation_contracts_authority(isolation_dir) {
+        Ok(lock) => lock,
+        Err(error) => return env_config("link-claim", isolation_dir, &error.to_string()),
+    };
+    let snapshot = match snapshot_isolation_contracts_under_authority(&isolation_lock) {
+        Ok(snapshot) => snapshot,
+        Err(error) => return env_config("link-claim", isolation_dir, &error.to_string()),
+    };
+    let mut matches = snapshot
+        .entries
+        .iter()
+        .filter(|entry| &entry.contract.id == isolation_id);
+    let Some(entry) = matches.next() else {
+        return CliEnvelope::err(
+            "isolation link-claim",
+            ExitReason::InvalidDecisionShape,
+            format!("isolation '{}' not found", isolation_id.0),
+        );
+    };
+    let relative_path = format!("{}.yaml", slug_for_file(&isolation_id.0));
+    if matches.next().is_some() || entry.relative_path != relative_path {
+        return env_config(
+            "link-claim",
+            isolation_dir,
+            "isolation id is duplicated or stored under a noncanonical filename",
+        );
+    }
+    let mut contract = entry.contract.clone();
+    if !matches!(
+        contract.status,
+        IsolationStatus::Proposed | IsolationStatus::Active
+    ) {
+        return CliEnvelope::err(
+            "isolation link-claim",
+            ExitReason::RejectedByGate,
+            "claim attachment requires a proposed or active isolation",
+        );
+    }
+    if contract
+        .claim_id
+        .as_ref()
+        .is_some_and(|linked| linked != claim_id)
+    {
+        return CliEnvelope::err(
+            "isolation link-claim",
+            ExitReason::RejectedByGate,
+            "isolation is already linked to a different claim",
+        );
+    }
+    let (claims, errors) = crate::claim::load_claims(claims_dir);
+    if !errors.is_empty() {
+        return env_config("link-claim", claims_dir, &errors.join("; "));
+    }
+    let Some(claim) = claims.iter().find(|claim| claim.id.0 == claim_id.0) else {
+        return CliEnvelope::err(
+            "isolation link-claim",
+            ExitReason::InvalidDecisionShape,
+            format!(
+                "linked claim '{}' was not found in authoritative claim state",
+                claim_id.0
+            ),
+        );
+    };
+    // Resolve wall-clock time only after both locks and authoritative reads.
+    if !forge_core_decisions::is_live(claim, resolve_now_unix(now_unix)) {
+        return CliEnvelope::err(
+            "isolation link-claim",
+            ExitReason::RejectedByGate,
+            "linked claim is not live or its lease has expired",
+        );
+    }
+    let already_linked = contract.claim_id.is_some();
+    contract.claim_id = Some(claim_id.clone());
+    if let Err(error) = validate_isolation_claim_agent(&contract, &claim.claim.claimant_agent_id) {
+        return rejection("link-claim", error, isolation_id);
+    }
+    let path = if already_linked {
+        isolation_dir.join(relative_path)
+    } else {
+        match save_isolation(isolation_dir, &contract) {
+            Ok(path) => path,
+            Err(error) => return env_config("link-claim", isolation_dir, &error.to_string()),
+        }
+    };
+    CliEnvelope::ok(
+        "isolation link-claim",
+        IsolationProposePayload {
+            isolation: contract,
+            contract_path: path.display().to_string(),
+            suggested_git_commands: Vec::new(),
+        },
+    )
+}
+
 /// Build the literal `git ...` commands an agent runs to create the worktree
 // and branch described by `c`. Every interpolated value is POSIX single-quote
 // escaped (review S4.6 C1: a stray `;`/`$()`/backtick in branch_name,
@@ -710,6 +817,7 @@ pub fn run_isolation_command(args: &[String]) -> Result<(), ExitError> {
     let sub = args.get(1).map_or("--help", String::as_str);
     match sub {
         "propose" => run_isolation_propose(&args[2..]),
+        "link-claim" => run_isolation_link_claim(&args[2..]),
         "status" => run_isolation_status(&args[2..]),
         "merge-plan" => run_isolation_merge_plan(&args[2..]),
         "transition" => run_isolation_transition(&args[2..]),
@@ -1151,6 +1259,66 @@ pub fn run_isolation_transition(args: &[String]) -> Result<(), ExitError> {
     emit_envelope_or_err("isolation", env, want_json)
 }
 
+fn run_isolation_link_claim(args: &[String]) -> Result<(), ExitError> {
+    let mut root = PathBuf::from(".");
+    let mut id = String::new();
+    let mut claim_id = String::new();
+    let mut now_unix = None;
+    let mut want_json = true;
+    let mut idx = 0;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--root" => {
+                idx += 1;
+                root = PathBuf::from(require_value_or_err(args, idx, "root")?);
+            }
+            "--id" => {
+                idx += 1;
+                id = require_value_or_err(args, idx, "id")?;
+            }
+            "--claim" => {
+                idx += 1;
+                claim_id = require_value_or_err(args, idx, "claim")?;
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict_or_err(
+                    &require_value_or_err(args, idx, "now-unix")?,
+                    "now-unix",
+                )?);
+            }
+            "--json" => want_json = true,
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("{}", isolation_command_surface_usage_line_for("link-claim"));
+                return Ok(());
+            }
+            other => return Err(unknown_isolation_arg("link-claim", other)),
+        }
+        idx += 1;
+    }
+    if id.is_empty() || claim_id.is_empty() {
+        return Err(ExitError::invalid_value(
+            "isolation link-claim: --id and --claim are both required",
+        ));
+    }
+    let isolation_dir =
+        resolve_isolation_dir_or_err("isolation.link-claim", None, &root, want_json)?;
+    let claims_dir =
+        crate::claim::resolve_claims_dir_or_err("isolation.link-claim", None, &root, want_json)?;
+    emit_envelope_or_err(
+        "isolation",
+        run_link_claim(
+            &isolation_dir,
+            &claims_dir,
+            &StableId(id),
+            &StableId(claim_id),
+            now_unix,
+        ),
+        want_json,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1190,6 +1358,221 @@ mod tests {
             &format!("iso-{agent}-{}", slug_for_file(branch)),
             NOW,
         )
+    }
+
+    fn link_claim_fixture() -> (PathBuf, PathBuf, String) {
+        let parent = dir();
+        let root = parent.join("app");
+        let state = parent.join("sidecar/.forge-method");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&state).unwrap();
+        fs::write(root.join(forge_core_contracts::PROJECT_LINK_FILE_NAME),
+            "schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: ../sidecar\nstate_root: ../sidecar/.forge-method\n").unwrap();
+        crate::claim::run_claim_acquire(&args(&[
+            "--root",
+            root.to_str().unwrap(),
+            "--scope",
+            "product-area",
+            "--id",
+            "link-test",
+            "--agent",
+            "alice",
+            "--path",
+            "src/a.rs",
+            "--now-unix",
+            &NOW.to_string(),
+        ]))
+        .unwrap();
+        let (claims, errors) = crate::claim::load_claims(&state.join("claims-active"));
+        assert!(errors.is_empty());
+        let claim_id = claims[0].id.0.clone();
+        let envelope = propose_ok(
+            &state.join("contracts/isolations"),
+            "alice",
+            "alice/link",
+            "../.forge-worktrees/alice/link",
+        );
+        assert!(envelope.ok);
+        (root, state, claim_id)
+    }
+
+    #[test]
+    fn isolation_link_claim_public_command_preserves_contract_and_retry_bytes() {
+        let (root, state, claim_id) = link_claim_fixture();
+        let isolation_dir = state.join("contracts/isolations");
+        let mut expected = load_isolations(&isolation_dir).0.remove(0);
+        let command = args(&[
+            "isolation",
+            "link-claim",
+            "--root",
+            root.to_str().unwrap(),
+            "--id",
+            &expected.id.0,
+            "--claim",
+            &claim_id,
+            "--now-unix",
+            &NOW.to_string(),
+        ]);
+        assert!(
+            run_isolation_command(&command).is_ok(),
+            "public link-claim must attach a live owned claim"
+        );
+        expected.claim_id = Some(StableId(claim_id));
+        assert_eq!(load_isolations(&isolation_dir).0, vec![expected.clone()]);
+        let path = isolation_dir.join(format!("{}.yaml", slug_for_file(&expected.id.0)));
+        let annotated = format!(
+            "{}\n# preserve exact retry bytes\n",
+            fs::read_to_string(&path).unwrap()
+        );
+        fs::write(&path, annotated).unwrap();
+        let before = fs::read(&path).unwrap();
+        let modified = fs::metadata(&path).unwrap().modified().unwrap();
+        assert!(run_isolation_command(&command).is_ok());
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), modified);
+    }
+
+    #[test]
+    fn isolation_link_claim_active_preserves_fields_and_duplicate_guards() {
+        let (root, state, claim_id) = link_claim_fixture();
+        let isolation_dir = state.join("contracts/isolations");
+        let mut expected = load_isolations(&isolation_dir).0.remove(0);
+        assert!(run_transition(&isolation_dir, &expected.id, IsolationStatus::Active, NOW).ok);
+        expected.status = IsolationStatus::Active;
+        assert!(run_isolation_command(&args(&[
+            "isolation",
+            "link-claim",
+            "--root",
+            root.to_str().unwrap(),
+            "--id",
+            &expected.id.0,
+            "--claim",
+            &claim_id,
+            "--now-unix",
+            &NOW.to_string()
+        ]))
+        .is_ok());
+        expected.claim_id = Some(StableId(claim_id));
+        assert_eq!(load_isolations(&isolation_dir).0, vec![expected]);
+        assert!(
+            !propose_ok(
+                &isolation_dir,
+                "alice",
+                "alice/link",
+                "../.forge-worktrees/alice/link"
+            )
+            .ok
+        );
+    }
+
+    #[test]
+    fn isolation_link_claim_rejections_preserve_exact_isolation_bytes() {
+        for case in [
+            "missing-isolation",
+            "missing-claim",
+            "expired-claim",
+            "wrong-owner",
+            "other-link",
+            "merging",
+            "merged",
+            "abandoned",
+            "duplicate-id",
+            "noncanonical",
+            "corrupt-document",
+            "retry-expired",
+            "retry-wrong-owner",
+            "retry-terminal",
+        ] {
+            let (root, state, claim_id) = link_claim_fixture();
+            let isolation_dir = state.join("contracts/isolations");
+            let mut contract = load_isolations(&isolation_dir).0.remove(0);
+            match case {
+                "wrong-owner" | "retry-wrong-owner" => contract.agent_id = StableId("bob".into()),
+                "other-link" => contract.claim_id = Some(StableId("another-claim".into())),
+                "merging" => contract.status = IsolationStatus::Merging,
+                "merged" | "retry-terminal" => contract.status = IsolationStatus::Merged,
+                "abandoned" => contract.status = IsolationStatus::Abandoned,
+                _ => {}
+            }
+            if case.starts_with("retry-") {
+                contract.claim_id = Some(StableId(claim_id.clone()));
+            }
+            let path = save_isolation(&isolation_dir, &contract).unwrap();
+            match case {
+                "duplicate-id" => {
+                    fs::copy(&path, isolation_dir.join("duplicate.yaml")).unwrap();
+                }
+                "noncanonical" => {
+                    fs::rename(&path, isolation_dir.join("renamed.yaml")).unwrap();
+                }
+                "corrupt-document" => {
+                    fs::write(isolation_dir.join("corrupt.yaml"), "[:invalid").unwrap();
+                }
+                _ => {}
+            }
+            let bytes: Vec<_> = fs::read_dir(&isolation_dir)
+                .unwrap()
+                .map(|entry| {
+                    let path = entry.unwrap().path();
+                    let raw = fs::read(&path).unwrap();
+                    (path, raw)
+                })
+                .collect();
+            let now = if matches!(case, "expired-claim" | "retry-expired") {
+                NOW + 600
+            } else {
+                NOW
+            };
+            let id = if case == "missing-isolation" {
+                "absent"
+            } else {
+                &contract.id.0
+            };
+            let claim = if case == "missing-claim" {
+                "absent"
+            } else {
+                &claim_id
+            };
+            assert!(
+                run_isolation_command(&args(&[
+                    "isolation",
+                    "link-claim",
+                    "--root",
+                    root.to_str().unwrap(),
+                    "--id",
+                    id,
+                    "--claim",
+                    claim,
+                    "--now-unix",
+                    &now.to_string()
+                ]))
+                .is_err(),
+                "case {case}"
+            );
+            assert_eq!(
+                fs::read_dir(&isolation_dir).unwrap().count(),
+                bytes.len(),
+                "case {case}"
+            );
+            for (path, before) in bytes {
+                assert_eq!(fs::read(path).unwrap(), before, "case {case}");
+            }
+        }
+    }
+
+    #[test]
+    fn isolation_link_claim_requires_explicit_selection_and_rejects_unknown_flags() {
+        for flags in [
+            vec![],
+            vec!["--id", "isolation"],
+            vec!["--claim", "claim"],
+            vec!["--unknown"],
+        ] {
+            let mut command = args(&["isolation", "link-claim"]);
+            command.extend(args(&flags));
+            assert!(run_isolation_command(&command).is_err());
+        }
+        assert!(run_isolation_command(&args(&["isolation", "link-claim", "--help"])).is_ok());
     }
 
     // --- propose --------------------------------------------------------
@@ -1526,13 +1909,19 @@ mod tests {
         }
         assert_eq!(
             isolation_subcommand_hint(),
-            "propose | status | merge-plan | transition"
+            "propose | link-claim | status | merge-plan | transition"
         );
     }
 
     #[test]
     fn isolation_subcommand_help_lookup_projects_full_command_surface_lines() {
-        for subcommand in ["propose", "status", "merge-plan", "transition"] {
+        for subcommand in [
+            "propose",
+            "link-claim",
+            "status",
+            "merge-plan",
+            "transition",
+        ] {
             let usage = isolation_command_surface_usage_line_for(subcommand);
             assert_eq!(
                 Some(usage),

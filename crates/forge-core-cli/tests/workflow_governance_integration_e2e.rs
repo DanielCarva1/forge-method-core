@@ -6533,14 +6533,14 @@ fn promotion_create_recover_exact_payload_via_returned_argv_is_idempotent() {
         .as_array()
         .expect("published recovery argv");
     assert_eq!(argv.first().and_then(Value::as_str), Some("forge-core"));
-    let args = argv
+    let recovery_arguments = argv
         .iter()
         .skip(1)
         .map(|arg| arg.as_str().expect("argv string"))
         .collect::<Vec<_>>();
     let recovered = assert_ok(
         &bin()
-            .args(&args)
+            .args(&recovery_arguments)
             .output()
             .expect("execute published recovery argv"),
     );
@@ -6578,7 +6578,7 @@ fn promotion_create_recover_exact_payload_via_returned_argv_is_idempotent() {
     let state_before = state_tree_snapshot(&fixture.consumer.state);
     let repeated = assert_ok(
         &bin()
-            .args(&args)
+            .args(&recovery_arguments)
             .output()
             .expect("repeat same published recovery argv"),
     );
@@ -6621,7 +6621,7 @@ fn promotion_create_recover_unrecorded_object_stops_and_preserves_everything() {
         .as_array()
         .expect("published recovery argv");
     assert_eq!(argv.first().and_then(Value::as_str), Some("forge-core"));
-    let args = argv
+    let recovery_arguments = argv
         .iter()
         .skip(1)
         .map(|arg| arg.as_str().expect("argv string"))
@@ -6629,7 +6629,7 @@ fn promotion_create_recover_unrecorded_object_stops_and_preserves_everything() {
     let canonical_before = state_tree_snapshot(&fixture.consumer.app);
     let state_before = state_tree_snapshot(&fixture.consumer.state);
     let stopped = bin()
-        .args(&args)
+        .args(&recovery_arguments)
         .output()
         .expect("execute published recovery argv and stop");
     assert!(!stopped.status.success());

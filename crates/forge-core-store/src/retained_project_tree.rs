@@ -1135,7 +1135,7 @@ impl RetainedProjectTree {
     }
 
     /// Exclusively create an empty ordinary leaf under an already admitted parent.
-    /// All allocation and nonce preparation precedes FILE_CREATE. Once successful,
+    /// All allocation and nonce preparation precedes `FILE_CREATE`. Once successful,
     /// the OS handle is immediately wrapped in the returned token; no metadata
     /// capture or other fallible operation is interposed. The tree is deliberately
     /// stale until apply or rollback. Callers must retain the token on subsequent
@@ -3306,7 +3306,8 @@ mod platform {
                 file.as_raw_handle().cast(),
                 FileDispositionInfo,
                 (&raw const information).cast(),
-                std::mem::size_of::<FILE_DISPOSITION_INFO>() as u32,
+                u32::try_from(std::mem::size_of::<FILE_DISPOSITION_INFO>())
+                    .expect("FILE_DISPOSITION_INFO size fits u32"),
             )
         };
         if result == 0 {
@@ -3934,7 +3935,7 @@ mod tests {
     fn windows_exact_regular_file_create_parent_profile_fails_before_mutation() {
         assert!(create_parent_attributes_supported(0x10));
         assert!(create_parent_attributes_supported(0x30));
-        for bits in [0, 0x20, 0x810, 0x2010, 0x4010, 0x8010, 0x20010, 0x80000010] {
+        for bits in [0, 0x20, 0x810, 0x2010, 0x4010, 0x8010, 0x20010, 0x8000_0010] {
             assert!(!create_parent_attributes_supported(bits), "{bits:#x}");
         }
         for nested in [false, true] {
