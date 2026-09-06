@@ -387,16 +387,16 @@ host_adapter_behavior:
     - "Describe the reason for expansion in product language; do not ask the human to select Quick Cycle or Expanded Cycle."
     - "When validation finds an upstream mistake, return to the owning stage instead of hiding the problem in implementation patches."
   stale_or_unsupported_runtime:
-    - "A host that receives workflow_resume_summary_v6 follows the v6 compatibility behavior and may use existing guide diagnostics as a temporary fallback."
-    - "A host must not invent v7 fields or assume the installed catalog matches its skill text."
+    - "The current CLI publishes workflow_resume_summary_v10. For an older response, consume only fields and command arrays actually returned; never assume current journey or Current Work fields exist."
+    - "If required continuity is unavailable, report the compatibility limitation and inspect the supported public interface or update path; do not reconstruct missing authority from chat or assume the installed catalog matches the skill text."
 
 current_work_continuity:
   problem: >-
-    The current resume can recover the active objective, lifecycle stage,
-    governance policy, evidence, blockers, and available actions, but it cannot
-    identify the bounded piece of product work the human and host agent are
-    currently pursuing. A replacement agent must reconstruct that link from
-    chat memory, GitHub, files, or guesses.
+    Historical motivation: before Current Work was implemented, resume could
+    recover the objective and governance state but not the bounded product task.
+    Current resume publishes current_work, with accepted Work Focus and on-demand
+    detail through the existing workflow current-work interface. Use that durable
+    continuity instead of reconstructing the task from chat or creating another store.
   historical_precedent:
     old_behavior: >-
       The pre-Rust host entry reran a route/context preflight, interpreted the
