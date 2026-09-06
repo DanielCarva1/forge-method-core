@@ -1,0 +1,29 @@
+{
+  "case_id": "replacement-agent-recovery",
+  "assertions": {
+    "durable_state_reconstructed": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "fresh_agent_has_no_transcript_dependency": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "recovery_ranked_before_new_work": {
+      "passed": false,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [
+    {
+      "kind": "evidence_unavailable",
+      "code": "not_exercised.recovery_ranked_before_new_work"
+    }
+  ],
+  "evidence": {
+    "fact_codes": [
+      "codex_0.153.4_native_windows",
+      "same_owner_controlled_cli_journey"
+    ]
+  }
+}

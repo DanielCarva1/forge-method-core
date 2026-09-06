@@ -1,0 +1,71 @@
+{
+  "schema_version": "forge_host_conformance_run_summary_v1",
+  "recorded_on": "2026-09-05",
+  "authority": "same_owner_cooperative_candidate_only",
+  "identities": {
+    "codex_cli_declared": "0.153.4",
+    "codex_cli_executable_sha256": "sha256:a1cf6360ca71918d5466bc3a32d9f18b7044c9128756d1949e715d277b88c9b6",
+    "codex_desktop_declared": "not_measured",
+    "adapter_id": "forge.codex.cooperative",
+    "adapter_version": "1.0.0",
+    "forge_version_measured": "0.12.0-alpha.49",
+    "forge_executable_sha256": "sha256:d160894bae84bf905b63805b8191c95950ba31e75f38f614be587e3d1574f4b8",
+    "repository_source_commit": "eb2b68ca381ae73d80083edd594ccc7b11791e24",
+    "source_to_binary_binding": "official_source_install_receipt_and_hash_readback",
+    "skill_source_commit": "62d0f535f62859ecd01f9f5ded038023dbd8494b",
+    "delivery_skill_source_commit": "e1fa3792f65c542fb3f4c332ea1b7dae7b576f3e",
+    "platform_label_declared": "windows-native-x86_64",
+    "environment_label_declared": "controlled-cli-forge-eb2b68ca-skill-62d0f535"
+  },
+  "journey": {
+    "external_work_item": "https://github.com/DanielCarva1/forge-method-core/issues/70",
+    "scenario": "coordinator_supplied_accepted_readme_task_in_disposable_consumer",
+    "canonical_root": {
+      "resolved_path_sha256": "sha256:15a80e63dcbc94514a479c0767ca8f6c2acd68d63530b6605caf5f01b1266ad9",
+      "kind": "native_or_other",
+      "exists": true,
+      "is_directory": true,
+      "windows_to_wsl_bridge": "not_applicable"
+    },
+    "read_only_state_equal": true,
+    "governed_promotion": "applied_with_verified_canonical_readback",
+    "exact_retry": "already_committed_same_receipt_no_canonical_mutation",
+    "task_closeout": "coordinator_exercised_existing_public_complete_api",
+    "replacement_agent_recovery": "fresh_cli_recovered_terminal_focus_read_only",
+    "interrupted_recovery": "not_exercised",
+    "evidence_comment": "https://github.com/DanielCarva1/forge-method-core/issues/70#issuecomment-5555795126",
+    "retained_local_evidence_sha256": {
+      "promotion-apply.json": "sha256:05d95839414e032a9bd5e48d2b623e030f2b1391a3e0dfd1195f99b308cee834",
+      "promotion-exact-retry.json": "sha256:3b7ed8b8cdb6cf9667800d59f315db3ef472778832c6277d5080fb381420e1ed",
+      "test-canonical.json": "sha256:ed4f58fe36c7cef881bf3a249815af88ae7e23ba19c0147d7e272e0f0edacf5b",
+      "coordinator-closeout-result.json": "sha256:10329add78d9c56a2dbc265ab38a4ae1039eceba1e7b7a1dee605911ea0496db",
+      "coordinator-closeout-resume.json": "sha256:f269f987c93edc3b309179fecca9a4f975b0488453344ed7483b9739b31b6c41",
+      "resume-report.txt": "sha256:965445f6d307df27943a4a416d363814e67908c4aaabba0d5a1746bde293d828"
+    }
+  },
+  "result": {
+    "overall": "candidate",
+    "capabilities": 8,
+    "partially_supported": 8,
+    "unsupported": 0,
+    "supported": 0,
+    "assertions_passed": 18,
+    "assertions_failed": 5,
+    "assertions_not_applicable": 1,
+    "integrity_proves_host_authenticity": false
+  },
+  "unexercised_checks": [
+    "ambiguous_roots_rejected",
+    "rejected_evidence_stays_rejected",
+    "ownership_mismatch_stops",
+    "missing_isolation_stops",
+    "recovery_ranked_before_new_work"
+  ],
+  "bundle": {
+    "relative_path": "bundle",
+    "bundle_digest": "sha256:6cd2b820d268b480dfea3374592936ba33a9cbc6946eab909a47c9d6810e63ee",
+    "bundle_integrity_verification": "passed",
+    "verification_scope": "closed_bundle_structure_completeness_derived_result_and_digests_only",
+    "reported_host_actions_verified": false
+  }
+}

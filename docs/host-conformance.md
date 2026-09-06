@@ -138,14 +138,15 @@ Linux runner can verify the canonical WSL project but cannot independently
 observe the Windows side of that bridge. The result must keep that limitation
 visible.
 
-The current retained candidate result covers Codex CLI `0.150.0-alpha.8` on
-Codex Desktop `26.820.10647.0` and native Windows. It is documented at
-`contracts/hosts/conformance-results/codex/0.150.0-alpha.8/README.md`; its
-`run-summary.json` and `bundle/` preserve six partially supported capabilities,
-two unsupported capabilities, and every typed gap from that exact journey.
-The earlier CLI `0.144.6` WSL result remains beside it as historical evidence.
-Re-verifying either bundle establishes file integrity and result consistency
-only, not the truth of the adapter-reported host actions.
+The newest retained Codex candidate covers CLI `0.153.4` on native Windows;
+Desktop version was not measured. See
+`contracts/hosts/conformance-results/codex/0.153.4/README.md` for the controlled
+delivery, exact retry and fresh-agent task recovery. Its bundle records 18 passed
+assertions, 5 unexercised failed assertions and 1 not-applicable bridge check;
+all eight capabilities remain partially supported. The earlier native-Windows
+`0.150.0-alpha.8` and WSL `0.144.6` bundles remain historical evidence for their
+exact versions. Re-verifying any bundle establishes file integrity and result
+consistency only, not the truth of adapter-reported host actions.
 
 The current retained OpenCode candidate result covers OpenCode CLI `1.14.33`
 with model `zai-coding-plan/glm-5.3` on native Windows. It is documented at
@@ -175,3 +176,10 @@ bridge assertion was not applicable. No GUI automation, private hook, permanent
 adapter, credential, transcript, or raw CLI output was retained. Bundle
 integrity still does not prove ZCode-native authenticity, so this is candidate
 evidence rather than official host support.
+
+Later ZCode `0.16.5` checks separately observed
+[ambiguous-root rejection](https://github.com/DanielCarva1/forge-method-core/issues/70#issuecomment-5555093016)
+and [missing-isolation rejection](https://github.com/DanielCarva1/forge-method-core/issues/70#issuecomment-5555146151),
+with unchanged disposable project/sidecar inventories. Those checks used newer
+skill/source combinations and supplement, rather than rewrite, the older
+21/2/1 bundle. They do not turn candidate evidence into native host proof.

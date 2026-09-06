@@ -1,0 +1,29 @@
+{
+  "case_id": "cooperative-evidence",
+  "assertions": {
+    "admission_result_read_back": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "evidence_source_preserved": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "rejected_evidence_stays_rejected": {
+      "passed": false,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [
+    {
+      "kind": "evidence_unavailable",
+      "code": "not_exercised.rejected_evidence_stays_rejected"
+    }
+  ],
+  "evidence": {
+    "fact_codes": [
+      "codex_0.153.4_native_windows",
+      "same_owner_controlled_cli_journey"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "case_id": "canonical-project-root",
+  "assertions": {
+    "ambiguous_roots_rejected": {
+      "passed": false,
+      "native_proof_claim": null
+    },
+    "exact_existing_root_resolved": {
+      "passed": true,
+      "native_proof_claim": null
+    },
+    "windows_wsl_bridge_applied_only_when_required": {
+      "passed": false,
+      "native_proof_claim": null
+    }
+  },
+  "gaps": [
+    {
+      "kind": "evidence_unavailable",
+      "code": "not_exercised.ambiguous_roots_rejected"
+    }
+  ],
+  "evidence": {
+    "fact_codes": [
+      "codex_0.153.4_native_windows",
+      "same_owner_controlled_cli_journey"
+    ]
+  }
+}
