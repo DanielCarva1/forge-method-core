@@ -359,7 +359,7 @@ pub struct GovernedPromotionPreview {
     pub unresolved_gaps: Vec<PromotionGap>,
 }
 
-pub const GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION: &str = "governed_promotion_receipt_v1";
+pub const GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION: &str = "governed_promotion_receipt_v2";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -373,8 +373,8 @@ pub enum GovernedPromotionApplyStatus {
 #[serde(deny_unknown_fields)]
 pub struct PromotionAppliedFileBinding {
     pub path: RepoPath,
-    pub before_content_digest: String,
-    pub before_byte_length: u64,
+    pub before_content_digest: Option<String>,
+    pub before_byte_length: Option<u64>,
     pub after_content_digest: String,
     pub after_byte_length: u64,
 }
@@ -429,4 +429,27 @@ pub struct GovernedPromotionApplication {
     pub status: GovernedPromotionApplyStatus,
     pub canonical_mutation_performed: bool,
     pub receipt: GovernedPromotionReceipt,
+}
+
+#[cfg(test)]
+mod promotion_binding_tests {
+    use super::*;
+
+    #[test]
+    fn promotion_before_binding_preserves_legacy_json_and_explicit_absence() {
+        let old = serde_json::json!({"path":"src/file.txt", "before_content_digest":"sha256:old",
+            "before_byte_length":0, "after_content_digest":"sha256:new", "after_byte_length":3});
+        let mut binding: PromotionAppliedFileBinding = serde_json::from_value(old.clone()).unwrap();
+        assert_eq!(binding.before_byte_length, Some(0));
+        assert_eq!(serde_json::to_value(&binding).unwrap(), old);
+        binding.before_content_digest = None;
+        binding.before_byte_length = None;
+        let absent = serde_json::to_value(&binding).unwrap();
+        assert!(absent["before_content_digest"].is_null());
+        assert!(absent["before_byte_length"].is_null());
+        assert_eq!(
+            serde_json::from_value::<PromotionAppliedFileBinding>(absent).unwrap(),
+            binding
+        );
+    }
 }

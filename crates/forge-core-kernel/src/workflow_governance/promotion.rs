@@ -22,10 +22,10 @@ use forge_core_contracts::{
     PrincipalId, PromotionAppliedFileBinding, PromotionApplyEligibility,
     PromotionAssuranceClaimCoverage, PromotionAssuranceClaimStatus, PromotionCarriedAssuranceGap,
     PromotionClaimConflict, PromotionClaimSetBinding, PromotionDestinationBinding,
-    PromotionDiffEffect, PromotionEvidenceRecordBinding, PromotionEvidenceSetBinding,
-    PromotionExcludedRootBinding, PromotionExcludedRootKind, PromotionGitWorktreeBinding,
-    PromotionGovernanceBinding, PromotionObjectiveBinding, PromotionObjectiveCoverage,
-    PromotionObjectiveCoverageStatus, PromotionPathClaimAttribution,
+    PromotionDiffEffect, PromotionDiffEntry, PromotionEvidenceRecordBinding,
+    PromotionEvidenceSetBinding, PromotionExcludedRootBinding, PromotionExcludedRootKind,
+    PromotionGitWorktreeBinding, PromotionGovernanceBinding, PromotionObjectiveBinding,
+    PromotionObjectiveCoverage, PromotionObjectiveCoverageStatus, PromotionPathClaimAttribution,
     PromotionRecoveryExecutionBinding, PromotionReplayBinding, PromotionSnapshotBinding,
     PromotionSourceBinding, PromotionUnsupportedEffect, PromotionUnsupportedEffectKind,
     PromotionWriteClaimCoverage, PromotionWriteClaimCoverageStatus, RepoPath, StableId,
@@ -546,6 +546,17 @@ fn derive_governed_promotion(
             &git_change_set,
             linked_claim_contract.as_ref(),
         )?;
+    for entry in &diff.diff {
+        if entry.effect == PromotionDiffEffect::CreateRegularFile {
+            if let Err(error) = destination_tree.preflight_exact_regular_file_create(&entry.path.0)
+            {
+                diff.unsupported_effects.push(PromotionUnsupportedEffect {
+                    path: entry.path.clone(), kind: PromotionUnsupportedEffectKind::FileMetadataCreate,
+                    detail: format!("retained destination create preflight rejected supported-profile admission: {error}"),
+                });
+            }
+        }
+    }
     for excluded in &source_excluded_roots {
         let explicitly_selected = selected_paths.iter().any(|path| {
             path == &excluded.name
@@ -1536,6 +1547,136 @@ fn load_promotion_intent_under_lock(
 mod intent_digest_tests {
     use super::*;
 
+    fn legacy_receipt_fixture() -> GovernedPromotionReceipt {
+        serde_json::from_str(include_str!(
+            "fixtures/promotion_receipt_v2_before_logical_snapshot.json"
+        ))
+        .unwrap()
+    }
+
+    fn create_entry() -> PromotionDiffEntry {
+        PromotionDiffEntry {
+            path: RepoPath("src/new.txt".to_owned()),
+            effect: PromotionDiffEffect::CreateRegularFile,
+            before_content_digest: None,
+            before_byte_length: None,
+            before_metadata_fingerprint: None,
+            after_content_digest: Some(sha256_content_hash(b"new")),
+            after_byte_length: Some(3),
+            after_metadata_fingerprint: Some("windows:attributes=00000020".to_owned()),
+            destructive: false,
+        }
+    }
+
+    #[test]
+    fn promotion_receipt_v2_write_and_v1_before_compatibility() {
+        let legacy = legacy_receipt_fixture();
+        assert_eq!(
+            promotion_receipt_digest(&legacy).unwrap(),
+            legacy.receipt_digest
+        );
+        let raw: serde_json::Value = serde_json::from_str(include_str!(
+            "fixtures/promotion_receipt_v2_before_logical_snapshot.json"
+        ))
+        .unwrap();
+        assert_eq!(serde_json::to_value(&legacy).unwrap(), raw);
+        let mut v2 = legacy.clone();
+        v2.schema_version = GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION.to_owned();
+        v2.receipt_digest = promotion_receipt_digest(&v2).unwrap();
+        verify_promotion_receipt(&v2, &v2.preview.preview_digest).unwrap();
+        for version in [
+            "governed_promotion_receipt_v1",
+            GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION,
+        ] {
+            for missing in [0, 1, 2] {
+                let mut bad = legacy.clone();
+                bad.schema_version = version.to_owned();
+                if missing != 1 {
+                    bad.applied_files[0].before_content_digest = None;
+                }
+                if missing != 0 {
+                    bad.applied_files[0].before_byte_length = None;
+                }
+                bad.receipt_digest = promotion_receipt_digest(&bad).unwrap();
+                assert!(verify_promotion_receipt(&bad, &bad.preview.preview_digest).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn promotion_create_and_mixed_effects_preserve_reads_and_checked_counts() {
+        let receipt = legacy_receipt_fixture();
+        let mut preview = receipt.preview.clone();
+        let old_count = preview.destination.snapshot.file_count;
+        preview.diff.push(create_entry());
+        let mixed = promotion_effect_contract(&preview, &receipt.derived_principal_id).unwrap();
+        assert_eq!(
+            mixed
+                .tool_effect_contract
+                .write_set
+                .last()
+                .unwrap()
+                .access_mode,
+            AccessMode::Create
+        );
+        assert_eq!(
+            mixed.tool_effect_contract.read_set.len(),
+            preview.diff.len()
+        );
+        assert_eq!(
+            promotion_result_file_count(&preview),
+            old_count.checked_add(1)
+        );
+        preview.diff = vec![create_entry()];
+        let create = promotion_effect_contract(&preview, &receipt.derived_principal_id).unwrap();
+        assert_eq!(create.tool_effect_contract.read_set.len(), 1);
+        assert!(create.tool_effect_contract.read_set[0]
+            .expected_hash
+            .is_none());
+        assert!(create.tool_effect_contract.write_set[0]
+            .expected_hash
+            .is_none());
+        preview.destination.snapshot.file_count = usize::MAX;
+        assert_eq!(promotion_result_file_count(&preview), None);
+    }
+
+    #[test]
+    fn promotion_create_rejects_partial_before_and_unsupported_metadata() {
+        assert_eq!(
+            promotion_entry_access_mode(&create_entry()).unwrap(),
+            AccessMode::Create
+        );
+        for field in [
+            "digest",
+            "length",
+            "metadata",
+            "after-digest",
+            "after-length",
+            "after-metadata",
+            "attribute",
+            "destructive",
+        ] {
+            let mut entry = create_entry();
+            match field {
+                "digest" => entry.before_content_digest = Some(sha256_content_hash(b"")),
+                "length" => entry.before_byte_length = Some(0),
+                "metadata" => {
+                    entry.before_metadata_fingerprint = entry.after_metadata_fingerprint.clone()
+                }
+                "after-digest" => entry.after_content_digest = None,
+                "after-length" => entry.after_byte_length = None,
+                "after-metadata" => entry.after_metadata_fingerprint = None,
+                "attribute" => {
+                    entry.after_metadata_fingerprint =
+                        Some("windows:attributes=00000022".to_owned())
+                }
+                "destructive" => entry.destructive = true,
+                _ => unreachable!(),
+            }
+            assert!(promotion_entry_access_mode(&entry).is_err(), "{field}");
+        }
+    }
+
     #[test]
     fn historical_v2_intent_survives_preview_v3_field_hydration() {
         let raw = include_str!("fixtures/promotion_intent_v2_before_logical_snapshot.json");
@@ -1850,11 +1991,25 @@ fn validate_recovery_destination(
         .map(|file| (file.relative_path.clone(), file))
         .collect::<BTreeMap<_, _>>();
     for diff in &preview.diff {
-        if diff.effect != PromotionDiffEffect::WriteRegularFile || diff.destructive {
-            return Err(PromotionApplyError::RecoveryRequired(format!(
-                "{} is not a recoverable existing-file write",
-                diff.path.0
-            )));
+        let access_mode = promotion_entry_access_mode(diff)
+            .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))?;
+        if access_mode == AccessMode::Create {
+            if let Some(current) = reconstructed_files.get(&diff.path.0) {
+                if Some(current.content_digest.as_str()) != diff.after_content_digest.as_deref()
+                    || Some(current.byte_length) != diff.after_byte_length
+                    || Some(current.metadata_fingerprint.as_str())
+                        != diff.after_metadata_fingerprint.as_deref()
+                {
+                    return Err(PromotionApplyError::RecoveryRequired(format!(
+                        "{} created destination is not exact approved new state",
+                        diff.path.0
+                    )));
+                }
+                // Reconstruct the approved absent preimage only in this inventory.
+                // Store WAL independently decides identity/progress ambiguity.
+                reconstructed_files.remove(&diff.path.0);
+            }
+            continue;
         }
         let before_content_digest = diff.before_content_digest.as_ref().ok_or_else(|| {
             PromotionApplyError::RecoveryRequired(format!(
@@ -2174,6 +2329,17 @@ pub(super) fn apply_prepared_promotion_under_lock(
         .map_err(|error| PromotionApplyError::Store(error.to_string()))?;
     ensure_preview_fresh(&prepared.preview, false)?;
     for file in &applied_files {
+        if file.before_content_digest.is_none() && file.before_byte_length.is_none() {
+            destination_tree
+                .preflight_exact_regular_file_create(&file.path.0)
+                .map_err(|error| {
+                    PromotionApplyError::UnsupportedEffect(format!(
+                        "{} cannot admit exact creation before durable intent: {error}",
+                        file.path.0
+                    ))
+                })?;
+            continue;
+        }
         let before = destination_tree
             .exact_regular_file_bytes(&file.path.0)
             .map_err(|error| PromotionApplyError::UnsupportedEffect(error.to_string()))?
@@ -2441,6 +2607,50 @@ fn verify_logical_result_matches_prediction(
     Ok(())
 }
 
+/// One admitted exact file operation; absence is not an empty-file preimage.
+fn promotion_entry_access_mode(
+    entry: &PromotionDiffEntry,
+) -> Result<AccessMode, PromotionApplyError> {
+    let after_valid = entry
+        .after_content_digest
+        .as_deref()
+        .is_some_and(is_sha256_digest)
+        && entry.after_byte_length.is_some()
+        && entry.after_metadata_fingerprint.is_some();
+    let mode = match entry.effect {
+        PromotionDiffEffect::WriteRegularFile
+            if entry
+                .before_content_digest
+                .as_deref()
+                .is_some_and(is_sha256_digest)
+                && entry.before_byte_length.is_some()
+                && entry.before_metadata_fingerprint.is_some()
+                && entry.before_metadata_fingerprint == entry.after_metadata_fingerprint =>
+        {
+            Some(AccessMode::Write)
+        }
+        PromotionDiffEffect::CreateRegularFile
+            if entry.before_content_digest.is_none() && entry.before_byte_length.is_none()
+                && entry.before_metadata_fingerprint.is_none()
+                // Current native creation policy: admit only this observed attribute
+                // shape; exact post-apply logical readback remains mandatory.
+                && entry.after_metadata_fingerprint.as_deref() == Some("windows:attributes=00000020") =>
+        {
+            Some(AccessMode::Create)
+        }
+        _ => None,
+    };
+    if !entry.destructive && after_valid {
+        if let Some(mode) = mode {
+            return Ok(mode);
+        }
+    }
+    Err(PromotionApplyError::UnsupportedEffect(format!(
+        "{} is not an admitted exact regular-file Write/Create shape",
+        entry.path.0
+    )))
+}
+
 fn promotion_effect_and_payloads(
     prepared: &PreparedPromotion,
 ) -> Result<
@@ -2458,18 +2668,11 @@ fn promotion_effect_and_payloads(
     let mut payloads = Vec::new();
     let mut applied = Vec::new();
     for entry in &prepared.preview.diff {
-        if entry.effect != PromotionDiffEffect::WriteRegularFile
-            || entry.destructive
-            || entry.before_metadata_fingerprint != entry.after_metadata_fingerprint
-        {
-            return Err(PromotionApplyError::UnsupportedEffect(format!(
-                "{} is not one metadata-stable write to an existing regular file",
-                entry.path.0
-            )));
+        if promotion_entry_access_mode(entry)? == AccessMode::Create && !cfg!(windows) {
+            return Err(PromotionApplyError::UnsupportedEffect(
+                "native retained Create requires Windows".to_owned(),
+            ));
         }
-        let before = entry.before_content_digest.clone().ok_or_else(|| {
-            PromotionApplyError::Payload(format!("{} lacks before digest", entry.path.0))
-        })?;
         let after = entry.after_content_digest.clone().ok_or_else(|| {
             PromotionApplyError::Payload(format!("{} lacks after digest", entry.path.0))
         })?;
@@ -2480,7 +2683,9 @@ fn promotion_effect_and_payloads(
             .ok_or_else(|| {
                 PromotionApplyError::Payload(format!("{} missing in retained source", entry.path.0))
             })?;
-        if sha256_content_hash(&content) != after {
+        if sha256_content_hash(&content) != after
+            || Some(content.len() as u64) != entry.after_byte_length
+        {
             return Err(PromotionApplyError::Payload(format!(
                 "{} retained source digest differs from preview",
                 entry.path.0
@@ -2493,8 +2698,8 @@ fn promotion_effect_and_payloads(
         });
         applied.push(PromotionAppliedFileBinding {
             path: entry.path.clone(),
-            before_content_digest: before,
-            before_byte_length: entry.before_byte_length.unwrap_or_default(),
+            before_content_digest: entry.before_content_digest.clone(),
+            before_byte_length: entry.before_byte_length,
             after_content_digest: after,
             after_byte_length: entry.after_byte_length.unwrap_or_default(),
         });
@@ -2510,30 +2715,20 @@ fn promotion_effect_contract(
     let mut reads = Vec::new();
     let mut writes = Vec::new();
     for entry in &preview.diff {
-        if entry.effect != PromotionDiffEffect::WriteRegularFile
-            || entry.destructive
-            || entry.before_metadata_fingerprint != entry.after_metadata_fingerprint
-        {
-            return Err(PromotionApplyError::UnsupportedEffect(format!(
-                "{} is not one metadata-stable write to an existing regular file",
-                entry.path.0
-            )));
-        }
-        let before = entry.before_content_digest.clone().ok_or_else(|| {
-            PromotionApplyError::Payload(format!("{} lacks before digest", entry.path.0))
-        })?;
+        let access_mode = promotion_entry_access_mode(entry)?;
+        let before = entry.before_content_digest.clone();
         reads.push(EffectRead {
             target_kind: EffectTargetKind::FilePath,
             reference: entry.path.0.clone(),
-            expected_hash: Some(before.clone()),
+            expected_hash: before.clone(),
             expected_version: None,
             required_for_plan: true,
         });
         writes.push(EffectWrite {
             target_kind: EffectTargetKind::FilePath,
             reference: entry.path.0.clone(),
-            access_mode: AccessMode::Write,
-            expected_hash: Some(before),
+            access_mode,
+            expected_hash: before,
             expected_version: None,
             destructive: false,
         });
@@ -2630,6 +2825,16 @@ fn ensure_preview_fresh(
     Ok(())
 }
 
+fn promotion_result_file_count(preview: &GovernedPromotionPreview) -> Option<usize> {
+    preview.destination.snapshot.file_count.checked_add(
+        preview
+            .diff
+            .iter()
+            .filter(|entry| entry.effect == PromotionDiffEffect::CreateRegularFile)
+            .count(),
+    )
+}
+
 fn promotion_receipt_digest(
     receipt: &GovernedPromotionReceipt,
 ) -> Result<String, PromotionApplyError> {
@@ -2643,8 +2848,10 @@ fn verify_promotion_receipt(
     receipt: &GovernedPromotionReceipt,
     expected_preview_digest: &str,
 ) -> Result<(), PromotionApplyError> {
-    if receipt.schema_version != GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION
-        || receipt.preview.preview_digest != expected_preview_digest
+    if !matches!(
+        receipt.schema_version.as_str(),
+        "governed_promotion_receipt_v1" | GOVERNED_PROMOTION_RECEIPT_SCHEMA_VERSION
+    ) || receipt.preview.preview_digest != expected_preview_digest
         || !receipt.readback_verified
     {
         return Err(PromotionApplyError::ReceiptInvalid(
@@ -2882,26 +3089,19 @@ fn verify_promotion_receipt(
         .diff
         .iter()
         .map(|entry| {
-            if entry.effect != PromotionDiffEffect::WriteRegularFile
-                || entry.destructive
-                || entry.before_metadata_fingerprint != entry.after_metadata_fingerprint
+            let access_mode = promotion_entry_access_mode(entry)
+                .map_err(|error| PromotionApplyError::ReceiptInvalid(error.to_string()))?;
+            if receipt.schema_version == "governed_promotion_receipt_v1"
+                && access_mode != AccessMode::Write
             {
                 return Err(PromotionApplyError::ReceiptInvalid(
-                    "receipt preview contains a non-admitted apply effect".to_owned(),
+                    "legacy receipt cannot claim Create".to_owned(),
                 ));
             }
             Ok(PromotionAppliedFileBinding {
                 path: entry.path.clone(),
-                before_content_digest: entry.before_content_digest.clone().ok_or_else(|| {
-                    PromotionApplyError::ReceiptInvalid(
-                        "receipt preview write lacks before digest".to_owned(),
-                    )
-                })?,
-                before_byte_length: entry.before_byte_length.ok_or_else(|| {
-                    PromotionApplyError::ReceiptInvalid(
-                        "receipt preview write lacks before length".to_owned(),
-                    )
-                })?,
+                before_content_digest: entry.before_content_digest.clone(),
+                before_byte_length: entry.before_byte_length,
                 after_content_digest: entry.after_content_digest.clone().ok_or_else(|| {
                     PromotionApplyError::ReceiptInvalid(
                         "receipt preview write lacks after digest".to_owned(),
@@ -2974,7 +3174,8 @@ fn verify_promotion_receipt(
         if result.regular_file_set_digest != preview.predicted_result_regular_file_set_digest {
             snapshot_mismatches.push("regular_file_set_digest");
         }
-        if result.file_count != destination.file_count {
+        let expected_file_count = promotion_result_file_count(preview);
+        if Some(result.file_count) != expected_file_count {
             snapshot_mismatches.push("file_count");
         }
         if result.directory_count != destination.directory_count {

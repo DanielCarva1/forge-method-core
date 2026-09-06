@@ -1180,11 +1180,47 @@ pub struct EffectWalRecord {
 pub enum EffectWalStage {
     Begin,
     BeforeImage,
+    CreateEstablished(EffectWalCreateEstablished),
     WriteApplied,
     Commit,
     RollbackComplete,
     RecoveredRollback,
     ReplayConsumed,
+}
+
+/// Observed Windows object identity; evidence, not a cross-process lifetime capability.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EffectWalCreatedObjectIdentity {
+    pub volume_serial_number: u32,
+    pub file_index: u64,
+    pub creation_time: u64,
+    pub file_attributes: u64,
+}
+
+/// Durable proof that exclusive creation returned an empty, single-link ordinary
+/// file under the bound retained parent/root before any payload write. Reusable
+/// IDs support exact forward readback only and NEVER authorize recovered deletion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EffectWalCreateEstablished {
+    pub root: EffectWalCreatedObjectIdentity,
+    pub parent: EffectWalCreatedObjectIdentity,
+    pub file: EffectWalCreatedObjectIdentity,
+}
+
+impl EffectWalCreateEstablished {
+    fn is_valid(self) -> bool {
+        [self.root, self.parent, self.file].iter().all(|object| {
+            object.file_index != 0
+                && object.creation_time != 0
+                && object.file_attributes & 0x400 == 0
+        }) && self.root.file_attributes & 0x10 != 0
+            && self.parent.file_attributes & 0x10 != 0
+            && self.file.file_attributes & 0x10 == 0
+            && self.root.volume_serial_number == self.parent.volume_serial_number
+            && self.parent.volume_serial_number == self.file.volume_serial_number
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -4492,8 +4528,9 @@ pub fn apply_file_effect_transaction_with_provenance_under_lock(
 /// This promotion-specific path never reopens `publication_root` by ambient
 /// pathname and never uses replacement/quarantine names. Each write mutates the
 /// exact admitted file handle in place, preserving admitted Unix mode/uid/gid.
-/// On unsupported platforms or insufficient write authority it blocks before
-/// appending the effect WAL begin record.
+/// Known unsupported paths/platforms and stale preimages block before Begin.
+/// Native creation permissions/collisions are checked again by exclusive create;
+/// live created handles remain owned for explicit same-process rollback.
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 #[must_use]
 pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
@@ -4578,12 +4615,12 @@ pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
     let mut seen = BTreeSet::new();
     for write in &effect_contract.write_set {
         if write.target_kind != EffectTargetKind::FilePath
-            || write.access_mode != AccessMode::Write
+            || !matches!(write.access_mode, AccessMode::Write | AccessMode::Create)
             || write.destructive
         {
             reasons.push(EffectApplicationReason::UnsupportedAccessMode);
             diagnostics.push(format!(
-                "promotion exact mutation supports only non-destructive existing file writes: {}",
+                "promotion exact mutation supports only non-destructive regular-file writes or creates: {}",
                 write.reference
             ));
             continue;
@@ -4593,11 +4630,6 @@ pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
             diagnostics.push(format!("duplicate promotion write {}", write.reference));
             continue;
         }
-        let Some(expected_hash) = write.expected_hash.as_ref() else {
-            reasons.push(EffectApplicationReason::MissingExpectedHashForOverwrite);
-            diagnostics.push(format!("missing expected hash for {}", write.reference));
-            continue;
-        };
         let Some(payload) = payload_for(payloads, &write.reference) else {
             reasons.push(EffectApplicationReason::MissingPayloadForWrite);
             diagnostics.push(format!("missing payload for {}", write.reference));
@@ -4609,12 +4641,7 @@ pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
             continue;
         }
         let before = match publication_tree.exact_regular_file_bytes(&write.reference) {
-            Ok(Some(bytes)) => bytes,
-            Ok(None) => {
-                reasons.push(EffectApplicationReason::TargetMissingForWrite);
-                diagnostics.push(format!("write target missing {}", write.reference));
-                continue;
-            }
+            Ok(value) => value,
             Err(error) => {
                 reasons.push(EffectApplicationReason::InvalidTargetPath);
                 diagnostics.push(format!(
@@ -4624,17 +4651,35 @@ pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
                 continue;
             }
         };
-        if sha256_content_hash(&before) != *expected_hash {
-            reasons.push(EffectApplicationReason::ExpectedHashMismatch);
-            diagnostics.push(format!("write freshness mismatch {}", write.reference));
-            continue;
-        }
-        if let Err(error) =
-            publication_tree.preflight_exact_regular_file_write(&write.reference, &before)
-        {
+        let preflight = if write.access_mode == AccessMode::Create {
+            if before.is_some() || write.expected_hash.is_some() {
+                reasons.push(EffectApplicationReason::ExpectedHashMismatch);
+                diagnostics.push(format!(
+                    "create {} requires absence, not an overwrite digest",
+                    write.reference
+                ));
+                continue;
+            }
+            publication_tree.preflight_exact_regular_file_create(&write.reference)
+        } else {
+            let Some(expected_hash) = write.expected_hash.as_ref() else {
+                reasons.push(EffectApplicationReason::MissingExpectedHashForOverwrite);
+                continue;
+            };
+            let Some(before) = before.as_ref() else {
+                reasons.push(EffectApplicationReason::TargetMissingForWrite);
+                continue;
+            };
+            if sha256_content_hash(before) != *expected_hash {
+                reasons.push(EffectApplicationReason::ExpectedHashMismatch);
+                continue;
+            }
+            publication_tree.preflight_exact_regular_file_write(&write.reference, before)
+        };
+        if let Err(error) = preflight {
             reasons.push(EffectApplicationReason::ApplyFailed);
             diagnostics.push(format!(
-                "exact metadata-preserving mutation unavailable for {}: {error}",
+                "exact mutation unavailable for {}: {error}",
                 write.reference
             ));
             continue;
@@ -4696,14 +4741,18 @@ pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
     }
     debug_test_promotion_crash("after_begin");
 
-    let mut applied = Vec::<(String, Vec<u8>, Vec<u8>)>::new();
+    let mut applied = Vec::<ExactProjectAppliedMutation>::new();
     for (write, before, after) in &writes {
         let prepared = PreparedWrite {
             reference: write.reference.clone(),
             physical_reference: write.reference.clone(),
             target: PathBuf::from(&write.reference),
             target_kind: write.target_kind,
-            access_mode: PreparedAccessMode::Write,
+            access_mode: if before.is_some() {
+                PreparedAccessMode::Write
+            } else {
+                PreparedAccessMode::Create
+            },
             destructive: false,
             expected_hash: write.expected_hash.clone(),
             payload_content: Some(after.clone()),
@@ -4712,8 +4761,8 @@ pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
         let original = OriginalFileState {
             target: PathBuf::from(&write.reference),
             physical_reference: write.reference.clone(),
-            existed: true,
-            content: before.clone(),
+            existed: before.is_some(),
+            content: before.clone().unwrap_or_default(),
             installed_content: Some(after.clone()),
         };
         let before_record =
@@ -4747,11 +4796,65 @@ pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
             );
         }
         debug_test_promotion_crash("after_before_image");
-        if let Err(error) =
-            publication_tree.apply_exact_regular_file_write(&write.reference, before, after)
-        {
+        let mutation = (|| -> Result<(), (EffectApplicationReason, String)> {
+            if let Some(before) = before {
+                publication_tree
+                    .apply_exact_regular_file_write(&write.reference, before, after)
+                    .map_err(|error| (EffectApplicationReason::ApplyFailed, error.to_string()))?;
+                applied.push(ExactProjectAppliedMutation::Write {
+                    path: write.reference.clone(),
+                    before: before.clone(),
+                    after: after.clone(),
+                });
+            } else {
+                let created = publication_tree
+                    .create_exact_regular_file(&write.reference)
+                    .map_err(|error| (EffectApplicationReason::ApplyFailed, error.to_string()))?;
+                // Register lifetime authority before metadata capture, WAL append,
+                // or any other fallible work after the native exclusive create.
+                applied.push(ExactProjectAppliedMutation::Create {
+                    path: write.reference.clone(),
+                    created,
+                });
+                debug_test_promotion_crash("after_create_before_progress");
+                let Some(ExactProjectAppliedMutation::Create { created, .. }) = applied.last()
+                else {
+                    unreachable!()
+                };
+                let progress = retained_create_established_information(
+                    publication_tree,
+                    &write.reference,
+                    Some(created),
+                )
+                .map_err(|error| (EffectApplicationReason::ApplyFailed, error))?;
+                #[cfg(test)]
+                if state_root
+                    .join(".test-fail-create-progress-append")
+                    .is_file()
+                {
+                    return Err((
+                        EffectApplicationReason::WalAppendFailed,
+                        "injected created-progress append failure".to_owned(),
+                    ));
+                }
+                append_effect_wal_record_for_publication(
+                    &effect_lock.state_root,
+                    state_root,
+                    wal_relative_path,
+                    EffectWalRecord::create_established(&tx_id, effect, &prepared, progress),
+                    WalDurability::SyncOnAppend,
+                )
+                .map_err(|error| (EffectApplicationReason::WalAppendFailed, error.to_string()))?;
+                debug_test_promotion_crash("after_create_progress");
+                publication_tree
+                    .apply_created_regular_file(created, after)
+                    .map_err(|error| (EffectApplicationReason::ApplyFailed, error.to_string()))?;
+            }
+            Ok(())
+        })();
+        if let Err((reason, error)) = mutation {
             diagnostics.push(format!("exact apply {} failed: {error}", write.reference));
-            reasons.push(EffectApplicationReason::ApplyFailed);
+            reasons.push(reason);
             return rollback_exact_project_writes(
                 state_root,
                 publication_tree,
@@ -4766,7 +4869,6 @@ pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
                 validation_warning_count,
             );
         }
-        applied.push((write.reference.clone(), before.clone(), after.clone()));
         debug_test_promotion_crash("after_bytes_before_marker");
         #[cfg(test)]
         if applied.len() == 1
@@ -4861,6 +4963,66 @@ pub fn apply_existing_file_effect_transaction_to_retained_project_tree(
     }
 }
 
+enum ExactProjectAppliedMutation {
+    Write {
+        path: String,
+        before: Vec<u8>,
+        after: Vec<u8>,
+    },
+    Create {
+        path: String,
+        created: retained_project_tree::RetainedCreatedProjectFile,
+    },
+}
+
+impl ExactProjectAppliedMutation {
+    fn path(&self) -> &str {
+        match self {
+            Self::Write { path, .. } | Self::Create { path, .. } => path,
+        }
+    }
+}
+
+fn retained_create_established_information(
+    tree: &retained_project_tree::RetainedProjectTree,
+    path: &str,
+    created: Option<&retained_project_tree::RetainedCreatedProjectFile>,
+) -> Result<EffectWalCreateEstablished, String> {
+    #[cfg(windows)]
+    {
+        let (root, parent, file) = tree
+            .create_established_information(path, created)
+            .map_err(|error| error.to_string())?;
+        if file.number_of_links != 1 || (created.is_some() && file.file_size != 0) {
+            return Err(
+                "creation evidence requires a single-link file, initially empty".to_owned(),
+            );
+        }
+        let convert = |information: crate::windows_file_info::WindowsFileInformation| {
+            EffectWalCreatedObjectIdentity {
+                volume_serial_number: information.volume_serial_number,
+                file_index: information.file_index,
+                creation_time: information.creation_time.unwrap_or(0),
+                file_attributes: information.file_attributes,
+            }
+        };
+        let progress = EffectWalCreateEstablished {
+            root: convert(root),
+            parent: convert(parent),
+            file: convert(file),
+        };
+        if !progress.is_valid() {
+            return Err("creation identity evidence is incomplete or unsupported".to_owned());
+        }
+        Ok(progress)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (tree, path, created);
+        Err("retained creation recovery requires native Windows".to_owned())
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn rollback_exact_project_writes(
     state_root: &Path,
@@ -4869,17 +5031,30 @@ fn rollback_exact_project_writes(
     wal_relative_path: &str,
     tx_id: &str,
     effect_id: StableId,
-    applied: Vec<(String, Vec<u8>, Vec<u8>)>,
+    mut applied: Vec<ExactProjectAppliedMutation>,
     mut reasons: Vec<EffectApplicationReason>,
     mut diagnostics: Vec<String>,
     validation_error_count: usize,
     validation_warning_count: usize,
 ) -> EffectApplicationResult {
     let mut rollback_ok = true;
-    for (path, before, after) in applied.iter().rev() {
-        if let Err(error) = publication_tree.apply_exact_regular_file_write(path, after, before) {
+    for mutation in applied.iter_mut().rev() {
+        let result = match mutation {
+            ExactProjectAppliedMutation::Write {
+                path,
+                before,
+                after,
+            } => publication_tree.apply_exact_regular_file_write(path, after, before),
+            ExactProjectAppliedMutation::Create { created, .. } => {
+                publication_tree.rollback_created_regular_file(created)
+            }
+        };
+        if let Err(error) = result {
             rollback_ok = false;
-            diagnostics.push(format!("exact rollback {path} failed: {error}"));
+            diagnostics.push(format!(
+                "exact rollback {} failed: {error}",
+                mutation.path()
+            ));
         }
     }
     if rollback_ok
@@ -4905,7 +5080,10 @@ fn rollback_exact_project_writes(
             EffectApplicationStatus::RollbackFailed
         },
         effect_id,
-        applied_refs: applied.into_iter().map(|(path, _, _)| path).collect(),
+        applied_refs: applied
+            .iter()
+            .map(|mutation| mutation.path().to_owned())
+            .collect(),
         metadata_records: Vec::new(),
         rolled_back: rollback_ok,
         reasons,
@@ -5252,7 +5430,7 @@ pub fn inspect_split_root_effect_transaction_under_lock(
     inspect_split_root_transaction_records(&records, tx_id)
 }
 
-/// Resume one exact existing-file-only split-root effect from its durable WAL.
+/// Resume one exact regular-file Write/Create split-root effect from its durable WAL.
 ///
 /// Every destination is compared with both the recorded before image and the
 /// caller-bound replacement bytes. Only an unambiguous old/new state is
@@ -5316,7 +5494,7 @@ pub fn recover_existing_file_effect_transaction_to_retained_project_tree(
     let mut seen = BTreeSet::new();
     for write in &effect.tool_effect_contract.write_set {
         if write.target_kind != EffectTargetKind::FilePath
-            || write.access_mode != AccessMode::Write
+            || !matches!(write.access_mode, AccessMode::Write | AccessMode::Create)
             || write.destructive
             || !seen.insert(write.reference.clone())
         {
@@ -5328,12 +5506,17 @@ pub fn recover_existing_file_effect_transaction_to_retained_project_tree(
                 ),
             });
         }
-        let expected_before = write.expected_hash.as_ref().ok_or_else(|| {
-            EffectReplayReconciliationError::ConflictingTransaction {
+        let is_create = write.access_mode == AccessMode::Create;
+        if is_create != write.expected_hash.is_none() {
+            return Err(EffectReplayReconciliationError::ConflictingTransaction {
                 tx_id: tx_id.to_owned(),
-                reason: format!("{} lacks an expected before digest", write.reference),
-            }
-        })?;
+                reason: format!(
+                    "{} has invalid before-digest presence for its access mode",
+                    write.reference
+                ),
+            });
+        }
+        let expected_before = write.expected_hash.as_ref();
         let payload = payload_for(payloads, &write.reference).ok_or_else(|| {
             EffectReplayReconciliationError::ConflictingTransaction {
                 tx_id: tx_id.to_owned(),
@@ -5362,7 +5545,15 @@ pub fn recover_existing_file_effect_transaction_to_retained_project_tree(
                     && record.target_ref.as_deref() == Some(write.reference.as_str())
             })
             .collect::<Vec<_>>();
-        if before_records.len() > 1 || write_records.len() > 1 {
+        let create_records = records
+            .iter()
+            .filter(|record| {
+                record.tx_id == tx_id
+                    && matches!(record.stage, EffectWalStage::CreateEstablished(_))
+                    && record.target_ref.as_deref() == Some(write.reference.as_str())
+            })
+            .collect::<Vec<_>>();
+        if before_records.len() > 1 || write_records.len() > 1 || create_records.len() > 1 {
             return Err(EffectReplayReconciliationError::ConflictingTransaction {
                 tx_id: tx_id.to_owned(),
                 reason: format!("{} has duplicate WAL progress records", write.reference),
@@ -5377,9 +5568,10 @@ pub fn recover_existing_file_effect_transaction_to_retained_project_tree(
                         reason: format!("{} before-image has no original bytes", write.reference),
                     }
                 })?;
-                if !original.existed
+                if original.existed == is_create
                     || original.content_hash != sha256_content_hash(&original.content)
-                    || original.content_hash != *expected_before
+                    || expected_before.is_some_and(|expected| original.content_hash != *expected)
+                    || (is_create && !original.content.is_empty())
                     || record.physical_target_ref.as_deref() != Some(write.reference.as_str())
                 {
                     return Err(EffectReplayReconciliationError::ConflictingTransaction {
@@ -5393,7 +5585,7 @@ pub fn recover_existing_file_effect_transaction_to_retained_project_tree(
                 Ok(original.content.clone())
             })
             .transpose()?;
-        if let Some(record) = write_records.first() {
+        for record in write_records.iter().chain(create_records.iter()) {
             let metadata = record.target_metadata.as_ref().ok_or_else(|| {
                 EffectReplayReconciliationError::ConflictingTransaction {
                     tx_id: tx_id.to_owned(),
@@ -5401,7 +5593,7 @@ pub fn recover_existing_file_effect_transaction_to_retained_project_tree(
                 }
             })?;
             if metadata.target_kind != EffectTargetKind::FilePath
-                || metadata.access_mode != AccessMode::Write
+                || metadata.access_mode != write.access_mode
                 || metadata.destructive
                 || metadata.content_hash.as_deref() != Some(payload.content_hash.as_str())
                 || metadata.byte_len != payload.content.len() as u64
@@ -5455,34 +5647,66 @@ pub fn recover_existing_file_effect_transaction_to_retained_project_tree(
                     tx_id: tx_id.to_owned(),
                     reason: format!("{} destination inspection failed: {error}", write.reference),
                 },
-            )?
-            .ok_or_else(|| EffectReplayReconciliationError::ConflictingTransaction {
-                tx_id: tx_id.to_owned(),
-                reason: format!("{} is no longer an existing regular file", write.reference),
-            })?;
-        let current_digest = sha256_content_hash(&current);
-        let is_old = current_digest == *expected_before;
-        let is_new = current_digest == payload.content_hash;
-        if !is_old && !is_new {
-            return Err(EffectReplayReconciliationError::ConflictingTransaction {
-                tx_id: tx_id.to_owned(),
-                reason: format!(
-                    "{} has third-party bytes: expected recorded old or exact new content",
-                    write.reference
-                ),
-            });
-        }
-        if is_new && recorded_before.is_none() {
-            return Err(EffectReplayReconciliationError::ConflictingTransaction {
-                tx_id: tx_id.to_owned(),
-                reason: format!("{} is new without a durable before-image", write.reference),
-            });
-        }
-        if is_old && !write_records.is_empty() {
-            return Err(EffectReplayReconciliationError::ConflictingTransaction {
-                tx_id: tx_id.to_owned(),
-                reason: format!("{} is old after a durable write marker", write.reference),
-            });
+            )?;
+        let is_new;
+        if is_create {
+            match (current.as_ref(), create_records.first()) {
+                (None, None) if write_records.is_empty() => {
+                    publication_tree.preflight_exact_regular_file_create(&write.reference)
+                        .map_err(|error| EffectReplayReconciliationError::ConflictingTransaction {
+                            tx_id: tx_id.to_owned(),
+                            reason: format!("{} create recovery preflight failed: {error}", write.reference),
+                        })?;
+                    is_new = false;
+                }
+                (Some(bytes), Some(record)) => {
+                    let EffectWalStage::CreateEstablished(expected) = record.stage else { unreachable!() };
+                    let observed = retained_create_established_information(publication_tree, &write.reference, None)
+                        .map_err(|reason| EffectReplayReconciliationError::ConflictingTransaction {
+                            tx_id: tx_id.to_owned(), reason,
+                        })?;
+                    // Persisted identities are evidence for exact forward readback only.
+                    // They never establish retained lifetime or authorize deletion.
+                    if expected != observed || bytes != &payload.content {
+                        return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                            tx_id: tx_id.to_owned(),
+                            reason: format!("{} created identity or exact payload differs from durable progress", write.reference),
+                        });
+                    }
+                    is_new = true;
+                }
+                _ => return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                    tx_id: tx_id.to_owned(),
+                    reason: format!("{} has ambiguous created-object presence/progress; preserved without mutation", write.reference),
+                }),
+            }
+        } else {
+            if !create_records.is_empty() {
+                return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                    tx_id: tx_id.to_owned(),
+                    reason: format!("{} Write has Create progress", write.reference),
+                });
+            }
+            let current =
+                current.ok_or_else(|| EffectReplayReconciliationError::ConflictingTransaction {
+                    tx_id: tx_id.to_owned(),
+                    reason: format!("{} is no longer an existing regular file", write.reference),
+                })?;
+            let is_old =
+                expected_before.is_some_and(|expected| sha256_content_hash(&current) == *expected);
+            is_new = current == payload.content;
+            if (!is_old && !is_new)
+                || (is_new && recorded_before.is_none())
+                || (is_old && !write_records.is_empty())
+            {
+                return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                    tx_id: tx_id.to_owned(),
+                    reason: format!(
+                        "{} has conflicting old/new bytes or durable progress",
+                        write.reference
+                    ),
+                });
+            }
         }
         writes.push((
             write.clone(),
@@ -5496,7 +5720,9 @@ pub fn recover_existing_file_effect_transaction_to_retained_project_tree(
         record.tx_id == tx_id
             && matches!(
                 record.stage,
-                EffectWalStage::BeforeImage | EffectWalStage::WriteApplied
+                EffectWalStage::BeforeImage
+                    | EffectWalStage::WriteApplied
+                    | EffectWalStage::CreateEstablished(_)
             )
     }) {
         let Some(target_ref) = record.target_ref.as_deref() else {
@@ -5541,33 +5767,47 @@ pub fn recover_existing_file_effect_transaction_to_retained_project_tree(
         });
     }
 
+    publication_tree.revalidate().map_err(|error| {
+        EffectReplayReconciliationError::ConflictingTransaction {
+            tx_id: tx_id.to_owned(),
+            reason: format!("recovery pre-mutation revalidation failed: {error}"),
+        }
+    })?;
     let wal_path = state_root.join(wal_relative_path);
     let mut canonical_mutation_performed = false;
     for (write, after, recorded_before, write_recorded, is_new) in &writes {
         let before = if let Some(before) = recorded_before {
             before.clone()
         } else {
-            let before = publication_tree
-                .exact_regular_file_bytes(&write.reference)
-                .map_err(
-                    |error| EffectReplayReconciliationError::ConflictingTransaction {
+            let before = if write.access_mode == AccessMode::Create {
+                Vec::new()
+            } else {
+                publication_tree
+                    .exact_regular_file_bytes(&write.reference)
+                    .map_err(
+                        |error| EffectReplayReconciliationError::ConflictingTransaction {
+                            tx_id: tx_id.to_owned(),
+                            reason: format!(
+                                "{} before-image inspection failed: {error}",
+                                write.reference
+                            ),
+                        },
+                    )?
+                    .ok_or_else(|| EffectReplayReconciliationError::ConflictingTransaction {
                         tx_id: tx_id.to_owned(),
-                        reason: format!(
-                            "{} before-image inspection failed: {error}",
-                            write.reference
-                        ),
-                    },
-                )?
-                .ok_or_else(|| EffectReplayReconciliationError::ConflictingTransaction {
-                    tx_id: tx_id.to_owned(),
-                    reason: format!("{} disappeared before recovery", write.reference),
-                })?;
+                        reason: format!("{} disappeared before recovery", write.reference),
+                    })?
+            };
             let prepared = PreparedWrite {
                 reference: write.reference.clone(),
                 physical_reference: write.reference.clone(),
                 target: PathBuf::from(&write.reference),
                 target_kind: write.target_kind,
-                access_mode: PreparedAccessMode::Write,
+                access_mode: if write.access_mode == AccessMode::Create {
+                    PreparedAccessMode::Create
+                } else {
+                    PreparedAccessMode::Write
+                },
                 destructive: false,
                 expected_hash: write.expected_hash.clone(),
                 payload_content: Some(after.clone()),
@@ -5576,7 +5816,7 @@ pub fn recover_existing_file_effect_transaction_to_retained_project_tree(
             let original = OriginalFileState {
                 target: PathBuf::from(&write.reference),
                 physical_reference: write.reference.clone(),
-                existed: true,
+                existed: write.access_mode != AccessMode::Create,
                 content: before.clone(),
                 installed_content: Some(after.clone()),
             };
@@ -5599,7 +5839,69 @@ pub fn recover_existing_file_effect_transaction_to_retained_project_tree(
             debug_test_promotion_crash("after_before_image");
             before
         };
-        if !*is_new {
+        if !*is_new && write.access_mode == AccessMode::Create {
+            let created = publication_tree
+                .create_exact_regular_file(&write.reference)
+                .map_err(
+                    |error| EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: tx_id.to_owned(),
+                        reason: format!(
+                            "{} exclusive recovery create failed: {error}",
+                            write.reference
+                        ),
+                    },
+                )?;
+            // This live token owns the new handle. On a subsequent failure, preserve
+            // the object for explicit recovery; never infer delete authority from WAL.
+            debug_test_promotion_crash("after_create_before_progress");
+            let progress = retained_create_established_information(
+                publication_tree,
+                &write.reference,
+                Some(&created),
+            )
+            .map_err(|reason| {
+                EffectReplayReconciliationError::ConflictingTransaction {
+                    tx_id: tx_id.to_owned(),
+                    reason: format!("created object preserved after evidence failure: {reason}"),
+                }
+            })?;
+            let prepared = PreparedWrite {
+                reference: write.reference.clone(),
+                physical_reference: write.reference.clone(),
+                target: PathBuf::from(&write.reference),
+                target_kind: write.target_kind,
+                access_mode: PreparedAccessMode::Create,
+                destructive: false,
+                expected_hash: None,
+                payload_content: Some(after.clone()),
+                content: after.clone(),
+            };
+            append_effect_wal_record_for_publication(
+                &effect_lock.state_root,
+                state_root,
+                wal_relative_path,
+                EffectWalRecord::create_established(tx_id, effect, &prepared, progress),
+                WalDurability::SyncOnAppend,
+            )
+            .map_err(|error| EffectReplayReconciliationError::WalAppend {
+                path: wal_path.clone(),
+                source: format!("created object preserved: {error}"),
+            })?;
+            debug_test_promotion_crash("after_create_progress");
+            publication_tree
+                .apply_created_regular_file(&created, after)
+                .map_err(
+                    |error| EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: tx_id.to_owned(),
+                        reason: format!(
+                            "{} created object preserved after payload failure: {error}",
+                            write.reference
+                        ),
+                    },
+                )?;
+            canonical_mutation_performed = true;
+            debug_test_promotion_crash("after_bytes_before_marker");
+        } else if !*is_new {
             publication_tree
                 .apply_exact_regular_file_write(&write.reference, &before, after)
                 .map_err(
@@ -5617,7 +5919,11 @@ pub fn recover_existing_file_effect_transaction_to_retained_project_tree(
                 physical_reference: write.reference.clone(),
                 target: PathBuf::from(&write.reference),
                 target_kind: write.target_kind,
-                access_mode: PreparedAccessMode::Write,
+                access_mode: if write.access_mode == AccessMode::Create {
+                    PreparedAccessMode::Create
+                } else {
+                    PreparedAccessMode::Write
+                },
                 destructive: false,
                 expected_hash: write.expected_hash.clone(),
                 payload_content: Some(after.clone()),
@@ -8911,7 +9217,10 @@ fn project_pending_effect_replay_commits(
                 }
                 transaction.completed = true;
             }
-            EffectWalStage::Begin | EffectWalStage::BeforeImage | EffectWalStage::WriteApplied => {}
+            EffectWalStage::Begin
+            | EffectWalStage::BeforeImage
+            | EffectWalStage::CreateEstablished(_)
+            | EffectWalStage::WriteApplied => {}
         }
     }
 
@@ -9000,6 +9309,7 @@ fn inspect_split_root_transaction_records(
         }
     })?;
     let mut stage = SplitRootEffectTransactionStage::Begun;
+    let mut progress = BTreeMap::<&str, (&EffectWalRecord, Option<&EffectWalRecord>, bool)>::new();
     for record in transaction_records.iter().skip(1) {
         if record.effect_id != begin.effect_id {
             return Err(EffectReplayReconciliationError::ConflictingTransaction {
@@ -9007,9 +9317,74 @@ fn inspect_split_root_transaction_records(
                 reason: "effect id changed within split-root transaction".to_owned(),
             });
         }
+        let conflict = |reason: &str| EffectReplayReconciliationError::ConflictingTransaction {
+            tx_id: tx_id.to_owned(),
+            reason: reason.to_owned(),
+        };
+        match record.stage {
+            EffectWalStage::BeforeImage => {
+                let target = record.target_ref.as_deref().expect("shape checked");
+                let original = record.original.as_ref().expect("shape checked");
+                if record.physical_target_ref.as_deref() != Some(target)
+                    || original.content_hash != sha256_content_hash(&original.content)
+                    || (!original.existed && !original.content.is_empty())
+                    || progress.contains_key(target)
+                {
+                    return Err(conflict(
+                        "before-image is duplicated, mismatched, or has invalid absence/bytes",
+                    ));
+                }
+                progress.insert(target, (record, None, false));
+            }
+            EffectWalStage::CreateEstablished(_) => {
+                let target = record.target_ref.as_deref().expect("shape checked");
+                let Some((before, created, written)) = progress.get_mut(target) else {
+                    return Err(conflict(
+                        "creation progress has no preceding absent before-image",
+                    ));
+                };
+                if before.original.as_ref().expect("shape checked").existed
+                    || created.is_some()
+                    || *written
+                    || record.physical_target_ref.as_deref() != Some(target)
+                {
+                    return Err(conflict(
+                        "creation progress is duplicated, reordered, or contradicts before-image",
+                    ));
+                }
+                *created = Some(record);
+            }
+            EffectWalStage::WriteApplied => {
+                let target = record.target_ref.as_deref().expect("shape checked");
+                let Some((before, created, written)) = progress.get_mut(target) else {
+                    return Err(conflict("write marker has no preceding before-image"));
+                };
+                let existed = before.original.as_ref().expect("shape checked").existed;
+                let metadata = record.target_metadata.as_ref().expect("shape checked");
+                if *written
+                    || record.physical_target_ref.as_deref() != Some(target)
+                    || (existed && (created.is_some() || metadata.access_mode != AccessMode::Write))
+                    || (!existed
+                        && (created.is_none() || metadata.access_mode != AccessMode::Create))
+                    || created
+                        .is_some_and(|created| created.target_metadata != record.target_metadata)
+                {
+                    return Err(conflict(
+                        "write marker contradicts exact before-image or creation progress",
+                    ));
+                }
+                *written = true;
+            }
+            EffectWalStage::Commit if progress.values().any(|(_, _, written)| !written) => {
+                return Err(conflict("commit precedes complete exact write progress"));
+            }
+            _ => {}
+        }
         match record.stage {
             EffectWalStage::Begin => unreachable!("unique begin checked above"),
-            EffectWalStage::BeforeImage | EffectWalStage::WriteApplied => {
+            EffectWalStage::BeforeImage
+            | EffectWalStage::CreateEstablished(_)
+            | EffectWalStage::WriteApplied => {
                 if stage != SplitRootEffectTransactionStage::Begun {
                     return Err(EffectReplayReconciliationError::ConflictingTransaction {
                         tx_id: tx_id.to_owned(),
@@ -9089,6 +9464,18 @@ fn validate_split_root_record_shape(
                     && record.physical_target_ref.is_some()
                     && record.target_metadata.is_none()
                     && record.original.is_some()
+                    && no_authority
+            }
+            EffectWalStage::CreateEstablished(progress) => {
+                progress.is_valid()
+                    && record.target_ref.is_some()
+                    && record.physical_target_ref.is_some()
+                    && record.target_metadata.as_ref().is_some_and(|metadata| {
+                        metadata.access_mode == AccessMode::Create
+                            && metadata.target_kind == EffectTargetKind::FilePath
+                            && !metadata.destructive
+                    })
+                    && record.original.is_none()
                     && no_authority
             }
             EffectWalStage::WriteApplied => {
@@ -9219,6 +9606,17 @@ impl EffectWalRecord {
             replay_binding: None,
             replay_completion: None,
         }
+    }
+
+    fn create_established(
+        tx_id: &str,
+        effect: &ToolEffectContractDocument,
+        write: &PreparedWrite,
+        progress: EffectWalCreateEstablished,
+    ) -> Self {
+        let mut record = Self::write_applied(tx_id, effect, write);
+        record.stage = EffectWalStage::CreateEstablished(progress);
+        record
     }
 
     fn stage(tx_id: &str, effect_id: StableId, stage: EffectWalStage) -> Self {
@@ -10159,6 +10557,682 @@ mod tests {
         write.reference = "out/committed.txt".to_owned();
         write.target_kind = EffectTargetKind::FilePath;
         effect
+    }
+
+    #[cfg(windows)]
+    struct RetainedCreateFixture {
+        root: PathBuf,
+        state: PathBuf,
+        publication: PathBuf,
+        tree: retained_project_tree::RetainedProjectTree,
+        lock: EffectStoreLock,
+        effect: ToolEffectContractDocument,
+        payloads: Vec<EffectApplicationPayload>,
+        provenance: EffectExecutionProvenance,
+        replay: EffectReplayCommitBinding,
+    }
+
+    #[cfg(windows)]
+    impl RetainedCreateFixture {
+        fn new(label: &str) -> Self {
+            let root = temp_root(label);
+            let state = root.join("state");
+            let publication = root.join("publication");
+            fs::create_dir_all(&state).unwrap();
+            fs::create_dir_all(publication.join("out")).unwrap();
+            fs::write(publication.join("out/committed.txt"), b"old\n").unwrap();
+            let mut effect = namespace_split_test_effect();
+            effect.tool_effect_contract.read_set =
+                vec![forge_core_contracts::tool_effect::EffectRead {
+                    target_kind: EffectTargetKind::FilePath,
+                    reference: "out/committed.txt".to_owned(),
+                    expected_hash: Some(sha256_content_hash(b"old\n")),
+                    expected_version: None,
+                    required_for_plan: true,
+                }];
+            let write = &mut effect.tool_effect_contract.write_set[0];
+            write.access_mode = AccessMode::Write;
+            write.expected_hash = Some(sha256_content_hash(b"old\n"));
+            let mut create = write.clone();
+            create.reference = "out/new.txt".to_owned();
+            create.access_mode = AccessMode::Create;
+            create.expected_hash = None;
+            effect.tool_effect_contract.write_set.push(create);
+            let validation = validate_tool_effect(&effect);
+            assert!(
+                validation
+                    .diagnostics()
+                    .iter()
+                    .all(|diagnostic| diagnostic.severity != DiagnosticSeverity::Error),
+                "{:?}",
+                validation.diagnostics()
+            );
+            let payloads = [
+                ("out/committed.txt", b"updated\n".as_slice()),
+                ("out/new.txt", b"created\n".as_slice()),
+            ]
+            .into_iter()
+            .map(|(path, bytes)| EffectApplicationPayload {
+                target_ref: path.to_owned(),
+                content: bytes.to_vec(),
+                content_hash: sha256_content_hash(bytes),
+            })
+            .collect();
+            let lock = acquire_effect_store_lock(&state, "promotion/apply.lock").unwrap();
+            let tree = retained_project_tree::RetainedProjectTree::capture(&publication, 100, 4096)
+                .unwrap();
+            let provenance = EffectExecutionProvenance::new(serde_json::json!({
+                "kind": "test-promotion", "preview_digest": format!("sha256:{}", "a".repeat(64)),
+                "publication_scope": { "kind": "external_retained_project_tree_v1",
+                    "retained_capability_digest": tree.exact_mutation_capability_digest().unwrap() }
+            }))
+            .unwrap();
+            let replay = EffectReplayCommitBinding::new(
+                format!("sha256:{}", "b".repeat(64)),
+                format!("sha256:{}", "c".repeat(64)),
+                format!("sha256:{}", "d".repeat(64)),
+                1,
+            );
+            Self {
+                root,
+                state,
+                publication,
+                tree,
+                lock,
+                effect,
+                payloads,
+                provenance,
+                replay,
+            }
+        }
+
+        fn apply(&mut self) -> EffectApplicationResult {
+            apply_existing_file_effect_transaction_to_retained_project_tree(
+                &self.state,
+                &mut self.tree,
+                &self.lock,
+                "promotion/apply.lock",
+                &self.effect,
+                &self.payloads,
+                "promotion/effects.ndjson",
+                "create-tx",
+                self.provenance.clone(),
+                self.replay.clone(),
+            )
+        }
+
+        fn records(&self) -> Vec<EffectWalRecord> {
+            fs::read_to_string(self.state.join("promotion/effects.ndjson"))
+                .unwrap()
+                .lines()
+                .map(|line| serde_json::from_str(line).unwrap())
+                .collect()
+        }
+
+        fn recover(
+            &mut self,
+        ) -> Result<SplitRootEffectRecoveryResult, EffectReplayReconciliationError> {
+            recover_existing_file_effect_transaction_to_retained_project_tree(
+                &self.state,
+                &mut self.tree,
+                &self.lock,
+                "promotion/apply.lock",
+                &self.effect,
+                &self.payloads,
+                "promotion/effects.ndjson",
+                "create-tx",
+                &self.provenance,
+                &self.replay,
+            )
+        }
+
+        fn replace_records(&self, records: &[EffectWalRecord]) {
+            let content = records
+                .iter()
+                .map(|record| serde_json::to_string(record).unwrap() + "\n")
+                .collect::<String>();
+            fs::write(self.state.join("promotion/effects.ndjson"), content).unwrap();
+        }
+
+        fn release_publication_handles(&mut self) {
+            let empty = self.root.join("released-handles");
+            fs::create_dir_all(&empty).unwrap();
+            self.tree =
+                retained_project_tree::RetainedProjectTree::capture(&empty, 100, 4096).unwrap();
+        }
+
+        fn recapture(&mut self) {
+            self.tree =
+                retained_project_tree::RetainedProjectTree::capture(&self.publication, 100, 4096)
+                    .unwrap();
+        }
+
+        fn cleanup(self) {
+            let root = self.root.clone();
+            drop(self);
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn retained_split_root_create_recovery_presence_and_progress_matrix() {
+        for case in [
+            "begin-absent",
+            "before-absent",
+            "before-present",
+            "progress-absent",
+            "progress-partial",
+            "progress-exact",
+            "applied-exact",
+            "committed-exact",
+        ] {
+            let mut fixture = RetainedCreateFixture::new(case);
+            fixture.effect.tool_effect_contract.write_set.remove(0);
+            fixture.payloads.remove(0);
+            assert_eq!(fixture.apply().status, EffectApplicationStatus::Applied);
+            let mut records = fixture.records();
+            let keep = match case {
+                "begin-absent" => 1,
+                "before-absent" | "before-present" => 2,
+                "progress-absent" | "progress-partial" | "progress-exact" => 3,
+                "applied-exact" => 4,
+                _ => 5,
+            };
+            records.truncate(keep);
+            fixture.release_publication_handles();
+            if case.ends_with("absent") {
+                fs::remove_file(fixture.publication.join("out/new.txt")).unwrap();
+            }
+            if case == "progress-partial" {
+                fs::write(fixture.publication.join("out/new.txt"), b"part").unwrap();
+            }
+            fixture.replace_records(&records);
+            fixture.recapture();
+            let before_wal = fs::read(fixture.state.join("promotion/effects.ndjson")).unwrap();
+            let before_bytes = fs::read(fixture.publication.join("out/new.txt")).ok();
+            let result = fixture.recover();
+            let succeeds = matches!(
+                case,
+                "begin-absent"
+                    | "before-absent"
+                    | "progress-exact"
+                    | "applied-exact"
+                    | "committed-exact"
+            );
+            assert_eq!(result.is_ok(), succeeds, "{case}: {result:?}");
+            if succeeds {
+                assert_eq!(
+                    result.unwrap().canonical_mutation_performed,
+                    matches!(case, "begin-absent" | "before-absent"),
+                    "{case}"
+                );
+                assert_eq!(
+                    fs::read(fixture.publication.join("out/new.txt")).unwrap(),
+                    b"created\n"
+                );
+                let final_records = fixture.records();
+                assert_eq!(
+                    final_records
+                        .iter()
+                        .filter(|record| record.stage == EffectWalStage::BeforeImage)
+                        .count(),
+                    1
+                );
+                assert_eq!(final_records.len(), 5);
+                let final_wal = fs::read(fixture.state.join("promotion/effects.ndjson")).unwrap();
+                assert!(!fixture.recover().unwrap().canonical_mutation_performed);
+                assert_eq!(
+                    fs::read(fixture.state.join("promotion/effects.ndjson")).unwrap(),
+                    final_wal
+                );
+            } else {
+                assert_eq!(
+                    fs::read(fixture.publication.join("out/new.txt")).ok(),
+                    before_bytes,
+                    "{case}"
+                );
+                assert_eq!(
+                    fs::read(fixture.state.join("promotion/effects.ndjson")).unwrap(),
+                    before_wal,
+                    "{case}"
+                );
+            }
+            fixture.cleanup();
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn retained_split_root_create_recovery_rejects_identity_and_metadata_mismatch() {
+        for field in [
+            "root",
+            "parent",
+            "file",
+            "volume",
+            "creation",
+            "attributes",
+            "malformed",
+            "payload-metadata",
+            "unexpected-target",
+        ] {
+            let mut fixture = RetainedCreateFixture::new(field);
+            fixture.effect.tool_effect_contract.write_set.remove(0);
+            fixture.payloads.remove(0);
+            assert_eq!(fixture.apply().status, EffectApplicationStatus::Applied);
+            let mut records = fixture.records();
+            records.truncate(3);
+            let EffectWalStage::CreateEstablished(mut progress) = records[2].stage else {
+                panic!()
+            };
+            match field {
+                "root" => progress.root.file_index ^= 1,
+                "parent" => progress.parent.file_index ^= 1,
+                "file" => progress.file.file_index ^= 1,
+                "volume" => {
+                    progress.root.volume_serial_number ^= 1;
+                    progress.parent.volume_serial_number ^= 1;
+                    progress.file.volume_serial_number ^= 1;
+                }
+                "creation" => progress.file.creation_time += 1,
+                "attributes" => progress.file.file_attributes ^= 2,
+                "malformed" => progress.file.file_attributes |= 0x400,
+                "payload-metadata" => records[2].target_metadata.as_mut().unwrap().byte_len += 1,
+                "unexpected-target" => {
+                    for record in records.iter_mut().skip(1) {
+                        record.target_ref = Some("out/unexpected.txt".to_owned());
+                        record.physical_target_ref = Some("out/unexpected.txt".to_owned());
+                    }
+                }
+                _ => unreachable!(),
+            }
+            records[2].stage = EffectWalStage::CreateEstablished(progress);
+            fixture.release_publication_handles();
+            fixture.replace_records(&records);
+            fixture.recapture();
+            let before = fs::read(fixture.state.join("promotion/effects.ndjson")).unwrap();
+            assert!(fixture.recover().is_err(), "{field}");
+            assert_eq!(
+                fs::read(fixture.state.join("promotion/effects.ndjson")).unwrap(),
+                before
+            );
+            assert_eq!(
+                fs::read(fixture.publication.join("out/new.txt")).unwrap(),
+                b"created\n"
+            );
+            fixture.cleanup();
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn retained_split_root_create_recovery_validates_later_target_before_earlier_mutation() {
+        for earlier_create in [false, true] {
+            let mut fixture = RetainedCreateFixture::new("mixed-later-conflict");
+            assert_eq!(fixture.apply().status, EffectApplicationStatus::Applied);
+            let mut records = fixture.records();
+            records.truncate(1);
+            fixture.release_publication_handles();
+            if earlier_create {
+                fixture.effect.tool_effect_contract.write_set.swap(0, 1);
+                fixture.payloads.swap(0, 1);
+                fs::remove_file(fixture.publication.join("out/new.txt")).unwrap();
+                fs::write(
+                    fixture.publication.join("out/committed.txt"),
+                    b"third-party",
+                )
+                .unwrap();
+            } else {
+                fs::write(fixture.publication.join("out/committed.txt"), b"old\n").unwrap();
+                // Existing exact new bytes without progress must still conflict.
+            }
+            fixture.replace_records(&records);
+            fixture.recapture();
+            let before_old = fs::read(fixture.publication.join("out/committed.txt")).unwrap();
+            let before_new = fs::read(fixture.publication.join("out/new.txt")).ok();
+            let before_wal = fs::read(fixture.state.join("promotion/effects.ndjson")).unwrap();
+            assert!(fixture.recover().is_err());
+            assert_eq!(
+                fs::read(fixture.publication.join("out/committed.txt")).unwrap(),
+                before_old
+            );
+            assert_eq!(
+                fs::read(fixture.publication.join("out/new.txt")).ok(),
+                before_new
+            );
+            assert_eq!(
+                fs::read(fixture.state.join("promotion/effects.ndjson")).unwrap(),
+                before_wal
+            );
+            fixture.cleanup();
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn retained_split_root_create_extension_preserves_legacy_write_only_recovery() {
+        let mut fixture = RetainedCreateFixture::new("legacy-write-only");
+        fixture.effect.tool_effect_contract.write_set.truncate(1);
+        fixture.payloads.truncate(1);
+        assert_eq!(fixture.apply().status, EffectApplicationStatus::Applied);
+        let records = fixture.records();
+        assert_eq!(
+            records
+                .iter()
+                .map(|record| record.stage)
+                .collect::<Vec<_>>(),
+            vec![
+                EffectWalStage::Begin,
+                EffectWalStage::BeforeImage,
+                EffectWalStage::WriteApplied,
+                EffectWalStage::Commit
+            ]
+        );
+        let recovery = recover_existing_file_effect_transaction_to_retained_project_tree(
+            &fixture.state,
+            &mut fixture.tree,
+            &fixture.lock,
+            "promotion/apply.lock",
+            &fixture.effect,
+            &fixture.payloads,
+            "promotion/effects.ndjson",
+            "create-tx",
+            &fixture.provenance,
+            &fixture.replay,
+        )
+        .unwrap();
+        assert_eq!(recovery.status, SplitRootEffectTransactionStage::Committed);
+        assert!(!recovery.canonical_mutation_performed);
+        assert_eq!(
+            fs::read(fixture.publication.join("out/committed.txt")).unwrap(),
+            b"updated\n"
+        );
+        assert!(!fixture.publication.join("out/new.txt").exists());
+        fixture.cleanup();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn retained_split_root_create_mixed_apply_records_absence_and_typed_progress() {
+        let mut fixture = RetainedCreateFixture::new("create-mixed-wal");
+        let result = fixture.apply();
+        assert_eq!(
+            result.status,
+            EffectApplicationStatus::Applied,
+            "{result:?}"
+        );
+        assert_eq!(
+            fs::read(fixture.publication.join("out/committed.txt")).unwrap(),
+            b"updated\n"
+        );
+        assert_eq!(
+            fs::read(fixture.publication.join("out/new.txt")).unwrap(),
+            b"created\n"
+        );
+        fixture.tree.revalidate().unwrap();
+        let records = fixture.records();
+        let create_records = records
+            .iter()
+            .filter(|record| record.target_ref.as_deref() == Some("out/new.txt"))
+            .collect::<Vec<_>>();
+        assert_eq!(create_records.len(), 3);
+        assert_eq!(create_records[0].stage, EffectWalStage::BeforeImage);
+        assert!(!create_records[0].original.as_ref().unwrap().existed);
+        assert!(create_records[0]
+            .original
+            .as_ref()
+            .unwrap()
+            .content
+            .is_empty());
+        let EffectWalStage::CreateEstablished(progress) = create_records[1].stage else {
+            panic!("missing typed progress")
+        };
+        assert!(progress.is_valid());
+        assert_eq!(
+            progress,
+            retained_create_established_information(&fixture.tree, "out/new.txt", None).unwrap()
+        );
+        assert_eq!(create_records[2].stage, EffectWalStage::WriteApplied);
+        assert_eq!(
+            create_records[2]
+                .target_metadata
+                .as_ref()
+                .unwrap()
+                .access_mode,
+            AccessMode::Create
+        );
+        assert_eq!(
+            inspect_split_root_transaction_records(&records, "create-tx")
+                .unwrap()
+                .unwrap()
+                .stage,
+            SplitRootEffectTransactionStage::Committed
+        );
+        // A committed exact Create is read back idempotently, without WAL append.
+        let recovery = recover_existing_file_effect_transaction_to_retained_project_tree(
+            &fixture.state,
+            &mut fixture.tree,
+            &fixture.lock,
+            "promotion/apply.lock",
+            &fixture.effect,
+            &fixture.payloads,
+            "promotion/effects.ndjson",
+            "create-tx",
+            &fixture.provenance,
+            &fixture.replay,
+        );
+        assert!(!recovery.unwrap().canonical_mutation_performed);
+        assert_eq!(fixture.records().len(), records.len());
+        assert_eq!(
+            fs::read(fixture.publication.join("out/new.txt")).unwrap(),
+            b"created\n"
+        );
+        fixture.cleanup();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn retained_split_root_create_progress_append_failure_rolls_back_exact_owned_object() {
+        let mut fixture = RetainedCreateFixture::new("create-progress-failure");
+        fs::write(
+            fixture.state.join(".test-fail-create-progress-append"),
+            b"inject",
+        )
+        .unwrap();
+        let result = fixture.apply();
+        assert_eq!(
+            result.status,
+            EffectApplicationStatus::RolledBack,
+            "{result:?}"
+        );
+        assert!(result
+            .reasons
+            .contains(&EffectApplicationReason::WalAppendFailed));
+        assert_eq!(
+            fs::read(fixture.publication.join("out/committed.txt")).unwrap(),
+            b"old\n"
+        );
+        assert!(!fixture.publication.join("out/new.txt").exists());
+        fixture.tree.revalidate().unwrap();
+        let records = fixture.records();
+        assert!(!records
+            .iter()
+            .any(|record| matches!(record.stage, EffectWalStage::CreateEstablished(_))));
+        assert_eq!(
+            records.last().unwrap().stage,
+            EffectWalStage::RollbackComplete
+        );
+        assert_eq!(
+            inspect_split_root_transaction_records(&records, "create-tx")
+                .unwrap()
+                .unwrap()
+                .stage,
+            SplitRootEffectTransactionStage::RolledBack
+        );
+        fixture.cleanup();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn retained_split_root_create_failure_after_payload_removes_only_owned_creation() {
+        let mut fixture = RetainedCreateFixture::new("create-payload-failure");
+        fixture.effect.tool_effect_contract.write_set.swap(0, 1);
+        fs::write(
+            fixture
+                .state
+                .join(".test-fail-exact-promotion-after-first-write"),
+            b"inject",
+        )
+        .unwrap();
+        let result = fixture.apply();
+        assert_eq!(
+            result.status,
+            EffectApplicationStatus::RolledBack,
+            "{result:?}"
+        );
+        assert!(!fixture.publication.join("out/new.txt").exists());
+        assert_eq!(
+            fs::read(fixture.publication.join("out/committed.txt")).unwrap(),
+            b"old\n"
+        );
+        let records = fixture.records();
+        assert!(records
+            .iter()
+            .any(|record| matches!(record.stage, EffectWalStage::CreateEstablished(_))));
+        assert!(!records
+            .iter()
+            .any(|record| record.stage == EffectWalStage::WriteApplied));
+        assert_eq!(
+            inspect_split_root_transaction_records(&records, "create-tx")
+                .unwrap()
+                .unwrap()
+                .stage,
+            SplitRootEffectTransactionStage::RolledBack
+        );
+        fixture.cleanup();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn retained_split_root_create_parent_attributes_reject_before_wal() {
+        for nested in [false, true] {
+            let mut fixture = RetainedCreateFixture::new("create-parent-wal");
+            fixture.release_publication_handles();
+            let parent = if nested {
+                fixture.publication.join("out")
+            } else {
+                fixture.publication.clone()
+            };
+            if !nested {
+                fixture.effect.tool_effect_contract.write_set[1].reference = "new.txt".to_owned();
+                fixture.payloads[1].target_ref = "new.txt".to_owned();
+            }
+            assert!(std::process::Command::new("attrib")
+                .arg("+I")
+                .arg(&parent)
+                .status()
+                .unwrap()
+                .success());
+            fixture.recapture();
+            assert_eq!(fixture.apply().status, EffectApplicationStatus::Blocked);
+            assert!(!fixture.state.join("promotion/effects.ndjson").exists());
+            assert!(!fixture
+                .publication
+                .join(&fixture.payloads[1].target_ref)
+                .exists());
+            assert_eq!(
+                fs::read(fixture.publication.join("out/committed.txt")).unwrap(),
+                b"old\n"
+            );
+            fixture.release_publication_handles();
+            assert!(std::process::Command::new("attrib")
+                .arg("-I")
+                .arg(&parent)
+                .status()
+                .unwrap()
+                .success());
+            fixture.cleanup();
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn retained_split_root_create_known_invalid_target_never_begins_wal() {
+        let mut fixture = RetainedCreateFixture::new("create-preflight-block");
+        fixture.effect.tool_effect_contract.write_set[1].reference = "missing/new.txt".to_owned();
+        fixture.payloads[1].target_ref = "missing/new.txt".to_owned();
+        let result = fixture.apply();
+        assert!(result
+            .reasons
+            .contains(&EffectApplicationReason::ApplyFailed));
+        assert_eq!(result.validation_error_count, 0);
+        assert_eq!(
+            result.status,
+            EffectApplicationStatus::Blocked,
+            "{result:?}"
+        );
+        assert!(!fixture.state.join("promotion/effects.ndjson").exists());
+        assert_eq!(
+            fs::read(fixture.publication.join("out/committed.txt")).unwrap(),
+            b"old\n"
+        );
+        fixture.cleanup();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn retained_split_root_create_inspection_rejects_forged_reordered_and_duplicate_progress() {
+        let mut fixture = RetainedCreateFixture::new("create-inspection");
+        assert_eq!(fixture.apply().status, EffectApplicationStatus::Applied);
+        let records = fixture.records();
+        let index = records
+            .iter()
+            .position(|record| matches!(record.stage, EffectWalStage::CreateEstablished(_)))
+            .unwrap();
+        for change in 0..5 {
+            let mut invalid = records.clone();
+            match change {
+                0 => {
+                    invalid.remove(index);
+                }
+                1 => {
+                    invalid.insert(index, invalid[index].clone());
+                }
+                2 => invalid.swap(index, index - 1),
+                3 => {
+                    let EffectWalStage::CreateEstablished(mut evidence) = invalid[index].stage
+                    else {
+                        unreachable!()
+                    };
+                    evidence.parent.file_index = 0;
+                    invalid[index].stage = EffectWalStage::CreateEstablished(evidence);
+                }
+                4 => invalid[index - 1].original.as_mut().unwrap().existed = true,
+                _ => unreachable!(),
+            }
+            assert!(
+                inspect_split_root_transaction_records(&invalid, "create-tx").is_err(),
+                "case {change}"
+            );
+        }
+        assert_eq!(
+            serde_json::to_value(EffectWalStage::BeforeImage).unwrap(),
+            serde_json::json!("before_image")
+        );
+        assert_eq!(
+            serde_json::to_value(EffectWalStage::WriteApplied).unwrap(),
+            serde_json::json!("write_applied")
+        );
+        let encoded = serde_json::to_value(&records[index]).unwrap();
+        assert!(encoded["stage"]["create_established"]["root"].is_object());
+        assert_eq!(
+            serde_json::from_value::<EffectWalRecord>(encoded.clone()).unwrap(),
+            records[index]
+        );
+        let mut malformed = encoded;
+        malformed["stage"]["create_established"]["file"]["unexpected"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<EffectWalRecord>(malformed).is_err());
+        fixture.cleanup();
     }
 
     #[cfg(unix)]

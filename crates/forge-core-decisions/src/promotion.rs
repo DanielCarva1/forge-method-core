@@ -96,14 +96,16 @@ pub fn derive_promotion_diff(
                     after_metadata_fingerprint: Some(after.metadata_fingerprint.clone()),
                     destructive: false,
                 });
-                unsupported_effects.push(PromotionUnsupportedEffect {
-                    path: RepoPath(path.clone()),
-                    kind: PromotionUnsupportedEffectKind::FileMetadataCreate,
-                    detail: format!(
+                if after.metadata_fingerprint != "windows:attributes=00000020" {
+                    unsupported_effects.push(PromotionUnsupportedEffect {
+                        path: RepoPath(path.clone()),
+                        kind: PromotionUnsupportedEffectKind::FileMetadataCreate,
+                        detail: format!(
                         "created regular-file metadata is explicit and unsupported (metadata={})",
                         after.metadata_fingerprint
                     ),
-                });
+                    });
+                }
             }
             (Some(before), None) => diff.push(PromotionDiffEntry {
                 path: RepoPath(path.clone()),
@@ -576,6 +578,20 @@ mod tests {
             effect.path == RepoPath("shape".to_owned())
                 && effect.kind == PromotionUnsupportedEffectKind::ObjectTypeTransition
         }));
+    }
+
+    #[test]
+    fn created_windows_archive_file_is_metadata_supported() {
+        let mut source_file = file("new.txt", "sha256:new", 4);
+        source_file.metadata_fingerprint = "windows:attributes=00000020".to_owned();
+        let projection = derive_promotion_diff(&[source_file], &[], &[], &[]).unwrap();
+        assert!(projection.unsupported_effects.is_empty());
+        assert_eq!(
+            projection.diff[0].effect,
+            PromotionDiffEffect::CreateRegularFile
+        );
+        assert!(projection.diff[0].before_content_digest.is_none());
+        assert!(projection.diff[0].before_byte_length.is_none());
     }
 
     #[test]

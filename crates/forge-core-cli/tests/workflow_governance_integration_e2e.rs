@@ -5794,6 +5794,11 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
             &now_unix,
             "--json",
         ])
+        .args(if cfg!(windows) {
+            vec!["--path", "NEW_PROMOTED.txt"]
+        } else {
+            Vec::new()
+        })
         .output()
         .expect("acquire promotion claim");
     let claim = assert_ok(&claim);
@@ -5818,6 +5823,23 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
         "consumer project\ngoverned apply\n",
     )
     .expect("write isolated modification");
+    #[cfg(windows)]
+    {
+        fs::write(worktree.join("NEW_PROMOTED.txt"), b"governed new file\n")
+            .expect("write isolated Create");
+        let staged = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&worktree)
+            .args(["add", "--", "NEW_PROMOTED.txt"])
+            .output()
+            .expect("stage exact new file");
+        assert!(
+            staged.status.success(),
+            "{}",
+            String::from_utf8_lossy(&staged.stderr)
+        );
+        assert!(!consumer.app.join("NEW_PROMOTED.txt").exists());
+    }
     fs::write(worktree.join("LINE_ENDINGS.txt"), b"stable\r\n")
         .expect("write apply checkout-only line ending");
     fs::create_dir_all(worktree.join(".local")).expect("create ignored apply journal");
@@ -5912,7 +5934,11 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
     );
     assert_eq!(
         preview["data"]["write_set"],
-        serde_json::json!(["README.md"]),
+        if cfg!(windows) {
+            serde_json::json!(["NEW_PROMOTED.txt", "README.md"])
+        } else {
+            serde_json::json!(["README.md"])
+        },
         "checkout normalization and unclaimed files must stay outside apply"
     );
     assert!(!preview["data"]["carried_assurance_gaps"]
@@ -5956,6 +5982,41 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
     assert!(!consumer.app.join("untracked.tmp").exists());
     assert!(!consumer.app.join(".forge-method").exists());
 
+    assert_eq!(
+        applied["data"]["receipt"]["schema_version"],
+        "governed_promotion_receipt_v2"
+    );
+    #[cfg(windows)]
+    {
+        let new_bytes = b"governed new file\n";
+        assert_eq!(
+            fs::read(consumer.app.join("NEW_PROMOTED.txt")).unwrap(),
+            new_bytes
+        );
+        let binding = applied["data"]["receipt"]["applied_files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|file| file["path"] == "NEW_PROMOTED.txt")
+            .unwrap();
+        assert!(binding["before_content_digest"].is_null());
+        assert!(binding["before_byte_length"].is_null());
+        assert_eq!(
+            binding["after_content_digest"],
+            forge_core_store::sha256_content_hash(new_bytes)
+        );
+        assert_eq!(binding["after_byte_length"], new_bytes.len());
+        assert_eq!(
+            applied["data"]["receipt"]["result_snapshot"]["file_count"]
+                .as_u64()
+                .unwrap(),
+            preview["data"]["destination"]["snapshot"]["file_count"]
+                .as_u64()
+                .unwrap()
+                + 1
+        );
+    }
+    let state_before_exact_retry = state_tree_snapshot(&consumer.state);
     let retry = assert_ok(
         &bin()
             .args([
@@ -5978,6 +6039,16 @@ fn promotion_apply_writes_once_reads_back_and_exact_retry_is_idempotent() {
     assert_eq!(
         retry["data"]["receipt"]["receipt_digest"],
         applied["data"]["receipt"]["receipt_digest"]
+    );
+    assert_eq!(
+        state_tree_snapshot(&consumer.state),
+        state_before_exact_retry,
+        "exact retry must append no state events or WAL records"
+    );
+    #[cfg(windows)]
+    assert_eq!(
+        fs::read(consumer.app.join("NEW_PROMOTED.txt")).unwrap(),
+        b"governed new file\n"
     );
     assert_ok(
         &bin()
@@ -6175,8 +6246,12 @@ struct PromotionRecoveryFixture {
 }
 
 impl PromotionRecoveryFixture {
-    #[allow(clippy::too_many_lines)]
     fn new() -> Self {
+        Self::with_create(false)
+    }
+
+    #[allow(clippy::too_many_lines)]
+    fn with_create(create: bool) -> Self {
         let consumer = Consumer::new_with_prefix("forge workflow promotion recovery e2e");
         fs::write(consumer.app.join("NOTES.md"), "old notes\n").expect("second canonical file");
         let run_git = |args: &[&str]| {
@@ -6216,7 +6291,7 @@ impl PromotionRecoveryFixture {
             &serde_json::json!({
                 "kind": "unambiguous",
                 "proposal": {
-                    "outcome": "Recover one exact interrupted two-file promotion",
+                    "outcome": if create { "Recover one exact interrupted mixed three-file promotion" } else { "Recover one exact interrupted two-file promotion" },
                     "constraints": ["retain durable intent", "read back canonical bytes"],
                     "unacceptable_outcomes": ["apply third-party bytes", "duplicate committed effects"],
                     "open_uncertainties": []
@@ -6261,6 +6336,11 @@ impl PromotionRecoveryFixture {
                 &now_unix,
                 "--json",
             ])
+            .args(if create {
+                vec!["--path", "CREATED.md"]
+            } else {
+                Vec::new()
+            })
             .output()
             .expect("acquire promotion recovery claim");
         let claim = assert_ok(&claim);
@@ -6286,6 +6366,21 @@ impl PromotionRecoveryFixture {
         )
         .expect("write recovery README");
         fs::write(worktree.join("NOTES.md"), "recovered notes\n").expect("write recovery NOTES");
+        if create {
+            fs::write(worktree.join("CREATED.md"), b"recovered creation\n")
+                .expect("write recovery Create");
+            let staged = std::process::Command::new("git")
+                .arg("-C")
+                .arg(&worktree)
+                .args(["add", "--", "CREATED.md"])
+                .output()
+                .expect("stage recovery Create");
+            assert!(
+                staged.status.success(),
+                "{}",
+                String::from_utf8_lossy(&staged.stderr)
+            );
+        }
         assert_ok(
             &bin()
                 .args([
@@ -6358,8 +6453,8 @@ impl PromotionRecoveryFixture {
         assert_eq!(preview["data"]["status"], "reviewable", "{preview}");
         assert_eq!(
             preview["data"]["diff"].as_array().map(Vec::len),
-            Some(2),
-            "recovery fixture must exercise two files"
+            Some(if create { 3 } else { 2 }),
+            "recovery fixture must exercise the exact optional-Create file set"
         );
         let preview_digest = preview["data"]["preview_digest"]
             .as_str()
@@ -6406,6 +6501,150 @@ impl PromotionRecoveryFixture {
     fn effect_wal_path(&self) -> PathBuf {
         self.consumer.state.join("promotion").join("effects.ndjson")
     }
+}
+
+#[cfg(windows)]
+#[test]
+fn promotion_create_recover_exact_payload_via_returned_argv_is_idempotent() {
+    let fixture = PromotionRecoveryFixture::with_create(true);
+    let crashed = fixture
+        .command("apply")
+        .env("FORGE_TEST_PROMOTION_CRASH_AT", "after_bytes_before_marker")
+        .output()
+        .expect("interrupt after exact Create payload");
+    assert_eq!(crashed.status.code(), Some(86));
+    assert_eq!(
+        fs::read(fixture.consumer.app.join("CREATED.md")).unwrap(),
+        b"recovered creation\n"
+    );
+    assert_eq!(
+        fs::read(fixture.consumer.app.join("NOTES.md")).unwrap(),
+        b"old notes\n"
+    );
+    let retry = fixture
+        .command("apply")
+        .output()
+        .expect("get typed recovery command");
+    assert!(!retry.status.success());
+    let retry = json(&retry);
+    assert_eq!(retry["typed_failure"]["type"], "recovery_required");
+    assert_eq!(retry["typed_failure"]["data"]["can_recover"], true);
+    let argv = retry["typed_failure"]["data"]["recovery_argv"]
+        .as_array()
+        .expect("published recovery argv");
+    assert_eq!(argv.first().and_then(Value::as_str), Some("forge-core"));
+    let args = argv
+        .iter()
+        .skip(1)
+        .map(|arg| arg.as_str().expect("argv string"))
+        .collect::<Vec<_>>();
+    let recovered = assert_ok(
+        &bin()
+            .args(&args)
+            .output()
+            .expect("execute published recovery argv"),
+    );
+    assert_eq!(recovered["data"]["status"], "recovered");
+    assert_eq!(
+        recovered["data"]["receipt"]["schema_version"],
+        "governed_promotion_receipt_v2"
+    );
+    assert_eq!(recovered["data"]["receipt"]["readback_verified"], true);
+    assert_eq!(
+        fs::read(fixture.consumer.app.join("CREATED.md")).unwrap(),
+        b"recovered creation\n"
+    );
+    assert_eq!(
+        fs::read(fixture.consumer.app.join("NOTES.md")).unwrap(),
+        b"recovered notes\n"
+    );
+    assert_eq!(
+        fs::read(fixture.consumer.app.join("README.md")).unwrap(),
+        b"consumer project\nrecovered readme\n"
+    );
+    let binding = recovered["data"]["receipt"]["applied_files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|file| file["path"] == "CREATED.md")
+        .unwrap();
+    assert!(binding["before_content_digest"].is_null());
+    assert!(binding["before_byte_length"].is_null());
+    assert_eq!(
+        binding["after_content_digest"],
+        forge_core_store::sha256_content_hash(b"recovered creation\n")
+    );
+    let canonical_before = state_tree_snapshot(&fixture.consumer.app);
+    let state_before = state_tree_snapshot(&fixture.consumer.state);
+    let repeated = assert_ok(
+        &bin()
+            .args(&args)
+            .output()
+            .expect("repeat same published recovery argv"),
+    );
+    assert_eq!(repeated["data"]["status"], "already_committed");
+    assert_eq!(repeated["data"]["canonical_mutation_performed"], false);
+    assert_eq!(
+        repeated["data"]["receipt"]["receipt_digest"],
+        recovered["data"]["receipt"]["receipt_digest"]
+    );
+    assert_eq!(state_tree_snapshot(&fixture.consumer.app), canonical_before);
+    assert_eq!(state_tree_snapshot(&fixture.consumer.state), state_before);
+}
+
+#[cfg(windows)]
+#[test]
+fn promotion_create_recover_unrecorded_object_stops_and_preserves_everything() {
+    let fixture = PromotionRecoveryFixture::with_create(true);
+    let crashed = fixture
+        .command("apply")
+        .env(
+            "FORGE_TEST_PROMOTION_CRASH_AT",
+            "after_create_before_progress",
+        )
+        .output()
+        .expect("interrupt before created progress");
+    assert_eq!(crashed.status.code(), Some(86));
+    assert_eq!(
+        fs::read(fixture.consumer.app.join("CREATED.md")).unwrap(),
+        b""
+    );
+    let retry = fixture
+        .command("apply")
+        .output()
+        .expect("get typed recovery command");
+    assert!(!retry.status.success());
+    let retry = json(&retry);
+    assert_eq!(retry["typed_failure"]["type"], "recovery_required");
+    assert_eq!(retry["typed_failure"]["data"]["can_recover"], true);
+    let argv = retry["typed_failure"]["data"]["recovery_argv"]
+        .as_array()
+        .expect("published recovery argv");
+    assert_eq!(argv.first().and_then(Value::as_str), Some("forge-core"));
+    let args = argv
+        .iter()
+        .skip(1)
+        .map(|arg| arg.as_str().expect("argv string"))
+        .collect::<Vec<_>>();
+    let canonical_before = state_tree_snapshot(&fixture.consumer.app);
+    let state_before = state_tree_snapshot(&fixture.consumer.state);
+    let stopped = bin()
+        .args(&args)
+        .output()
+        .expect("execute published recovery argv and stop");
+    assert!(!stopped.status.success());
+    let stopped = json(&stopped);
+    assert_eq!(stopped["typed_failure"]["type"], "recovery_required");
+    assert_eq!(stopped["typed_failure"]["data"]["can_recover"], false);
+    assert!(stopped["typed_failure"]["data"]
+        .get("recovery_argv")
+        .is_none());
+    assert_eq!(
+        fs::read(fixture.consumer.app.join("CREATED.md")).unwrap(),
+        b""
+    );
+    assert_eq!(state_tree_snapshot(&fixture.consumer.app), canonical_before);
+    assert_eq!(state_tree_snapshot(&fixture.consumer.state), state_before);
 }
 
 #[test]

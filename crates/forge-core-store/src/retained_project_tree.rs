@@ -94,6 +94,45 @@ pub struct RetainedProjectTree {
     git_ignored_paths: BTreeSet<String>,
 }
 
+/// Same-process ownership of an exclusively created file. Not serializable or
+/// cloneable: neither a path nor a persisted file ID can mint deletion authority.
+/// Dropping this token closes its handle; it does NOT silently delete the file.
+#[derive(Debug)]
+#[allow(dead_code)] // Internal primitive; promotion remains blocked until WAL integration.
+pub(crate) struct RetainedCreatedProjectFile {
+    handle: Option<File>,
+    root_nonce: String,
+    capability_nonce: String,
+    relative_path: String,
+    name: OsString,
+    parent: usize,
+}
+
+impl RetainedCreatedProjectFile {
+    /// False after rollback has successfully requested deletion and closed the
+    /// owned handles, even if its final namespace validation returned an error.
+    #[allow(dead_code)]
+    pub(crate) fn has_live_handle(&self) -> bool {
+        self.handle.is_some()
+    }
+
+    /// Evidence for a future WAL record, never cross-process deletion authority.
+    #[cfg(windows)]
+    #[allow(dead_code)]
+    pub(crate) fn created_object_information(
+        &self,
+    ) -> Result<crate::windows_file_info::WindowsFileInformation, RetainedProjectTreeError> {
+        let path = Path::new(&self.relative_path);
+        let handle = self
+            .handle
+            .as_ref()
+            .ok_or_else(|| identity_error(path, "created handle was consumed"))?;
+        let metadata = RetainedMetadata::capture(handle, path)?;
+        validate_file_metadata(&metadata, path, RetainedFileAliasPolicy::SingleLink)?;
+        Ok(metadata.file_information)
+    }
+}
+
 /// Read-only regular-file observation derived from one retained tree.
 ///
 /// It contains no ambient path and no mutation handle. Callers must keep the
@@ -898,6 +937,441 @@ impl RetainedProjectTree {
         self.files[file_index].exact_bytes = replacement.to_vec();
         self.refresh_snapshot_digests()?;
         self.revalidate()
+    }
+
+    /// Validate a creation without mutating the namespace or starting a WAL.
+    pub fn preflight_exact_regular_file_create(
+        &self,
+        relative_path: &str,
+    ) -> Result<(), RetainedProjectTreeError> {
+        #[cfg(windows)]
+        {
+            self.exact_regular_file_create_parent(relative_path)
+                .map(|_| ())
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = relative_path;
+            Err(io_error(
+                &self.display_root,
+                io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "retained creation requires native Windows",
+                ),
+            ))
+        }
+    }
+
+    #[cfg(windows)]
+    fn exact_regular_file_create_parent(
+        &self,
+        relative_path: &str,
+    ) -> Result<usize, RetainedProjectTreeError> {
+        let path = self.display_root.join(relative_path);
+        if relative_path.is_empty()
+            || relative_path.contains(['\\', ':', '\0'])
+            || relative_path.split('/').any(|part| {
+                let stem = part.split('.').next().unwrap_or("").to_ascii_uppercase();
+                part.is_empty()
+                    || matches!(part, "." | "..")
+                    || part.ends_with(['.', ' '])
+                    || part.chars().any(|ch| {
+                        ch.is_control() || matches!(ch, '<' | '>' | '"' | '|' | '?' | '*')
+                    })
+                    || matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+                    || ((stem.starts_with("COM") || stem.starts_with("LPT"))
+                        && stem.len() == 4
+                        && matches!(stem.as_bytes()[3], b'1'..=b'9'))
+            })
+        {
+            return Err(identity_error(
+                &path,
+                "create requires a normalized ordinary project-relative path",
+            ));
+        }
+        let (parent_path, leaf) = relative_path
+            .rsplit_once('/')
+            .unwrap_or(("", relative_path));
+        let root_name = relative_path.split('/').next().expect("nonempty path");
+        if !self.capture_policy.includes_root_name(root_name)
+            || EXCLUDED_ROOT_NAMES
+                .iter()
+                .any(|name| root_name.eq_ignore_ascii_case(name))
+            || (matches!(
+                self.capture_policy,
+                RetainedProjectCapturePolicy::WorkflowLocalRootExcluded
+            ) && root_name.eq_ignore_ascii_case(WORKFLOW_LOCAL_ROOT_NAME))
+            || self.git_ignored_paths.iter().any(|ignored| {
+                relative_path == ignored
+                    || relative_path
+                        .strip_prefix(ignored)
+                        .is_some_and(|suffix| suffix.starts_with('/'))
+            })
+        {
+            return Err(identity_error(
+                &path,
+                "create target is excluded from the admitted project",
+            ));
+        }
+        let parent = self
+            .directories
+            .iter()
+            .position(|directory| directory.relative_path == parent_path)
+            .ok_or_else(|| identity_error(&path, "create requires an existing admitted parent"))?;
+        let parent_attributes = self.directories[parent]
+            .metadata
+            .file_information
+            .file_attributes;
+        if !create_parent_attributes_supported(parent_attributes) {
+            return Err(identity_error(
+                &path,
+                "create parent attributes are outside the supported Directory/Archive profile",
+            ));
+        }
+        validate_component(OsStr::new(leaf), &self.directory_display_path(parent))?;
+        // The captured ignored-path set only contains existing names. Ask
+        // the same hardened Git query for this absent candidate; tracked
+        // entries keep Git's usual exemption (deliberately no --no-index).
+        if self.capture_policy.honors_git_ignored_paths() {
+            if let Some(mut command) = project_git_command(&self.display_root)? {
+                command.args(["check-ignore", "--quiet", "--", relative_path]);
+                let output = run_bounded_git_command(&mut command, &self.display_root)?;
+                match output.status.code() {
+                    Some(1) => {}
+                    Some(0) => {
+                        return Err(identity_error(&path, "create target is Git-ignored"));
+                    }
+                    _ => {
+                        return Err(identity_error(
+                            &path,
+                            "Git could not classify create target",
+                        ));
+                    }
+                }
+            }
+        }
+        self.revalidate()?;
+        if read_directory_entries(&self.directories[parent].handle, &path)?
+            .iter()
+            .any(|entry| entry.name.to_string_lossy().eq_ignore_ascii_case(leaf))
+        {
+            return Err(identity_error(&path, "create target is already occupied"));
+        }
+        Ok(parent)
+    }
+
+    /// Read-only root/parent/file evidence from retained handles. Pending creation
+    /// accepts only this tree's live token; fresh observations revalidate the tree.
+    /// The returned reusable platform IDs never confer deletion authority.
+    #[cfg(windows)]
+    pub(crate) fn create_established_information(
+        &self,
+        relative_path: &str,
+        created: Option<&RetainedCreatedProjectFile>,
+    ) -> Result<
+        (
+            crate::windows_file_info::WindowsFileInformation,
+            crate::windows_file_info::WindowsFileInformation,
+            crate::windows_file_info::WindowsFileInformation,
+        ),
+        RetainedProjectTreeError,
+    > {
+        let path = self.display_root.join(relative_path);
+        let (parent, file) = if let Some(created) = created {
+            if created.root_nonce != self.directories[0].capability_nonce
+                || created.relative_path != relative_path
+            {
+                return Err(identity_error(
+                    &path,
+                    "created token differs from requested retained target",
+                ));
+            }
+            self.validate_ancestry()?;
+            (created.parent, created.created_object_information()?)
+        } else {
+            self.revalidate()?;
+            let index = self.exact_regular_file_index(relative_path)?;
+            let file = &self.files[index];
+            validate_file_metadata(&file.metadata, &path, RetainedFileAliasPolicy::SingleLink)?;
+            (
+                file.parent,
+                RetainedMetadata::capture(&file.handle, &path)?.file_information,
+            )
+        };
+        let root = RetainedMetadata::capture(&self.directories[0].handle, &self.display_root)?;
+        let parent = RetainedMetadata::capture(&self.directories[parent].handle, &path)?;
+        validate_directory_metadata(&root, &self.display_root)?;
+        validate_directory_metadata(&parent, &path)?;
+        Ok((root.file_information, parent.file_information, file))
+    }
+
+    #[cfg(not(windows))]
+    pub(crate) fn apply_created_regular_file(
+        &mut self,
+        _: &RetainedCreatedProjectFile,
+        _: &[u8],
+    ) -> Result<(), RetainedProjectTreeError> {
+        Err(io_error(
+            &self.display_root,
+            io::Error::new(
+                io::ErrorKind::Unsupported,
+                "retained creation requires native Windows",
+            ),
+        ))
+    }
+
+    #[cfg(not(windows))]
+    pub(crate) fn rollback_created_regular_file(
+        &mut self,
+        _: &mut RetainedCreatedProjectFile,
+    ) -> Result<(), RetainedProjectTreeError> {
+        Err(io_error(
+            &self.display_root,
+            io::Error::new(
+                io::ErrorKind::Unsupported,
+                "retained creation requires native Windows",
+            ),
+        ))
+    }
+
+    /// Exclusively create an empty ordinary leaf under an already admitted parent.
+    /// All allocation and nonce preparation precedes FILE_CREATE. Once successful,
+    /// the OS handle is immediately wrapped in the returned token; no metadata
+    /// capture or other fallible operation is interposed. The tree is deliberately
+    /// stale until apply or rollback. Callers must retain the token on subsequent
+    /// errors and record creation progress BEFORE writing any payload.
+    #[allow(dead_code)]
+    pub(crate) fn create_exact_regular_file(
+        &mut self,
+        relative_path: &str,
+    ) -> Result<RetainedCreatedProjectFile, RetainedProjectTreeError> {
+        #[cfg(not(windows))]
+        {
+            let _ = relative_path;
+            Err(io_error(
+                &self.display_root,
+                io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "retained project creation is supported only on native Windows",
+                ),
+            ))
+        }
+        #[cfg(windows)]
+        {
+            let parent = self.exact_regular_file_create_parent(relative_path)?;
+            let path = self.display_root.join(relative_path);
+            let leaf = relative_path
+                .rsplit('/')
+                .next()
+                .expect("preflight checked path");
+            let mut created = RetainedCreatedProjectFile {
+                handle: None,
+                root_nonce: self.directories[0].capability_nonce.clone(),
+                capability_nonce: project_capability_nonce(&path)?,
+                relative_path: relative_path.to_owned(),
+                name: OsString::from(leaf),
+                parent,
+            };
+            created.handle = Some(
+                platform::create_child_exclusive(&self.directories[parent].handle, &created.name)
+                    .map_err(|error| io_error(&path, error))?,
+            );
+            Ok(created)
+        }
+    }
+
+    /// Write through the exclusive creation handle, sync, read back exact bytes,
+    /// and advance only the created leaf and its parent timestamp. An error may
+    /// follow creation or a partial payload write; the caller still owns `created`
+    /// and must explicitly rollback or report recovery required. No implicit retry.
+    #[cfg(windows)]
+    #[allow(dead_code)]
+    pub(crate) fn apply_created_regular_file(
+        &mut self,
+        created: &RetainedCreatedProjectFile,
+        replacement: &[u8],
+    ) -> Result<(), RetainedProjectTreeError> {
+        self.admit_created_file(created)?;
+        let index = self.exact_regular_file_index(&created.relative_path)?;
+        let path = self.display_root.join(&created.relative_path);
+        if !self.files[index].exact_bytes.is_empty() {
+            return Err(identity_error(
+                &path,
+                "created payload requires the initial empty file",
+            ));
+        }
+        let before = self.files[index].metadata.clone();
+        let mut handle = created
+            .handle
+            .as_ref()
+            .expect("admission checked live token");
+        handle
+            .seek(SeekFrom::Start(0))
+            .and_then(|_| handle.write_all(replacement))
+            .and_then(|()| handle.sync_all())
+            .map_err(|error| io_error(&path, error))?;
+        let after = RetainedMetadata::capture(handle, &path)?;
+        validate_file_metadata(&after, &path, RetainedFileAliasPolicy::SingleLink)?;
+        if !same_exact_file_and_admitted_metadata_after_mutation(
+            &before,
+            &after,
+            RetainedFileAliasPolicy::SingleLink,
+        ) || read_retained_file(handle, replacement.len() as u64, &path)? != replacement
+        {
+            return Err(identity_error(
+                &path,
+                "created file identity, metadata, or exact payload readback changed",
+            ));
+        }
+        self.files[index].metadata = after;
+        self.files[index].exact_bytes = replacement.to_vec();
+        self.refresh_snapshot_digests()?;
+        self.revalidate()
+    }
+
+    /// Remove only the exact live object minted by this tree. Partial payloads
+    /// are removable because the original creation handle, not bytes or file ID,
+    /// proves lifetime. Failures before disposition retain the token. After a
+    /// successful disposition the token is consumed; an error then means removal
+    /// was requested but namespace/readback failed (including external open handles).
+    #[cfg(windows)]
+    #[allow(dead_code)]
+    pub(crate) fn rollback_created_regular_file(
+        &mut self,
+        created: &mut RetainedCreatedProjectFile,
+    ) -> Result<(), RetainedProjectTreeError> {
+        self.admit_created_file(created)?;
+        let index = self.exact_regular_file_index(&created.relative_path)?;
+        let path = self.display_root.join(&created.relative_path);
+        platform::delete_created_file(
+            created
+                .handle
+                .as_ref()
+                .expect("admission checked live token"),
+        )
+        .map_err(|error| io_error(&path, error))?;
+        drop(self.files.remove(index));
+        for directory in &mut self.directories {
+            directory.entries.retain(|entry| {
+                !(entry.kind == RetainedTreeEntryKind::File && entry.witness_index == index)
+            });
+            for entry in &mut directory.entries {
+                if entry.kind == RetainedTreeEntryKind::File && entry.witness_index > index {
+                    entry.witness_index -= 1;
+                }
+            }
+        }
+        drop(created.handle.take());
+        self.advance_created_parent_metadata(created.parent)?;
+        self.refresh_snapshot_digests()?;
+        self.revalidate()
+    }
+
+    /// Stage exactly one token-owned leaf for validation. On validation failure,
+    /// restore the previous admitted state; never accept a recaptured namespace.
+    #[cfg(windows)]
+    fn admit_created_file(
+        &mut self,
+        created: &RetainedCreatedProjectFile,
+    ) -> Result<(), RetainedProjectTreeError> {
+        let path = self.display_root.join(&created.relative_path);
+        if created.root_nonce != self.directories[0].capability_nonce {
+            return Err(identity_error(
+                &path,
+                "created token belongs to another retained tree",
+            ));
+        }
+        let handle = created
+            .handle
+            .as_ref()
+            .ok_or_else(|| identity_error(&path, "created token was consumed"))?;
+        let metadata = RetainedMetadata::capture(handle, &path)?;
+        validate_file_metadata(&metadata, &path, RetainedFileAliasPolicy::SingleLink)?;
+        let bytes = read_retained_file(handle, metadata.metadata.len(), &path)?;
+        let file = RetainedTreeFile {
+            handle: handle.try_clone().map_err(|error| io_error(&path, error))?,
+            metadata,
+            capability_nonce: created.capability_nonce.clone(),
+            relative_path: created.relative_path.clone(),
+            parent: created.parent,
+            name_in_parent: created.name.clone(),
+            content_digest: crate::sha256_content_hash(&bytes),
+            exact_bytes: bytes,
+        };
+        let existing = self
+            .files
+            .iter()
+            .position(|file| file.relative_path == created.relative_path);
+        if existing
+            .is_some_and(|index| self.files[index].capability_nonce != created.capability_nonce)
+        {
+            return Err(identity_error(
+                &path,
+                "created token does not own admitted file",
+            ));
+        }
+        let created_object_id = object_id(&file.metadata)?;
+        let old_parent_metadata = self.directories[created.parent].metadata.clone();
+        self.advance_created_parent_metadata(created.parent)?;
+        let index = existing.unwrap_or(self.files.len());
+        let old_file = if existing.is_some() {
+            Some(std::mem::replace(&mut self.files[index], file))
+        } else {
+            let entry = RetainedTreeEntry {
+                name: created.name.clone(),
+                object_id: created_object_id,
+                kind: RetainedTreeEntryKind::File,
+                witness_index: index,
+            };
+            self.files.push(file);
+            self.directories[created.parent].entries.push(entry);
+            self.directories[created.parent]
+                .entries
+                .sort_by(|a, b| a.name.cmp(&b.name));
+            None
+        };
+        let result = self
+            .refresh_snapshot_digests()
+            .and_then(|()| self.revalidate());
+        if result.is_err() {
+            self.directories[created.parent].metadata = old_parent_metadata;
+            if let Some(old_file) = old_file {
+                self.files[index] = old_file;
+            } else {
+                self.files.pop();
+                self.directories[created.parent].entries.retain(|entry| {
+                    !(entry.kind == RetainedTreeEntryKind::File && entry.witness_index == index)
+                });
+            }
+            self.refresh_snapshot_digests()?;
+        }
+        result
+    }
+
+    #[cfg(windows)]
+    fn advance_created_parent_metadata(
+        &mut self,
+        parent: usize,
+    ) -> Result<(), RetainedProjectTreeError> {
+        let path = self.directory_display_path(parent);
+        let current = RetainedMetadata::capture(&self.directories[parent].handle, &path)?;
+        validate_directory_metadata(&current, &path)?;
+        let before = &self.directories[parent].metadata;
+        let mut comparable = current.clone();
+        comparable.file_information.last_write_time = before.file_information.last_write_time;
+        // NTFS can grow/shrink directory index storage as this owned leaf is
+        // inserted/removed. This is not regular-file payload size. Admit only
+        // here, retaining identity/attributes/link checks and exact namespace
+        // revalidation by the caller after staging the token-owned entry.
+        comparable.file_information.file_size = before.file_information.file_size;
+        if !same_stable_metadata(before, &comparable) {
+            return Err(identity_error(
+                &path,
+                "create changed parent identity or metadata beyond namespace timestamp/storage",
+            ));
+        }
+        self.directories[parent].metadata = current;
+        Ok(())
     }
 
     fn exact_regular_file_index(
@@ -1905,11 +2379,11 @@ fn read_directory_entries(
     Ok(entries)
 }
 
-fn discover_git_ignored_paths(root: &Path) -> Result<BTreeSet<String>, RetainedProjectTreeError> {
+fn project_git_command(root: &Path) -> Result<Option<Command>, RetainedProjectTreeError> {
     let git_entry = root.join(".git");
     let metadata = match std::fs::symlink_metadata(&git_entry) {
         Ok(metadata) => metadata,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(BTreeSet::new()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(io_error(&git_entry, error)),
     };
     if metadata.file_type().is_symlink() || !(metadata.is_dir() || metadata.is_file()) {
@@ -1931,15 +2405,6 @@ fn discover_git_ignored_paths(root: &Path) -> Result<BTreeSet<String>, RetainedP
         .args(["-c", "submodule.recurse=false"])
         .arg("-c")
         .arg(format!("core.excludesFile={null_device}"))
-        .args([
-            "ls-files",
-            "--others",
-            "--ignored",
-            "--exclude-standard",
-            "--directory",
-            "--no-empty-directory",
-            "-z",
-        ])
         .current_dir(root)
         .env("GIT_OPTIONAL_LOCKS", "0")
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -1961,6 +2426,22 @@ fn discover_git_ignored_paths(root: &Path) -> Result<BTreeSet<String>, RetainedP
         .env_remove("GIT_CONFIG_COUNT")
         .env_remove("GIT_CONFIG_PARAMETERS")
         .stdin(Stdio::null());
+    Ok(Some(command))
+}
+
+fn discover_git_ignored_paths(root: &Path) -> Result<BTreeSet<String>, RetainedProjectTreeError> {
+    let Some(mut command) = project_git_command(root)? else {
+        return Ok(BTreeSet::new());
+    };
+    command.args([
+        "ls-files",
+        "--others",
+        "--ignored",
+        "--exclude-standard",
+        "--directory",
+        "--no-empty-directory",
+        "-z",
+    ]);
     let output = run_bounded_git_command(&mut command, root)?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -2575,6 +3056,11 @@ fn promotion_metadata_fingerprint(metadata: &RetainedMetadata) -> String {
 }
 
 #[cfg(windows)]
+fn create_parent_attributes_supported(attributes: u64) -> bool {
+    attributes & 0x10 != 0 && attributes & !0x30 == 0
+}
+
+#[cfg(windows)]
 fn promotion_metadata_fingerprint(metadata: &RetainedMetadata) -> String {
     format!(
         "windows:attributes={:08x}",
@@ -2679,6 +3165,8 @@ mod platform {
     const FILE_SHARE_WRITE: u32 = 0x2;
     const FILE_SHARE_DELETE: u32 = 0x4;
     const FILE_OPEN: u32 = 1;
+    const FILE_CREATE: u32 = 2;
+    const DELETE: u32 = 0x0001_0000;
     const OPEN_EXISTING: u32 = 3;
     const FILE_DIRECTORY_FILE: u32 = 0x1;
     const FILE_NON_DIRECTORY_FILE: u32 = 0x40;
@@ -2779,6 +3267,8 @@ mod platform {
             name,
             GENERIC_READ | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
             0,
+            FILE_OPEN,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         )
     }
 
@@ -2788,7 +3278,42 @@ mod platform {
             name,
             GENERIC_READ | GENERIC_WRITE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
             FILE_NON_DIRECTORY_FILE,
+            FILE_OPEN,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         )
+    }
+
+    pub(super) fn create_child_exclusive(parent: &File, name: &OsStr) -> io::Result<File> {
+        open_child_with_access(
+            parent,
+            name,
+            GENERIC_READ | GENERIC_WRITE | DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+            FILE_NON_DIRECTORY_FILE,
+            FILE_CREATE,
+            FILE_SHARE_READ,
+        )
+    }
+
+    pub(super) fn delete_created_file(file: &File) -> io::Result<()> {
+        use windows_sys::Win32::Storage::FileSystem::{
+            FileDispositionInfo, SetFileInformationByHandle, FILE_DISPOSITION_INFO,
+        };
+        let information = FILE_DISPOSITION_INFO { DeleteFile: true };
+        // SAFETY: the exact retained creation handle has DELETE access; the
+        // initialized structure and documented size remain live for this call.
+        let result = unsafe {
+            SetFileInformationByHandle(
+                file.as_raw_handle().cast(),
+                FileDispositionInfo,
+                (&raw const information).cast(),
+                std::mem::size_of::<FILE_DISPOSITION_INFO>() as u32,
+            )
+        };
+        if result == 0 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(())
+        }
     }
 
     pub(super) fn restore_file_attributes(file: &File, attributes: u64) -> io::Result<()> {
@@ -2832,6 +3357,8 @@ mod platform {
         name: &OsStr,
         desired_access: u32,
         required_type: u32,
+        disposition: u32,
+        share_access: u32,
     ) -> io::Result<File> {
         let mut wide = name.encode_wide().collect::<Vec<_>>();
         let byte_len = wide
@@ -2867,8 +3394,8 @@ mod platform {
                 std::ptr::from_mut(&mut io_status),
                 std::ptr::null_mut(),
                 0,
-                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                FILE_OPEN,
+                share_access,
+                disposition,
                 FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT | required_type,
                 std::ptr::null_mut(),
                 0,
@@ -3027,13 +3554,16 @@ mod tests {
             std::process::id()
         ))
     }
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     fn git(root: &Path, args: &[&str]) {
         let output = Command::new("git")
             .args(args)
             .current_dir(root)
             .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env(
+                "GIT_CONFIG_GLOBAL",
+                if cfg!(windows) { "NUL" } else { "/dev/null" },
+            )
             .output()
             .expect("git command starts");
         assert!(
@@ -3369,6 +3899,306 @@ mod tests {
         fs::write(&leaf, b"changed!").unwrap();
         assert!(retained.exact_regular_file_bytes("README.md").is_err());
         drop(retained);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_exact_regular_file_create_directory_growth_preserves_parent_identity() {
+        for count in [0, 1, 4, 8, 16, 32, 64] {
+            let root = project_root("create-directory-growth");
+            fs::create_dir_all(&root).unwrap();
+            for index in 0..count {
+                fs::write(root.join(format!("existing-{index}.txt")), b"old").unwrap();
+            }
+            let mut tree = RetainedProjectTree::capture(&root, 128, 4096).unwrap();
+            let before = tree.directories[0].metadata.file_information;
+            let mut created = tree.create_exact_regular_file("NEW_PROMOTED.txt").unwrap();
+            let after = RetainedMetadata::capture(&tree.directories[0].handle, &root)
+                .unwrap()
+                .file_information;
+            assert_eq!(before.file_attributes, after.file_attributes);
+            assert_eq!(before.volume_serial_number, after.volume_serial_number);
+            assert_eq!(before.file_index, after.file_index);
+            assert_eq!(before.creation_time, after.creation_time);
+            assert_eq!(before.number_of_links, after.number_of_links);
+            tree.apply_created_regular_file(&created, b"new").unwrap();
+            tree.rollback_created_regular_file(&mut created).unwrap();
+            drop(tree);
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_exact_regular_file_create_parent_profile_fails_before_mutation() {
+        assert!(create_parent_attributes_supported(0x10));
+        assert!(create_parent_attributes_supported(0x30));
+        for bits in [0, 0x20, 0x810, 0x2010, 0x4010, 0x8010, 0x20010, 0x80000010] {
+            assert!(!create_parent_attributes_supported(bits), "{bits:#x}");
+        }
+        for nested in [false, true] {
+            let root = project_root("create-parent-profile");
+            fs::create_dir_all(root.join("nested")).unwrap();
+            let parent = if nested {
+                root.join("nested")
+            } else {
+                root.clone()
+            };
+            let status = std::process::Command::new("attrib")
+                .arg("+I")
+                .arg(&parent)
+                .status()
+                .unwrap();
+            assert!(status.success());
+            let mut tree = RetainedProjectTree::capture(&root, 16, 4096).unwrap();
+            let path = if nested { "nested/new.txt" } else { "new.txt" };
+            assert!(tree.preflight_exact_regular_file_create(path).is_err());
+            assert!(tree.create_exact_regular_file(path).is_err());
+            assert!(!root.join(path).exists());
+            tree.revalidate().unwrap();
+            drop(tree);
+            assert!(std::process::Command::new("attrib")
+                .arg("-I")
+                .arg(&parent)
+                .status()
+                .unwrap()
+                .success());
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_exact_regular_file_create_readback_and_owned_rollback() {
+        let root = project_root("create-rollback");
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join("src/existing.txt"), b"before").unwrap();
+        let mut tree = RetainedProjectTree::capture(&root, 16, 4096).unwrap();
+        let original_digest = tree.snapshot_digest().to_owned();
+        let mut created = tree.create_exact_regular_file("src/new.txt").unwrap();
+        let evidence = created.created_object_information().unwrap();
+        eprintln!(
+            "exclusive create initial file_attributes={:#x}",
+            evidence.file_attributes
+        );
+        assert_eq!(evidence.file_size, 0);
+        assert_eq!(evidence.number_of_links, 1);
+        assert!(
+            tree.revalidate().is_err(),
+            "pending creation is not yet admitted"
+        );
+        tree.apply_created_regular_file(&created, b"exact new bytes\n")
+            .unwrap();
+        assert_eq!(
+            tree.exact_regular_file_bytes("src/new.txt")
+                .unwrap()
+                .unwrap(),
+            b"exact new bytes\n"
+        );
+        assert_eq!(
+            fs::read(root.join("src/new.txt")).unwrap(),
+            b"exact new bytes\n"
+        );
+        let after_evidence = created.created_object_information().unwrap();
+        eprintln!(
+            "exclusive create post-payload file_attributes={:#x}",
+            after_evidence.file_attributes
+        );
+        assert_eq!(after_evidence.file_attributes, evidence.file_attributes);
+        assert_ne!(tree.snapshot_digest(), original_digest);
+        assert_eq!(
+            created.created_object_information().unwrap().file_index,
+            evidence.file_index
+        );
+        assert!(
+            fs::remove_file(root.join("src/new.txt")).is_err(),
+            "creation handle pins deletion lifetime"
+        );
+        assert!(
+            fs::write(root.join("src/new.txt"), b"intruder").is_err(),
+            "creation handle excludes other writers"
+        );
+        tree.apply_exact_regular_file_write("src/existing.txt", b"before", b"after")
+            .unwrap();
+        tree.rollback_created_regular_file(&mut created).unwrap();
+        assert!(!root.join("src/new.txt").exists());
+        assert_eq!(fs::read(root.join("src/existing.txt")).unwrap(), b"after");
+        assert!(!created.has_live_handle());
+        assert!(created.created_object_information().is_err());
+        tree.revalidate().unwrap();
+        drop(tree);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_exact_regular_file_create_rejects_occupied_and_unsafe_names() {
+        let root = project_root("create-invalid");
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::create_dir_all(root.join(".git")).unwrap();
+        fs::write(root.join("existing.txt"), b"untouched").unwrap();
+        let mut tree = RetainedProjectTree::capture(&root, 16, 4096).unwrap();
+        for path in [
+            "existing.txt",
+            "EXISTING.TXT",
+            "src",
+            "",
+            "/new",
+            "../new",
+            "src/../new",
+            "src//new",
+            "src/./new",
+            "src\\new",
+            "new:ads",
+            "src/new:ads",
+            "missing/new",
+            ".git/new",
+            ".GIT/new",
+            "target/new",
+            "new.",
+            "new ",
+            "nul\0name",
+            "NUL",
+            "CON.txt",
+            "COM1",
+            "LPT9.txt",
+            "new?",
+            "new*",
+        ] {
+            assert!(
+                tree.create_exact_regular_file(path).is_err(),
+                "must reject {path:?}"
+            );
+            tree.revalidate().unwrap();
+        }
+        assert_eq!(fs::read(root.join("existing.txt")).unwrap(), b"untouched");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 3);
+        drop(tree);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_exact_regular_file_create_rejects_namespace_drift_without_recapture() {
+        let root = project_root("create-drift");
+        fs::create_dir_all(root.join("src")).unwrap();
+        let mut tree = RetainedProjectTree::capture(&root, 16, 4096).unwrap();
+        let mut created = tree.create_exact_regular_file("src/new.txt").unwrap();
+        fs::write(root.join("src/intruder.txt"), b"unrelated").unwrap();
+        assert!(tree
+            .apply_created_regular_file(&created, b"payload")
+            .is_err());
+        assert_eq!(fs::read(root.join("src/new.txt")).unwrap(), b"");
+        assert!(
+            tree.regular_file_observations().is_empty(),
+            "failed admission must not adopt extra entries"
+        );
+        assert!(tree.rollback_created_regular_file(&mut created).is_err());
+        assert_eq!(
+            fs::read(root.join("src/intruder.txt")).unwrap(),
+            b"unrelated"
+        );
+        fs::remove_file(root.join("src/intruder.txt")).unwrap();
+        tree.rollback_created_regular_file(&mut created).unwrap();
+        tree.revalidate().unwrap();
+        drop(tree);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_exact_regular_file_create_partial_payload_and_foreign_token_fail_closed() {
+        let root = project_root("create-partial");
+        fs::create_dir_all(&root).unwrap();
+        let mut tree = RetainedProjectTree::capture(&root, 16, 4096).unwrap();
+        let mut foreign_tree = RetainedProjectTree::capture(&root, 16, 4096).unwrap();
+        let mut created = tree.create_exact_regular_file("new.txt").unwrap();
+        assert!(foreign_tree
+            .rollback_created_regular_file(&mut created)
+            .is_err());
+        // Inject an interrupted payload on the exact owned handle, not ambient I/O.
+        let mut handle = created.handle.as_ref().unwrap();
+        handle.write_all(b"partial").unwrap();
+        handle.sync_all().unwrap();
+        assert!(tree
+            .apply_created_regular_file(&created, b"retry is not implicit")
+            .is_err());
+        tree.rollback_created_regular_file(&mut created).unwrap();
+        assert!(!root.join("new.txt").exists());
+        tree.revalidate().unwrap();
+        drop(foreign_tree);
+        drop(tree);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_exact_regular_file_create_honors_git_ignore_and_tracked_exception() {
+        let root = project_root("create-git-ignore");
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(root.join(".gitignore"), b"*.log\n").unwrap();
+        fs::write(root.join("tracked.log"), b"tracked").unwrap();
+        git(&root, &["init", "-q", "-b", "master"]);
+        git(&root, &["add", ".gitignore"]);
+        git(&root, &["add", "-f", "tracked.log"]);
+        fs::remove_file(root.join("tracked.log")).unwrap();
+        let mut tree = RetainedProjectTree::capture_project_snapshot(&root, 16, 4096).unwrap();
+        assert!(tree.create_exact_regular_file("src/absent.log").is_err());
+        assert!(!root.join("src/absent.log").exists());
+        tree.revalidate().unwrap();
+        let mut ordinary = tree.create_exact_regular_file("src/new.rs").unwrap();
+        tree.apply_created_regular_file(&ordinary, b"fn new() {}\n")
+            .unwrap();
+        let mut tracked = tree.create_exact_regular_file("tracked.log").unwrap();
+        tree.apply_created_regular_file(&tracked, b"tracked replacement")
+            .unwrap();
+        tree.rollback_created_regular_file(&mut ordinary).unwrap();
+        tree.rollback_created_regular_file(&mut tracked).unwrap();
+        tree.revalidate().unwrap();
+        drop(tree);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_exact_regular_file_create_rollback_reindexes_inventory() {
+        let root = project_root("create-reindex");
+        fs::create_dir_all(&root).unwrap();
+        let mut tree = RetainedProjectTree::capture(&root, 16, 4096).unwrap();
+        let original = tree.snapshot_digest().to_owned();
+        let mut first = tree.create_exact_regular_file("z.txt").unwrap();
+        tree.apply_created_regular_file(&first, b"first").unwrap();
+        let mut second = tree.create_exact_regular_file("a.txt").unwrap();
+        tree.apply_created_regular_file(&second, b"second").unwrap();
+        let recaptured = RetainedProjectTree::capture(&root, 16, 4096).unwrap();
+        assert_eq!(tree.snapshot_digest(), recaptured.snapshot_digest());
+        assert_eq!(
+            tree.regular_file_observations(),
+            recaptured.regular_file_observations()
+        );
+        drop(recaptured);
+        tree.rollback_created_regular_file(&mut first).unwrap();
+        tree.revalidate().unwrap();
+        assert_eq!(
+            tree.exact_regular_file_bytes("a.txt").unwrap().unwrap(),
+            b"second"
+        );
+        tree.rollback_created_regular_file(&mut second).unwrap();
+        assert_eq!(tree.snapshot_digest(), original);
+        drop(tree);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn retained_create_is_explicitly_unsupported_off_windows() {
+        let root = project_root("create-unsupported");
+        fs::create_dir_all(&root).unwrap();
+        let mut tree = RetainedProjectTree::capture(&root, 16, 4096).unwrap();
+        assert!(tree.create_exact_regular_file("new.txt").is_err());
+        assert!(!root.join("new.txt").exists());
+        drop(tree);
         fs::remove_dir_all(root).unwrap();
     }
 
