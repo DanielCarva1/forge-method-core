@@ -11,9 +11,9 @@ current_product_authority:
   milestone_qualified: false
   readiness_profile: "solo_cooperative"
   current_summary:
-    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-07"]
+    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-07", "SD-08"]
     next_item_id: "SD-06"
-    remaining_item_ids: ["SD-06", "SD-08"]
+    remaining_item_ids: ["SD-06"]
   executable_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
   strict_external_state: "later_stage_closed"
 

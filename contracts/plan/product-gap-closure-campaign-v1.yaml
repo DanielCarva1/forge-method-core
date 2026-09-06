@@ -15,9 +15,9 @@ current_product_authority:
   milestone_qualified: false
   readiness_profile: "solo_cooperative"
   current_summary:
-    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-07"]
+    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-07", "SD-08"]
     next_item_id: "SD-06"
-    remaining_item_ids: ["SD-06", "SD-08"]
+    remaining_item_ids: ["SD-06"]
   executable_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
   strict_external_state: "later_stage_closed"
 
@@ -253,7 +253,7 @@ solo_execution:
         updated_at: "2026-09-06"
     - id: "SD-08"
       title: "Sustain real dogfood"
-      status: "implemented_pending_evidence"
+      status: "completed"
       depends_on: ["SD-07"]
       checkpoint:
         kind: "campaign-item-checkpoint"
@@ -268,11 +268,10 @@ solo_execution:
           - "https://github.com/DanielCarva1/forge-method-core/issues/72#issuecomment-5556484944"
           - "https://github.com/DanielCarva1/forge-method-core/issues/72#issuecomment-5556826232"
           - "https://github.com/DanielCarva1/forge-method-core/issues/72#issuecomment-5556901122"
-        remaining_work:
-          - "Consolidate the completed public-path CI-verdict, planning-order and Windows-release-repetition changes with their promotion, cleanup and fresh-agent continuation evidence; do not reimplement them."
-          - "Reconcile final readiness with the three passed journeys of the exact installed Windows binary from source 9a66e4a8 and the separate nine passed debug-build transaction-interruption tests. Do not repeat completed packaging, installation or recovery checks without a relevant change. These observations do not claim a public tag release or native host authenticity."
-          - "Complete genuine non-fixture work through the qualified installed path and retain its public promotion and continuation evidence; do not invent features solely to satisfy the evidence requirement. Keep the SD-06 scoped cleanup restriction explicit until resolved."
-        base_commit: "9a66e4a8aeee4b8643fb2b7f64eb19588c92aaf4"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/72#issuecomment-5557003252"
+          - "https://github.com/DanielCarva1/forge-method-core/actions/runs/34011998308"
+        remaining_work: []
+        base_commit: "33657d944856b3aee9d98aec1ead14a0135aeb24"
         updated_at: "2026-09-06"
 
 
