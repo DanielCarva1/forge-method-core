@@ -123,8 +123,9 @@ cooperative evidence, exact Git-isolated work, governed promotion and readback,
 post-commit `recover` plus exact `apply` retry idempotence, replacement-process
 continuity, finalized claim/isolation/worktree/branch cleanup, and zero retained
 delete debt. This does not inject or prove a real crash-recovery window. The
-x86_64 Linux reference archive must pass three consecutive fresh
-journeys; machine-readable results are retained. Publication additionally
+x86_64 Linux reference archive and the native x86_64 Windows archive must each
+pass three consecutive fresh journeys; machine-readable results are retained.
+Publication additionally
 re-verifies manifests, checksums, Sigstore identities, and a schema-validated
 release-level CycloneDX SBOM. This proves the packaged runtime, not that Codex,
 Cursor, Claude, or another host performed the journey. These controls become

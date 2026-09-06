@@ -266,10 +266,13 @@ solo_execution:
           - "https://github.com/DanielCarva1/forge-method-core/issues/72#issuecomment-5556306140"
           - "https://github.com/DanielCarva1/forge-method-core/issues/72#issuecomment-5556415857"
           - "https://github.com/DanielCarva1/forge-method-core/issues/72#issuecomment-5556484944"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/72#issuecomment-5556826232"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/72#issuecomment-5556901122"
         remaining_work:
           - "Consolidate the completed public-path CI-verdict, planning-order and Windows-release-repetition changes with their promotion, cleanup and fresh-agent continuation evidence; do not reimplement them."
-          - "Finish the matching packaged release qualification and installed-source update. Configuration and same-owner dogfood receipts do not replace three actual consecutive packaged journeys or transaction-interruption execution evidence."
-        base_commit: "b5ea8b76a10144e8f1de0adc04e5fd0bb5cb52a3"
+          - "Reconcile final readiness with the three passed journeys of the exact installed Windows binary from source 9a66e4a8 and the separate nine passed debug-build transaction-interruption tests. Do not repeat completed packaging, installation or recovery checks without a relevant change. These observations do not claim a public tag release or native host authenticity."
+          - "Complete genuine non-fixture work through the qualified installed path and retain its public promotion and continuation evidence; do not invent features solely to satisfy the evidence requirement. Keep the SD-06 scoped cleanup restriction explicit until resolved."
+        base_commit: "9a66e4a8aeee4b8643fb2b7f64eb19588c92aaf4"
         updated_at: "2026-09-06"
 
 

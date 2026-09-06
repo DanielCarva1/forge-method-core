@@ -212,7 +212,8 @@ The focused CLI integration checks `cooperative_objective_cli_commits_once_and_f
 A release additionally requires exact tag/commit/workspace/CLI agreement,
 manifested payload verification, the complete packaged Solo Dogfood journey on
 native Linux, Windows, Intel macOS, and Apple Silicon macOS, three consecutive
-fresh reference runs on x86_64 Linux, retained result evidence, per-asset
+fresh runs on x86_64 Linux and native x86_64 Windows, retained result evidence,
+per-asset
 checksum and Sigstore verification, a schema-validated release-level CycloneDX
 SBOM, release-note/docs agreement, and residual limitations. The packaged
 journey uses synthetic cooperative objective input and proves post-commit
