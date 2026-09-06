@@ -1522,3 +1522,26 @@ fn reinitialize_resumes_reserved_wal_in_a_fresh_process() {
         destination.join(".forge-method")
     );
 }
+
+#[test]
+fn canonical_skill_guides_compact_cycle_creation_and_closeout() {
+    let skill = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skill/start-forge/SKILL.md"),
+    )
+    .expect("read canonical skill");
+    for instruction in [
+        "For a new compact task, populate `continuity.quick_cycle`",
+        "`compactness_reason`",
+        "empty `stage_closeouts`",
+        "`analysis_discovery`, `product_planning`, `solution_definition`",
+        "`implementation`, and `validation_delivery`",
+        "same completion update",
+        "Do not create an event per stage",
+        "do not backfill terminal or historical work",
+    ] {
+        assert!(
+            skill.contains(instruction),
+            "missing guidance: {instruction}"
+        );
+    }
+}

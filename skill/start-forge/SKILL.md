@@ -133,6 +133,19 @@ write the temporary input outside the project snapshot, execute the exact
 successful existing `current-work accept` or `current-work update` operation
 makes the saved resume response stale.
 
+For a new compact task, populate `continuity.quick_cycle` in the prepared
+acceptance input (inside `change.continuity` for a superseding focus). Set an
+honest `compactness_reason`, empty `stage_closeouts`, and empty
+`expansion_history`; do not use null merely because the work is small. This
+uses the existing Work Focus record, not another document or permission step.
+At delivery, supply the verified summaries for `analysis_discovery`, `product_planning`, `solution_definition`,
+`implementation`, and `validation_delivery` in the same completion update.
+Each closeout has a `summary` and optional `evidence_record_digests` referring
+only to evidence already in the owning continuity evidence set. Preserve the
+complete continuity snapshot as described below. Do not create an event per stage
+or invent a finished stage; if accepted work remains, keep the task open.
+This applies to new work; do not backfill terminal or historical work.
+
 Before reporting the accepted task as finished, check all of the current Work
 Focus acceptance against actual results; a promotion receipt alone is not enough
 if other accepted work remains. When the focus is current and its work is done,
