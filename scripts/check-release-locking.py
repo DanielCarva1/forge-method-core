@@ -49,8 +49,8 @@ class Job(NamedTuple):
 # of the byte commitment, complete semantic manifest, and independently modeled
 # graph edges. Authorizing candidate byte/graph digests cannot bypass the fixed
 # manifest governed below.
-EXPECTED_WORKFLOW_SHA256 = "94f8bba4a3ab0cc20fa1d463ec4fe82c33af432a9e56e088f0766b5a0211c7b6"
-EXPECTED_GRAPH_SHA256 = "688fbf12a3bf6beb6a15474d1d9f312b8da7554aef6e9b6cb4571c225d435200"
+EXPECTED_WORKFLOW_SHA256 = "efda951c00312f0a786bb3e1824d16bc25a21bc01b16989ed8c5465800a79465"
+EXPECTED_GRAPH_SHA256 = "079e896fe7ac0cae28b161d47bcf6f443d2c916f107af9c6c4219528e48af78e"
 EXPECTED_CARGO_STEPS = {
     ("build", "Install cross"): ("cargo", "install", "cross", "--version", "0.2.5", "--locked", "--quiet"),
     ("build", "Build (Linux cross)"): ("cross", "build", "--locked", "--release", "--target", "${{", "matrix.target", "}}", "-p", "forge-core-cli"),
@@ -120,7 +120,7 @@ GOVERNED_FILE_SHA256 = {
     "contracts/fixtures/release-lock/manifest-drift/Cargo.toml": "8ff62e94d1327c44671f0572c032cec8d770615c8356a64ec8be16751d878352",
     "contracts/fixtures/release-lock/manifest-drift/Cargo.lock": "8aac6f6c147c6e9099790e083f623e37e8016cbda16d778c9a22c1799fca46b0",
     "contracts/fixtures/release-lock/manifest-drift/src/main.rs": "536e506bb90914c243a12b397b9a998f85ae2cbd9ba02dfd03a9e155ca5ca0f4",
-    "contracts/fixtures/release-lock/workflow-semantic-manifest.json": "45caaa53e1c2c06d2784d7a04eec365ee46c545fbef38ea9159c1d5e5453ec10",
+    "contracts/fixtures/release-lock/workflow-semantic-manifest.json": "62e03e7595d93778555b1e22fecf577197a9ed39f07938cb54207f0bb99b3036",
 }
 
 # Only these reviewed release payloads use Git's `text:auto` checkout policy.
@@ -1015,11 +1015,11 @@ def _check_native_solo_journey(source: str, jobs: tuple[Job, ...]) -> None:
         raise ReleaseLockError(
             "packaged native Solo Dogfood journey does not use the exact governed argv"
         )
-    if source.count("            journey_runs: 3\n") != 1:
+    if source.count("            journey_runs: 3\n") != 2:
         raise ReleaseLockError(
-            "exactly one native reference package must run three consecutive journeys"
+            "Linux reference and Windows packages must run three consecutive journeys"
         )
-    if source.count("            journey_runs: 1\n") != 4:
+    if source.count("            journey_runs: 1\n") != 3:
         raise ReleaseLockError(
             "every remaining package boundary must retain one packaged journey"
         )

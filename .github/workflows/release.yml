@@ -219,7 +219,7 @@ jobs:
             archive: forge-core-x86_64-windows.zip
             can_smoke: true
             native_release: true
-            journey_runs: 1
+            journey_runs: 3
 
     steps:
       - name: Checkout the validated immutable commit

@@ -30,6 +30,35 @@ lock_checker = checker._load_release_lock_checker()
 
 
 class ReleasePolicyTests(unittest.TestCase):
+    def test_windows_release_runs_the_readiness_minimum(self) -> None:
+        readiness = checker.parse_workflow(
+            (ROOT / "contracts/spec/solo-dogfood-readiness-v0.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        minimum = int(
+            readiness["testing_decisions"]["release_evidence"]["minimum_consecutive_runs"]
+        )
+        build = checker.parse_workflow(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["build"]
+        windows = [
+            target for target in build["strategy"]["matrix"]["include"]
+            if target["target"] == "x86_64-pc-windows-msvc"
+        ]
+        self.assertEqual(len(windows), 1)
+        self.assertEqual(windows[0]["native_release"], "true")
+        self.assertGreaterEqual(int(windows[0]["journey_runs"]), minimum)
+        journey_steps = [
+            step for step in build["steps"]
+            if "scripts/smoke-release-install.py" in step.get("run", "")
+        ]
+        self.assertEqual(len(journey_steps), 1)
+        self.assertEqual(journey_steps[0]["if"], "matrix.native_release == true")
+        self.assertIn('--journey-runs "${{ matrix.journey_runs }}"', journey_steps[0]["run"])
+        lock_checker._check_native_solo_journey(
+            WORKFLOW.read_text(encoding="utf-8"),
+            lock_checker.parse_graph(WORKFLOW.read_text(encoding="utf-8")),
+        )
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.policy_source = POLICY_WORKFLOW.read_text(encoding="utf-8")

@@ -196,7 +196,7 @@
         "            archive: forge-core-x86_64-windows.zip",
         "            can_smoke: true",
         "            native_release: true",
-        "            journey_runs: 1",
+        "            journey_runs: 3",
         "    steps:",
         "      - name: Checkout the validated immutable commit",
         "        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5",
