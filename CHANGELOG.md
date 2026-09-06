@@ -16,9 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-- **Source candidate version advanced to `0.12.0-alpha.49` for `master`.** This
-  does not claim hosted CI, an exact tag, or a GitHub Release; those release
-  proofs remain pending.
+## [0.12.0] - 2026-09-06
+
+Stable release preparation for native Windows with Codex and ZCode. The
+version label alone is not publication evidence: verify the matching GitHub
+Release, archive manifest and checksum before updating. Existing alpha49 host
+observations remain version-scoped; they are not rewritten as stable-host runs.
 
 ### Changed
 - **ZCode now has an authenticated public-CLI candidate journey on native

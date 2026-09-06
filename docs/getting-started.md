@@ -46,6 +46,43 @@ and older installer receipts are removed. The repository tool reuses Cargo's
 effective target directory, including `.cargo/config.toml`; set
 `CARGO_TARGET_DIR` only when that cache needs an explicit override.
 
+## Update an existing Windows project
+
+1. Finish or pause the agent's current operation before switching executables.
+2. Download the new Windows archive from the exact GitHub Release and verify
+   its checksum and manifest. Extract it into a separate version directory;
+   do not extract over a running executable or into your project.
+3. Keep the previous package until the new one has been checked. Select the
+   new directory on PATH and confirm the resolved executable with
+   `Get-Command forge-core` and `forge-core --version`.
+4. Update the host's start-forge skill from that same archive. Ask the agent to
+   resume the existing project, not initialize another project or sidecar.
+5. The agent follows the existing Project Link and checks the accepted work.
+   Project source, `.forge-method.yaml` and the linked sidecar are not package
+   files: do not delete, move or recreate them during a binary update.
+
+A runtime release upgrade is different from replacing the executable. Run only
+an upgrade command actually offered by Forge for that project. If resume reports
+state loss or incompatible data, preserve the state and inspect the diagnostic;
+do not try older binaries against modified state as an improvised rollback.
+Once the new package resumes correctly, remove only the old package directory
+when no process uses it. No source build or Cargo cache is needed for a prebuilt.
+
+### Supported scope and known limits
+
+The initial stable scope is native Windows with cooperative Codex/ZCode agents.
+Other platform archives have package checks; that is not a claim that every
+agent on those platforms has completed the human development journey. The agent
+still owns reasoning, research quality, tool use and clear conversation. Forge
+preserves accepted state and governs delivery through its public commands; it
+cannot prevent an agent with filesystem access from writing outside that path.
+
+The observed product journey needed some host/environment assistance and a
+correction to documentation. Later compact-task and replacement checks passed,
+but this is not a guarantee of perfect autonomy, optimal latency or support for
+every future model. Enterprise identity and independent review are not part of
+the Solo Cooperative promise.
+
 ## Install the host skill
 
 Copy `skill/start-forge/SKILL.md` to a location recognized by the host agent.

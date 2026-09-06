@@ -7,7 +7,7 @@ project: "forge-method-core"
 
 current_product_authority:
   authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#current_product_authority"
-  authority_revision: 3
+  authority_revision: 4
   authority_chain_id: "solo-dogfood-readiness-v0"
   milestone_id: "solo-dogfood-ready"
   milestone: "Solo Dogfood Ready"
@@ -16,9 +16,9 @@ current_product_authority:
   readiness_profile: "solo_cooperative"
   strict_external_state: "later_stage_closed"
   current_summary:
-    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-07", "SD-08"]
-    next_item_id: "SD-06"
-    remaining_item_ids: ["SD-06"]
+    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
+    next_item_id: null
+    remaining_item_ids: []
   executable_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
   executable_item_authority: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence"
   executable_item_projection:

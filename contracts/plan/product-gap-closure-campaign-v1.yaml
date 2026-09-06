@@ -8,16 +8,16 @@ base_commit: "137b3cf43b123d4b15c45b544a3e3060e714ffb9"
 source_checkpoint: "0.12.0"
 current_product_authority:
   authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#current_product_authority"
-  authority_revision: 3
+  authority_revision: 4
   milestone_id: "solo-dogfood-ready"
   milestone: "Solo Dogfood Ready"
   milestone_state: "active_implementation"
   milestone_qualified: false
   readiness_profile: "solo_cooperative"
   current_summary:
-    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-07", "SD-08"]
-    next_item_id: "SD-06"
-    remaining_item_ids: ["SD-06"]
+    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
+    next_item_id: null
+    remaining_item_ids: []
   executable_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
   strict_external_state: "later_stage_closed"
 
@@ -200,7 +200,7 @@ solo_execution:
         updated_at: "2026-08-29"
     - id: "SD-06"
       title: "Conform the initial Windows hosts"
-      status: "in_progress"
+      status: "completed"
       depends_on: ["SD-05"]
       checkpoint:
         kind: "campaign-item-checkpoint"
@@ -227,9 +227,9 @@ solo_execution:
           - "contracts/hosts/conformance-results/zcode/0.16.5/README.md"
           - "https://github.com/DanielCarva1/forge-method-core/issues/70#issuecomment-5556319491"
           - "https://github.com/DanielCarva1/forge-method-core/issues/70#issuecomment-5556327636"
-        remaining_work:
-          - "Finish scoped cleanup of the retained disposable host fixtures when the recorded environment restriction permits it; preserve the consolidated evidence."
-          - "Carry the completed authenticated ZCode journey and subsequent Codex/ZCode negative-scenario observations into release qualification without repeating login or rewriting historical bundles as one combined run. Native host authenticity remains unclaimed and is not a Solo prerequisite."
+          - "https://github.com/DanielCarva1/forge-method-core/issues/70#issuecomment-5561310056"
+          - "https://github.com/DanielCarva1/forge-method-core/actions/runs/34049391531"
+        remaining_work: []
         base_commit: "b5ea8b76a10144e8f1de0adc04e5fd0bb5cb52a3"
         updated_at: "2026-09-06"
     - id: "SD-07"

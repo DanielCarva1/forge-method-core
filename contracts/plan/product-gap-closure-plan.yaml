@@ -7,16 +7,16 @@ source_checkpoint: "0.12.0"
 
 current_product_authority:
   authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#current_product_authority"
-  authority_revision: 3
+  authority_revision: 4
   milestone_id: "solo-dogfood-ready"
   milestone: "Solo Dogfood Ready"
   milestone_state: "active_implementation"
   milestone_qualified: false
   readiness_profile: "solo_cooperative"
   current_summary:
-    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-07", "SD-08"]
-    next_item_id: "SD-06"
-    remaining_item_ids: ["SD-06"]
+    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
+    next_item_id: null
+    remaining_item_ids: []
   executable_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
   strict_external_state: "later_stage_closed"
 
@@ -382,13 +382,14 @@ first_executable_slice:
   milestone: "Solo Dogfood Ready"
   readiness_profile: "solo_cooperative"
   phase: "solo-dogfood-ready"
-  first_item: "SD-06"
-  status: "in_progress"
+  first_item: null
+  status: "completed"
   authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-06]"
   rationale: >-
-    The host-neutral conformance kit and the first five journey items are
-    complete. The next bounded step is to run the public corpus for each initial
-    host candidate and record an honest capability result or typed gap.
+    SD-00 through SD-08 are complete. The final host coverage and owned fixture
+    cleanup are reconciled in issue 70. No implementation item remains in this
+    sequence; stable publication and artifact-specific verification remain
+    separate from milestone implementation completion.
   stop_conditions:
     - "Any artifact marks Solo Dogfood Ready qualified before SD-00 through SD-08 close."
     - "Cooperative evidence is relabeled as human-origin, independent-review, trusted-runtime, publication, or field proof."
