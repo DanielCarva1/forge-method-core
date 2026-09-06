@@ -378,22 +378,7 @@ phases:
       - "A third-party author completes the full lifecycle without core changes."
       - "Incompatible, shadowing, tampered, and revoked packs fail closed."
 
-first_executable_slice:
-  milestone: "Solo Dogfood Ready"
-  readiness_profile: "solo_cooperative"
-  phase: "solo-dogfood-ready"
-  first_item: null
-  status: "completed"
-  authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-06]"
-  rationale: >-
-    SD-00 through SD-08 are complete. The final host coverage and owned fixture
-    cleanup are reconciled in issue 70. No implementation item remains in this
-    sequence; stable publication and artifact-specific verification remain
-    separate from milestone implementation completion.
-  stop_conditions:
-    - "Any artifact marks Solo Dogfood Ready qualified before SD-00 through SD-08 close."
-    - "Cooperative evidence is relabeled as human-origin, independent-review, trusted-runtime, publication, or field proof."
-    - "A strict_external checkpoint, identity, or evidence boundary is deleted or rewritten as solo proof."
+first_executable_slice: null
 
 preserved_strict_external_first_executable_slice:
   phase: "C1-first-use-authority-vertical-slice"

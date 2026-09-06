@@ -965,6 +965,100 @@ mod tests {
         ScratchRoot(root)
     }
 
+    // Negative progression tests own an in-progress scenario, not the live milestone.
+    fn active_product_fixture(label: &str) -> ScratchRoot {
+        let fixture = workspace_contract_fixture(label);
+        let source: CurrentProductAuthorityDocument =
+            load(&fixture.0, SOLO_SPEC_PATH).expect("load authority");
+        let ids = &source.current_product_authority.executable_item_ids;
+        let current = &source.current_product_authority.current_summary;
+        let first = ids.first().expect("executable item");
+        for relative in [
+            SOLO_SPEC_PATH,
+            PRODUCT_PLAN_PATH,
+            PRODUCT_CAMPAIGN_PATH,
+            PRODUCT_INVENTORY_PATH,
+        ] {
+            let path = fixture.0.join(relative);
+            let text = fs::read_to_string(&path).expect("read projection");
+            let text = text
+                .replacen(
+                    &format!(
+                        "    completed_item_ids: {}",
+                        yaml_inline_strings(&current.completed_item_ids)
+                    ),
+                    "    completed_item_ids: []",
+                    1,
+                )
+                .replacen(
+                    &format!(
+                        "    next_item_id: {}",
+                        yaml_optional_string(current.next_item_id.as_ref())
+                    ),
+                    &format!("    next_item_id: \"{first}\""),
+                    1,
+                )
+                .replacen(
+                    &format!(
+                        "    remaining_item_ids: {}",
+                        yaml_inline_strings(&current.remaining_item_ids)
+                    ),
+                    &format!("    remaining_item_ids: {}", yaml_inline_strings(ids)),
+                    1,
+                )
+                .replacen(
+                    "  milestone_qualified: true",
+                    "  milestone_qualified: false",
+                    1,
+                );
+            fs::write(path, text).expect("write active projection");
+        }
+        let plan_path = fixture.0.join(PRODUCT_PLAN_PATH);
+        let plan = fs::read_to_string(&plan_path).expect("read plan");
+        let start = plan
+            .find("\nfirst_executable_slice:")
+            .expect("slice boundary");
+        let end = plan[start + 1..]
+            .find("\npreserved_strict_external_first_executable_slice:")
+            .map(|offset| start + 1 + offset)
+            .expect("preserved slice boundary");
+        let mut plan = plan;
+        plan.replace_range(start..end, &format!(
+            "\nfirst_executable_slice:\n  first_item: \"{first}\"\n  status: \"in_progress\"\n  authority_ref: \"{SOLO_SPEC_PATH}#implementation_decisions.delivery_sequence[{first}]\"\n"
+        ));
+        fs::write(plan_path, plan).expect("write active slice");
+        let campaign_path = fixture.0.join(PRODUCT_CAMPAIGN_PATH);
+        let document: ProductCampaignDocument =
+            load(&fixture.0, PRODUCT_CAMPAIGN_PATH).expect("load campaign");
+        let mut campaign = fs::read_to_string(&campaign_path).expect("read campaign");
+        for item in &document.solo_execution.items {
+            let anchor = format!("    - id: \"{}\"", item.id);
+            let status = if &item.id == first {
+                "in_progress"
+            } else {
+                "planned"
+            };
+            campaign = replace_first_after(
+                campaign,
+                &anchor,
+                &format!("      status: \"{}\"", item.status),
+                &format!("      status: \"{status}\""),
+            );
+            if item.checkpoint.remaining_work.is_empty() {
+                campaign = replace_first_after(
+                    campaign,
+                    &anchor,
+                    "        remaining_work: []",
+                    "        remaining_work: [\"Test fixture pending work\"]",
+                );
+            }
+        }
+        fs::write(campaign_path, campaign).expect("write active campaign");
+        let report = validate_workspace_architecture_contracts(&fixture.0).expect("fixture loads");
+        assert!(report.is_clean(), "{:?}", report.issues);
+        fixture
+    }
+
     fn yaml_inline_strings(values: &[String]) -> String {
         format!(
             "[{}]",
@@ -1131,7 +1225,7 @@ mod tests {
 
     #[test]
     fn current_product_authority_accepts_completion_after_a_pending_item() {
-        let fixture = workspace_contract_fixture("non-prefix-completion");
+        let fixture = active_product_fixture("non-prefix-completion");
         let authority: CurrentProductAuthorityDocument =
             load(&fixture.0, SOLO_SPEC_PATH).expect("load Solo authority");
         let summary = &authority.current_product_authority.current_summary;
@@ -1179,7 +1273,7 @@ mod tests {
 
     #[test]
     fn current_product_authority_rejects_an_internally_stale_summary() {
-        let fixture = workspace_contract_fixture("stale-summary");
+        let fixture = active_product_fixture("stale-summary");
         let spec_path = fixture.0.join(SOLO_SPEC_PATH);
         let authority: CurrentProductAuthorityDocument =
             load(&fixture.0, SOLO_SPEC_PATH).expect("load Solo authority");
@@ -1215,7 +1309,7 @@ mod tests {
 
     #[test]
     fn current_product_authority_rejects_stale_plan_order() {
-        let fixture = workspace_contract_fixture("stale-plan-order");
+        let fixture = active_product_fixture("stale-plan-order");
         let plan_path = fixture.0.join(PRODUCT_PLAN_PATH);
         let authority: CurrentProductAuthorityDocument =
             load(&fixture.0, SOLO_SPEC_PATH).expect("load Solo authority");
@@ -1253,7 +1347,7 @@ mod tests {
 
     #[test]
     fn current_product_authority_rejects_active_plan_after_terminal_summary() {
-        let fixture = workspace_contract_fixture("terminal-active-plan");
+        let fixture = active_product_fixture("terminal-active-plan");
         let spec: CurrentProductAuthorityDocument =
             load(&fixture.0, SOLO_SPEC_PATH).expect("load Solo authority");
         for relative in [
@@ -1278,7 +1372,7 @@ mod tests {
 
     #[test]
     fn current_product_authority_rejects_campaign_state_that_diverges_from_summary() {
-        let fixture = workspace_contract_fixture("campaign-state");
+        let fixture = active_product_fixture("campaign-state");
         let campaign_path = fixture.0.join(PRODUCT_CAMPAIGN_PATH);
         let authority: CurrentProductAuthorityDocument =
             load(&fixture.0, SOLO_SPEC_PATH).expect("load Solo authority");
