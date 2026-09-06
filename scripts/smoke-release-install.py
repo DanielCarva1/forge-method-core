@@ -134,7 +134,7 @@ def extract_checked_members(archive: Path, destination: Path) -> dict[str, Path]
 
 
 def run(
-    command: list[os.PathLike[str] | str], label: str, timeout_seconds: int
+    command: list[os.PathLike[str] | str] | str, label: str, timeout_seconds: int
 ) -> subprocess.CompletedProcess[str]:
     try:
         completed = subprocess.run(
@@ -163,13 +163,14 @@ def run(
     return completed
 
 
-def wrapper_command(wrapper: Path, arguments: list[str]) -> list[str]:
+def wrapper_command(wrapper: Path, arguments: list[str]) -> list[str] | str:
     if os.name != "nt":
         return [str(wrapper), *arguments]
-    # `call` preserves the batch wrapper's exit status and handles a quoted
-    # extraction path without asking Python to reinterpret command arguments.
-    command_line = "call " + subprocess.list2cmdline([str(wrapper), *arguments])
-    return ["cmd.exe", "/d", "/s", "/c", command_line]
+    # Give cmd its command tail once. Passing that tail as a list element makes
+    # subprocess quote it again using CRT rules, turning its quotes into \".
+    # /s strips the outer pair; the inner quotes preserve spaced fixture paths.
+    command_line = subprocess.list2cmdline([str(wrapper), *arguments])
+    return f'cmd.exe /d /s /c "{command_line}"'
 
 
 def require(condition: bool, message: str) -> None:
@@ -178,7 +179,7 @@ def require(condition: bool, message: str) -> None:
 
 
 def require_version(
-    command: list[str], expected: str, label: str, timeout_seconds: int
+    command: list[str] | str, expected: str, label: str, timeout_seconds: int
 ) -> None:
     actual = run(command, label, timeout_seconds).stdout.strip()
     if actual != expected:
@@ -189,7 +190,7 @@ def require_version(
         )
 
 
-def require_ok_json(command: list[str], label: str, timeout_seconds: int) -> dict[str, Any]:
+def require_ok_json(command: list[str] | str, label: str, timeout_seconds: int) -> dict[str, Any]:
     completed = run(command, label, timeout_seconds)
     try:
         envelope = json.loads(completed.stdout)
@@ -209,7 +210,7 @@ def require_ok_json(command: list[str], label: str, timeout_seconds: int) -> dic
 
 
 def timed_ok_json(
-    command: list[str], label: str, timeout_seconds: int
+    command: list[str] | str, label: str, timeout_seconds: int
 ) -> tuple[dict[str, Any], float]:
     started = time.perf_counter()
     result = require_ok_json(command, label, timeout_seconds)

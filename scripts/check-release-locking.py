@@ -107,12 +107,12 @@ RELEASE_SET_ARCHIVE_ARGV = (
 # are included, not merely the scripts directly named in YAML.
 GOVERNED_FILE_SHA256 = {
     "scripts/run-release-locked-sbom.py": "c2d5d5461346988c83fa542d1ac4743c321bb4b0505983a6efb6285187c9eba8",
-    "scripts/test-release-locking.py": "21a19a1eb36251c98d603c1e65227cbfe0d5c6acb7b8f681f20446adadb2d590",
+    "scripts/test-release-locking.py": "e482e9c0f60d4664ae2b1844e605aa7244e984013f28f757c0f86c276413a6d3",
     "scripts/test-release-archive.py": "9fa807099e2dd32181d84a8917fe8739ac6c652ed8fbe92cca22d420c00b3286",
     "distribution/release-payload.txt": "aef129de07a2415fc118df79d4c3cb8da70e49b5a3b00302756165c1ab1f4a29",
     "scripts/build-release-archive.py": "c5dbb723e768fec1469fd0928b138eacf4bc4d6e64e13d567c786bdb82eea593",
     "scripts/check-release-archive.py": "d61fdab452cd673a6b6fa676fe2100e4ee81a68e56e9bd0a6c4942dfd2d19ef4",
-    "scripts/smoke-release-install.py": "c70deaee0375cd69f31f21b5d949113ee05f21c1fa5e6580127264f30dbcdc0c",
+    "scripts/smoke-release-install.py": "fb27c9e044f4a63ec750591bd5b9d832cf041df47716b741f9f988d20e5efeae",
     "scripts/build-release-set-manifest.py": "ca00140321cb565af9694b39729dc7fb3156140b41d4293d910bc5aff1196d83",
     "scripts/test-release-set-manifest.py": "466d73c1a2afafdaa240fbedf777969db58dcad0dd10b4d9ceeb7b0c3d975a7b",
     "distribution/forge": "6b151926a6b69e514d6542ff93974c1251f9a597a246ab49d8c04649f8a5f25b",

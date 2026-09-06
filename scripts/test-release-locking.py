@@ -80,6 +80,36 @@ def release_cargo() -> str | None:
 
 
 class ReleaseLockingTests(unittest.TestCase):
+    def test_packaged_wrapper_keeps_posix_argv_separate(self) -> None:
+        wrapper = Path("installed/forge")
+        arguments = ["start", "--root", "consumer project", "--json"]
+        with mock.patch.object(smoke_module.os, "name", "posix"):
+            self.assertEqual(
+                smoke_module.wrapper_command(wrapper, arguments),
+                [str(wrapper), *arguments],
+            )
+
+    @unittest.skipUnless(os.name == "nt", "native Windows batch argument handling")
+    def test_packaged_wrapper_preserves_spaced_arguments_and_exit_status(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="forge wrapper space ") as directory:
+            root = Path(directory)
+            probe = root / "argument probe.py"
+            probe.write_text(
+                "import json, sys\nprint(json.dumps(sys.argv[1:]))\nsys.exit(7)\n",
+                encoding="utf-8",
+            )
+            wrapper = root / "forge.cmd"
+            wrapper.write_text(
+                f'@echo off\n"{sys.executable}" "{probe}" %*\n', encoding="utf-8"
+            )
+            arguments = ["start", "--root", str(root / "consumer project"), "--json"]
+            completed = subprocess.run(
+                smoke_module.wrapper_command(wrapper, arguments),
+                capture_output=True, text=True, timeout=10, check=False,
+            )
+            self.assertEqual(completed.returncode, 7, completed.stderr)
+            self.assertEqual(json.loads(completed.stdout), arguments)
+
     def assert_mutation_rejected(self, mutated: str) -> None:
         """Bypass only the byte hash: the independent graph must still reject."""
         original = WORKFLOW.read_text(encoding="utf-8")
