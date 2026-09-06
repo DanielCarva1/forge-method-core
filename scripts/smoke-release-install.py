@@ -355,6 +355,46 @@ def require_release_status(release_status: dict[str, Any]) -> str:
     return release_id
 
 
+def activate_packaged_release(
+    wrapper: Path, project: Path, status: dict[str, Any],
+    timeout_seconds: int, timings: dict[str, float],
+) -> str:
+    """Follow the same one-time, runtime-offered upgrades as Start Forge."""
+    seen: set[str] = set()
+    for ordinal in range(16):
+        release_id = require_release_status(status)
+        require(release_id not in seen, "release upgrade repeated an active release")
+        seen.add(release_id)
+        data = status["data"]
+        argv = data.get("upgrade_argv")
+        target = data.get("available_successor")
+        if argv is None:
+            require(target is None, "release successor has no executable upgrade route")
+            return release_id
+        require(
+            isinstance(argv, list) and len(argv) == 13
+            and all(isinstance(token, str) for token in argv)
+            and isinstance(target, dict),
+            "release upgrade command has an unexpected shape",
+        )
+        require(
+            argv == ["forge-core", "workflow", "release-upgrade", "--root", argv[4],
+                     "--target-release-id", target.get("release_id"),
+                     "--expected-current-release-digest", data["active"]["release"].get("release_digest"),
+                     "--expected-head-digest", data.get("ledger_head_digest"),
+                     "--expected-snapshot-digest", data.get("snapshot_digest")],
+            "release upgrade command does not match its published bindings",
+        )
+        require(Path(argv[4]).samefile(project), "release upgrade targets another project")
+        forge_call(wrapper, argv[1:] + ["--json"], f"release upgrade {ordinal + 1}",
+                   timeout_seconds, timings)
+        status = forge_call(wrapper, ["workflow", "release-status", "--root", str(project), "--json"],
+                            f"release readback {ordinal + 1}", timeout_seconds, timings)
+        require(status.get("data", {}).get("active", {}).get("release") == target,
+                "release upgrade readback does not match the offered target")
+    raise InstallSmokeError("release upgrade exceeded the bounded setup budget")
+
+
 def require_archive_identity(
     extracted: dict[str, Path], expected_version: str
 ) -> dict[str, Any]:
@@ -462,7 +502,9 @@ def run_solo_journey(args: argparse.Namespace, ordinal: int) -> dict[str, Any]:
             args.command_timeout_seconds,
             timings,
         )
-        active_release_id = require_release_status(release_status)
+        active_release_id = activate_packaged_release(
+            wrapper, project, release_status, args.command_timeout_seconds, timings
+        )
         guidance = forge_call(
             wrapper,
             ["workflow", "next", *root_args],

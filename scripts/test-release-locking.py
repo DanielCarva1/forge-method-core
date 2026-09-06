@@ -80,6 +80,69 @@ def release_cargo() -> str | None:
 
 
 class ReleaseLockingTests(unittest.TestCase):
+    def test_packaged_setup_follows_offered_release_and_checks_readback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            old = {"release_id": "old", "release_digest": "sha256:old"}
+            new = {"release_id": "new", "release_digest": "sha256:new"}
+            active = lambda release: {"release": release, "runtime_bundle": {
+                "bundle_id": "bundle", "bundle_digest": "sha256:bundle"}}
+            argv = ["forge-core", "workflow", "release-upgrade", "--root", str(project),
+                    "--target-release-id", "new", "--expected-current-release-digest", "sha256:old",
+                    "--expected-head-digest", "sha256:head", "--expected-snapshot-digest", "sha256:snapshot"]
+            initial = {"data": {"active": active(old), "available_successor": new,
+                "ledger_head_digest": "sha256:head", "snapshot_digest": "sha256:snapshot",
+                "upgrade_argv": argv}}
+            final = {"data": {"active": active(new), "available_successor": None, "upgrade_argv": None}}
+            with mock.patch.object(smoke_module, "forge_call", side_effect=[{}, final]) as call:
+                result = smoke_module.activate_packaged_release(Path("forge"), project, initial, 10, {})
+                self.assertEqual(result, "new")
+                self.assertEqual(call.call_args_list[0].args[1], argv[1:] + ["--json"])
+                self.assertEqual(call.call_count, 2)
+            latest = {"release_id": "latest", "release_digest": "sha256:latest"}
+            next_argv = argv[:6] + ["latest", "--expected-current-release-digest", "sha256:new",
+                "--expected-head-digest", "sha256:head2", "--expected-snapshot-digest", "sha256:snapshot2"]
+            intermediate = {"data": {**initial["data"], "active": active(new),
+                "available_successor": latest, "upgrade_argv": next_argv,
+                "ledger_head_digest": "sha256:head2", "snapshot_digest": "sha256:snapshot2"}}
+            terminal = {"data": {**final["data"], "active": active(latest)}}
+            with mock.patch.object(smoke_module, "forge_call", side_effect=[{}, intermediate, {}, terminal]) as call:
+                self.assertEqual(smoke_module.activate_packaged_release(
+                    Path("forge"), project, initial, 10, {}), "latest")
+                self.assertEqual(call.call_args_list[2].args[1], next_argv[1:] + ["--json"])
+                self.assertEqual(call.call_count, 4)
+            with mock.patch.object(smoke_module, "forge_call", side_effect=[{}, initial]):
+                with self.assertRaisesRegex(smoke_module.InstallSmokeError, "target"):
+                    smoke_module.activate_packaged_release(Path("forge"), project, initial, 10, {})
+            with mock.patch.object(smoke_module, "forge_call") as call:
+                self.assertEqual(smoke_module.activate_packaged_release(
+                    Path("forge"), project, final, 10, {}), "new")
+                call.assert_not_called()
+            stalled = {"data": {**initial["data"], "available_successor": old,
+                "upgrade_argv": argv[:6] + ["old"] + argv[7:]}}
+            with mock.patch.object(smoke_module, "forge_call", side_effect=[{}, stalled]):
+                with self.assertRaisesRegex(smoke_module.InstallSmokeError, "repeated"):
+                    smoke_module.activate_packaged_release(Path("forge"), project, stalled, 10, {})
+            with mock.patch.object(smoke_module, "forge_call") as call:
+                with self.assertRaisesRegex(smoke_module.InstallSmokeError, "no executable"):
+                    smoke_module.activate_packaged_release(Path("forge"), project,
+                        {"data": {**initial["data"], "upgrade_argv": None}}, 10, {})
+                call.assert_not_called()
+            elsewhere = project / "other-project"
+            elsewhere.mkdir()
+            wrong_root = argv[:4] + [str(elsewhere)] + argv[5:]
+            for bad in [argv + ["--registry-file", "untrusted"], argv[:5] + ["--target-release-id", "other"] + argv[7:]]:
+                with self.subTest(argv=bad), mock.patch.object(smoke_module, "forge_call") as call:
+                    with self.assertRaises(smoke_module.InstallSmokeError):
+                        smoke_module.activate_packaged_release(Path("forge"), project,
+                            {"data": {**initial["data"], "upgrade_argv": bad}}, 10, {})
+                    call.assert_not_called()
+            with mock.patch.object(smoke_module, "forge_call") as call:
+                with self.assertRaisesRegex(smoke_module.InstallSmokeError, "another project"):
+                    smoke_module.activate_packaged_release(Path("forge"), project,
+                        {"data": {**initial["data"], "upgrade_argv": wrong_root}}, 10, {})
+                call.assert_not_called()
+
     def test_packaged_wrapper_keeps_posix_argv_separate(self) -> None:
         wrapper = Path("installed/forge")
         arguments = ["start", "--root", "consumer project", "--json"]
