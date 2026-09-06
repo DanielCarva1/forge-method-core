@@ -223,11 +223,15 @@ solo_execution:
           - "contracts/hosts/conformance-results/zcode/0.16.5/bundle/result.json"
           - "contracts/hosts/conformance-results/zcode/0.16.5/run-summary.json"
           - "https://github.com/DanielCarva1/forge-method-core/issues/69"
+          - "contracts/hosts/conformance-results/codex/0.153.4/run-summary.json"
+          - "contracts/hosts/conformance-results/zcode/0.16.5/README.md"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/70#issuecomment-5556319491"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/70#issuecomment-5556327636"
         remaining_work:
-          - "Establish a safe authenticated ZCode CLI journey and rerun the public corpus; the current exact-version result stops before the first agent turn."
-          - "Close or explicitly accept the required-capability gaps in the retained Codex Windows result before initial release qualification."
-        base_commit: "776c5f3fcf462f523e194fa9a5e82c1381bb0d41"
-        updated_at: "2026-08-31"
+          - "Finish scoped cleanup of the retained disposable host fixtures when the recorded environment restriction permits it; preserve the consolidated evidence."
+          - "Carry the completed authenticated ZCode journey and subsequent Codex/ZCode negative-scenario observations into release qualification without repeating login or rewriting historical bundles as one combined run. Native host authenticity remains unclaimed and is not a Solo prerequisite."
+        base_commit: "b5ea8b76a10144e8f1de0adc04e5fd0bb5cb52a3"
+        updated_at: "2026-09-06"
     - id: "SD-07"
       title: "Gate the packaged journey"
       status: "completed"
@@ -259,11 +263,14 @@ solo_execution:
           - "https://github.com/DanielCarva1/forge-method-core/issues/41"
           - "https://github.com/DanielCarva1/forge-method-core/issues/45"
           - "https://github.com/DanielCarva1/forge-method-core/issues/64"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/72#issuecomment-5556306140"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/72#issuecomment-5556415857"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/72#issuecomment-5556484944"
         remaining_work:
-          - "Complete multiple non-trivial Forge changes through the same matching released public path after SD-07 closes."
-          - "Convert observed friction into bounded governed work and retain cleanup, timing, and continuation evidence."
-        base_commit: "ed4d1e35ed1263a580e46bd255a2aea14dfafa05"
-        updated_at: "2026-08-29"
+          - "Consolidate the completed public-path CI-verdict, planning-order and Windows-release-repetition changes with their promotion, cleanup and fresh-agent continuation evidence; do not reimplement them."
+          - "Finish the matching packaged release qualification and installed-source update. Configuration and same-owner dogfood receipts do not replace three actual consecutive packaged journeys or transaction-interruption execution evidence."
+        base_commit: "b5ea8b76a10144e8f1de0adc04e5fd0bb5cb52a3"
+        updated_at: "2026-09-06"
 
 
 status_vocabulary:

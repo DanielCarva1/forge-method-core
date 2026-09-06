@@ -634,7 +634,6 @@ out_of_scope:
   - "same-operating-system-user confinement against a malicious agent"
   - "multi-organization key management, enrollment, rotation, and revocation UX"
   - "automatic Forge activation in every new chat"
-  - "native Windows Forge runtime support"
   - "claiming support for capabilities that a host cannot expose or prove"
   - "mediation of every intermediate file edit"
   - "publication, push, merge, deployment, production mutation, or secret use without explicit human confirmation"
