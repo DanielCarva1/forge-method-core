@@ -81,9 +81,9 @@ CI_VERDICT_COMMAND = (
     '--mandatory msrv "Rust 1.85 minimum supported version" "${{ needs.msrv.result }}" '
     '--mandatory focused "Focused package and integration evidence" "${{ needs.focused.result }}" '
     '--mandatory windows-package "Windows packaged Solo Dogfood journey" "${{ needs[\'windows-package\'].result }}" '
-    '--informational platform "Prerelease-channel native platform observations" "${{ needs.platform.result }}" '
+    '--informational platform "Prerelease-channel native platform observations" "not_awaited" '
     '--informational expensive-journey "Prerelease-channel Linux P6d reference journey observation" '
-    '"${{ needs[\'expensive-journey\'].result }}"'
+    '"not_awaited"'
 )
 
 POLICY_COMMAND = TRUSTED_CHECK_COMMAND
@@ -91,7 +91,7 @@ LEGACY_WORKFLOW_DIGEST = (
     "22d63c7f271a732a104b3282664980caa69880db619c9e5d04f734496933c140"
 )
 FINAL_WORKFLOW_DIGEST = (
-    "04b7eb61891ec86cd796975ad42fcdb648a09486d617ccb038e78b1a2c1884ca"
+    "6cc192830abcf4728531cab123948d09eaa910e7e6486efcb767cce92f8eeebe"
 )
 FOCUSED_JOB_DIGEST = (
     "cc001becf4c4b0da263343e2403dc85b5ccbc147fd17a63464a1a09d56f6d11a"
@@ -588,8 +588,6 @@ def _check_ci_verdict_topology(jobs: dict[str, Any]) -> None:
             "msrv",
             "focused",
             "windows-package",
-            "platform",
-            "expensive-journey",
         ],
         "ci-verdict dependencies",
     )

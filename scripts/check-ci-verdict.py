@@ -34,6 +34,8 @@ def _escape_cell(value: str) -> str:
 
 
 def _display_state(state: str) -> str:
+    if state == "not_awaited":
+        return "not awaited (see separate job)"
     if not state:
         return "missing"
     if state not in TERMINAL_STATES:
@@ -107,12 +109,14 @@ def render_summary(
                 "## Prerelease-channel informational observations (excluded)",
                 "",
                 (
-                    "The current prerelease channel does not claim native "
+                    "These optional observations do not establish native "
                     "platform-gate or P6d cumulative evidence, and neither "
                     "observation is P7F proof. These allowed-failure "
                     "observations are listed separately and cannot "
                     "satisfy this verdict or any broader readiness claim. Their "
-                    "dependency result is descriptive only: job-level "
+                    "status is descriptive only. Jobs marked `not_awaited` run "
+                    "separately and do not delay this verdict; inspect their own "
+                    "steps and artifacts for results. Job-level "
                     "`continue-on-error` can normalize an underlying failure to "
                     "`success`, so the job steps and timing artifacts remain the "
                     "authoritative observation detail."

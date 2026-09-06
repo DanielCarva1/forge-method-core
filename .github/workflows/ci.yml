@@ -452,7 +452,7 @@ jobs:
   # Retain the existing check name for branch-protection compatibility.
   ci-verdict:
     name: Required source-only CI verdict
-    needs: [static_docs, msrv, focused, windows-package, platform, expensive-journey]
+    needs: [static_docs, msrv, focused, windows-package]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -467,4 +467,4 @@ jobs:
           fetch-depth: 1
 
       - name: Summarize mandatory terminal states and fail closed
-        run: python -I trusted/scripts/check-ci-verdict.py --mandatory static_docs "Tier 0 static and docs" "${{ needs.static_docs.result }}" --mandatory msrv "Rust 1.85 minimum supported version" "${{ needs.msrv.result }}" --mandatory focused "Focused package and integration evidence" "${{ needs.focused.result }}" --mandatory windows-package "Windows packaged Solo Dogfood journey" "${{ needs['windows-package'].result }}" --informational platform "Prerelease-channel native platform observations" "${{ needs.platform.result }}" --informational expensive-journey "Prerelease-channel Linux P6d reference journey observation" "${{ needs['expensive-journey'].result }}"
+        run: python -I trusted/scripts/check-ci-verdict.py --mandatory static_docs "Tier 0 static and docs" "${{ needs.static_docs.result }}" --mandatory msrv "Rust 1.85 minimum supported version" "${{ needs.msrv.result }}" --mandatory focused "Focused package and integration evidence" "${{ needs.focused.result }}" --mandatory windows-package "Windows packaged Solo Dogfood journey" "${{ needs['windows-package'].result }}" --informational platform "Prerelease-channel native platform observations" "not_awaited" --informational expensive-journey "Prerelease-channel Linux P6d reference journey observation" "not_awaited"

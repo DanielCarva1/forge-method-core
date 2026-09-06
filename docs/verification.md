@@ -29,7 +29,10 @@ Windows instead exercises the shipped CLI through the existing release smoke.
 The final check keeps its historical name, `Required source-only CI verdict`,
 for branch-protection compatibility. Its mandatory set now also includes the
 Windows package: failure, cancellation, skipping or a missing result fails the
-verdict. This proves a packaged-runtime journey, not Codex/ZCode host support
+verdict. The required verdict depends only on those four mandatory jobs.
+Optional platform/P6d jobs continue separately and are shown as `not_awaited`,
+not as successes; their own steps and artifacts hold the results. They cannot
+delay the required check. This proves a packaged-runtime journey, not Codex/ZCode host support
 or full product readiness. Platform and P6d observations remain informational.
 
 The workspace declares `rust-version = "1.85"` because Cargo's manifest field

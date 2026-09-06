@@ -46,6 +46,12 @@ topology = load_topology_checker()
 
 
 class CiVerdictTests(unittest.TestCase):
+    def test_required_verdict_does_not_wait_for_informational_jobs(self) -> None:
+        jobs = topology.parse_workflow(CI_WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        self.assertEqual(
+            jobs["ci-verdict"]["needs"], list(topology.REQUIRED_CI_RESULT_JOBS)
+        )
+
     def test_windows_package_is_mandatory_and_every_non_success_fails(self) -> None:
         source = CI_WORKFLOW.read_text(encoding="utf-8")
         jobs = topology.parse_workflow(source)["jobs"]
@@ -83,7 +89,7 @@ class CiVerdictTests(unittest.TestCase):
         self.assertIn("Required source-only verdict: PASS", summary)
 
     def test_failure_cancel_skip_missing_and_unknown_fail_closed(self) -> None:
-        for state in ("failure", "cancelled", "skipped", "", "timed_out"):
+        for state in ("failure", "cancelled", "skipped", "", "timed_out", "not_awaited"):
             with self.subTest(state=state):
                 summary, passed = checker.render_summary(
                     [self.row("static_docs", "success"), self.row("focused", state)],
@@ -110,8 +116,6 @@ class CiVerdictTests(unittest.TestCase):
                 "msrv",
                 "focused",
                 "windows-package",
-                "platform",
-                "expensive-journey",
             ],
         )
         self.assertEqual(jobs["platform"]["continue-on-error"], "true")
@@ -143,6 +147,16 @@ class CiVerdictTests(unittest.TestCase):
         self.assertIn("cannot satisfy this verdict", summary)
         self.assertIn("continue-on-error", summary)
         self.assertNotIn("0.12.0-alpha.1", summary)
+
+    def test_optional_jobs_are_explicitly_not_awaited_not_fake_success(self) -> None:
+        summary, passed = checker.render_summary(
+            [self.row("windows-package", "success")],
+            [self.row("platform", "not_awaited")],
+        )
+        self.assertTrue(passed)
+        self.assertIn("not awaited (see separate job)", summary)
+        self.assertNotIn("unknown (not_awaited)", summary)
+        self.assertIn("**none (excluded)**", summary)
 
     def test_empty_mandatory_set_and_duplicate_classification_are_rejected(self) -> None:
         with self.assertRaisesRegex(

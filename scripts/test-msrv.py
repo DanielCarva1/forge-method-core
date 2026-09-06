@@ -719,14 +719,14 @@ class MsrvContractTests(unittest.TestCase):
 
     def test_ci_verdict_requires_all_dependencies_and_always_runs(self) -> None:
         self.assert_workflow_rejected(
-            "    needs: [static_docs, msrv, focused, windows-package, platform, expensive-journey]\n",
+            "    needs: [static_docs, msrv, focused, windows-package]\n",
             "    needs: [static_docs, msrv, focused, platform]\n",
             "ci-verdict dependencies",
         )
         verdict_condition = (
             "  ci-verdict:\n"
             "    name: Required source-only CI verdict\n"
-            "    needs: [static_docs, msrv, focused, windows-package, platform, expensive-journey]\n"
+            "    needs: [static_docs, msrv, focused, windows-package]\n"
             "    if: always()\n"
         )
         self.assert_workflow_rejected(
