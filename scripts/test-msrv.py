@@ -122,7 +122,8 @@ class MsrvContractTests(unittest.TestCase):
         self.assertIn(".github/workflows/ci.yml", phase_one["explicitly_does_not_land"])
         self.assertEqual(
             phase_two["ci_workflow_digest"],
-            f"sha256:{checker.FINAL_WORKFLOW_DIGEST}",
+            "sha256:" + checker._normalized_digest(checker.parse_workflow(
+                PHASE_TWO_WORKFLOW.read_text(encoding="utf-8"))),
         )
         self.assertEqual(phase_two["lands"], [".github/workflows/ci.yml"])
         self.assertIn("immutable base SHA", document["trust_rule"])
@@ -146,13 +147,15 @@ class MsrvContractTests(unittest.TestCase):
         final_source = PHASE_TWO_WORKFLOW.read_text(encoding="utf-8")
         self.assertEqual(
             checker._normalized_digest(checker.parse_workflow(final_source)),
-            checker.FINAL_WORKFLOW_DIGEST,
+            "5f74265e835caf2727e96e1544e547c42c6a9c59bbefc02e1f6275521d8ca141",
         )
-        checker.check_workflow_source(final_source)
+        # Retained migration evidence is not the currently accepted CI topology.
+        with self.assertRaises(checker.MsrvCheckError):
+            checker.check_workflow_source(final_source)
         checker.check_workflow_source(self.source)
 
         # Reproduce the real cross-root boundary: an immutable phase-1 base
-        # checker validates a phase-2 candidate without executing candidate
+        # checker validates the current candidate without executing candidate
         # trust code or defaulting manifest reads back to the base root.
         with tempfile.TemporaryDirectory() as directory:
             trusted_phase_one = Path(directory)
@@ -166,7 +169,7 @@ class MsrvContractTests(unittest.TestCase):
             shutil.copy2(PHASE_ONE_WORKFLOW, trusted_workflow)
             phase_one_checker = load_checker_from(trusted_phase_one)
             packages = phase_one_checker.check(
-                workflow=PHASE_TWO_WORKFLOW,
+                workflow=WORKFLOW,
                 root=ROOT,
                 policy_workflow=POLICY_WORKFLOW,
             )
@@ -596,6 +599,22 @@ class MsrvContractTests(unittest.TestCase):
             "msrv job condition",
         )
 
+    def test_windows_package_cannot_be_skipped_or_weakened(self) -> None:
+        start = self.source.index("  windows-package:\n")
+        end = self.source.index("  expensive-journey:\n", start)
+        job = self.source[start:end]
+        mutations = [
+            job.replace("    needs: static_docs\n", "    needs: static_docs\n    continue-on-error: true\n"),
+            job.replace("    needs: static_docs\n", "    needs: static_docs\n    if: false\n"),
+            job.replace("scripts/smoke-release-install.py", "scripts/check-release-archive.py"),
+            job.replace("--journey-runs 1", "--journey-runs 0"),
+            job.replace("--expected-host-arch amd64", "--expected-host-arch arm64"),
+        ]
+        for mutated in mutations:
+            with self.subTest(job=mutated):
+                with self.assertRaises(checker.MsrvCheckError):
+                    checker.check_workflow_source(self.source[:start] + mutated + self.source[end:])
+
     def test_required_ci_jobs_reject_job_or_step_allowed_failure(self) -> None:
         focused_header = (
             "  focused:\n"
@@ -700,14 +719,14 @@ class MsrvContractTests(unittest.TestCase):
 
     def test_ci_verdict_requires_all_dependencies_and_always_runs(self) -> None:
         self.assert_workflow_rejected(
-            "    needs: [static_docs, msrv, focused, platform, expensive-journey]\n",
+            "    needs: [static_docs, msrv, focused, windows-package, platform, expensive-journey]\n",
             "    needs: [static_docs, msrv, focused, platform]\n",
             "ci-verdict dependencies",
         )
         verdict_condition = (
             "  ci-verdict:\n"
             "    name: Required source-only CI verdict\n"
-            "    needs: [static_docs, msrv, focused, platform, expensive-journey]\n"
+            "    needs: [static_docs, msrv, focused, windows-package, platform, expensive-journey]\n"
             "    if: always()\n"
         )
         self.assert_workflow_rejected(

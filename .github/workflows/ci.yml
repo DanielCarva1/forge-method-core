@@ -294,11 +294,6 @@ jobs:
             runner: ubuntu-latest
             expected-arch: x86_64
             cache-key: forge-linux-stable
-          - name: Windows
-            id: windows
-            runner: windows-latest
-            expected-arch: amd64
-            cache-key: forge-windows-stable
           - name: macOS Intel
             id: macos-intel
             runner: macos-15-intel
@@ -350,11 +345,67 @@ jobs:
           path: target/ci-timing
           if-no-files-found: warn
 
+  windows-package:
+    name: Windows packaged Solo Dogfood journey
+    needs: static_docs
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable action
+
+      - name: Cache release build
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          shared-key: forge-windows-package-stable
+
+      - name: Build shipped CLI only
+        run: python scripts/run-ci-tier.py --tier windows-package-build --budget-seconds 1800 --report target/ci-timing/windows-package-build.json -- cargo build --locked --release -p forge-core-cli --bin forge-core
+
+      - name: Build, verify and exercise the Windows package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(python -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
+          commit=$(git rev-parse HEAD)
+          epoch=$(git show -s --format=%ct HEAD)
+          python scripts/build-release-archive.py \
+            --repo-root . --binary target/release/forge-core.exe \
+            --binary-name forge-core.exe --wrapper distribution/forge.cmd --wrapper-name forge.cmd \
+            --archive forge-core-x86_64-windows.zip --version "$version" \
+            --release-tag "v$version" --source-commit "$commit" --source-date-epoch "$epoch"
+          python scripts/check-release-archive.py \
+            --archive forge-core-x86_64-windows.zip --version "$version" \
+            --expected-release-tag "v$version" --expected-source-commit "$commit" \
+            --binary-name forge-core.exe --wrapper-name forge.cmd \
+            --payload-manifest distribution/release-payload.txt --require-checksum
+          python scripts/run-ci-tier.py --tier windows-package-journey \
+            --budget-seconds 600 --report target/ci-timing/windows-package-journey.json -- \
+            python scripts/smoke-release-install.py \
+            --archive forge-core-x86_64-windows.zip --version "$version" \
+            --binary-name forge-core.exe --wrapper-name forge.cmd --expected-host-arch amd64 \
+            --command-timeout-seconds 60 --journey-runs 1 \
+            --evidence-output packaged-solo-evidence/windows.json
+
+      - name: Retain Windows journey evidence and timings
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-package-evidence
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            packaged-solo-evidence/windows.json
+            target/ci-timing
+
   expensive-journey:
     name: "[informational prerelease] Linux P6d reference journey observation"
     needs: [static_docs, focused, platform]
     # A push to a declared cumulative branch is the sole execution trigger.
-    # Pull requests compile this target on Linux, Windows, and both macOS architectures.
+    # Pull requests compile this target on Linux and both macOS architectures.
     if: >-
       github.event_name == 'push' &&
       needs.static_docs.result == 'success' &&
@@ -398,9 +449,10 @@ jobs:
           path: target/ci-timing
           if-no-files-found: warn
 
+  # Retain the existing check name for branch-protection compatibility.
   ci-verdict:
     name: Required source-only CI verdict
-    needs: [static_docs, msrv, focused, platform, expensive-journey]
+    needs: [static_docs, msrv, focused, windows-package, platform, expensive-journey]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -415,4 +467,4 @@ jobs:
           fetch-depth: 1
 
       - name: Summarize mandatory terminal states and fail closed
-        run: python -I trusted/scripts/check-ci-verdict.py --mandatory static_docs "Tier 0 static and docs" "${{ needs.static_docs.result }}" --mandatory msrv "Rust 1.85 minimum supported version" "${{ needs.msrv.result }}" --mandatory focused "Focused package and integration evidence" "${{ needs.focused.result }}" --informational platform "Prerelease-channel native platform observations" "${{ needs.platform.result }}" --informational expensive-journey "Prerelease-channel Linux P6d reference journey observation" "${{ needs['expensive-journey'].result }}"
+        run: python -I trusted/scripts/check-ci-verdict.py --mandatory static_docs "Tier 0 static and docs" "${{ needs.static_docs.result }}" --mandatory msrv "Rust 1.85 minimum supported version" "${{ needs.msrv.result }}" --mandatory focused "Focused package and integration evidence" "${{ needs.focused.result }}" --mandatory windows-package "Windows packaged Solo Dogfood journey" "${{ needs['windows-package'].result }}" --informational platform "Prerelease-channel native platform observations" "${{ needs.platform.result }}" --informational expensive-journey "Prerelease-channel Linux P6d reference journey observation" "${{ needs['expensive-journey'].result }}"

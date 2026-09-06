@@ -15,14 +15,22 @@ alone met a time budget or changed repository settings.
 | **Tier 0: static/docs** | Every pull request and push to `main`/`master` | 120 seconds | Generated workspace layout, local Markdown links, public-promise audit, evidence-tool tests, Rust formatting |
 | **MSRV** | Every pull request and push to `main`/`master`, after Tier 0 completes (even if Tier 0 failed or was skipped) | 300 seconds contract test; 1,800 seconds compile | Exact PyYAML 6.0.3 provisioning and Rust 1.85.1, locked workspace, every Cargo target and feature, adversarial lane tests |
 | **Focused package/integration** | Every pull request and push to `main`/`master`, after Tier 0 | 900 seconds | Generated command/release subjects, retirement runtime, test inventories, all-feature pedantic clippy, aggregate validation and regression anchors |
-| **Platform** | Every pull request and push to `main`/`master`, after Tier 0; native Linux, Windows, Intel macOS, Apple Silicon macOS matrix | 1,800 seconds | Workspace all-target compilation and default workspace tests on every runner; each non-Linux runner also compiles the expensive P6d target |
+| **Platform** | Every pull request and push to `main`/`master`, after Tier 0; native Linux, Intel macOS, Apple Silicon macOS informational matrix | 1,800 seconds | Workspace all-target compilation and default workspace tests on every runner; each non-Linux runner also compiles the expensive P6d target |
+| **Windows package** | Every pull request and push to `main`/`master`, after Tier 0 | 1,800 seconds build; 600 seconds journey | Required release CLI build, archive/checksum validation and packaged Solo Dogfood journey; no duplicate Windows workspace suite |
 | **Expensive cumulative journey** | Push to `main`/`master` only, after Tier 0 + focused + platform succeed | 1,800 seconds | Exact Linux P6d reference-pack real-process journey once |
 
-Job timeouts (10, 35, 45, 40, and 35 minutes respectively) are outer safety bounds.
+Job timeouts (10, 35, 45, 40, 45, and 35 minutes respectively) are outer safety bounds.
 Each wrapped step also enforces its own hard wall-clock timeout, terminates its
 complete child process tree, and persists timing evidence. Pull requests do not
 execute the expensive journey, but focused all-feature clippy compiles its code
-on Linux and every non-Linux platform has a dedicated feature-gated compile.
+on Linux and both macOS runners have a dedicated feature-gated compile.
+Windows instead exercises the shipped CLI through the existing release smoke.
+
+The final check keeps its historical name, `Required source-only CI verdict`,
+for branch-protection compatibility. Its mandatory set now also includes the
+Windows package: failure, cancellation, skipping or a missing result fails the
+verdict. This proves a packaged-runtime journey, not Codex/ZCode host support
+or full product readiness. Platform and P6d observations remain informational.
 
 The workspace declares `rust-version = "1.85"` because Cargo's manifest field
 expresses a stable release line as major.minor. CI pins patch release **1.85.1**
@@ -111,6 +119,7 @@ outcome, and wrapper exit. It is uploaded even after failure:
 - `ci-timing-focused`
 - `ci-timing-platform-${{ matrix.id }}`
 - `ci-timing-expensive-journey`
+- `windows-package-evidence` (journey JSON and timings; 7-day retention)
 
 The wrapper also appends the row to `GITHUB_STEP_SUMMARY`. A timeout terminates
 the child process tree, records the timeout, and exits `124`; a command that fails

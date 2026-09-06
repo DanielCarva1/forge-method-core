@@ -46,6 +46,26 @@ topology = load_topology_checker()
 
 
 class CiVerdictTests(unittest.TestCase):
+    def test_windows_package_is_mandatory_and_every_non_success_fails(self) -> None:
+        source = CI_WORKFLOW.read_text(encoding="utf-8")
+        jobs = topology.parse_workflow(source)["jobs"]
+        self.assertIn("windows-package", topology.REQUIRED_CI_RESULT_JOBS)
+        self.assertIn("windows-package", jobs["ci-verdict"]["needs"])
+        windows = jobs["windows-package"]
+        self.assertEqual(windows["runs-on"], "windows-latest")
+        self.assertNotIn("continue-on-error", windows)
+        self.assertNotIn("windows-latest", [item["runner"] for item in jobs["platform"]["strategy"]["matrix"]["include"]])
+        commands = "\n".join(step.get("run", "") for step in windows["steps"])
+        for script in ("build-release-archive.py", "check-release-archive.py", "smoke-release-install.py"):
+            self.assertIn(script, commands)
+        self.assertNotIn("cargo test --workspace", commands)
+        for state in ("success", "failure", "cancelled", "skipped", "", "unknown"):
+            with self.subTest(state=state):
+                _, passed = checker.render_summary([
+                    self.row(job, state if job == "windows-package" else "success")
+                    for job in topology.REQUIRED_CI_RESULT_JOBS], [])
+                self.assertEqual(passed, state == "success")
+
     def row(self, job_id: str, state: str):
         return checker.JobResult(job_id, f"label for {job_id}", state)
 
@@ -89,6 +109,7 @@ class CiVerdictTests(unittest.TestCase):
                 "static_docs",
                 "msrv",
                 "focused",
+                "windows-package",
                 "platform",
                 "expensive-journey",
             ],

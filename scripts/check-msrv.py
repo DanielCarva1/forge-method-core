@@ -73,13 +73,14 @@ MSRV_REGRESSION_COMMAND = (
     "--budget-seconds 360 --report target/ci-timing/msrv-topology-tests.json -- "
     "python -I trusted/scripts/test-msrv.py"
 )
-REQUIRED_CI_RESULT_JOBS = ("static_docs", "msrv", "focused")
+REQUIRED_CI_RESULT_JOBS = ("static_docs", "msrv", "focused", "windows-package")
 INFORMATIONAL_CHANNEL_JOBS = ("platform", "expensive-journey")
 CI_VERDICT_COMMAND = (
     'python -I trusted/scripts/check-ci-verdict.py '
     '--mandatory static_docs "Tier 0 static and docs" "${{ needs.static_docs.result }}" '
     '--mandatory msrv "Rust 1.85 minimum supported version" "${{ needs.msrv.result }}" '
     '--mandatory focused "Focused package and integration evidence" "${{ needs.focused.result }}" '
+    '--mandatory windows-package "Windows packaged Solo Dogfood journey" "${{ needs[\'windows-package\'].result }}" '
     '--informational platform "Prerelease-channel native platform observations" "${{ needs.platform.result }}" '
     '--informational expensive-journey "Prerelease-channel Linux P6d reference journey observation" '
     '"${{ needs[\'expensive-journey\'].result }}"'
@@ -90,7 +91,7 @@ LEGACY_WORKFLOW_DIGEST = (
     "22d63c7f271a732a104b3282664980caa69880db619c9e5d04f734496933c140"
 )
 FINAL_WORKFLOW_DIGEST = (
-    "5f74265e835caf2727e96e1544e547c42c6a9c59bbefc02e1f6275521d8ca141"
+    "04b7eb61891ec86cd796975ad42fcdb648a09486d617ccb038e78b1a2c1884ca"
 )
 FOCUSED_JOB_DIGEST = (
     "cc001becf4c4b0da263343e2403dc85b5ccbc147fd17a63464a1a09d56f6d11a"
@@ -586,6 +587,7 @@ def _check_ci_verdict_topology(jobs: dict[str, Any]) -> None:
             "static_docs",
             "msrv",
             "focused",
+            "windows-package",
             "platform",
             "expensive-journey",
         ],
@@ -732,6 +734,7 @@ def check_workflow_source(
             "static_docs",
             "msrv",
             "focused",
+            "windows-package",
             "platform",
             "expensive-journey",
             "ci-verdict",
