@@ -1661,14 +1661,14 @@ mod intent_digest_tests {
                 "digest" => entry.before_content_digest = Some(sha256_content_hash(b"")),
                 "length" => entry.before_byte_length = Some(0),
                 "metadata" => {
-                    entry.before_metadata_fingerprint = entry.after_metadata_fingerprint.clone()
+                    entry.before_metadata_fingerprint = entry.after_metadata_fingerprint.clone();
                 }
                 "after-digest" => entry.after_content_digest = None,
                 "after-length" => entry.after_byte_length = None,
                 "after-metadata" => entry.after_metadata_fingerprint = None,
                 "attribute" => {
                     entry.after_metadata_fingerprint =
-                        Some("windows:attributes=00000022".to_owned())
+                        Some("windows:attributes=00000022".to_owned());
                 }
                 "destructive" => entry.destructive = true,
                 _ => unreachable!(),
