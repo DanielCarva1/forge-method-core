@@ -395,6 +395,60 @@ def activate_packaged_release(
     raise InstallSmokeError("release upgrade exceeded the bounded setup budget")
 
 
+def packaged_evidence_offer(
+    packet: dict[str, Any], project: Path, worktree: Path, offer_id: str,
+) -> dict[str, Any]:
+    """Assess only this synthetic README task, never arbitrary consumer work."""
+    require((project / "README.md").read_bytes() == b"packaged consumer\n",
+            "assessment baseline differs from the controlled README fixture")
+    require((worktree / "README.md").read_bytes() == b"packaged consumer\ngoverned packaged change\n",
+            "assessment candidate differs from the accepted README edit")
+    require(git_output(worktree, "diff", "--name-only", "HEAD").splitlines() == ["README.md"],
+            "assessment candidate has unexpected tracked changes")
+    offer = json.loads(json.dumps(packet["offer_template"]))
+    offer["offer_id"] = offer_id
+    attestation = offer["attestation"]
+    policy = attestation["policy_ref"]
+    reasons = {
+        "policy.workflow.investigation": ("not_applicable", "A predetermined README addition, not diagnosis of a reported defect or unknown cause."),
+        "policy.workflow.domain-scan": ("not_applicable", "The generic README addition introduces no specialized domain assumptions or domain-sensitive behavior."),
+        "policy.workflow.technical-feasibility-scan": ("not_applicable", "No runtime, dependency, API or infrastructure is introduced by this exact text addition."),
+        "policy.workflow.checkpoint-preview": ("applicable", "The accepted README edit has an inspected canonical baseline and isolated candidate to check before delivery."),
+    }
+    assessment = {"basis_paths": ["README.md"], "limitations": [
+        "Synthetic same-owner README fixture only; not independent review or whole-product readiness.",
+        "Canonical delivery and recovery are verified separately after this checkpoint."]}
+    if attestation.get("target") == "policy_applicability" and policy in reasons:
+        assessment["outcome"], assessment["summary"] = reasons[policy]
+        attestation["applicability_assessment"] = assessment
+    elif (policy == "policy.workflow.checkpoint-preview"
+          and attestation.get("claim_ref") == "claim.workflow.checkpoint-preview.state-bound"
+          and "source_assessment" in attestation):
+        assessment.update(outcome="pass", prior_evidence_record_digests=[], summary=(
+            f"Inspected unchanged canonical README {file_sha256(project / 'README.md')}. "
+            "Isolated candidate contains exactly the accepted line addition and no other tracked diff. "
+            "This supports the bounded checkpoint state-binding claim, not completed delivery."))
+        attestation["source_assessment"] = assessment
+    else:
+        raise InstallSmokeError(f"packaged fixture has an unassessed evidence route: {policy}")
+    require("${" not in json.dumps(offer), "packaged evidence retains unfilled template markers")
+    return offer
+
+
+def require_no_repeated_evidence(packet: Any, admitted: dict[str, Any]) -> None:
+    if packet is None:
+        return
+    require(isinstance(packet, dict), "unexpected next evidence packet")
+    proposed = packet.get("offer_template", {}).get("attestation", {})
+    require(all(isinstance(proposed.get(key), str) and proposed[key]
+                for key in ("policy_ref", "claim_ref")), "next evidence packet lacks its claim route")
+    require(proposed.get("target", "source_claim") in ("source_claim", "policy_applicability"),
+            "next evidence packet has an invalid target")
+    route = lambda value: (value.get("policy_ref"), value.get("claim_ref"),
+                           value.get("target", "source_claim"))
+    require(route(proposed) != route(admitted), "current supporting evidence was offered again")
+
+
 def require_archive_identity(
     extracted: dict[str, Path], expected_version: str
 ) -> dict[str, Any]:
@@ -670,40 +724,45 @@ def run_solo_journey(args: argparse.Namespace, ordinal: int) -> dict[str, Any]:
             timings,
         )
 
-        evidence_guidance = forge_call(
-            wrapper,
-            ["workflow", "next", *root_args],
-            "workflow next for evidence",
-            args.command_timeout_seconds,
-            timings,
-        )
-        evidence_packet = evidence_guidance["data"].get(
-            "cooperative_evidence_action_packet"
-        )
-        require(
-            isinstance(evidence_packet, dict),
-            "workflow next did not offer cooperative evidence",
-        )
-        offer = evidence_packet["offer_template"]
-        offer["offer_id"] = f"offer.packaged-solo-{ordinal}.pass"
-        evidence_path = write_json(root / "evidence.json", offer)
-        admitted = forge_call(
-            wrapper,
-            [
-                "workflow",
-                "evidence",
-                "admit-cooperative",
-                "--root",
-                str(project),
-                "--input-file",
-                str(evidence_path),
-                "--json",
-            ],
-            "admit cooperative evidence",
-            args.command_timeout_seconds,
-            timings,
-        )
-        admitted_evidence = admitted["data"]["event"]["payload"]["admitted_evidence"]
+        for evidence_step in range(16):
+            evidence_guidance = forge_call(
+                wrapper, ["workflow", "resume", *root_args],
+                f"evidence guidance {evidence_step}", args.command_timeout_seconds, timings,
+            )["data"]
+            actions = evidence_guidance["actions"]
+            if actions.get("recommended", {}).get("kind") == "complete_workflow":
+                argv = actions["completion"]["argv"]
+                require(isinstance(argv, list) and len(argv) == 10,
+                        "unexpected packaged completion command")
+                require(argv == ["forge-core", "workflow", "complete", "--root", argv[4],
+                        "--if-snapshot", evidence_guidance["snapshot_digest"],
+                        "--principal", principal, "--json"] and Path(argv[4]).samefile(project),
+                        "packaged completion command has unexpected bindings")
+                forge_call(wrapper, argv[1:], f"complete ready workflow {evidence_step}",
+                           args.command_timeout_seconds, timings)
+                continue
+            evidence_packet = actions.get("cooperative_evidence_packet")
+            require(isinstance(evidence_packet, dict), "no executable packaged evidence route")
+            offer = packaged_evidence_offer(
+                evidence_packet, project, worktree, f"offer.packaged-solo-{ordinal}.{evidence_step}"
+            )
+            evidence_path = write_json(root / "evidence.json", offer)
+            argv = evidence_packet["argv"]
+            require(isinstance(argv, list) and len(argv) == 9,
+                    "unexpected packaged evidence command")
+            require(argv == ["forge-core", "workflow", "evidence", "admit-cooperative", "--root",
+                    argv[5], "--input-file", evidence_packet["input_file_token"], "--json"]
+                    and Path(argv[5]).samefile(project), "packaged evidence command targets unexpected input")
+            admitted = forge_call(
+                wrapper, [str(evidence_path) if token == evidence_packet["input_file_token"] else token
+                          for token in argv[1:]],
+                f"admit cooperative evidence {evidence_step}", args.command_timeout_seconds, timings,
+            )
+            admitted_evidence = admitted["data"]["event"]["payload"]["admitted_evidence"]
+            if "source_assessment" in offer["attestation"]:
+                break
+        else:
+            raise InstallSmokeError("packaged evidence journey exceeded its bounded step budget")
         evidence_summary, suppression = resume_summary_and_report(
             wrapper,
             project,
@@ -711,19 +770,21 @@ def run_solo_journey(args: argparse.Namespace, ordinal: int) -> dict[str, Any]:
             timings,
             "resume after evidence",
         )
-        require(
-            suppression["data"].get("cooperative_evidence_action_packet") is None,
-            "current supporting evidence was offered again",
+        require_no_repeated_evidence(
+            suppression["data"].get("cooperative_evidence_action_packet"), admitted_evidence
         )
         evidence_audit = suppression["data"].get("cooperative_evidence", [])
         require(
-            any(item.get("current_status") == "supporting" for item in evidence_audit),
+            any(item.get("current_status") == "supporting"
+                and item.get("admitted_evidence", {}).get("offer_digest") == admitted_evidence["offer_digest"]
+                for item in evidence_audit),
             "admitted evidence did not survive a fresh process",
         )
         supporting_evidence = next(
             item
             for item in evidence_audit
             if item.get("current_status") == "supporting"
+            and item.get("admitted_evidence", {}).get("offer_digest") == admitted_evidence["offer_digest"]
         )
         require(
             admitted_evidence.get("outcome") == "pass",

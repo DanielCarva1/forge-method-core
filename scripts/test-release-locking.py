@@ -80,6 +80,55 @@ def release_cargo() -> str | None:
 
 
 class ReleaseLockingTests(unittest.TestCase):
+    def test_packaged_evidence_suppression_distinguishes_next_claim(self) -> None:
+        prior = {"policy_ref": "checkpoint", "claim_ref": "state-bound", "target": "source_claim"}
+        packet = {"offer_template": {"attestation": {"policy_ref": "checkpoint", "claim_ref": "state-bound"}}}
+        with self.assertRaisesRegex(smoke_module.InstallSmokeError, "offered again"):
+            smoke_module.require_no_repeated_evidence(packet, prior)
+        packet["offer_template"]["attestation"]["claim_ref"] = "next-claim"
+        smoke_module.require_no_repeated_evidence(packet, prior)
+        smoke_module.require_no_repeated_evidence(None, prior)
+        for target in (None, "unknown"):
+            packet["offer_template"]["attestation"]["target"] = target
+            with self.assertRaisesRegex(smoke_module.InstallSmokeError, "invalid target"):
+                smoke_module.require_no_repeated_evidence(packet, prior)
+
+    def test_packaged_assessment_is_bound_to_inspected_readme_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project, worktree = Path(directory) / "project", Path(directory) / "worktree"
+            project.mkdir(); worktree.mkdir()
+            (project / "README.md").write_bytes(b"packaged consumer\n")
+            (worktree / "README.md").write_bytes(b"packaged consumer\ngoverned packaged change\n")
+            packet = {"offer_template": {"offer_id": "${UNIQUE_OFFER_ID}", "attestation": {
+                "policy_ref": "policy.workflow.investigation", "target": "policy_applicability",
+                "applicability_assessment": {"outcome": "${APPLICABILITY_OUTCOME}"}}}}
+            with mock.patch.object(smoke_module, "git_output", return_value="README.md\n"):
+                offer = smoke_module.packaged_evidence_offer(packet, project, worktree, "offer.fixture")
+                self.assertEqual(offer["attestation"]["applicability_assessment"]["outcome"], "not_applicable")
+                self.assertEqual(packet["offer_template"]["offer_id"], "${UNIQUE_OFFER_ID}")
+                (project / "README.md").write_bytes(b"changed baseline\n")
+                with self.assertRaisesRegex(smoke_module.InstallSmokeError, "baseline"):
+                    smoke_module.packaged_evidence_offer(packet, project, worktree, "offer.fixture")
+                (project / "README.md").write_bytes(b"packaged consumer\n")
+                with mock.patch.object(smoke_module, "git_output", return_value="README.md\nextra.txt\n"):
+                    with self.assertRaisesRegex(smoke_module.InstallSmokeError, "tracked changes"):
+                        smoke_module.packaged_evidence_offer(packet, project, worktree, "offer.fixture")
+                packet["offer_template"]["attestation"]["policy_ref"] = "policy.unknown"
+                with self.assertRaisesRegex(smoke_module.InstallSmokeError, "unassessed"):
+                    smoke_module.packaged_evidence_offer(packet, project, worktree, "offer.fixture")
+                packet["offer_template"]["attestation"] = {
+                    "policy_ref": "policy.workflow.checkpoint-preview", "target": "source_claim",
+                    "claim_ref": "claim.workflow.checkpoint-preview.state-bound",
+                    "source_assessment": {"outcome": "${ASSESSMENT_OUTCOME}"}}
+                offer = smoke_module.packaged_evidence_offer(packet, project, worktree, "offer.fixture")
+                self.assertEqual(offer["attestation"]["source_assessment"]["outcome"], "pass")
+                packet["offer_template"]["attestation"]["claim_ref"] = "claim.unassessed"
+                with self.assertRaisesRegex(smoke_module.InstallSmokeError, "unassessed"):
+                    smoke_module.packaged_evidence_offer(packet, project, worktree, "offer.fixture")
+                (worktree / "README.md").write_bytes(b"unexpected edit\n")
+                with self.assertRaisesRegex(smoke_module.InstallSmokeError, "candidate"):
+                    smoke_module.packaged_evidence_offer(packet, project, worktree, "offer.fixture")
+
     def test_packaged_setup_follows_offered_release_and_checks_readback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)
