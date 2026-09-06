@@ -122,14 +122,33 @@ silently reused. `completed` and `abandoned` are terminal: a terminal
 accepted detail without scanning project documentation. This block is
 read-only advice and never authorizes edits or completion.
 
-Only after the host and human have accepted the meaning of a new or replacement
-Work Focus, run `forge-core workflow current-work prepare --root <path> --json`.
+For a new or replacement Work Focus, first establish its accepted meaning with
+the human. Updating or closing already accepted work does not require another
+approval. Run `forge-core workflow current-work prepare --root <path> --json`
+to prepare either kind of change.
 This is an on-demand helper, not a pre-flight step: never run it for every
 message or ordinary resume. Replace every marker in its candidate template,
 write the temporary input outside the project snapshot, execute the exact
 `apply_argv`, then delete the temporary file. Preparation is read-only; only a
 successful existing `current-work accept` or `current-work update` operation
 makes the saved resume response stale.
+
+Before reporting the accepted task as finished, check all of the current Work
+Focus acceptance against actual results; a promotion receipt alone is not enough
+if other accepted work remains. When the focus is current and its work is done,
+use the same `current-work prepare` helper and update input: preserve its expected
+bindings, replace only its `change` with `kind: complete`, `completion_summary`
+and `next_step`, and fill the host provenance honestly. Use `completion_summary`
+and `next_step` to record verified results, limitations and the real handoff.
+When supplying `continuity`, carry its complete snapshot: final blocker/evidence
+references and existing Quick Cycle/collaboration state, with any verified
+closeouts. It replaces those fields, not merges them; never invent missing
+evidence. Omit it when no continuity change is needed. Do not create a replacement
+focus just to close the old task. Execute the prepared update argv, then confirm
+`current_work.status=completed` in resume before claiming the saved task is closed.
+This is task continuity, not whole-workflow or product completion; never force a
+phase advance to make the display look finished, and do not repeat closeout for
+an already terminal focus.
 
 When Discovery follows an accepted `material_supersession` and
 `data.active_objective.previous_objective_digest` is present, treat this as an

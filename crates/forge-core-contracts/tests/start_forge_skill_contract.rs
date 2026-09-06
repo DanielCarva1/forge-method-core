@@ -333,6 +333,27 @@ fn current_work_and_collaboration_use_existing_safe_interfaces() {
 }
 
 #[test]
+fn verified_delivery_closes_only_the_accepted_current_work() {
+    assert_contains(
+        guided_contract(),
+        &[
+            "Before reporting the accepted task as finished",
+            "all of the current Work Focus acceptance",
+            "promotion receipt alone is not enough",
+            "replace only its `change` with `kind: complete`",
+            "`completion_summary` and `next_step`",
+            "Updating or closing already accepted work does not require another approval",
+            "carry its complete snapshot: final blocker/evidence references",
+            "It replaces those fields, not merges them",
+            "Do not create a replacement focus just to close the old task",
+            "`current_work.status=completed`",
+            "not whole-workflow or product completion",
+            "do not repeat closeout for an already terminal focus",
+        ],
+    );
+}
+
+#[test]
 fn all_primary_activation_journeys_have_closed_behavior() {
     let matrix = marked_section(guided_contract(), "guided-activation-journeys");
     let mut rows = BTreeMap::<String, Vec<String>>::new();
