@@ -15,9 +15,9 @@ current_product_authority:
   milestone_qualified: false
   readiness_profile: "solo_cooperative"
   current_summary:
-    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05"]
+    completed_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-07"]
     next_item_id: "SD-06"
-    remaining_item_ids: ["SD-06", "SD-07", "SD-08"]
+    remaining_item_ids: ["SD-06", "SD-08"]
   executable_item_ids: ["SD-00", "SD-01", "SD-02", "SD-03", "SD-04", "SD-05", "SD-06", "SD-07", "SD-08"]
   strict_external_state: "later_stage_closed"
 
@@ -105,8 +105,9 @@ campaign_scope:
     evidence references remain authoritative for strict_external history, but
     none is evidence that Solo Dogfood Ready is qualified.
   unlock_rule: >-
-    SD-00 through SD-08 execute in specification order under solo_cooperative
-    authority. C3.2, C3.3, and C3.4 remain strict_external stabilization,
+    SD-00 through SD-08 retain specification order for presentation and next-item
+    priority under solo_cooperative authority. Independent items may complete
+    out of order once their declared prerequisites are met. C3.2, C3.3, and C3.4 remain strict_external stabilization,
     publication, and field gates and do not block solo progression.
 
 solo_execution:
@@ -229,8 +230,9 @@ solo_execution:
         updated_at: "2026-08-31"
     - id: "SD-07"
       title: "Gate the packaged journey"
-      status: "implemented_pending_evidence"
-      depends_on: ["SD-06"]
+      status: "completed"
+      # Package gating reuses the public kit; host qualification remains separate.
+      depends_on: ["SD-05"]
       checkpoint:
         kind: "campaign-item-checkpoint"
         state_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#implementation_decisions.delivery_sequence[SD-07]"
@@ -238,12 +240,13 @@ solo_execution:
           - ".github/workflows/ci.yml"
           - "scripts/smoke-release-install.py"
           - "https://github.com/DanielCarva1/forge-method-core/issues/51"
-          - "https://github.com/DanielCarva1/forge-method-core/actions/runs/33236302012"
-        remaining_work:
-          - "Make every advertised supported package, platform boundary, conditional WSL bridge, and recovery proof a hard-fail gate."
-          - "Resolve or explicitly narrow the failing informational Linux, macOS, and Windows platform observations before qualification."
-        base_commit: "ed4d1e35ed1263a580e46bd255a2aea14dfafa05"
-        updated_at: "2026-08-29"
+          - "https://github.com/DanielCarva1/forge-method-core/actions/runs/34003893682"
+          - "https://github.com/DanielCarva1/forge-method-core/issues/71"
+          - "scripts/test-check-ci-verdict.py"
+          - "scripts/test-msrv.py"
+        remaining_work: []
+        base_commit: "908a6821a6d757d8991ceac3574073ae5909280b"
+        updated_at: "2026-09-06"
     - id: "SD-08"
       title: "Sustain real dogfood"
       status: "implemented_pending_evidence"

@@ -567,23 +567,44 @@ pub fn validate_cargo_metadata_workspace(
     Ok(issues)
 }
 
+fn summary_partitions_executable_items(
+    summary: &CurrentProductSummary,
+    executable: &[String],
+) -> bool {
+    let mut completed = summary.completed_item_ids.iter().peekable();
+    let mut remaining = summary.remaining_item_ids.iter().peekable();
+    // Merge the two ordered partitions, rather than requiring completion to be a prefix.
+    let covered = executable.iter().all(|item| {
+        if completed.peek() == Some(&item) {
+            completed.next();
+            true
+        } else if remaining.peek() == Some(&item) {
+            remaining.next();
+            true
+        } else {
+            false
+        }
+    });
+    covered && completed.next().is_none() && remaining.next().is_none()
+}
+
 fn validate_current_product_authority(
     root: &Path,
     issues: &mut Vec<WorkspaceArchitectureIssue>,
 ) -> Result<(), String> {
     let spec: CurrentProductAuthorityDocument = load(root, SOLO_SPEC_PATH)?;
     let summary = &spec.current_product_authority.current_summary;
-    let mut projected = summary.completed_item_ids.clone();
-    projected.extend(summary.remaining_item_ids.iter().cloned());
     let expected_next = summary.remaining_item_ids.first();
-    if projected != spec.current_product_authority.executable_item_ids
-        || summary.next_item_id.as_ref() != expected_next
+    if !summary_partitions_executable_items(
+        summary,
+        &spec.current_product_authority.executable_item_ids,
+    ) || summary.next_item_id.as_ref() != expected_next
         || (spec.current_product_authority.milestone_qualified
             && !summary.remaining_item_ids.is_empty())
     {
         issues.push(issue(
             "current_product_summary_invalid",
-            "completed plus remaining items must preserve executable order, the next item must be the first remaining item, and an incomplete milestone cannot be qualified",
+            "completed and remaining items must partition executable items without duplication and preserve order within each list, the next item must be the first remaining item, and an incomplete milestone cannot be qualified",
         ));
     }
     let plan: ProductPlanDocument = load(root, PRODUCT_PLAN_PATH)?;
@@ -1073,6 +1094,87 @@ mod tests {
         assert!(report.is_clean(), "{:?}", report.issues);
         assert_eq!(report.selected_host, "none");
         assert_eq!(report.declared_crates.len(), EXPECTED_CRATE_COUNT);
+    }
+
+    #[test]
+    fn summary_partition_preserves_coverage_and_order() {
+        let ids = |values: &[&str]| {
+            values
+                .iter()
+                .map(|value| (*value).to_owned())
+                .collect::<Vec<_>>()
+        };
+        let executable = ids(&["a", "b", "c"]);
+        for (completed, remaining, valid) in [
+            (vec!["a", "c"], vec!["b"], true),
+            (vec![], vec!["a", "b", "c"], true),
+            (vec!["a", "b", "c"], vec![], true),
+            (vec!["a", "a"], vec!["b", "c"], false),
+            (vec!["a"], vec!["a", "b", "c"], false),
+            (vec!["a"], vec!["c"], false),
+            (vec!["a", "unknown"], vec!["b", "c"], false),
+            (vec!["c", "a"], vec!["b"], false),
+            (vec!["a"], vec!["c", "b"], false),
+        ] {
+            let summary = CurrentProductSummary {
+                completed_item_ids: ids(&completed),
+                next_item_id: remaining.first().map(|id| (*id).to_owned()),
+                remaining_item_ids: ids(&remaining),
+            };
+            assert_eq!(
+                summary_partitions_executable_items(&summary, &executable),
+                valid,
+                "{summary:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn current_product_authority_accepts_completion_after_a_pending_item() {
+        let fixture = workspace_contract_fixture("non-prefix-completion");
+        let authority: CurrentProductAuthorityDocument =
+            load(&fixture.0, SOLO_SPEC_PATH).expect("load Solo authority");
+        let summary = &authority.current_product_authority.current_summary;
+        assert!(summary.remaining_item_ids.len() >= 2);
+        let mut completed = summary.completed_item_ids.clone();
+        let mut remaining = summary.remaining_item_ids.clone();
+        completed.push(remaining.pop().expect("later pending item"));
+        let path = fixture.0.join(SOLO_SPEC_PATH);
+        let text = fs::read_to_string(&path).expect("read spec");
+        let text = replace_once(
+            &text,
+            &format!(
+                "    completed_item_ids: {}",
+                yaml_inline_strings(&summary.completed_item_ids)
+            ),
+            &format!(
+                "    completed_item_ids: {}",
+                yaml_inline_strings(&completed)
+            ),
+            "later completion",
+        );
+        let text = replace_once(
+            &text,
+            &format!(
+                "    remaining_item_ids: {}",
+                yaml_inline_strings(&summary.remaining_item_ids)
+            ),
+            &format!(
+                "    remaining_item_ids: {}",
+                yaml_inline_strings(&remaining)
+            ),
+            "remaining items",
+        );
+        fs::write(path, text).expect("write non-prefix summary");
+        let report = validate_workspace_architecture_contracts(&fixture.0).expect("contracts load");
+        assert!(
+            !report
+                .issues
+                .iter()
+                .any(|issue| issue.code == "current_product_summary_invalid"),
+            "{:?}",
+            report.issues
+        );
     }
 
     #[test]
