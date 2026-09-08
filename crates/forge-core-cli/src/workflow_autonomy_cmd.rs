@@ -8,7 +8,7 @@ use forge_core_contracts::{
 };
 
 use crate::cli_error::ExitError;
-use crate::cli_util::emit_envelope;
+use crate::cli_util::{emit_envelope, parse_unique_value_flags};
 
 pub(crate) fn run(args: &[String]) -> Result<(), ExitError> {
     let want_json = match resolve_output_mode(args) {
@@ -149,40 +149,11 @@ fn resolve_output_mode(args: &[String]) -> Result<bool, (bool, String)> {
 }
 
 fn parse_flags(args: &[String]) -> Result<BTreeMap<String, Vec<String>>, ExitError> {
-    let mut flags = BTreeMap::<String, Vec<String>>::new();
-    let mut index = 0usize;
-    while index < args.len() {
-        let flag = args[index].as_str();
-        if matches!(flag, "--json" | "--no-json" | "--text") {
-            index += 1;
-            continue;
-        }
-        if !matches!(flag, "--root" | "--input-file") {
-            return Err(ExitError::usage(format!(
-                "unknown flag '{flag}' for workflow autonomy assess"
-            )));
-        }
-        index += 1;
-        let value = args
-            .get(index)
-            .ok_or_else(|| ExitError::usage(format!("{flag} requires a value")))?;
-        if value.starts_with('-') {
-            return Err(ExitError::usage(format!(
-                "{flag} requires a value, got flag '{value}'"
-            )));
-        }
-        flags
-            .entry(flag.to_owned())
-            .or_default()
-            .push(value.clone());
-        index += 1;
-    }
-    if let Some((flag, _)) = flags.iter().find(|(_, values)| values.len() != 1) {
-        return Err(ExitError::usage(format!(
-            "{flag} may be supplied only once"
-        )));
-    }
-    Ok(flags)
+    parse_unique_value_flags(
+        args,
+        &["--root", "--input-file"],
+        "workflow autonomy assess",
+    )
 }
 
 fn required_path(flags: &BTreeMap<String, Vec<String>>, flag: &str) -> Result<PathBuf, ExitError> {
@@ -217,6 +188,44 @@ mod tests {
         );
         assert!(resolve_output_mode(&argv(&["assess", "--json", "--text"])).is_err());
         assert!(resolve_output_mode(&argv(&["assess", "--json", "--json"])).is_err());
+    }
+
+    #[test]
+    fn workflow_flags_preserve_autonomy_errors_and_values() {
+        let flags = parse_flags(&argv(&[
+            "--root",
+            "a b",
+            "--input-file",
+            "input.json",
+            "--text",
+        ]))
+        .unwrap();
+        assert_eq!(flags["--root"], ["a b"]);
+        assert_eq!(flags["--input-file"], ["input.json"]);
+        for (input, expected) in [
+            (
+                vec!["--unknown"],
+                "unknown flag '--unknown' for workflow autonomy assess",
+            ),
+            (vec!["--input-file"], "--input-file requires a value"),
+            (
+                vec!["--root", "-x"],
+                "--root requires a value, got flag '-x'",
+            ),
+            (
+                vec!["--root", "a", "--root", "b"],
+                "--root may be supplied only once",
+            ),
+            (
+                vec!["--root", "a", "--root", "b", "--input-file"],
+                "--input-file requires a value",
+            ),
+        ] {
+            assert_eq!(
+                parse_flags(&argv(&input)).unwrap_err(),
+                ExitError::usage(expected)
+            );
+        }
     }
 
     #[test]

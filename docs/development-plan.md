@@ -1,7 +1,7 @@
 # Forge Core — Development Plan
 
 **Status:** ACTIVE — the single development entry document for this repository.
-**Last updated:** 2026-09-07 (B1 probe found executed — plan corrected; maintainer product principle recorded)
+**Last updated:** 2026-09-08 (workflow parsing slice and stale navigation corrected)
 **Kind:** navigation and sequencing only. **Not runtime authority.**
 
 ---
@@ -98,14 +98,14 @@ guarantee that an LLM always follows guidance.
 | Main machine install | `forge-core 0.12.0` at `C:\Users\User\AppData\Local\Programs\forge-core\bin` (upgraded from alpha.49 on 2026-09-07; rollback: `forge-core.exe.alpha49.bak`) |
 | Host skill | `start-forge` identical to the packaged canonical skill |
 | Milestone | **Solo Dogfood Ready — QUALIFIED** (`milestone_qualified: true`, authority revision 5, flipped 2026-09-08 through governed promotion) |
-| SD items (solo milestone) | SD-00 … SD-08 **all completed**; what remains is qualification evidence (§5 WS10) |
+| SD items (solo milestone) | SD-00 through SD-08 completed; qualification recorded (WS10) |
 | **B1 probe (issue #75)** | **Executed 2026-09-06; CLOSED 2026-09-07.** 16 turns, real Codex CLI 0.153.4 + isolated human simulator, real delivered app through public promotions. Verdict: **bounded PARTIAL** — R1/R2/R5/R6/R8 PASS; R3/R4/R7 NOT OBSERVED in full. Repairs committed during the probe (7b8aa6e7, 3c123198, 6e890357, 648b23e3). Sanitized summary published and issue closed as completed with the PARTIAL verdict: [#75 comment](https://github.com/DanielCarva1/forge-method-core/issues/75#issuecomment-5578622376) |
 | Human-origin trust boundary (C1) | **PARKED by maintainer product principle (2026-09-07):** Forge must not strangle the agent with hard fraud-proof barriers. Codex/pi/OpenCode rejected; no further host hunting for now; record honest limits instead (see §5 WS3) |
 | Qualified platform | Native Windows only. Linux/macOS artifacts exist but are **not qualified** |
 | ZCode host | **Recognized working initial solo host (maintainer decision 2026-09-07).** Retained authenticated journey completed all eight solo capabilities on Forge alpha.49 (21 assertions); capability outcomes are judged on observed cooperative behavior; host-native authenticity attestation is out of scope for the solo profile. Support matrix corrected to the retained evidence with current digests |
 | C1.1 host selection | **None.** Codex 0.143.0, pi 0.80.7, OpenCode 1.14.33 all rejected for the human-origin signer boundary (see `contracts/spec/C1.1-*-host-capability-decision.yaml`) |
 | cosign | Not installed on this machine; cryptographic local verification outstanding |
-| Open issues | #73 (PRD umbrella), #75 (B1, `ready-for-agent`), #19 (docs audit), #22/#23/#24 (platform tests, `needs-triage`) |
+| Open issues | #73 (PRD umbrella), #19 (docs audit), #22/#23/#24 (platform tests, `needs-triage`) |
 | Closed and settled | #74 (A1 guidance reconciliation), #70, #64, #41–#46 — do not reopen or recreate |
 
 Recorded evidence (already collected — cite, don't regenerate):
@@ -148,15 +148,15 @@ WS6  Platform triage #22/23/24 → C4 breadth                         independen
 WS7  Docs audit #19                                                 independent, low priority
 WS8  C5 evidence closure (post-BuildVerify)                         independent
 WS9  C6.2/C7 evidence closure (domain packs)                        independent
-WS10 Milestone qualification closeout                               [READY — next up]
+WS10 Milestone qualification closeout                               [DONE 2026-09-08]
 ```
 
 Rules for this sequence:
 
 - **WS1 is closed.** The sanitized summary is published and #75 is closed with
   the honest PARTIAL verdict.
-- **WS10 is next:** the claim-by-claim milestone audit uses existing evidence
-  only — no new tests, no reruns.
+- **WS10 is closed.** Do not repeat the milestone audit. The maintainer selected
+  the bounded CLI parsing consolidation below as the next architecture slice.
 - **WS3 is parked, not abandoned.** The C1.1 rejection decisions and frozen
   adapter contract stay in `contracts/spec/` for future reuse. Solo evidence
   never claims human-origin attestation, so nothing downstream is blocked.
@@ -326,20 +326,34 @@ Statuses: `ready` | `blocked` | `in_progress` | `implemented_pending_evidence` |
 
 ---
 
+### Selected architecture slice - workflow flag parsing - `done`
+
+Maintainer accepted 2026-09-08. Consolidate equivalent parsing in intent record,
+intent accept-cooperative and autonomy assess into the existing CLI utility
+module. Preserve flags, errors, output handling and error precedence. No new
+crate, dependency or persisted format. Focused characterization and parity
+checks plus code review; do not expand to all parsers or kernel redesign.
+
+Verified: four focused command tests passed; a temporary characterization harness
+compared 67,863 old/new parser results (including typed errors) with no difference.
+Standards/Spec reviews found no Rust issues; documentation findings corrected.
+No workspace suite or new CI run was required. These are parser checks, not a
+new product-journey qualification.
+
 ## 6. Test strategy
 
 | Layer | What it proves | When it runs |
 |---|---|---|
 | Focused unit/integration (`cargo test -p …`) | The story's own logic, including its negative cases | Every story, before review |
-| Workspace tests | No cross-crate regression | Before every PR/merge |
+| Workspace tests | No cross-crate regression | Locally when impact requires; existing CI gates remain unchanged |
 | Failure injection | Fail-closed behavior (state loss, tamper, forgery, interruption) | C1/C2/C3 stories — mandatory there |
 | Host-conformance adapters | The 8 host capabilities, protocol-level | Host-facing changes; evidence runs |
 | Packaged journeys (3 consecutive, Windows) | The shipped artifact works end-to-end | Release candidates (already done for 0.12.0 — do not rerun) |
 | `scripts/smoke-release-install.py` + `scripts/check-release-archive.py` | Downloaded assets verify and install clean | C3 verification work |
 | Readiness claim admission | Evidence is claim-bound, fresh, honest | WS8–WS10 |
 
-Standing rules: every new behavior gets a test (`feature => test`); build/lint/
-typecheck after every change; a green CI never substitutes for the
+Standing local rules: every new behavior gets a test (`feature => test`); select focused
+build/lint/type checks from the affected behavior; a green CI never substitutes for the
 requirement-level R1–R8 audit.
 
 ---

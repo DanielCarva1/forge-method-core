@@ -13,7 +13,7 @@ use forge_core_contracts::{
 };
 
 use crate::cli_error::ExitError;
-use crate::cli_util::emit_envelope;
+use crate::cli_util::{emit_envelope, parse_unique_value_flags};
 
 pub(crate) fn run(args: &[String]) -> Result<(), ExitError> {
     let action = args.first().map_or("help", String::as_str);
@@ -99,77 +99,19 @@ fn accept_cooperative(args: &[String]) -> Result<(), ExitError> {
 }
 
 fn parse_flags(args: &[String]) -> Result<BTreeMap<String, Vec<String>>, ExitError> {
-    let mut flags = BTreeMap::<String, Vec<String>>::new();
-    let mut index = 0usize;
-    while index < args.len() {
-        let flag = args[index].as_str();
-        if matches!(flag, "--json" | "--no-json" | "--text") {
-            index += 1;
-            continue;
-        }
-        if !matches!(flag, "--root" | "--origin-envelope-file") {
-            return Err(ExitError::usage(format!(
-                "unknown flag '{flag}' for workflow intent record"
-            )));
-        }
-        index += 1;
-        let value = args
-            .get(index)
-            .ok_or_else(|| ExitError::usage(format!("{flag} requires a value")))?;
-        if value.starts_with('-') {
-            return Err(ExitError::usage(format!(
-                "{flag} requires a value, got flag '{value}'"
-            )));
-        }
-        flags
-            .entry(flag.to_owned())
-            .or_default()
-            .push(value.clone());
-        index += 1;
-    }
-    if let Some((flag, _)) = flags.iter().find(|(_, values)| values.len() != 1) {
-        return Err(ExitError::usage(format!(
-            "{flag} may be supplied only once"
-        )));
-    }
-    Ok(flags)
+    parse_unique_value_flags(
+        args,
+        &["--root", "--origin-envelope-file"],
+        "workflow intent record",
+    )
 }
 
 fn parse_cooperative_flags(args: &[String]) -> Result<BTreeMap<String, Vec<String>>, ExitError> {
-    let mut flags = BTreeMap::<String, Vec<String>>::new();
-    let mut index = 0usize;
-    while index < args.len() {
-        let flag = args[index].as_str();
-        if matches!(flag, "--json" | "--no-json" | "--text") {
-            index += 1;
-            continue;
-        }
-        if !matches!(flag, "--root" | "--packet-digest" | "--input-file") {
-            return Err(ExitError::usage(format!(
-                "unknown flag '{flag}' for workflow intent accept-cooperative"
-            )));
-        }
-        index += 1;
-        let value = args
-            .get(index)
-            .ok_or_else(|| ExitError::usage(format!("{flag} requires a value")))?;
-        if value.starts_with('-') {
-            return Err(ExitError::usage(format!(
-                "{flag} requires a value, got flag '{value}'"
-            )));
-        }
-        flags
-            .entry(flag.to_owned())
-            .or_default()
-            .push(value.clone());
-        index += 1;
-    }
-    if let Some((flag, _)) = flags.iter().find(|(_, values)| values.len() != 1) {
-        return Err(ExitError::usage(format!(
-            "{flag} may be supplied only once"
-        )));
-    }
-    Ok(flags)
+    parse_unique_value_flags(
+        args,
+        &["--root", "--packet-digest", "--input-file"],
+        "workflow intent accept-cooperative",
+    )
 }
 
 fn required_value(flags: &BTreeMap<String, Vec<String>>, flag: &str) -> Result<String, ExitError> {
@@ -200,4 +142,62 @@ fn required_path(flags: &BTreeMap<String, Vec<String>>, flag: &str) -> Result<Pa
 fn usage() -> String {
     "usage:\n  forge-core workflow intent accept-cooperative --root <project> --packet-digest <sha256> --input-file <cooperative-input.json> [--json|--no-json]\n    input contract: use the cooperative_objective UTF-8 JSON templates and limits from the current packet\n  forge-core workflow intent record --root <project> --origin-envelope-file <signed-json> [--json|--no-json]"
         .to_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workflow_flags_preserve_intent_errors_and_values() {
+        for (parse, command, value_flag) in [
+            (
+                parse_flags as fn(&[String]) -> Result<BTreeMap<String, Vec<String>>, ExitError>,
+                "record",
+                "--origin-envelope-file",
+            ),
+            (
+                parse_cooperative_flags,
+                "accept-cooperative",
+                "--input-file",
+            ),
+        ] {
+            let args = |values: &[&str]| values.iter().map(|v| v.to_string()).collect::<Vec<_>>();
+            let flags = parse(&args(&[
+                "--root",
+                "a b",
+                value_flag,
+                "input.json",
+                "--json",
+                "--text",
+            ]))
+            .unwrap();
+            assert_eq!(flags["--root"], ["a b"]);
+            assert_eq!(flags[value_flag], ["input.json"]);
+            for (input, expected) in [
+                (
+                    vec!["--unknown"],
+                    format!("unknown flag '--unknown' for workflow intent {command}"),
+                ),
+                (vec!["--root"], "--root requires a value".to_owned()),
+                (
+                    vec!["--root", "-x"],
+                    "--root requires a value, got flag '-x'".to_owned(),
+                ),
+                (
+                    vec!["--root", "a", "--root", "b"],
+                    "--root may be supplied only once".to_owned(),
+                ),
+                (
+                    vec!["--root", "a", "--root", "b", "--unknown"],
+                    format!("unknown flag '--unknown' for workflow intent {command}"),
+                ),
+            ] {
+                let error = parse(&args(&input)).unwrap_err();
+                assert_eq!(error, ExitError::usage(expected));
+            }
+        }
+        let flags = parse_cooperative_flags(&["--packet-digest".into(), "digest".into()]).unwrap();
+        assert_eq!(flags["--packet-digest"], ["digest"]);
+    }
 }

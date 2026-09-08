@@ -26,6 +26,7 @@ use forge_core_crypto::host_adapter_types::{
     HostAdapterProcessTarget, HostAdapterProjectionTarget, HostAdapterUpdateChannel,
 };
 use forge_core_store::{EffectMetadataAdapterTrigger, EffectMetadataConsumerUse};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -72,6 +73,50 @@ impl std::fmt::Display for StatefulRootsError {
 }
 
 impl std::error::Error for StatefulRootsError {}
+
+/// Parse unique value flags for workflow commands. Output selectors are left to
+/// the caller's presentation policy. Keep duplicate checks after the full scan:
+/// a later malformed argument takes precedence over an earlier duplicate.
+pub(crate) fn parse_unique_value_flags(
+    args: &[String],
+    allowed: &[&str],
+    command: &str,
+) -> Result<BTreeMap<String, Vec<String>>, ExitError> {
+    let mut flags = BTreeMap::<String, Vec<String>>::new();
+    let mut index = 0usize;
+    while index < args.len() {
+        let flag = args[index].as_str();
+        if matches!(flag, "--json" | "--no-json" | "--text") {
+            index += 1;
+            continue;
+        }
+        if !allowed.contains(&flag) {
+            return Err(ExitError::usage(format!(
+                "unknown flag '{flag}' for {command}"
+            )));
+        }
+        index += 1;
+        let value = args
+            .get(index)
+            .ok_or_else(|| ExitError::usage(format!("{flag} requires a value")))?;
+        if value.starts_with('-') {
+            return Err(ExitError::usage(format!(
+                "{flag} requires a value, got flag '{value}'"
+            )));
+        }
+        flags
+            .entry(flag.to_owned())
+            .or_default()
+            .push(value.clone());
+        index += 1;
+    }
+    if let Some((flag, _)) = flags.iter().find(|(_, values)| values.len() != 1) {
+        return Err(ExitError::usage(format!(
+            "{flag} may be supplied only once"
+        )));
+    }
+    Ok(flags)
+}
 
 /// Resolves `project_root` and `effect_store_root` for any state-bearing
 /// command (operation/effect) by reading the project's `.forge-method.yaml`.
