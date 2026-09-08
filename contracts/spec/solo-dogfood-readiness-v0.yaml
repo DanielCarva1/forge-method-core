@@ -7,12 +7,12 @@ project: "forge-method-core"
 
 current_product_authority:
   authority_ref: "contracts/spec/solo-dogfood-readiness-v0.yaml#current_product_authority"
-  authority_revision: 4
+  authority_revision: 5
   authority_chain_id: "solo-dogfood-readiness-v0"
   milestone_id: "solo-dogfood-ready"
   milestone: "Solo Dogfood Ready"
-  milestone_state: "active_implementation"
-  milestone_qualified: false
+  milestone_state: "qualified"
+  milestone_qualified: true
   readiness_profile: "solo_cooperative"
   strict_external_state: "later_stage_closed"
   current_summary:

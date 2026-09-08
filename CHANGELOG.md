@@ -16,6 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Solo Dogfood Ready milestone qualified.** The four readiness authority files now
+  record `milestone_qualified: true` (authority revision 5). The qualification closed
+  after the stable 0.12.0 released path carried a real governed delivery — the
+  development plan plus the host-support matrix correction — with a durable promotion
+  receipt, satisfying the spec release rule. ZCode is recorded as a working initial
+  solo host: capability outcomes follow observed cooperative behavior, while
+  host-native authenticity attestation stays explicitly out of scope. Linux/macOS
+  remain unqualified; strict_external history stays closed and is never relabeled.
+
 ## [0.12.0] - 2026-09-06
 
 Stable release preparation for native Windows with Codex and ZCode. The

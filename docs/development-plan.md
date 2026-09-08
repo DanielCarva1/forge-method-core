@@ -97,7 +97,7 @@ guarantee that an LLM always follows guidance.
 | Stable release | **v0.12.0** published (tag = commit `4fc9bd80`), Release + CI green |
 | Main machine install | `forge-core 0.12.0` at `C:\Users\User\AppData\Local\Programs\forge-core\bin` (upgraded from alpha.49 on 2026-09-07; rollback: `forge-core.exe.alpha49.bak`) |
 | Host skill | `start-forge` identical to the packaged canonical skill |
-| Milestone | **Solo Dogfood Ready** — `milestone_qualified: false`, `milestone_state: active_implementation` |
+| Milestone | **Solo Dogfood Ready — QUALIFIED** (`milestone_qualified: true`, authority revision 5, flipped 2026-09-08 through governed promotion) |
 | SD items (solo milestone) | SD-00 … SD-08 **all completed**; what remains is qualification evidence (§5 WS10) |
 | **B1 probe (issue #75)** | **Executed 2026-09-06; CLOSED 2026-09-07.** 16 turns, real Codex CLI 0.153.4 + isolated human simulator, real delivered app through public promotions. Verdict: **bounded PARTIAL** — R1/R2/R5/R6/R8 PASS; R3/R4/R7 NOT OBSERVED in full. Repairs committed during the probe (7b8aa6e7, 3c123198, 6e890357, 648b23e3). Sanitized summary published and issue closed as completed with the PARTIAL verdict: [#75 comment](https://github.com/DanielCarva1/forge-method-core/issues/75#issuecomment-5578622376) |
 | Human-origin trust boundary (C1) | **PARKED by maintainer product principle (2026-09-07):** Forge must not strangle the agent with hard fraud-proof barriers. Codex/pi/OpenCode rejected; no further host hunting for now; record honest limits instead (see §5 WS3) |
@@ -306,7 +306,7 @@ Statuses: `ready` | `blocked` | `in_progress` | `implemented_pending_evidence` |
   core changes; incompatible, shadowing, tampered, and revoked packs fail
   closed. Evidence journey design follows the WS8 pattern.
 
-### WS10 — Solo Dogfood Ready qualification closeout — `audit complete 2026-09-07; qualification gate closing`
+### WS10 — Solo Dogfood Ready qualification closeout — `done — milestone_qualified flipped 2026-09-08`
 
 - **Authority:** `contracts/spec/solo-dogfood-readiness-v0.yaml`
   (`readiness_profiles.solo_cooperative`, `release_evidence.rule`).
@@ -314,13 +314,12 @@ Statuses: `ready` | `blocked` | `in_progress` | `implemented_pending_evidence` |
   maintainer decision: capability outcomes judged on observed cooperative
   behavior; authenticity attestation out of scope; host matrix corrected to
   the retained evidence. SD-08 covered by the B1-era governed repairs.
-- **Last gate before flipping `milestone_qualified`:** the spec's release rule
-  requires one real non-fixture Forge improvement through the released stable
-  path. This very delivery — the development plan, the host-matrix correction,
-  and the #75 closeout record, promoted through governed Forge 0.12.0 — is
-  that improvement. After its promotion receipt exists, the four authority
-  files flip to `milestone_qualified: true` (revision 4 → 5) as a second
-  governed change.
+- **Gate closed 2026-09-08:** the released-path delivery (development plan +
+  host-matrix correction) was promoted through governed Forge 0.12.0 with receipt
+  `sha256:763bf02f…` (canonical commit `5e00219b`), and the four authority files
+  flipped to `milestone_qualified: true` (revision 4 → 5) as a second governed
+  delivery. Honest limits stand: Linux/macOS unqualified; authenticity attestation
+  out of scope; strict_external closed.
 - **Honest limits that must survive into the closeout:** Linux/macOS
   unqualified; ZCode authenticity attestation out of scope (recorded, not
   hidden); strict_external profile explicitly out of this milestone's scope.
@@ -389,6 +388,9 @@ A story is done when **all** of these hold:
 
 ## 10. Document history
 
+- 2026-09-08 — v4: **Solo Dogfood Ready qualified.** Released-path dogfood gate closed
+  by governed promotion receipt; four authority files flipped to
+  `milestone_qualified: true` (revision 5). WS10 done.
 - 2026-09-07 — v3: WS1 closed. Sanitized B1 summary published on #75
   (comment 5578622376) and issue closed as completed with the PARTIAL verdict,
   under the maintainer's plain-language draft. WS10 (milestone qualification)
