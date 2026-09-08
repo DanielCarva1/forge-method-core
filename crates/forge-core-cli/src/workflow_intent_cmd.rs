@@ -162,7 +162,7 @@ mod tests {
                 "--input-file",
             ),
         ] {
-            let args = |values: &[&str]| values.iter().map(|v| v.to_string()).collect::<Vec<_>>();
+            let args = |values: &[&str]| values.iter().map(ToString::to_string).collect::<Vec<_>>();
             let flags = parse(&args(&[
                 "--root",
                 "a b",
