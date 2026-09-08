@@ -265,12 +265,18 @@ fn legacy_validator_and_forge_core_cli_both_reject_product_authority_divergence(
         .join("plan")
         .join("product-gap-closure-story-inventory-v1.yaml");
     let inventory = fs::read_to_string(&inventory_path).expect("read inventory");
-    let inventory = inventory.replacen(
-        "  milestone_qualified: false",
-        "  milestone_qualified: true",
-        1,
-    );
-    fs::write(&inventory_path, inventory).expect("write divergent inventory");
+    let mut inventory: yaml_serde::Value =
+        yaml_serde::from_str(&inventory).expect("parse inventory");
+    let qualified = inventory["current_product_authority"]["milestone_qualified"]
+        .as_bool()
+        .expect("milestone_qualified must be a boolean");
+    inventory["current_product_authority"]["milestone_qualified"] =
+        yaml_serde::Value::Bool(!qualified);
+    fs::write(
+        &inventory_path,
+        yaml_serde::to_string(&inventory).expect("serialize divergent inventory"),
+    )
+    .expect("write divergent inventory");
 
     assert_both_reject(&temp, "current_product_authority");
 
