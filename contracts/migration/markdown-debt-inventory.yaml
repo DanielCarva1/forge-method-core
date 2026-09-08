@@ -202,6 +202,15 @@ allowlist:
     typed_authority_refs:
       - "contracts/policies/rust-validation-authority.yaml"
     non_authority_reason: "Human contributor walkthrough; typed validation policy controls."
+  - path: "docs/development-plan.md"
+    role: "distribution_only"
+    provenance: "hand_authored"
+    runtime_load: "deny"
+    agent_load: "allow_non_authoritative"
+    typed_authority_refs:
+      - "contracts/spec/solo-dogfood-readiness-v0.yaml"
+      - "contracts/plan/product-gap-closure-plan.yaml"
+    non_authority_reason: "Development sequencing and story routing aid; typed contracts, tracker issues, and runtime receipts control authority."
   - path: "docs/domain-pack-authoring.md"
     role: "distribution_only"
     provenance: "hand_authored"

@@ -133,7 +133,7 @@ host_support_matrix:
     - runtime:
         kind: "zcode"
         version: "0.16.5"
-      status: "unsupported"
+      status: "candidate"
       recognition:
         status: "candidate"
         evidence: null
@@ -147,40 +147,39 @@ host_support_matrix:
         status: "unknown"
         evidence: null
       governed_mutation:
-        status: "unknown"
+        status: "candidate"
         evidence: null
       conformance:
-        status: "unsupported"
+        status: "candidate"
         evidence:
           evidence_id: "evidence.zcode-0.16.5.conformance-result"
           observed_runtime:
             kind: "zcode"
             version: "0.16.5"
           evidence_ref: "contracts/hosts/conformance-results/zcode/0.16.5/bundle/result.json"
-          evidence_digest: "sha256:560be58e80eadc91322f92cb480abb962010f0f4329eb69bf502d31b96ca5fcd"
+          evidence_digest: "sha256:3027c6c989456ff18600286532f7b5976dd8cd89b70de39d4903e52d97bcee71"
       release_asset:
         status: "unknown"
         evidence: null
       field_evidence:
-        status: "unsupported"
+        status: "candidate"
         evidence:
           evidence_id: "evidence.zcode-0.16.5.run-summary"
           observed_runtime:
             kind: "zcode"
             version: "0.16.5"
           evidence_ref: "contracts/hosts/conformance-results/zcode/0.16.5/run-summary.json"
-          evidence_digest: "sha256:753bdf7940918cb3069cd8896569cc7bb4883b30d8df4c21357c73bc46e9aaa8"
+          evidence_digest: "sha256:68dee88263fb2020baf344e86d5d503201f09afcf806d769ed6a658fd8b5d8db"
       known_limits:
         status: "known"
         limits:
-          - "isolated_cli_authentication_unavailable"
-          - "journey_stopped_before_first_agent_turn"
-          - "advertised_max_turns_option_rejected_by_cli_parser"
-          - "no_public_cli_capability_observed"
+          - "host_native_authenticity_attestation_out_of_solo_scope"
+          - "retained_result_version_scoped_to_forge_0.12.0-alpha.49"
+          - "capability_outcomes_record_observed_cooperative_behavior_not_host_attestation"
         disclosure_evidence:
           evidence_id: "evidence.zcode-0.16.5.known-limits"
           observed_runtime:
             kind: "zcode"
             version: "0.16.5"
           evidence_ref: "contracts/hosts/conformance-results/zcode/0.16.5/README.md"
-          evidence_digest: "sha256:09da2d10a152464efbb32fe0d218afcc2603a809fc162a9db764964fee2de68d"
+          evidence_digest: "sha256:149d4b906bd70b7e613571d4cb445e90a4a326acd2d7cccef8bb7e9b33f9c617"

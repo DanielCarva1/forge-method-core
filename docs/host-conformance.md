@@ -170,12 +170,20 @@ documented at
 public CLI completed one disposable Solo Cooperative journey on Forge
 `0.12.0-alpha.49` in ZCode `yolo` mode, without host permission buttons. Forge
 still governed accepted intent, evidence, isolation ownership, promotion, and
-replacement recovery. All eight capabilities are `partially_supported`: 21
-assertions passed, two unexercised checks remain visible, and the native-Windows
-bridge assertion was not applicable. No GUI automation, private hook, permanent
-adapter, credential, transcript, or raw CLI output was retained. Bundle
-integrity still does not prove ZCode-native authenticity, so this is candidate
-evidence rather than official host support.
+replacement recovery. The retained bundle records 21 assertions passed, two
+unexercised checks, and one not-applicable native-Windows bridge check. No GUI
+automation, private hook, permanent adapter, credential, transcript, or raw CLI
+output was retained.
+
+Under the maintainer product decision of 2026-09-07, ZCode is treated as a
+working initial solo host alongside Codex. Capability outcomes are judged on
+observed cooperative behavior, which the retained journey demonstrates for all
+eight required solo capabilities; host-native authenticity attestation is
+explicitly out of scope for the solo profile
+(`contracts/spec/solo-dogfood-readiness-v0.yaml#out_of_scope`), so it is a
+recorded boundary, not a capability deficit. The retained result stays
+version-scoped to Forge `0.12.0-alpha.49`; the candidate host-support matrix
+carries the corrected current reading with matching evidence digests.
 
 Later ZCode `0.16.5` checks separately observed
 [ambiguous-root rejection](https://github.com/DanielCarva1/forge-method-core/issues/70#issuecomment-5555093016)

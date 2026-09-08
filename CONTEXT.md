@@ -29,6 +29,11 @@ The current product and architecture direction is defined by:
 - `contracts/spec/agent-native-assurance-architecture.yaml`
 - `contracts/plan/agent-native-guidance-plan.yaml`
 
+The single development entry document is `docs/development-plan.md`. It owns
+work sequencing, story routing, and status snapshotting. Like this file, it is
+navigation, not runtime authority; its conflict rule defers to typed contracts,
+issues, and receipts.
+
 External human-origin brokers, FIDO-backed presence, independently administered
 reviewer/runtime identities, and compliance-grade signing are deferred to a
 later enterprise profile. They must not appear in the normal Solo Cooperative
@@ -148,6 +153,8 @@ sandbox against a malicious process running as the same OS user.
   operations; it is not normal solo onboarding.
 - `docs/security-model.md`: explicit guarantees and residual threats.
 - `docs/generated/`: machine-checked command and workspace references.
+- `docs/development-plan.md`: single development entry document (sequencing and
+  story routing for active work; not product usage documentation).
 - `CHANGELOG.md`: historical source checkpoints.
 
 Do not copy version/status paragraphs between guides. Link to the owning page or
