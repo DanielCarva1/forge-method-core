@@ -6698,6 +6698,15 @@ fn promotion_apply_failure_supplies_one_safe_recovery_argv_and_recover_failure_s
 
 #[test]
 fn promotion_recover_executes_a_real_legacy_v1_pre_begin_intent_honestly() {
+    assert_legacy_v1_recovery(false);
+}
+
+#[test]
+fn promotion_recover_resumes_interrupted_legacy_v1_recovery() {
+    assert_legacy_v1_recovery(true);
+}
+
+fn assert_legacy_v1_recovery(interrupt_recovery: bool) {
     let fixture = PromotionRecoveryFixture::new();
     let crashed = fixture
         .command("apply")
@@ -6747,7 +6756,12 @@ fn promotion_recover_executes_a_real_legacy_v1_pre_begin_intent_honestly() {
             "promotion",
             "recover",
             "--root",
-            fixture.root.clone(),
+            fixture
+                .consumer
+                .app
+                .canonicalize()
+                .expect("canonical project root")
+                .to_string_lossy(),
             "--isolation-id",
             "isolation.promotion-recovery-e2e",
             "--expected-preview-digest",
@@ -6761,6 +6775,25 @@ fn promotion_recover_executes_a_real_legacy_v1_pre_begin_intent_honestly() {
         "legacy v1 resume must reconstruct guidance without creating replay or effect state"
     );
 
+    if interrupt_recovery {
+        // A fresh v1 reconstruction must not accidentally reuse the original second.
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        let interrupted = fixture
+            .command("recover")
+            .env("FORGE_TEST_PROMOTION_CRASH_AT", "after_begin")
+            .output()
+            .expect("interrupt legacy recovery after its real WAL begin");
+        assert_eq!(interrupted.status.code(), Some(86), "{interrupted:?}");
+        let wal = fs::read_to_string(fixture.effect_wal_path()).expect("runtime recovery WAL");
+        assert!(
+            wal.lines().any(|line| {
+                let record: Value = serde_json::from_str(line).expect("WAL record");
+                record["stage"] == "begin"
+            }),
+            "recovery must leave a real begin record"
+        );
+    }
+
     let recovered = assert_ok(
         &fixture
             .command("recover")
@@ -6768,6 +6801,15 @@ fn promotion_recover_executes_a_real_legacy_v1_pre_begin_intent_honestly() {
             .expect("recover legacy v1 intent"),
     );
     assert_eq!(recovered["data"]["status"], "recovered");
+    assert_eq!(
+        fs::read_to_string(fixture.consumer.app.join("README.md")).expect("recovered README"),
+        "consumer project\nrecovered readme\n"
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.consumer.app.join("NOTES.md")).expect("recovered NOTES"),
+        "recovered notes\n"
+    );
+
     assert_eq!(
         recovered["data"]["receipt"]["recovery_execution"]["recovery_kind"],
         "legacy_v1_pre_begin_fresh_execution_v1"
