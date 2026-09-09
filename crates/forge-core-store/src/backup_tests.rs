@@ -6,6 +6,34 @@ use crate::replay_wal::{
 use forge_core_contracts::{BackupEntryKind, PrincipalId};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+#[test]
+fn backup_hashes_preserve_known_digests() {
+    assert_eq!(
+        sha256(b""),
+        "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    );
+    assert_eq!(
+        sha256(b"abc"),
+        "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    );
+    let binding = DomainPackOperatorSourceBinding {
+        schema_version: "0.1".into(),
+        generation: 1,
+        operator_root: "operator".into(),
+        trust_policy_file: "trust.yaml".into(),
+        registry_file: "registry.yaml".into(),
+        reviewer_registry_file: "reviewers.yaml".into(),
+        reviewed_registry_file: "reviewed.yaml".into(),
+        capability_registry_file: "capabilities.yaml".into(),
+        sandbox_policy_file: "sandbox.yaml".into(),
+        artifact_root: "artifacts".into(),
+    };
+    assert_eq!(
+        canonical_domain_pack_source_binding_digest(&binding).expect("canonical binding digest"),
+        "sha256:b2caf4918143a8d8b5cd5298531f11f84553ecd3741d16d962e0470739f9223b"
+    );
+}
+
 static NEXT: AtomicU64 = AtomicU64::new(1);
 
 struct TempDir(PathBuf);

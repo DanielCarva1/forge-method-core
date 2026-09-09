@@ -13,6 +13,7 @@ use crate::replay_anchor::{
     ReplayAnchorRetainedLock, ReplayAnchorStatus, ReplayAnchorVerification, ReplayWalHead,
 };
 use crate::retained_dir::{RetainedDirectory, RetainedFileIdentity};
+use crate::sha256_content_hash as sha256;
 use forge_core_authority::{AuthorizedWorkflowBrokerRegistry, WorkflowBrokerRegistryDocument};
 use forge_core_contracts::{
     canonical_archive_path, decode_canonical_archive_path, BackupArchiveEntryType,
@@ -34,7 +35,6 @@ use forge_core_contracts::{
     BACKUP_RECEIPT_SCHEMA_VERSION, DOMAIN_PACK_OPERATOR_SOURCE_SCHEMA_VERSION,
 };
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 #[cfg(test)]
 use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -2575,7 +2575,7 @@ fn canonical_domain_pack_source_binding_digest(
         serde_json_canonicalizer::to_vec(binding).map_err(|error| BackupError::Manifest {
             reason: format!("Domain Pack operator-source canonicalization failed: {error}"),
         })?;
-    Ok(format!("sha256:{:x}", Sha256::digest(&canonical)))
+    Ok(sha256(&canonical))
 }
 
 fn active_domain_pack_source_binding_member(
@@ -4626,10 +4626,6 @@ fn usize_from_u64(value: u64, resource: &'static str) -> Result<usize, BackupErr
         resource,
         maximum: usize::MAX as u64,
     })
-}
-
-fn sha256(bytes: &[u8]) -> String {
-    format!("sha256:{:x}", Sha256::digest(bytes))
 }
 
 fn hex(bytes: &[u8]) -> String {
