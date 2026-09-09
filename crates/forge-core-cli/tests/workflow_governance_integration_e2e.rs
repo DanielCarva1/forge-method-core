@@ -6698,6 +6698,15 @@ fn promotion_apply_failure_supplies_one_safe_recovery_argv_and_recover_failure_s
 
 #[test]
 fn promotion_recover_executes_a_real_legacy_v1_pre_begin_intent_honestly() {
+    assert_legacy_v1_recovery(false);
+}
+
+#[test]
+fn promotion_recover_resumes_interrupted_legacy_v1_recovery() {
+    assert_legacy_v1_recovery(true);
+}
+
+fn assert_legacy_v1_recovery(interrupt_recovery: bool) {
     let fixture = PromotionRecoveryFixture::new();
     let crashed = fixture
         .command("apply")
@@ -6747,7 +6756,12 @@ fn promotion_recover_executes_a_real_legacy_v1_pre_begin_intent_honestly() {
             "promotion",
             "recover",
             "--root",
-            fixture.root.clone(),
+            fixture
+                .consumer
+                .app
+                .canonicalize()
+                .expect("canonical project root")
+                .to_string_lossy(),
             "--isolation-id",
             "isolation.promotion-recovery-e2e",
             "--expected-preview-digest",
@@ -6761,6 +6775,37 @@ fn promotion_recover_executes_a_real_legacy_v1_pre_begin_intent_honestly() {
         "legacy v1 resume must reconstruct guidance without creating replay or effect state"
     );
 
+    if interrupt_recovery {
+        // A fresh v1 reconstruction must not accidentally reuse the original second.
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        let interrupted = fixture
+            .command("recover")
+            .env("FORGE_TEST_PROMOTION_CRASH_AT", "after_begin")
+            .output()
+            .expect("interrupt legacy recovery after its real WAL begin");
+        assert_eq!(interrupted.status.code(), Some(86), "{interrupted:?}");
+        let wal = fs::read_to_string(fixture.effect_wal_path()).expect("runtime recovery WAL");
+        assert!(
+            wal.lines().any(|line| {
+                let record: Value = serde_json::from_str(line).expect("WAL record");
+                record["stage"] == "begin"
+            }),
+            "recovery must leave a real begin record"
+        );
+        let before_report = state_tree_snapshot(&fixture.consumer.state);
+        let report = assert_ok(&fixture.consumer.run(&["report"]));
+        let promotion = report["data"]["replacement_continuity"]["promotions"]
+            .as_array()
+            .expect("interrupted recovery continuity")
+            .iter()
+            .find(|entry| entry["preview_digest"] == fixture.preview_digest)
+            .expect("interrupted recovery must remain visible");
+        assert_eq!(promotion["status"], "recoverable");
+        assert_eq!(promotion["recovery_argv"], legacy["recovery_argv"]);
+        assert_eq!(state_tree_snapshot(&fixture.consumer.state), before_report);
+        assert_recovery_rejects_changed_legacy_binding(&fixture, &wal);
+    }
+
     let recovered = assert_ok(
         &fixture
             .command("recover")
@@ -6768,6 +6813,15 @@ fn promotion_recover_executes_a_real_legacy_v1_pre_begin_intent_honestly() {
             .expect("recover legacy v1 intent"),
     );
     assert_eq!(recovered["data"]["status"], "recovered");
+    assert_eq!(
+        fs::read_to_string(fixture.consumer.app.join("README.md")).expect("recovered README"),
+        "consumer project\nrecovered readme\n"
+    );
+    assert_eq!(
+        fs::read_to_string(fixture.consumer.app.join("NOTES.md")).expect("recovered NOTES"),
+        "recovered notes\n"
+    );
+
     assert_eq!(
         recovered["data"]["receipt"]["recovery_execution"]["recovery_kind"],
         "legacy_v1_pre_begin_fresh_execution_v1"
@@ -6788,6 +6842,64 @@ fn promotion_recover_executes_a_real_legacy_v1_pre_begin_intent_honestly() {
     );
     assert_eq!(repeated["data"]["status"], "already_committed");
     assert_eq!(repeated["data"]["canonical_mutation_performed"], false);
+}
+
+fn assert_recovery_rejects_changed_legacy_binding(
+    fixture: &PromotionRecoveryFixture,
+    original_wal: &str,
+) {
+    let wal_path = fixture.effect_wal_path();
+    for field in [
+        "durable_intent_digest",
+        "superseded_provenance_digest",
+        "superseded_publication_capability_digest",
+    ] {
+        let mut records: Vec<Value> = original_wal
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("runtime WAL record"))
+            .collect();
+        let mut changed = false;
+        for record in &mut records {
+            if record["execution_provenance"].is_object() {
+                let mut document = record["execution_provenance"]["document"].clone();
+                assert!(document["recovery"][field].is_string(), "{field}");
+                document["recovery"][field] =
+                    serde_json::json!(format!("sha256:{}", "f".repeat(64)));
+                let provenance = forge_core_store::EffectExecutionProvenance::new(document)
+                    .expect("valid envelope around mismatched recovery binding");
+                record["execution_provenance"] = serde_json::to_value(provenance).unwrap();
+                changed = true;
+            }
+        }
+        assert!(changed, "runtime WAL must contain recovery provenance");
+        let mut bytes = Vec::new();
+        for record in records {
+            bytes.extend(serde_json::to_vec(&record).unwrap());
+            bytes.push(b'\n');
+        }
+        fs::write(&wal_path, bytes).expect("install mismatched recovery binding");
+        let canonical_before = state_tree_snapshot(&fixture.consumer.app);
+        let state_before = state_tree_snapshot(&fixture.consumer.state);
+        let refused = fixture
+            .command("recover")
+            .output()
+            .expect("reject mismatched binding");
+        assert!(!refused.status.success(), "{field}");
+        let failure = json(&refused);
+        assert_eq!(failure["typed_failure"]["type"], "recovery_required");
+        assert_eq!(failure["typed_failure"]["data"]["can_recover"], false);
+        assert_eq!(
+            state_tree_snapshot(&fixture.consumer.app),
+            canonical_before,
+            "{field}"
+        );
+        assert_eq!(
+            state_tree_snapshot(&fixture.consumer.state),
+            state_before,
+            "{field}"
+        );
+        fs::write(&wal_path, original_wal).expect("restore exact runtime WAL");
+    }
 }
 
 #[test]

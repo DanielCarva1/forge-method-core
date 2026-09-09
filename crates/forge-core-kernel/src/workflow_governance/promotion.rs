@@ -1128,62 +1128,21 @@ pub(super) fn recover_promotion_under_lock(
     }
     validate_recovery_destination(binding, destination_tree, &prepared.preview)?;
     let (effect, payloads, applied_files) = promotion_effect_and_payloads(&prepared)?;
-    let legacy_v1_pre_begin =
-        intent.schema_version == "governed_promotion_intent_v1" && inspection.is_none();
-    let original_provenance = if legacy_v1_pre_begin {
-        // v1 intentionally did not retain the preview. Its self-digested
-        // intent remains authoritative, but a fresh preview with the same
-        // semantic digest cannot recreate the historical observed_at value.
-        // Do not pretend that historical provenance was reconstructed.
-        None
-    } else {
-        let reconstructed = promotion_provenance_from_intent(&intent, &prepared.preview, &effect)?;
-        if reconstructed.digest != intent.provenance_digest {
+    if inspection.is_none() && intent.schema_version != "governed_promotion_intent_v1" {
+        let original = promotion_provenance_from_intent(&intent, &prepared.preview, &effect)?;
+        if original.digest != intent.provenance_digest {
             return Err(PromotionApplyError::RecoveryRequired(
                 "durable intent provenance differs from its exact historical preview/effect binding"
                     .to_owned(),
             ));
         }
-        Some(reconstructed)
-    };
+    }
     let (provenance, publication_capability_digest, recovery_execution) = if let Some(inspection) =
         &inspection
     {
-        let original_provenance = original_provenance.as_ref().ok_or_else(|| {
-            PromotionApplyError::RecoveryRequired(
-                "legacy intent has an effect begin but no reconstructable historical preview"
-                    .to_owned(),
-            )
-        })?;
-        if inspection.provenance == *original_provenance {
-            (
-                original_provenance.clone(),
-                intent.publication_capability_digest.clone(),
-                None,
-            )
-        } else {
-            let publication_capability_digest =
-                recovery_publication_capability_from_wal(&inspection.provenance)?;
-            let recovery_execution = recovery_execution_binding(&intent);
-            let expected_recovery = pre_begin_recovery_provenance(
-                &intent,
-                &prepared.preview,
-                &effect,
-                &publication_capability_digest,
-                &recovery_execution,
-            )?;
-            if inspection.provenance != expected_recovery {
-                return Err(PromotionApplyError::RecoveryRequired(
-                        "effect WAL recovery provenance does not exactly link to the durable original intent"
-                            .to_owned(),
-                    ));
-            }
-            (
-                inspection.provenance.clone(),
-                publication_capability_digest,
-                Some(recovery_execution),
-            )
-        }
+        let (capability, recovery) =
+            validate_stored_recovery_provenance(&intent, &prepared.preview, &effect, inspection)?;
+        (inspection.provenance.clone(), capability, recovery)
     } else {
         let publication_capability_digest = destination_tree
             .exact_mutation_capability_digest()
@@ -2190,6 +2149,39 @@ fn pre_begin_recovery_provenance(
         "commit_digest": &intent.replay.commit_digest,
     }))
     .map_err(|error| PromotionApplyError::RecoveryRequired(error.to_string()))
+}
+
+/// Validate the whole saved execution before admitting the legacy history exception.
+fn validate_stored_recovery_provenance(
+    intent: &PromotionReplayIntent,
+    preview: &GovernedPromotionPreview,
+    effect: &ToolEffectContractDocument,
+    inspection: &SplitRootEffectTransactionInspection,
+) -> Result<(String, Option<PromotionRecoveryExecutionBinding>), PromotionApplyError> {
+    let original = promotion_provenance_from_intent(intent, preview, effect)?;
+    let historical_match = original.digest == intent.provenance_digest;
+    if historical_match && inspection.provenance == original {
+        return Ok((intent.publication_capability_digest.clone(), None));
+    }
+
+    let capability = recovery_publication_capability_from_wal(&inspection.provenance)?;
+    let recovery = recovery_execution_binding(intent);
+    let expected = pre_begin_recovery_provenance(intent, preview, effect, &capability, &recovery)?;
+    if inspection.provenance != expected {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "effect WAL recovery provenance does not exactly link to the durable original intent"
+                .to_owned(),
+        ));
+    }
+    // v1 did not save the original preview timestamp. A fully validated recovery
+    // keeps its own preview; it must not pretend to reconstruct that lost history.
+    if !historical_match && intent.schema_version != "governed_promotion_intent_v1" {
+        return Err(PromotionApplyError::RecoveryRequired(
+            "durable intent provenance differs from its exact historical preview/effect binding"
+                .to_owned(),
+        ));
+    }
+    Ok((capability, Some(recovery)))
 }
 
 fn recovery_publication_capability_from_wal(
@@ -4133,13 +4125,13 @@ fn validate_recoverable_promotion(
     }
     validate_recovery_destination(binding, &destination_tree, &prepared.preview)?;
     let (effect, _payloads, _applied_files) = promotion_effect_and_payloads(&prepared)?;
-    let original_provenance = promotion_provenance_from_intent(intent, &prepared.preview, &effect)?;
-    let legacy_v1_pre_begin =
-        intent.schema_version == "governed_promotion_intent_v1" && inspection.is_none();
-    if !legacy_v1_pre_begin && original_provenance.digest != intent.provenance_digest {
-        return Err(PromotionApplyError::RecoveryRequired(
-            "durable intent provenance differs from its preview/effect binding".to_owned(),
-        ));
+    if inspection.is_none() && intent.schema_version != "governed_promotion_intent_v1" {
+        let original = promotion_provenance_from_intent(intent, &prepared.preview, &effect)?;
+        if original.digest != intent.provenance_digest {
+            return Err(PromotionApplyError::RecoveryRequired(
+                "durable intent provenance differs from its preview/effect binding".to_owned(),
+            ));
+        }
     }
     let replay_binding = EffectReplayCommitBinding::new(
         intent.replay.key_hash.clone(),
@@ -4155,23 +4147,7 @@ fn validate_recoverable_promotion(
                 "effect WAL begin contradicts the durable promotion intent".to_owned(),
             ));
         }
-        if inspection.provenance != original_provenance {
-            let publication_capability_digest =
-                recovery_publication_capability_from_wal(&inspection.provenance)?;
-            let recovery_execution = recovery_execution_binding(intent);
-            let expected_recovery = pre_begin_recovery_provenance(
-                intent,
-                &prepared.preview,
-                &effect,
-                &publication_capability_digest,
-                &recovery_execution,
-            )?;
-            if inspection.provenance != expected_recovery {
-                return Err(PromotionApplyError::RecoveryRequired(
-                    "effect WAL provenance does not link to the durable original intent".to_owned(),
-                ));
-            }
-        }
+        validate_stored_recovery_provenance(intent, &prepared.preview, &effect, inspection)?;
         if inspection.stage == SplitRootEffectTransactionStage::RolledBack {
             return Err(PromotionApplyError::RecoveryRequired(
                 "the interrupted promotion was rolled back and cannot be resumed".to_owned(),
