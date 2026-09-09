@@ -7913,6 +7913,52 @@ pub struct WorkflowGovernanceGuidance {
     pub current_work: Option<WorkflowCurrentWorkContext>,
 }
 
+/// Semantic next step for a resume snapshot; presentation belongs to the caller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkflowResumeActionKind {
+    CompleteWorkflow,
+    ExecuteCooperativeEvidencePacket,
+    ResolveSourceClaimGap,
+    ResolveCooperativeEvidenceGap,
+    ExecuteContinuityRankedAction,
+}
+
+impl WorkflowGovernanceGuidance {
+    /// Select from the already reconstructed snapshot without additional I/O.
+    #[must_use]
+    pub fn recommended_resume_action(&self) -> Option<WorkflowResumeActionKind> {
+        use WorkflowResumeActionKind::{
+            CompleteWorkflow, ExecuteContinuityRankedAction, ExecuteCooperativeEvidencePacket,
+            ResolveCooperativeEvidenceGap, ResolveSourceClaimGap,
+        };
+
+        if self.status == WorkflowGovernanceGuidanceStatus::ReadyToComplete {
+            return Some(CompleteWorkflow);
+        }
+        let has_ranked_action = self
+            .replacement_continuity
+            .as_ref()
+            .is_some_and(|continuity| !continuity.ranked_next_actions.is_empty());
+        if let Some(packet) = &self.cooperative_evidence_action_packet {
+            let already_supporting = packet.route.assurance_effect
+                == WorkflowCooperativeEvidenceAssuranceEffect::CooperativeClaimOnlyDoesNotSatisfySourceClaim
+                && self.cooperative_evidence.iter().any(|evidence| {
+                    evidence.current_status == WorkflowCooperativeEvidenceCurrentStatus::Supporting
+                        && evidence.supports_cooperative_claim_ref.as_ref()
+                            == Some(&packet.route.cooperative_claim_ref)
+                });
+            if already_supporting {
+                return has_ranked_action.then_some(ResolveSourceClaimGap);
+            }
+            return Some(ExecuteCooperativeEvidencePacket);
+        }
+        if self.cooperative_evidence_action_gap.is_some() {
+            return Some(ResolveCooperativeEvidenceGap);
+        }
+        has_ranked_action.then_some(ExecuteContinuityRankedAction)
+    }
+}
+
 pub const WORKFLOW_REPLACEMENT_CONTINUITY_SCHEMA_VERSION: &str =
     "workflow_replacement_continuity_v1";
 
@@ -19154,6 +19200,103 @@ mod tests {
         );
     }
 
+    fn assert_resume_recommendation_semantics(mut guidance: WorkflowGovernanceGuidance) {
+        use WorkflowResumeActionKind::{
+            CompleteWorkflow, ExecuteContinuityRankedAction, ExecuteCooperativeEvidencePacket,
+            ResolveCooperativeEvidenceGap, ResolveSourceClaimGap,
+        };
+
+        let packet = guidance
+            .cooperative_evidence_action_packet
+            .clone()
+            .expect("source packet");
+        let supporting = guidance
+            .cooperative_evidence
+            .iter()
+            .find(|evidence| {
+                evidence.current_status == WorkflowCooperativeEvidenceCurrentStatus::Supporting
+                    && evidence.supports_cooperative_claim_ref.as_ref()
+                        == Some(&packet.route.cooperative_claim_ref)
+            })
+            .expect("matching supporting evidence")
+            .clone();
+        assert!(!guidance
+            .replacement_continuity
+            .as_ref()
+            .expect("resume continuity")
+            .ranked_next_actions
+            .is_empty());
+        guidance.status = WorkflowGovernanceGuidanceStatus::Active;
+        guidance.cooperative_evidence = vec![supporting.clone()];
+        guidance.cooperative_evidence_action_gap = Some("route gap".to_owned());
+        assert_eq!(
+            guidance.recommended_resume_action(),
+            Some(ResolveSourceClaimGap)
+        );
+
+        guidance.cooperative_evidence[0].supports_cooperative_claim_ref =
+            Some(StableId("claim.unrelated".to_owned()));
+        assert_eq!(
+            guidance.recommended_resume_action(),
+            Some(ExecuteCooperativeEvidencePacket)
+        );
+        guidance.cooperative_evidence[0] = supporting.clone();
+        guidance.cooperative_evidence[0].current_status =
+            WorkflowCooperativeEvidenceCurrentStatus::Disproving;
+        assert_eq!(
+            guidance.recommended_resume_action(),
+            Some(ExecuteCooperativeEvidencePacket)
+        );
+        guidance.cooperative_evidence.clear();
+        assert_eq!(
+            guidance.recommended_resume_action(),
+            Some(ExecuteCooperativeEvidencePacket)
+        );
+
+        guidance.cooperative_evidence = vec![supporting];
+        guidance
+            .cooperative_evidence_action_packet
+            .as_mut()
+            .expect("packet")
+            .route
+            .assurance_effect =
+            WorkflowCooperativeEvidenceAssuranceEffect::SoloSourceClaimSatisfiedByAgentInspection;
+        assert_eq!(
+            guidance.recommended_resume_action(),
+            Some(ExecuteCooperativeEvidencePacket)
+        );
+        guidance.cooperative_evidence_action_packet = Some(packet);
+        guidance.status = WorkflowGovernanceGuidanceStatus::ReadyToComplete;
+        assert_eq!(guidance.recommended_resume_action(), Some(CompleteWorkflow));
+        guidance.status = WorkflowGovernanceGuidanceStatus::Active;
+
+        let continuity = guidance.replacement_continuity.take();
+        assert_eq!(
+            guidance.recommended_resume_action(),
+            None,
+            "do not fall through to route gap after matching support"
+        );
+        guidance.cooperative_evidence_action_packet = None;
+        assert_eq!(
+            guidance.recommended_resume_action(),
+            Some(ResolveCooperativeEvidenceGap)
+        );
+        guidance.cooperative_evidence_action_gap = None;
+        assert_eq!(guidance.recommended_resume_action(), None);
+        guidance.replacement_continuity = continuity;
+        assert_eq!(
+            guidance.recommended_resume_action(),
+            Some(ExecuteContinuityRankedAction)
+        );
+        guidance
+            .replacement_continuity
+            .as_mut()
+            .expect("continuity")
+            .ranked_next_actions
+            .clear();
+        assert_eq!(guidance.recommended_resume_action(), None);
+    }
+
     #[test]
     fn cooperative_evidence_is_admitted_recovered_and_projected_honestly() {
         let (root, state) = temp_project("cooperative-evidence");
@@ -19304,6 +19447,7 @@ mod tests {
             current_audit.current_status,
             WorkflowCooperativeEvidenceCurrentStatus::Supporting
         );
+        assert_resume_recommendation_semantics(adapter.resume().expect("resume evidence guidance"));
         let expected_valid_through = current_audit
             .valid_through_unix
             .expect("supporting evidence validity");

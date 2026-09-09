@@ -534,47 +534,37 @@ struct WorkflowResumeCompletionAction {
     argv: Vec<String>,
 }
 
-fn recommended_workflow_resume_action(
-    status: WorkflowGovernanceGuidanceStatus,
-    has_cooperative_evidence_packet: bool,
-    cooperative_packet_already_supporting: bool,
-    has_cooperative_evidence_gap: bool,
-    continuity_ranked: &[WorkflowReplacementRankedAction],
-) -> Option<WorkflowResumeActionRecommendation> {
-    if status == WorkflowGovernanceGuidanceStatus::ReadyToComplete {
-        return Some(WorkflowResumeActionRecommendation {
+fn present_workflow_resume_action(
+    action: forge_core_kernel::WorkflowResumeActionKind,
+) -> WorkflowResumeActionRecommendation {
+    use forge_core_kernel::WorkflowResumeActionKind;
+    match action {
+        WorkflowResumeActionKind::CompleteWorkflow => WorkflowResumeActionRecommendation {
             kind: WorkflowResumeActionRecommendationKind::CompleteWorkflow,
             action_ref: "actions.completion",
             reason: "the trusted snapshot is ready and workflow completion is the concrete next operation",
-        });
-    }
-    if has_cooperative_evidence_packet && !cooperative_packet_already_supporting {
-        return Some(WorkflowResumeActionRecommendation {
+        },
+        WorkflowResumeActionKind::ExecuteCooperativeEvidencePacket => WorkflowResumeActionRecommendation {
             kind: WorkflowResumeActionRecommendationKind::ExecuteCooperativeEvidencePacket,
             action_ref: "actions.cooperative_evidence_packet",
             reason: "a concrete Solo Cooperative packet is executable before capability acquisition or human escalation",
-        });
-    }
-    if cooperative_packet_already_supporting {
-        return (!continuity_ranked.is_empty()).then_some(WorkflowResumeActionRecommendation {
+        },
+        WorkflowResumeActionKind::ResolveSourceClaimGap => WorkflowResumeActionRecommendation {
             kind: WorkflowResumeActionRecommendationKind::ResolveSourceClaimGap,
             action_ref: "actions.continuity_ranked[0]",
             reason: "the current cooperative evidence already exercised this packet; repeating it would not advance the selected source claim",
-        });
-    }
-    if has_cooperative_evidence_gap {
-        return Some(WorkflowResumeActionRecommendation {
+        },
+        WorkflowResumeActionKind::ResolveCooperativeEvidenceGap => WorkflowResumeActionRecommendation {
             kind: WorkflowResumeActionRecommendationKind::ResolveCooperativeEvidenceGap,
             action_ref: "actions.cooperative_evidence_gap",
-            reason:
-                "the Solo Cooperative route gap must be resolved before abstract fallback actions",
-        });
+            reason: "the Solo Cooperative route gap must be resolved before abstract fallback actions",
+        },
+        WorkflowResumeActionKind::ExecuteContinuityRankedAction => WorkflowResumeActionRecommendation {
+            kind: WorkflowResumeActionRecommendationKind::ExecuteContinuityRankedAction,
+            action_ref: "actions.continuity_ranked[0]",
+            reason: "no concrete Solo Cooperative packet or route gap is currently published",
+        },
     }
-    (!continuity_ranked.is_empty()).then_some(WorkflowResumeActionRecommendation {
-        kind: WorkflowResumeActionRecommendationKind::ExecuteContinuityRankedAction,
-        action_ref: "actions.continuity_ranked[0]",
-        reason: "no concrete Solo Cooperative packet or route gap is currently published",
-    })
 }
 
 #[derive(Debug, Serialize)]
@@ -866,19 +856,6 @@ fn workflow_resume_summary<'a>(
             .len()
             .saturating_sub(current_cooperative_evidence.len()),
     };
-    let cooperative_packet_already_supporting = guidance
-        .cooperative_evidence_action_packet
-        .as_ref()
-        .is_some_and(|packet| {
-            packet.route.assurance_effect
-                == forge_core_contracts::WorkflowCooperativeEvidenceAssuranceEffect::CooperativeClaimOnlyDoesNotSatisfySourceClaim
-                && guidance.cooperative_evidence.iter().any(|evidence| {
-                    evidence.current_status
-                        == WorkflowCooperativeEvidenceCurrentStatus::Supporting
-                        && evidence.supports_cooperative_claim_ref.as_ref()
-                            == Some(&packet.route.cooperative_claim_ref)
-                })
-        });
     let completion =
         (guidance.status == WorkflowGovernanceGuidanceStatus::ReadyToComplete).then(|| {
             WorkflowResumeCompletionAction {
@@ -943,13 +920,9 @@ fn workflow_resume_summary<'a>(
             let continuity_ranked: &[WorkflowReplacementRankedAction] =
                 continuity.map_or(&[], |continuity| continuity.ranked_next_actions.as_slice());
             WorkflowResumeActionSummary {
-                recommended: recommended_workflow_resume_action(
-                    guidance.status,
-                    guidance.cooperative_evidence_action_packet.is_some(),
-                    cooperative_packet_already_supporting,
-                    guidance.cooperative_evidence_action_gap.is_some(),
-                    continuity_ranked,
-                ),
+                recommended: guidance
+                    .recommended_resume_action()
+                    .map(present_workflow_resume_action),
                 completion,
                 cooperative_evidence_packet: guidance.cooperative_evidence_action_packet.as_ref(),
                 cooperative_evidence_gap: guidance.cooperative_evidence_action_gap.as_deref(),
@@ -1771,22 +1744,10 @@ mod tests {
     }
 
     #[test]
-    fn resume_recommends_concrete_cooperative_packet_before_abstract_actions() {
-        let abstract_actions = [WorkflowReplacementRankedAction {
-            rank: 1,
-            kind: forge_core_kernel::WorkflowReplacementRankedActionKind::GovernedNext,
-            description: "Acquire the missing capability".to_owned(),
-            argv: Vec::new(),
-            governed_action: None,
-        }];
-        let recommended = recommended_workflow_resume_action(
-            WorkflowGovernanceGuidanceStatus::Active,
-            true,
-            false,
-            false,
-            &abstract_actions,
-        )
-        .expect("concrete packet must outrank the abstract action");
+    fn resume_presents_concrete_cooperative_packet() {
+        let recommended = present_workflow_resume_action(
+            forge_core_kernel::WorkflowResumeActionKind::ExecuteCooperativeEvidencePacket,
+        );
         assert_eq!(
             serde_json::to_value(recommended).expect("recommendation JSON"),
             serde_json::json!({
@@ -1798,22 +1759,10 @@ mod tests {
     }
 
     #[test]
-    fn resume_recommends_completion_before_abstract_evaluation() {
-        let abstract_actions = [WorkflowReplacementRankedAction {
-            rank: 1,
-            kind: forge_core_kernel::WorkflowReplacementRankedActionKind::GovernedNext,
-            description: "Obtain a trusted evaluation".to_owned(),
-            argv: Vec::new(),
-            governed_action: None,
-        }];
-        let recommended = recommended_workflow_resume_action(
-            WorkflowGovernanceGuidanceStatus::ReadyToComplete,
-            false,
-            false,
-            false,
-            &abstract_actions,
-        )
-        .expect("ready workflow must publish completion");
+    fn resume_presents_completion() {
+        let recommended = present_workflow_resume_action(
+            forge_core_kernel::WorkflowResumeActionKind::CompleteWorkflow,
+        );
         assert_eq!(
             serde_json::to_value(recommended).expect("recommendation JSON"),
             serde_json::json!({
@@ -1825,22 +1774,39 @@ mod tests {
     }
 
     #[test]
-    fn resume_does_not_recommend_an_already_supporting_cooperative_packet() {
-        let source_gap = [WorkflowReplacementRankedAction {
-            rank: 1,
-            kind: forge_core_kernel::WorkflowReplacementRankedActionKind::GovernedNext,
-            description: "Collect source-claim evidence".to_owned(),
-            argv: Vec::new(),
-            governed_action: None,
-        }];
-        let recommended = recommended_workflow_resume_action(
-            WorkflowGovernanceGuidanceStatus::Active,
-            true,
-            true,
-            false,
-            &source_gap,
-        )
-        .expect("the remaining source-claim gap must stay visible");
+    fn resume_presents_remaining_fallbacks() {
+        use forge_core_kernel::WorkflowResumeActionKind;
+        for (action, kind, action_ref, reason) in [
+            (
+                WorkflowResumeActionKind::ResolveCooperativeEvidenceGap,
+                "resolve_cooperative_evidence_gap",
+                "actions.cooperative_evidence_gap",
+                "the Solo Cooperative route gap must be resolved before abstract fallback actions",
+            ),
+            (
+                WorkflowResumeActionKind::ExecuteContinuityRankedAction,
+                "execute_continuity_ranked_action",
+                "actions.continuity_ranked[0]",
+                "no concrete Solo Cooperative packet or route gap is currently published",
+            ),
+        ] {
+            assert_eq!(
+                serde_json::to_value(present_workflow_resume_action(action))
+                    .expect("recommendation JSON"),
+                serde_json::json!({
+                    "kind": kind,
+                    "action_ref": action_ref,
+                    "reason": reason,
+                }),
+            );
+        }
+    }
+
+    #[test]
+    fn resume_presents_source_claim_gap() {
+        let recommended = present_workflow_resume_action(
+            forge_core_kernel::WorkflowResumeActionKind::ResolveSourceClaimGap,
+        );
         assert_eq!(
             serde_json::to_value(recommended).expect("recommendation JSON"),
             serde_json::json!({
