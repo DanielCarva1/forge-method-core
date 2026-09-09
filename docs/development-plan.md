@@ -1,7 +1,7 @@
 # Forge Core — Development Plan
 
 **Status:** ACTIVE — the single development entry document for this repository.
-**Last updated:** 2026-09-08 (workflow parsing slice and stale navigation corrected)
+**Last updated:** 2026-09-09 (current Solo scope and later-stage routing aligned)
 **Kind:** navigation and sequencing only. **Not runtime authority.**
 
 ---
@@ -90,7 +90,7 @@ guarantee that an LLM always follows guidance.
 
 ---
 
-## 2. Current state snapshot (2026-09-07)
+## 2. Current state snapshot (2026-09-09)
 
 | Fact | State |
 |---|---|
@@ -136,36 +136,45 @@ Recorded evidence (already collected — cite, don't regenerate):
 
 ---
 
-## 4. Roadmap — sequence and dependencies
+## 4. Roadmap — current work versus retained future work
 
-```
-WS1  #75 closeout: publish sanitized PARTIAL report + close issue   [DONE 2026-09-07]
-WS2  B1 follow-ups (R3 accounting, R7 hygiene check)                small; mostly delivered
-WS3  C1 trust boundary — PARKED (rule §0.8)                         resumes only by maintainer decision
-WS4  C2 state-loss + install lifecycle                              P0 hardening, independent
-WS5  C3 release-assurance debts                                     P0 hardening; v0.12.0 covered much of it
-WS6  Platform triage #22/23/24 → C4 breadth                         independent; unblocks Linux/macOS
-WS7  Docs audit #19                                                 independent, low priority
-WS8  C5 evidence closure (post-BuildVerify)                         independent
-WS9  C6.2/C7 evidence closure (domain packs)                        independent
-WS10 Milestone qualification closeout                               [DONE 2026-09-08]
-```
+**The current Solo Dogfood Ready milestone is qualified.** Authority revision 5
+lists SD-00 through SD-08 as completed, with no remaining or next SD item.
+This is a bounded Solo milestone, not universal product, platform or field-use
+assurance. Unfinished evidence in a retained C-series item does not reopen it.
 
-Rules for this sequence:
+| Work | Current disposition |
+|---|---|
+| WS1 probe closeout, WS10 Solo milestone | Delivered, within recorded limits |
+| CLI parsing and backup hashing slices below | Delivered maintenance |
+| WS2 follow-ups | Conditional: repair only a reproduced current Solo defect |
+| WS7 docs audit, further architecture cleanup | Optional maintenance |
+| WS3–WS5, C4 in WS6, WS8–WS9 | Retained later-stage C-series campaigns |
+| Linux/macOS triage in WS6 | Separate qualification, not a Windows blocker by itself |
 
-- **WS1 is closed.** The sanitized summary is published and #75 is closed with
-  the honest PARTIAL verdict.
-- **WS10 is closed.** Do not repeat the milestone audit. The maintainer selected
-  the bounded CLI parsing consolidation below as the next architecture slice.
-- **WS3 is parked, not abandoned.** The C1.1 rejection decisions and frozen
-  adapter contract stay in `contracts/spec/` for future reuse. Solo evidence
-  never claims human-origin attestation, so nothing downstream is blocked.
-- **WS5 no longer waits on WS3:** release assurance proceeds on the
-  cooperative evidence path; only independent-review items keep their
-  own strict requirements.
-- **WS10 closes the milestone** only with explicit claim-by-claim evidence and
-  honest remaining limits (delivery rule from #73).
-- Sequencing changes are made **only** by editing this section.
+Rules for selecting the next task:
+
+- Typed current-scope projections in the readiness spec, gap-closure plan and
+  story inventory win over historical campaign statuses and this document.
+  C1–C7 items remain preserved later-stage work, not missing current Solo
+  implementation or mandatory prerequisites.
+- Inspect existing implementation and evidence before selecting a repair.
+  A concrete defect affecting the accepted Windows/Codex/ZCode journey may
+  justify a small task in a module also used by a later-stage campaign.
+  Later-stage disposition is not permission to ignore real defects.
+- WS2 accounting and cleanup checks are conditional follow-ups. If they reveal
+  no defect, do not invent a repair story.
+- Both selected architecture slices below are complete. Further refactoring
+  is optional and needs a concrete maintenance or user benefit; do not select
+  another merely to keep working.
+- Agree new features, broader host/platform support or strict-external work
+  with the maintainer first. Do not require brokers, independent-review
+  identity or signing-tool provisioning for ordinary Solo work. Existing
+  release verification still applies when publishing a release.
+- WS1 remains closed with its honest PARTIAL probe verdict. WS10 remains
+  qualified within its recorded limits; neither claim supersedes the other.
+- Change sequencing only here. Sections below retain context and future exit
+  criteria, not an instruction to execute every stream.
 
 ---
 
@@ -232,15 +241,20 @@ Statuses: `ready` | `blocked` | `in_progress` | `implemented_pending_evidence` |
   trust (enterprise profile). Then C1.1 restarts from the retained decision
   files, not from zero.
 
-### WS4 — C2 state-loss and install lifecycle — `planned` (C2.3 `in_progress`)
+### WS4 — C2 state-loss and install lifecycle — later-stage; implemented_pending_evidence
 
+- **Current scope:** C2.1–C2.4 are preserved later-stage campaign items, all
+  recorded as implemented pending evidence in the campaign. Missing-state
+  rejection, lifecycle recovery, and backup/restore code already exist.
+  These headings do not imply missing Windows Solo implementation. The exit
+  criteria below apply when that campaign is explicitly resumed.
 - **Authority:** plan C2 (GAP-002, GAP-004); continuity ref
   `contracts/plan/c2.2-campaign-continuity-v1.yaml`.
 - **Stories:** C2.1 fail closed on linked-sidecar loss (typed state-loss
   diagnostic, never implicit recreation); C2.2 complete-state backup/restore
   contracts (reject partial/stale/cross-project/tampered restores; private
   broker keys stay in owner-specific backup); C2.3 owned product lifecycle
-  (`in_progress`: idempotent setup/diagnostic surface, verified immutable
+  (implemented, with campaign evidence remaining: idempotent setup/diagnostic surface, verified immutable
   asset updates with rollback, uninstall that preserves consumer projects);
   C2.4 interrupted and mixed-version states (partial setup, interrupted update,
   downgrade refusal, wrapper mismatch, restore after replacement machine).
@@ -250,7 +264,7 @@ Statuses: `ready` | `blocked` | `in_progress` | `implemented_pending_evidence` |
   user repairs installation without YAML; uninstall/update preserve durable
   authority.
 
-### WS5 — C3 release assurance and publication — `planned`
+### WS5 — C3 release assurance and publication — retained later-stage campaign
 
 - **Authority:** plan C3 (GAP-005, GAP-006).
 - **Stories:** C3.1 release-control debts (locked Cargo resolution, declared-MSRV
@@ -260,13 +274,13 @@ Statuses: `ready` | `blocked` | `in_progress` | `implemented_pending_evidence` |
   verify version, tag/commit, manifest, checksum, signature, SBOM binding,
   wrapper, clean install from downloaded assets); C3.4 real-host evidence with
   the exact published integration + independent semantic/actor-separation review.
-- **Machine note:** install cosign before C3.3 verification work starts.
+- **Scope note:** retained C3 campaign requirements are not a Solo setup checklist. Do not provision cosign or independent-review infrastructure merely to close current Solo tasks.
 - **Tests:** consecutive CI timing runs with retained command/duration/timeout
   artifacts; failure injection on verification paths.
 - **Exit:** every supported archive immutable and independently verifiable; the
   exact published assets complete one clean real-host journey.
 
-### WS6 — Platform triage → C4 host breadth — `planned`
+### WS6 — Platform triage → C4 host breadth — separate qualification / later-stage C4
 
 - **Step 1 — triage #22/#23/#24** (Linux `unshare`/`CAP_SYS_ADMIN` tests,
   macOS symlink tests, domain-pack CLI e2e). Triage any concrete overlap with
@@ -287,7 +301,7 @@ Statuses: `ready` | `blocked` | `in_progress` | `implemented_pending_evidence` |
   owner-review rule. Not a prerequisite for WS1. Do not expand its scope
   silently; keep product+usage docs shipped, move development diaries out.
 
-### WS8 — C5 post-BuildVerify episodes — `implemented_pending_evidence`
+### WS8 — C5 post-BuildVerify episodes — later-stage; implemented_pending_evidence
 
 - **Authority:** plan C5 (GAP-007). Implementation exists (C5.1–C5.3). What is
   missing is **evidence**, not code: a real release + rollback baseline with
@@ -298,7 +312,7 @@ Statuses: `ready` | `blocked` | `in_progress` | `implemented_pending_evidence` |
   existing readiness/claim machinery; convert each `implemented_pending_evidence`
   to closed or reopen the specific defect.
 
-### WS9 — C6.2 / C7 domain-pack lifecycle and SDK — `implemented_pending_evidence`
+### WS9 — C6.2 / C7 domain-pack lifecycle and SDK — later-stage; implemented_pending_evidence
 
 - **Authority:** plan C6 (C6.2 immutable remote acquisition) and C7 (C7.1/C7.2
   authoring + publish/sign/review/revoke workflows). Both implemented pending
@@ -339,6 +353,15 @@ compared 67,863 old/new parser results (including typed errors) with no differen
 Standards/Spec reviews found no Rust issues; documentation findings corrected.
 No workspace suite or new CI run was required. These are parser checks, not a
 new product-journey qualification.
+
+### Selected architecture slice - backup content hashing - done
+
+Delivered in commit `e47ff479`: backup reuses the existing Store content-hash
+function, preserving canonicalization, errors and stored digest format. No new
+module, dependency, migration or release. Known-digest, archive/receipt
+round-trip and tampering tests passed; Standards and Spec reviews had no
+findings. Required CI, including the packaged Windows journey, passed in run
+`34297021244`. This maintenance change does not extend platform support.
 
 ## 6. Test strategy
 
@@ -401,6 +424,8 @@ A story is done when **all** of these hold:
   snapshot is older than the last merged change on `master`, refresh §2 first.
 
 ## 10. Document history
+
+- 2026-09-09 — Aligned navigation with authority revision 5: delivered Solo work, conditional repairs, optional cleanup and retained C-series campaigns are separate. Recorded completed backup hashing slice.
 
 - 2026-09-08 — v4: **Solo Dogfood Ready qualified.** Released-path dogfood gate closed
   by governed promotion receipt; four authority files flipped to
