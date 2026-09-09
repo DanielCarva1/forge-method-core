@@ -16,6 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-09-09
+
+### Fixed
+- Interrupted recovery of a legacy v1 promotion can resume after its recovery
+  journal begins. Guidance and execution share the same validation, without
+  accepting mismatched recovery bindings or weakening v2 checks.
+
+### Changed
+- Resume recommendations now belong to the kernel; existing CLI responses stay
+  unchanged. Workflow value flags and backup content hashing reuse their existing
+  owners instead of duplicating behavior.
+- The development plan separates delivered Solo scope from future campaigns.
+
+
 ### Added
 - **Solo Dogfood Ready milestone qualified.** The four readiness authority files now
   record `milestone_qualified: true` (authority revision 5). The qualification closed
