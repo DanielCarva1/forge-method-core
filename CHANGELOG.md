@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-09-13
+
+### Fixed
+- Current Work preparation can explicitly prepare an existing Quick Cycle checkpoint,
+  preserving task identity and saved continuity instead of requiring hosts to rewrite
+  a replacement-task template. Existing default preparation remains compatible.
+- Start Forge guidance now points hosts to the explicit progress preparation command.
+
+
 ## [0.12.1] - 2026-09-09
 
 ### Fixed

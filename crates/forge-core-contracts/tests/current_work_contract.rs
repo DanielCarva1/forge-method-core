@@ -742,3 +742,44 @@ fn current_work_preparation_packet_rejects_unknown_authority_fields() {
             .contains("unknown field")
     );
 }
+
+#[test]
+fn checkpoint_preparation_requires_current_or_blocked_focus() {
+    let packet = serde_json::json!({
+        "schema_version": "current_work_preparation_v1",
+        "authority": "candidate_preparation_only",
+        "current_work_status": "current",
+        "operation": "checkpoint_quick_cycle",
+        "binding": {
+            "snapshot_digest": format!("sha256:{}", "a".repeat(64)),
+            "ledger_head_digest": format!("sha256:{}", "b".repeat(64)),
+            "state_version": 1,
+            "expected_work_focus": {"status": "current", "record_digest": format!("sha256:{}", "c".repeat(64))}
+        },
+        "apply_input_schema_version": "work_focus_update_input_v3",
+        "apply_argv": ["forge-core", "workflow", "current-work", "update"],
+        "input_file_token": "${CURRENT_WORK_INPUT_FILE}",
+        "maximum_input_bytes": forge_core_contracts::MAX_WORK_FOCUS_UPDATE_INPUT_BYTES,
+        "input_file_must_be_outside_project_snapshot": true,
+        "apply_input_template": {},
+        "required_replacements": ["${CURRENT_ACTIVITY}"],
+        "readback_contract": "Preparation writes no Forge state."
+    });
+    let mut parsed: WorkflowCurrentWorkPreparationPacket = serde_json::from_value(packet).unwrap();
+    for status in [
+        WorkflowCurrentWorkStatus::Current,
+        WorkflowCurrentWorkStatus::Blocked,
+    ] {
+        parsed.current_work_status = status;
+        parsed.validate().unwrap();
+    }
+    for status in [
+        WorkflowCurrentWorkStatus::Absent,
+        WorkflowCurrentWorkStatus::Completed,
+        WorkflowCurrentWorkStatus::Abandoned,
+        WorkflowCurrentWorkStatus::Stale,
+    ] {
+        parsed.current_work_status = status;
+        assert!(parsed.validate().is_err());
+    }
+}

@@ -133,6 +133,15 @@ write the temporary input outside the project snapshot, execute the exact
 successful existing `current-work accept` or `current-work update` operation
 makes the saved resume response stale.
 
+To save progress on the same active Quick Cycle, use
+`current-work prepare --operation checkpoint_quick_cycle --root <path> --json`.
+This prepares the existing checkpoint operation, retaining the focus identity
+and complete continuity (blockers, evidence, Quick Cycle, collaboration). Fill
+activity, next step and provenance markers; adjust only honestly changed
+continuity fields. Never use `supersede` for progress: it means a different task
+with a new identity. Without `--operation`, preparation still selects a new-task
+accept/supersede candidate; it does not infer your intent.
+
 For a new compact task, populate `continuity.quick_cycle` in the prepared
 acceptance input (inside `change.continuity` for a superseding focus). Set an
 honest `compactness_reason`, empty `stage_closeouts`, and empty

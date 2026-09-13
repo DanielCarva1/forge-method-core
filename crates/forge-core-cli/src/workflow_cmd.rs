@@ -19,8 +19,9 @@ use forge_core_contracts::{
     WorkflowCooperativeApplicabilityOutcome, WorkflowCooperativeEvidenceCurrentStatus,
     WorkflowCooperativeEvidenceNonProof, WorkflowCooperativeEvidenceProof,
     WorkflowCooperativeEvidenceTarget, WorkflowCooperativePriorEvidenceReference,
-    WorkflowCurrentWorkContext, WorkflowEffectiveBundleIdentity, WorkflowEvidenceOutcome,
-    WorkflowWorkFocusAcceptInput, WorkflowWorkFocusUpdateInput, MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES,
+    WorkflowCurrentWorkContext, WorkflowCurrentWorkPreparationOperation,
+    WorkflowEffectiveBundleIdentity, WorkflowEvidenceOutcome, WorkflowWorkFocusAcceptInput,
+    WorkflowWorkFocusUpdateInput, MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES,
     MAX_WORK_FOCUS_UPDATE_INPUT_BYTES,
 };
 use forge_core_decisions::{
@@ -254,7 +255,9 @@ pub fn run_workflow_command(args: &[String]) -> Result<(), ExitError> {
         };
     }
     if parsed.subcommand == "current-work-prepare" {
-        return match adapter.prepare_work_focus() {
+        return match adapter.prepare_work_focus_for_operation(
+            requested_current_work_operation(&parsed).expect("validated preparation operation"),
+        ) {
             Ok(value) => emit_envelope(CliEnvelope::ok(&command, value), parsed.want_json),
             Err(error) => emit_failure(
                 &command,
@@ -1323,7 +1326,8 @@ fn parse_args(args: &[String]) -> Result<WorkflowCliArgs, String> {
             | "--expected-rebase-plan-digest"
             | "--expected-snapshot-digest"
             | "--input-file"
-            | "--readiness-profile" => {
+            | "--readiness-profile"
+            | "--operation" => {
                 index += 1;
                 let value = args
                     .get(index)
@@ -1398,7 +1402,28 @@ fn requested_readiness_profile(
         .transpose()
 }
 
+fn requested_current_work_operation(
+    args: &WorkflowCliArgs,
+) -> Result<Option<WorkflowCurrentWorkPreparationOperation>, String> {
+    optional(args, "operation")
+        .map(|value| match value.as_str() {
+            "accept" => Ok(WorkflowCurrentWorkPreparationOperation::Accept),
+            "supersede" => Ok(WorkflowCurrentWorkPreparationOperation::Supersede),
+            "checkpoint_quick_cycle" => {
+                Ok(WorkflowCurrentWorkPreparationOperation::CheckpointQuickCycle)
+            }
+            _ => Err(
+                "--operation must be one of: accept, supersede, checkpoint_quick_cycle".to_owned(),
+            ),
+        })
+        .transpose()
+}
+
 fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
+    if args.subcommand != "current-work-prepare" && args.flags.contains_key("operation") {
+        return Err("--operation is valid only for workflow current-work prepare".to_owned());
+    }
+
     if let Some(flag) = ["request-file", "attestation-file"]
         .iter()
         .find(|flag| args.flags.contains_key(**flag))
@@ -1425,17 +1450,19 @@ fn validate_release_args(args: &WorkflowCliArgs) -> Result<(), String> {
             }
             requested_readiness_profile(args).map(|_| ())
         }
-        "action-packets"
-        | "release-status"
-        | "retirement-status"
-        | "profile-status"
-        | "current-work-prepare"
+        "action-packets" | "release-status" | "retirement-status" | "profile-status"
             if !args.flags.is_empty() =>
         {
             Err(format!(
                 "workflow {} accepts only --root and the JSON output switch",
                 args.subcommand
             ))
+        }
+        "current-work-prepare" => {
+            if args.flags.keys().any(|flag| flag != "operation") {
+                return Err("workflow current-work prepare accepts only --root, optional --operation, and the JSON output switch".to_owned());
+            }
+            requested_current_work_operation(args).map(|_| ())
         }
         "current-work-detail" => {
             if args
@@ -1741,6 +1768,41 @@ mod tests {
         validate_release_args(&parsed).expect("Current Work prepare remains read-only");
         assert_eq!(parsed.subcommand, "current-work-prepare");
         assert_eq!(parsed.root, PathBuf::from("D:\\product"));
+    }
+
+    #[test]
+    fn current_work_prepare_operation_is_explicit_and_scoped() {
+        assert!(parse_args(&argv(&[
+            "workflow",
+            "current-work-prepare",
+            "--operation",
+            "accept",
+            "--operation",
+            "supersede"
+        ]))
+        .is_err());
+        for operation in ["accept", "supersede", "checkpoint_quick_cycle"] {
+            let parsed = parse_args(&argv(&[
+                "workflow",
+                "current-work-prepare",
+                "--operation",
+                operation,
+            ]))
+            .unwrap();
+            validate_release_args(&parsed).unwrap();
+            assert!(requested_current_work_operation(&parsed).unwrap().is_some());
+        }
+        for args in [
+            argv(&["workflow", "current-work-prepare", "--operation", "guess"]),
+            argv(&[
+                "workflow",
+                "resume",
+                "--operation",
+                "checkpoint_quick_cycle",
+            ]),
+        ] {
+            assert!(validate_release_args(&parse_args(&args).unwrap()).is_err());
+        }
     }
 
     #[test]

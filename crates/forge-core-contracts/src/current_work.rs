@@ -322,6 +322,7 @@ pub enum WorkflowCurrentWorkPreparationAuthority {
 pub enum WorkflowCurrentWorkPreparationOperation {
     Accept,
     Supersede,
+    CheckpointQuickCycle,
 }
 
 impl WorkflowCurrentWorkPreparationOperation {
@@ -720,7 +721,8 @@ impl WorkflowCurrentWorkPreparationPacket {
                 ) && self.apply_input_schema_version == WORK_FOCUS_ACCEPT_INPUT_SCHEMA_VERSION
                     && self.maximum_input_bytes == MAX_WORK_FOCUS_ACCEPT_INPUT_BYTES
             }
-            WorkflowCurrentWorkPreparationOperation::Supersede => {
+            WorkflowCurrentWorkPreparationOperation::Supersede
+            | WorkflowCurrentWorkPreparationOperation::CheckpointQuickCycle => {
                 matches!(
                     self.current_work_status,
                     WorkflowCurrentWorkStatus::Current
@@ -733,7 +735,10 @@ impl WorkflowCurrentWorkPreparationPacket {
                     && self.maximum_input_bytes == MAX_WORK_FOCUS_UPDATE_INPUT_BYTES
             }
         };
-        if !shape_matches {
+        if !shape_matches
+            || (self.operation == WorkflowCurrentWorkPreparationOperation::CheckpointQuickCycle
+                && self.current_work_status == WorkflowCurrentWorkStatus::Stale)
+        {
             return Err(WorkflowCurrentWorkValidationError::StatusFocusMismatch);
         }
         validate_total(self, MAX_CURRENT_WORK_PREPARATION_BYTES)

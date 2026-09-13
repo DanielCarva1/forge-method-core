@@ -1949,6 +1949,15 @@ fn current_work_prepare_is_read_only_and_selects_the_existing_accept_path() {
     assert_eq!(work_focus_record_count(&consumer.state), records_before);
     assert_eq!(state_tree_snapshot(&consumer.state), state_before);
 
+    let absent_checkpoint = bin()
+        .args(["workflow", "current-work", "prepare", "--root"])
+        .arg(&consumer.app)
+        .args(["--operation", "checkpoint_quick_cycle", "--json"])
+        .output()
+        .expect("checkpoint without a focus");
+    assert_eq!(json(&absent_checkpoint)["ok"], false);
+    assert_eq!(state_tree_snapshot(&consumer.state), state_before);
+
     let accept_input = fill_prepared_current_work(
         &prepared["data"]["apply_input_template"],
         "focus.prepared-first",
@@ -1959,6 +1968,18 @@ fn current_work_prepare_is_read_only_and_selects_the_existing_accept_path() {
     assert_eq!(work_focus_record_count(&consumer.state), records_before + 1);
 
     let state_after_accept = state_tree_snapshot(&consumer.state);
+    let no_cycle = bin()
+        .args(["workflow", "current-work", "prepare", "--root"])
+        .arg(&consumer.app)
+        .args(["--operation", "checkpoint_quick_cycle", "--json"])
+        .output()
+        .expect("checkpoint without a Quick Cycle");
+    assert!(!json(&no_cycle)["ok"].as_bool().unwrap());
+    assert!(json(&no_cycle)["error"]["message"]
+        .as_str()
+        .unwrap()
+        .contains("active Quick Cycle"));
+    assert_eq!(state_tree_snapshot(&consumer.state), state_after_accept);
     let prepared_update = assert_ok(&run_current_work_prepare(&consumer));
     assert_eq!(prepared_update["data"]["current_work_status"], "current");
     assert_eq!(prepared_update["data"]["operation"], "supersede");
@@ -1972,13 +1993,21 @@ fn current_work_prepare_is_read_only_and_selects_the_existing_accept_path() {
     );
     assert_eq!(state_tree_snapshot(&consumer.state), state_after_accept);
 
-    let update_input = fill_prepared_current_work(
+    let mut update_input = fill_prepared_current_work(
         &prepared_update["data"]["apply_input_template"],
         "focus.prepared-second",
         "Prepared replacement focus",
     );
+    update_input["change"]["continuity"] = serde_json::json!({
+        "quick_cycle": {
+            "compactness_reason": "One bounded preparation regression",
+            "stage_closeouts": {},
+            "expansion_history": []
+        },
+        "collaboration": { "lanes": [{ "lane_id": "lane.review", "outcome": "Review the focused correction" }] }
+    });
     let update_path = consumer.write_json("prepared-current-work-update.json", &update_input);
-    assert_ok(&run_current_work_update(&consumer, &update_path));
+    let replacement = assert_ok(&run_current_work_update(&consumer, &update_path));
     assert_eq!(work_focus_record_count(&consumer.state), records_before + 2);
     let state_after_update = state_tree_snapshot(&consumer.state);
     let stale_update = run_current_work_update(&consumer, &update_path);
@@ -1994,6 +2023,60 @@ fn current_work_prepare_is_read_only_and_selects_the_existing_accept_path() {
         resume["data"]["current_work"]["focus"]["focus_id"],
         "focus.prepared-second"
     );
+
+    let checkpoint = assert_ok(
+        &bin()
+            .args(["workflow", "current-work", "prepare", "--root"])
+            .arg(&consumer.app)
+            .args(["--operation", "checkpoint_quick_cycle", "--json"])
+            .output()
+            .expect("prepare explicit progress"),
+    );
+    assert_eq!(state_tree_snapshot(&consumer.state), state_after_update);
+    assert_eq!(checkpoint["data"]["operation"], "checkpoint_quick_cycle");
+    let template = &checkpoint["data"]["apply_input_template"];
+    assert_eq!(template["change"]["kind"], "checkpoint_quick_cycle");
+    assert!(template["change"].get("focus").is_none());
+    assert_eq!(
+        template["change"]["continuity"]["quick_cycle"],
+        replacement["data"]["focus_record"]["event"]["payload"]["quick_cycle"]
+    );
+    assert_eq!(
+        template["change"]["continuity"]["collaboration"],
+        update_input["change"]["continuity"]["collaboration"]
+    );
+    assert_eq!(
+        template["change"]["continuity"]["blocker_record_digests"],
+        replacement["data"]["focus_record"]["event"]["payload"]["blocker_record_digests"]
+    );
+    assert_eq!(
+        template["change"]["continuity"]["evidence_record_digests"],
+        replacement["data"]["focus_record"]["event"]["payload"]["evidence_record_digests"]
+    );
+    let input = fill_prepared_current_work(template, "unused-no-new-identity", "unused");
+    let path = consumer.write_json("prepared-progress.json", &input);
+    let saved = assert_ok(&run_current_work_update(&consumer, &path));
+    assert_eq!(
+        saved["data"]["focus_record"]["event"]["payload"]["focus_id"],
+        "focus.prepared-second"
+    );
+    assert_eq!(
+        saved["data"]["focus_record"]["event"]["payload"]["collaboration"],
+        update_input["change"]["continuity"]["collaboration"]
+    );
+    assert_eq!(work_focus_record_count(&consumer.state), records_before + 3);
+    let after_progress = state_tree_snapshot(&consumer.state);
+    assert_eq!(
+        run_current_work_update(&consumer, &path).status.code(),
+        Some(4)
+    );
+    assert_eq!(state_tree_snapshot(&consumer.state), after_progress);
+    let resumed = assert_ok(&consumer.run(&["resume"]));
+    assert_eq!(
+        resumed["data"]["current_work"]["focus"]["focus_id"],
+        "focus.prepared-second"
+    );
+    assert_eq!(resumed["data"]["current_work"]["status"], "current");
 }
 
 #[test]

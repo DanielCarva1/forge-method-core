@@ -3388,10 +3388,24 @@ impl WorkflowGovernanceProjectAdapter {
     ///
     /// # Panics
     ///
-    /// Panics only if the preparation operation reports `Supersede` without
-    /// the Work Focus record used to derive that operation.
+    /// Panics only if an update operation has no observed Work Focus after
+    /// its state preconditions have been checked.
     pub fn prepare_work_focus(
         &self,
+    ) -> Result<WorkflowCurrentWorkPreparationPacket, WorkflowGovernanceAdapterError> {
+        self.prepare_work_focus_for_operation(None)
+    }
+
+    /// Prepare an explicitly requested existing operation without inferring host intent.
+    /// Omitting the operation preserves the original accept/supersede selection.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if an update operation has no observed Work Focus after
+    /// its state preconditions have been checked.
+    pub fn prepare_work_focus_for_operation(
+        &self,
+        requested_operation: Option<WorkflowCurrentWorkPreparationOperation>,
     ) -> Result<WorkflowCurrentWorkPreparationPacket, WorkflowGovernanceAdapterError> {
         let ledger = observe_existing_workflow_governance_ledger(&self.binding.state_root)?;
         let projection = ledger.recover()?;
@@ -3414,13 +3428,43 @@ impl WorkflowGovernanceProjectAdapter {
             Some((_, focus)) => Self::current_work_projection(&projection, focus)?.status,
             None => WorkflowCurrentWorkStatus::Absent,
         };
-        let operation = WorkflowCurrentWorkPreparationOperation::for_status(current_work_status);
+        let default_operation =
+            WorkflowCurrentWorkPreparationOperation::for_status(current_work_status);
+        let operation = requested_operation.unwrap_or(default_operation);
+        if operation != default_operation
+            && operation != WorkflowCurrentWorkPreparationOperation::CheckpointQuickCycle
+        {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "the requested preparation operation does not match the current Work Focus state"
+                    .to_owned(),
+            ));
+        }
+        let checkpoint_continuity = if operation
+            == WorkflowCurrentWorkPreparationOperation::CheckpointQuickCycle
+        {
+            let focus = latest.map(|(_, focus)| focus).filter(|focus| {
+                matches!(current_work_status, WorkflowCurrentWorkStatus::Current | WorkflowCurrentWorkStatus::Blocked)
+                    && focus.state == WorkflowWorkFocusState::Active
+                    && focus.quick_cycle.is_some()
+            }).ok_or_else(|| WorkflowGovernanceAdapterError::InvalidObservation(
+                "checkpoint_quick_cycle preparation requires an active Quick Cycle in the current objective and phase; do not replace a task to save progress".to_owned(),
+            ))?;
+            Some(WorkflowWorkFocusContinuityInput {
+                blocker_record_digests: focus.blocker_record_digests.clone(),
+                evidence_record_digests: focus.evidence_record_digests.clone(),
+                quick_cycle: focus.quick_cycle.clone(),
+                collaboration: focus.collaboration.clone(),
+            })
+        } else {
+            None
+        };
         let expected_work_focus = match operation {
             WorkflowCurrentWorkPreparationOperation::Accept => WorkflowExpectedWorkFocus::Absent,
-            WorkflowCurrentWorkPreparationOperation::Supersede => {
+            WorkflowCurrentWorkPreparationOperation::Supersede
+            | WorkflowCurrentWorkPreparationOperation::CheckpointQuickCycle => {
                 WorkflowExpectedWorkFocus::Current {
                     record_digest: latest
-                        .expect("a supersede operation requires an observed Work Focus")
+                        .expect("an update operation requires an observed Work Focus")
                         .0
                         .record_digest
                         .clone(),
@@ -3468,6 +3512,21 @@ impl WorkflowGovernanceProjectAdapter {
                     "kind": "supersede",
                     "focus": focus_template,
                     "continuity": "${CONTINUITY_JSON}"
+                });
+                (
+                    "update",
+                    WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION,
+                    MAX_WORK_FOCUS_UPDATE_INPUT_BYTES,
+                )
+            }
+            WorkflowCurrentWorkPreparationOperation::CheckpointQuickCycle => {
+                apply_input_template["schema_version"] =
+                    serde_json::json!(WORK_FOCUS_UPDATE_INPUT_SCHEMA_VERSION);
+                apply_input_template["change"] = serde_json::json!({
+                    "kind": "checkpoint_quick_cycle",
+                    "current_activity": "${CURRENT_ACTIVITY}",
+                    "next_step": "${NEXT_STEP}",
+                    "continuity": checkpoint_continuity
                 });
                 (
                     "update",

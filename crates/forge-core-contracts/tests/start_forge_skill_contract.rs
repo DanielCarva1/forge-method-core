@@ -315,6 +315,8 @@ fn current_work_and_collaboration_use_existing_safe_interfaces() {
         guided_contract(),
         &[
             "workflow current-work prepare",
+            "--operation checkpoint_quick_cycle",
+            "Never use `supersede` for progress",
             "on-demand helper, not a pre-flight step",
             "temporary input outside the project snapshot",
             "Preparation is read-only",
