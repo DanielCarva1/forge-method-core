@@ -16,6 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-13
+
+### Changed
+- Episode preparation now returns the existing finalization command and the exact
+  result location to use for application. Hosts supply observed facts; Rust owns
+  canonical digest calculation and validation. No new admission or persistence path.
+- Compatibility: episode preparation responses use post_build_verify_episode_preparation_v2.
+  Consumers requiring the exact v1 response must adapt. Finalization, apply inputs,
+  and persisted project data are unchanged.
+
+
 ## [0.12.2] - 2026-09-13
 
 ### Fixed
