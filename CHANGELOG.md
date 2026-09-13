@@ -16,6 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-09-13
+
+### Changed
+- Current Work during resume reuses pending decisions already derived from the
+  same immutable ledger projection. Standalone detail/preparation retains its
+  existing derivation; public responses and concurrency checks are unchanged.
+  User-visible latency improvement has not been measured.
+
+### Fixed
+- The read-only resume source test now inspects only the resume method, rather
+  than accidentally including later mutating methods. All forbidden-path checks
+  remain in place; this is a textual guard, not a complete side-effect proof.
+
+
 ## [0.13.1] - 2026-09-13
 
 ### Changed
