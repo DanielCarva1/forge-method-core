@@ -3440,7 +3440,7 @@ impl WorkflowGovernanceProjectAdapter {
         let state_version = projection.current_state_version().unwrap_or_default();
         let latest = projection.latest_work_focus_record();
         let current_work_status = match latest {
-            Some((_, focus)) => Self::current_work_projection(&projection, focus)?.status,
+            Some((_, focus)) => Self::current_work_projection(&projection, focus, None)?.status,
             None => WorkflowCurrentWorkStatus::Absent,
         };
         let default_operation =
@@ -4191,7 +4191,7 @@ impl WorkflowGovernanceProjectAdapter {
                 ));
             }
         };
-        let observation = Self::current_work_projection(&projection, focus)?;
+        let observation = Self::current_work_projection(&projection, focus, None)?;
         let collaboration = if let Some(plan) = focus.collaboration.as_ref() {
             let now = unix_time()?;
             let readiness_profile = projection
@@ -4307,7 +4307,11 @@ impl WorkflowGovernanceProjectAdapter {
             return Ok(context);
         };
 
-        let observation = Self::current_work_projection(projection, focus)?;
+        let observation = Self::current_work_projection(
+            projection,
+            focus,
+            continuity.map(|continuity| continuity.durable_pending_decisions.as_slice()),
+        )?;
         let context = WorkflowCurrentWorkContext {
             schema_version: CURRENT_WORK_CONTEXT_SCHEMA_VERSION.to_owned(),
             authority: WorkflowCurrentWorkAuthority::AdvisoryReadOnly,
@@ -4427,6 +4431,7 @@ impl WorkflowGovernanceProjectAdapter {
     fn current_work_projection(
         projection: &WorkflowGovernanceLedgerProjection,
         focus: &forge_core_contracts::WorkflowWorkFocusRecordedEvent,
+        pending_decisions: Option<&[WorkflowReplacementDecisionAudit]>,
     ) -> Result<CurrentWorkProjection, WorkflowGovernanceAdapterError> {
         let objective_is_current = projection
             .records
@@ -4449,10 +4454,18 @@ impl WorkflowGovernanceProjectAdapter {
                     && focus.objective.accepted_objective_record_sequence == record.sequence
             });
         let phase_is_current = focus.phase.to_string() == current_phase(projection)?.0;
-        let pending_decisions = replacement_decision_history(&projection.records)
-            .into_iter()
-            .filter(|decision| decision.status == WorkflowReplacementDecisionStatus::Unresolved)
-            .collect::<Vec<_>>();
+        // Resume already derives these decisions from this same immutable
+        // projection. Standalone detail/preparation still derives its own view.
+        let derived_pending_decisions;
+        let pending_decisions = if let Some(pending) = pending_decisions {
+            pending
+        } else {
+            derived_pending_decisions = replacement_decision_history(&projection.records)
+                .into_iter()
+                .filter(|decision| decision.status == WorkflowReplacementDecisionStatus::Unresolved)
+                .collect::<Vec<_>>();
+            &derived_pending_decisions
+        };
         let blocker_refs = focus
             .blocker_record_digests
             .iter()
@@ -4472,9 +4485,9 @@ impl WorkflowGovernanceProjectAdapter {
             ),
             open_decision_count: pending_decisions.len(),
             open_decision_refs: pending_decisions
-                .into_iter()
+                .iter()
                 .take(forge_core_contracts::MAX_CURRENT_WORK_REFERENCE_ITEMS)
-                .map(|decision| decision.need_record_digest)
+                .map(|decision| decision.need_record_digest.clone())
                 .collect(),
             blocker_refs,
             evidence_refs: focus.evidence_record_digests.clone(),
@@ -16360,6 +16373,67 @@ mod tests {
         assert_eq!(blocked_focus.blocker_refs, vec![blocker_digest]);
         assert_eq!(blocked_focus.evidence_refs, vec![evidence_digest.clone()]);
 
+        // Both the resume path (precomputed decisions) and standalone detail
+        // must agree, including linked blockers, unrelated needs and truncation.
+        let mut many_needs = unresolved.clone();
+        for index in 0..forge_core_contracts::MAX_CURRENT_WORK_REFERENCE_ITEMS + 2 {
+            let mut need = many_needs.records.last().unwrap().clone();
+            need.sequence += 1;
+            need.record_digest = format!("sha256:{index:064x}");
+            if let WorkflowGovernanceEvent::DecisionNeedRaised(event) = &mut need.event {
+                event.decision_ref = StableId(format!("decision.unrelated-{index}"));
+            }
+            many_needs.records.push(need);
+        }
+        let mut resolved_need = many_needs.clone();
+        let mut resolution = resolved_need.records.last().unwrap().clone();
+        resolution.sequence += 1;
+        resolution.record_digest = format!("sha256:{}", "a".repeat(64));
+        resolution.event = WorkflowGovernanceEvent::DecisionResolved(DecisionResolvedEvent {
+            policy_ref: StableId("policy.bound-focus".to_owned()),
+            decision_ref: StableId("decision.bound-focus".to_owned()),
+            selected_alternative_ref: StableId("alternative.proceed".to_owned()),
+            principal: PrincipalId("principal.test".to_owned()),
+            authority_scope: StableId("workflow.decision.resolve".to_owned()),
+            credential_id: StableId("credential.test".to_owned()),
+            public_key_fingerprint: record.record_digest.clone(),
+            authorization_registry_digest: record.record_digest.clone(),
+            snapshot_digest: record.record_digest.clone(),
+            ledger_head_digest: record.record_digest.clone(),
+            authorization_intent_digest: record.record_digest.clone(),
+            signature_fingerprint: record.record_digest.clone(),
+            resolved_at_unix: recorded_at_unix,
+        });
+        resolved_need.records.push(resolution);
+        for case in [
+            &projection,
+            &bound_projection,
+            &unresolved,
+            &many_needs,
+            &resolved_need,
+        ] {
+            let mut continuity = resumed.replacement_continuity.clone().unwrap();
+            continuity.decision_history = replacement_decision_history(&case.records);
+            continuity.durable_pending_decisions = continuity
+                .decision_history
+                .iter()
+                .filter(|decision| decision.status == WorkflowReplacementDecisionStatus::Unresolved)
+                .cloned()
+                .collect();
+            let standalone = adapter.current_work_context(case, None).unwrap();
+            let reused = adapter
+                .current_work_context(case, Some(&continuity))
+                .unwrap();
+            assert_eq!(
+                serde_json::to_value(&reused).unwrap(),
+                serde_json::to_value(&standalone).unwrap()
+            );
+            assert_eq!(
+                reused.focus.as_ref().unwrap().open_decision_count,
+                continuity.durable_pending_decisions.len()
+            );
+        }
+
         let resolved = adapter
             .current_work_context(&bound_projection, None)
             .expect("resolved blocker projection");
@@ -18518,9 +18592,11 @@ mod tests {
         let start = source
             .find("    pub fn resume(")
             .expect("resume function source");
+        // Stop at this rustfmt-indented method's closing brace, not a later
+        // method that can have unrelated mutating operations before it.
         let end = source[start..]
-            .find("    fn replacement_continuity(")
-            .map(|offset| start + offset)
+            .find("\n    }")
+            .map(|offset| start + offset + "\n    }".len())
             .expect("resume function boundary");
         let resume = &source[start..end];
         for forbidden in [
