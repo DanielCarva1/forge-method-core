@@ -91,6 +91,19 @@ c5_2_runtime_admission:
   preparation_cli: "forge-core workflow episode prepare --root <path>"
   finalization_cli: "forge-core workflow episode finalize --input-file <episode-candidate.json>"
   public_cli: "forge-core workflow episode apply --root <path> --input-file <episode-apply.json>"
+  preparation_response: "post_build_verify_episode_preparation_v2"
+  preparation_handoff: >-
+    Preparation returns finalize_argv and finalize_input_file_token for the
+    host-filled candidate. The finalizer owns episode_digest; it is not a
+    required host replacement. After successful finalization, the JSON Pointer
+    finalized_apply_input_pointer selects the apply input from the response.
+    Write that value outside the project snapshot and use the existing
+    apply_argv/input_file_token. No host-side canonical hashing is required.
+  preparation_compatibility: >-
+    The v2 preparation response adds an explicit finalization handoff to the
+    formerly closed v1 response. Consumers requiring the exact v1 response
+    schema must update; existing apply input, finalization and admission
+    contracts are unchanged. Preparation responses are not persisted state.
   finalization_boundary: >-
     Finalization reuses the candidate contract to calculate its canonical digest
     and validate the same apply-input shape. It has no project root, state read,

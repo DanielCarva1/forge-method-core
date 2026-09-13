@@ -81,6 +81,28 @@ fn episode_prepare_is_bounded_and_does_not_write_project_state() {
     let mut envelope: Value =
         serde_json::from_slice(&output.stdout).expect("JSON prepare envelope");
     assert_eq!(envelope["command"], "workflow.episode.prepare");
+    assert_eq!(envelope["data"]["finalize_argv"][3], "finalize");
+    assert_eq!(
+        envelope["data"]["schema_version"],
+        "post_build_verify_episode_preparation_v2"
+    );
+    let finalize_argv = envelope["data"]["finalize_argv"]
+        .as_array()
+        .expect("returned finalize command")
+        .clone();
+    let finalize_token = envelope["data"]["finalize_input_file_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let finalized_pointer = envelope["data"]["finalized_apply_input_pointer"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(!envelope["data"]["required_replacements"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|value| value.as_str().unwrap().contains("EPISODE_DIGEST")));
     assert_eq!(envelope["data"]["authority"], "candidate_preparation_only");
     assert_eq!(envelope["data"]["current_phase"], "1-discovery");
     assert_eq!(envelope["data"]["applicable_now"], false);
@@ -132,7 +154,6 @@ fn episode_prepare_is_bounded_and_does_not_write_project_state() {
         "context_recovery_subject": {"subject_ref": "recovery/prepared", "subject_digest": digest('5')},
         "next_action_ref": "action.prepared"
     });
-    episode["episode_digest"] = serde_json::json!(digest('0'));
     let candidate = root.join("episode candidate.json");
     fs::write(
         &candidate,
@@ -141,9 +162,14 @@ fn episode_prepare_is_bounded_and_does_not_write_project_state() {
     .expect("write candidate");
     let finalized = Command::cargo_bin("forge-core")
         .expect("forge-core binary")
-        .args(["workflow", "episode", "finalize", "--input-file"])
-        .arg(&candidate)
-        .arg("--json")
+        .args(finalize_argv.iter().skip(1).map(|value| {
+            let arg = value.as_str().expect("string argv");
+            if arg == finalize_token {
+                candidate.display().to_string()
+            } else {
+                arg.to_owned()
+            }
+        }))
         .output()
         .expect("episode finalize");
     assert!(
@@ -158,16 +184,20 @@ fn episode_prepare_is_bounded_and_does_not_write_project_state() {
     let finalized: Value =
         serde_json::from_slice(&finalized.stdout).expect("JSON finalize envelope");
     assert_eq!(finalized["command"], "workflow.episode.finalize");
-    let document: PostBuildVerifyEpisodeDocument =
-        serde_json::from_value(finalized["data"]["apply_input"]["document"].clone())
-            .expect("typed finalized document");
+    let document: PostBuildVerifyEpisodeDocument = serde_json::from_value(
+        finalized
+            .pointer(&finalized_pointer)
+            .expect("returned apply-input pointer")["document"]
+            .clone(),
+    )
+    .expect("typed finalized document");
     assert!(
         document.validate().is_empty(),
         "finalized preparation must satisfy the existing episode contract"
     );
     assert_ne!(
         document.post_build_verify_episode.episode_digest,
-        digest('0')
+        "${EPISODE_DIGEST_SET_BY_FINALIZE}"
     );
     assert_eq!(
         before,

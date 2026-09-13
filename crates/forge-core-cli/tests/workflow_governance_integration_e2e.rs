@@ -164,13 +164,32 @@ impl Consumer {
             .expect("prepare workflow episode")
     }
 
-    fn finalize_episode(input: &Path) -> Output {
+    fn execute_prepared_episode(
+        prepared: &Value,
+        argv_field: &str,
+        token_field: &str,
+        input: &Path,
+    ) -> Output {
+        let data = &prepared["data"];
+        let token = data[token_field].as_str().expect("returned input token");
         bin()
-            .args(["workflow", "episode", "finalize", "--input-file"])
-            .arg(input)
-            .arg("--json")
+            .args(
+                data[argv_field]
+                    .as_array()
+                    .expect("returned command")
+                    .iter()
+                    .skip(1)
+                    .map(|value| {
+                        let arg = value.as_str().expect("string argv");
+                        if arg == token {
+                            input.display().to_string()
+                        } else {
+                            arg.to_owned()
+                        }
+                    }),
+            )
             .output()
-            .expect("finalize workflow episode")
+            .expect("execute returned episode command")
     }
 
     fn write_json<T: Serialize>(&self, name: &str, value: &T) -> PathBuf {
@@ -613,7 +632,6 @@ fn prepared_episode_candidate(prepared: &Value) -> Value {
         },
         "next_action_ref": "action.monitor-notes"
     });
-    episode["episode_digest"] = serde_json::json!(digest('0'));
     input
 }
 
@@ -4442,7 +4460,12 @@ fn public_episode_apply_routes_evolve_changes_and_resume_context() {
             "episode candidate.json",
             &prepared_episode_candidate(&prepared),
         );
-        let finalized_output = Consumer::finalize_episode(&candidate);
+        let finalized_output = Consumer::execute_prepared_episode(
+            &prepared,
+            "finalize_argv",
+            "finalize_input_file_token",
+            &candidate,
+        );
         assert!(
             finalized_output.stdout.len() < 32 * 1024,
             "finalized episode input is unexpectedly large"
@@ -4455,8 +4478,15 @@ fn public_episode_apply_routes_evolve_changes_and_resume_context() {
             state_before_read_only_handoff,
             "prepare/finalize handoff must not mutate Forge state"
         );
-        let input = consumer.write_json("episode apply.json", &finalized["data"]["apply_input"]);
-        let attempt = consumer.apply_episode(&input);
+        let pointer = prepared["data"]["finalized_apply_input_pointer"]
+            .as_str()
+            .expect("returned result pointer");
+        let input = consumer.write_json(
+            "episode apply.json",
+            finalized.pointer(pointer).expect("finalized apply input"),
+        );
+        let attempt =
+            Consumer::execute_prepared_episode(&prepared, "apply_argv", "input_file_token", &input);
         if attempt.status.success() {
             break (assert_ok(&attempt), input);
         }

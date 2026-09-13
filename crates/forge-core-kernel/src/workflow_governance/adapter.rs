@@ -980,6 +980,11 @@ pub struct PostBuildVerifyEpisodePreparationPacket {
     pub binding: PostBuildVerifyEpisodePreparationBinding,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_episode: Option<PostBuildVerifyEpisodePreparationLineage>,
+    pub finalize_argv: Vec<String>,
+    pub finalize_input_file_token: &'static str,
+    /// JSON Pointer into a successful finalize CLI envelope; save that value,
+    /// not the envelope, as the input for the existing apply command.
+    pub finalized_apply_input_pointer: &'static str,
     pub apply_argv: Vec<String>,
     pub input_file_token: &'static str,
     pub maximum_input_bytes: usize,
@@ -1336,7 +1341,6 @@ impl WorkflowGovernanceProjectAdapter {
             "${OPERATIONAL_EVIDENCE_JSON}".to_owned(),
             "${EVOLUTION_JSON}".to_owned(),
             "${CONTINUITY_JSON}".to_owned(),
-            "${EPISODE_DIGEST_AFTER_REPLACEMENTS}".to_owned(),
         ]);
         let release_subject = admitted.release().clone();
         let snapshot_reference = serde_json::json!({
@@ -1364,7 +1368,7 @@ impl WorkflowGovernanceProjectAdapter {
                     "intake": [],
                     "evolution": "${EVOLUTION_JSON}",
                     "continuity": "${CONTINUITY_JSON}",
-                    "episode_digest": "${EPISODE_DIGEST_AFTER_REPLACEMENTS}",
+                    "episode_digest": "${EPISODE_DIGEST_SET_BY_FINALIZE}",
                 }
             },
             "expected_snapshot_digest": snapshot_digest,
@@ -1372,7 +1376,7 @@ impl WorkflowGovernanceProjectAdapter {
             "expected_state_version": state_version,
         });
         Ok(PostBuildVerifyEpisodePreparationPacket {
-            schema_version: "post_build_verify_episode_preparation_v1",
+            schema_version: "post_build_verify_episode_preparation_v2",
             authority: PostBuildVerifyEpisodePreparationAuthority::CandidatePreparationOnly,
             current_phase,
             applicable_now: matches!(
@@ -1385,6 +1389,17 @@ impl WorkflowGovernanceProjectAdapter {
                 state_version,
             },
             latest_episode,
+            finalize_argv: vec![
+                "forge-core".to_owned(),
+                "workflow".to_owned(),
+                "episode".to_owned(),
+                "finalize".to_owned(),
+                "--input-file".to_owned(),
+                "${EPISODE_CANDIDATE_INPUT_FILE}".to_owned(),
+                "--json".to_owned(),
+            ],
+            finalize_input_file_token: "${EPISODE_CANDIDATE_INPUT_FILE}",
+            finalized_apply_input_pointer: "/data/apply_input",
             apply_argv: vec![
                 "forge-core".to_owned(),
                 "workflow".to_owned(),
@@ -1400,7 +1415,7 @@ impl WorkflowGovernanceProjectAdapter {
             maximum_input_bytes: MAX_POST_BUILD_VERIFY_EPISODE_APPLY_INPUT_BYTES,
             apply_input_template,
             required_replacements,
-            readback_contract: "Preparation writes no Forge state. Replace every marker with observed host facts, recompute the canonical episode digest, then use episode apply; apply remains the only mutation.",
+            readback_contract: "Preparation writes no Forge state. Replace required_replacements with observed host facts; leave the episode digest for finalize. Write the candidate outside the project snapshot and execute finalize_argv with finalize_input_file_token replaced. Only after finalize returns ok=true, save the value at finalized_apply_input_pointer outside the project snapshot and execute apply_argv with input_file_token replaced. Finalization calculates the canonical digest and validates the candidate; it does not authorize application. Trust only successful apply readback; apply remains the only mutation.",
         })
     }
 
