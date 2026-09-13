@@ -4109,11 +4109,10 @@ impl WorkflowGovernanceProjectAdapter {
             event,
         )?;
         let committed = ledger.recover()?;
-        let mut guidance = self.guidance_from_projection_with_snapshot(
+        let guidance = self.guidance_from_projection_with_snapshot(
             &registry, admitted, &effective, &committed, now, &snapshot,
         )?;
         let current_work = self.current_work_context(&committed, None)?;
-        guidance.current_work = Some(current_work.clone());
         Ok(WorkflowWorkFocusAcceptance {
             focus_record,
             current_work,

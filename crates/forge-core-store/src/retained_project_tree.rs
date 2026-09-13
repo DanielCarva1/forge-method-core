@@ -747,12 +747,17 @@ impl RetainedProjectTree {
     pub fn workflow_regular_file_snapshot_digest(
         &self,
     ) -> Result<String, RetainedProjectTreeError> {
-        let entries = self
-            .workflow_regular_file_observations()
-            .into_iter()
-            .map(|observation| (observation.relative_path, observation.content_digest))
+        // The digest needs only paths and content hashes, not owned observations
+        // or metadata fingerprints. Borrow the retained values until serialization.
+        let mut entries = self
+            .files
+            .iter()
+            .filter(|file| !is_top_level_workflow_local_path(&file.relative_path))
+            .map(|file| (file.relative_path.as_str(), file.content_digest.as_str()))
             .collect::<Vec<_>>();
-        retained_regular_file_projection_digest(&entries)
+        entries.sort_unstable_by(|left, right| left.0.cmp(right.0));
+        validate_regular_file_projection_order(&entries)?;
+        digest_entries_digest(&entries)
     }
 
     /// Copy bytes from the already-retained exact file handle for one normalized
@@ -2675,7 +2680,9 @@ fn read_retained_file(
     Ok(bytes)
 }
 
-fn digest_entries_digest(entries: &[(String, String)]) -> Result<String, RetainedProjectTreeError> {
+fn digest_entries_digest<T: serde::Serialize>(
+    entries: &[(T, T)],
+) -> Result<String, RetainedProjectTreeError> {
     let bytes = serde_json_canonicalizer::to_vec(&entries).map_err(|error| {
         RetainedProjectTreeError::InvalidRoot {
             path: PathBuf::from("<retained-project-tree>"),
@@ -2693,6 +2700,13 @@ fn digest_entries_digest(entries: &[(String, String)]) -> Result<String, Retaine
 pub fn retained_regular_file_projection_digest(
     entries: &[(String, String)],
 ) -> Result<String, RetainedProjectTreeError> {
+    validate_regular_file_projection_order(entries)?;
+    digest_entries_digest(entries)
+}
+
+fn validate_regular_file_projection_order<T: Ord>(
+    entries: &[(T, T)],
+) -> Result<(), RetainedProjectTreeError> {
     if entries.windows(2).any(|pair| pair[0].0 >= pair[1].0) {
         return Err(RetainedProjectTreeError::InvalidRoot {
             path: PathBuf::from("<retained-project-tree-projection>"),
@@ -2700,7 +2714,7 @@ pub fn retained_regular_file_projection_digest(
                 .to_owned(),
         });
     }
-    digest_entries_digest(entries)
+    Ok(())
 }
 
 fn project_capability_nonce(path: &Path) -> Result<String, RetainedProjectTreeError> {
@@ -3688,6 +3702,42 @@ mod tests {
 
         drop(recaptured);
         drop(retained);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn workflow_borrowed_digest_matches_owned_projection() {
+        let root = project_root("borrowed-workflow-digest");
+        fs::create_dir_all(&root).unwrap();
+        for populated in [false, true] {
+            if populated {
+                fs::create_dir_all(root.join(".local")).unwrap();
+                fs::create_dir_all(root.join("src/.local")).unwrap();
+                for path in [
+                    "z.txt",
+                    "a.txt",
+                    "caf\u{e9}.txt",
+                    ".local/ignored",
+                    "src/.local/kept",
+                ] {
+                    fs::write(root.join(path), path.as_bytes()).unwrap();
+                }
+            }
+            let tree =
+                RetainedProjectTree::capture_shared_read_snapshot_allowing_stable_file_aliases(
+                    &root, 32, 32, 4096,
+                )
+                .unwrap();
+            let owned = tree
+                .workflow_regular_file_observations()
+                .into_iter()
+                .map(|file| (file.relative_path, file.content_digest))
+                .collect::<Vec<_>>();
+            assert_eq!(
+                tree.workflow_regular_file_snapshot_digest().unwrap(),
+                retained_regular_file_projection_digest(&owned).unwrap()
+            );
+        }
         fs::remove_dir_all(root).unwrap();
     }
 

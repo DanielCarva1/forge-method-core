@@ -2818,7 +2818,7 @@ fn build_record_line_at(
     record.record_digest = workflow_governance_record_digest(&record)?;
     let document = WorkflowGovernanceReceiptDocument {
         schema_version: ledger_wire_schema(projection, &record.event).to_owned(),
-        workflow_governance_receipt: record.clone(),
+        workflow_governance_receipt: record,
     };
     let mut line = serde_json::to_vec(&document).map_err(|error| {
         WorkflowGovernanceLedgerError::Canonicalization {
@@ -2826,7 +2826,7 @@ fn build_record_line_at(
         }
     })?;
     line.push(b'\n');
-    Ok((record, line))
+    Ok((document.workflow_governance_receipt, line))
 }
 
 fn raw_project_import_readiness_profile_field_present(document: &serde_json::Value) -> bool {
@@ -2906,7 +2906,7 @@ fn build_deterministic_broker_record_line(
     record.record_digest = workflow_governance_record_digest(&record)?;
     let document = WorkflowGovernanceReceiptDocument {
         schema_version: ledger_wire_schema(projection, &record.event).to_owned(),
-        workflow_governance_receipt: record.clone(),
+        workflow_governance_receipt: record,
     };
     let mut line = serde_json::to_vec(&document).map_err(|error| {
         WorkflowGovernanceLedgerError::Canonicalization {
@@ -2914,7 +2914,7 @@ fn build_deterministic_broker_record_line(
         }
     })?;
     line.push(b'\n');
-    Ok((record, line))
+    Ok((document.workflow_governance_receipt, line))
 }
 
 fn event_contains_prior_cooperative_evidence(event: &WorkflowGovernanceEvent) -> bool {
@@ -8410,6 +8410,47 @@ mod replacement_protocol_tests {
     }
 
     #[test]
+    fn moved_receipt_records_preserve_wire_bytes() {
+        let root = test_root("moved-receipt-wire");
+        valid_wal_versions(&root);
+        let projection = recover_under_lock(&root).unwrap();
+        let identity = test_identity();
+        let head = projection.head_digest.as_deref().unwrap();
+        let packet = sha256_digest(b"packet");
+        let origin = sha256_digest(b"origin");
+        let binding = DeterministicBrokerRecordBinding {
+            action_packet_digest: &packet,
+            broker_event_digest: &origin,
+            event_kind: "signal",
+            recorded_at_unix: 100,
+        };
+        let records = [
+            build_record_line_at(&projection, &identity, 0, broker_signal_event(head), 100)
+                .unwrap(),
+            build_deterministic_broker_record_line(
+                &projection,
+                &identity,
+                0,
+                broker_signal_event(head),
+                &binding,
+            )
+            .unwrap(),
+        ];
+        for (record, line) in records {
+            let document = WorkflowGovernanceReceiptDocument {
+                schema_version: ledger_wire_schema(&projection, &record.event).to_owned(),
+                workflow_governance_receipt: record.clone(),
+            };
+            let mut expected = serde_json::to_vec(&document).unwrap();
+            expected.push(b'\n');
+            assert_eq!(line, expected);
+            let decoded: WorkflowGovernanceReceiptDocument = serde_json::from_slice(&line).unwrap();
+            assert_eq!(decoded.workflow_governance_receipt, record);
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn broker_action_record_is_exactly_retryable_while_legacy_api_remains_random() {
         let root = test_root("deterministic-broker-record");
         let (_, _, _) = valid_wal_versions(&root);
@@ -8503,6 +8544,8 @@ mod replacement_protocol_tests {
             ),
             Err(WorkflowGovernanceLedgerError::StateVersionRegression { .. })
         ));
+        drop(batch);
+        drop(ledger);
         fs::remove_dir_all(root).expect("cleanup");
     }
 
