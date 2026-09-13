@@ -16,6 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-09-13
+
+### Changed
+- Avoid copying receipt records during history serialization and remove an unused
+  copy of Current Work when saving a task. Persisted bytes and responses are unchanged.
+- Workflow snapshot digests borrow retained paths and content hashes instead of
+  constructing full owned observations and unused metadata fingerprints. Existing
+  ordering, local-path exclusions, duplicate checks, and file protections remain.
+  No new dependency or cache; user-visible latency improvement is not yet measured.
+
+### Fixed
+- A focused history retry test now releases its ledger handle before removing its
+  temporary directory, allowing cleanup on Windows without weakening its assertions.
+
+
 ## [0.13.0] - 2026-09-13
 
 ### Changed
