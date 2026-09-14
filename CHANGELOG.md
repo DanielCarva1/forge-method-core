@@ -16,6 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-09-14
+
+### Changed
+- Consolidate Collaboration Plan projection in a private kernel module. Summary
+  and detail share owner-state classification while detail retains its additional
+  claim checks. Public responses, dependency ordering and observation stability
+  checks are unchanged; no new persistence or I/O is introduced.
+- Add focused coverage for overlapping owner states, missing/stale/mismatched
+  claims and completed-promotion precedence. This is a maintainability change;
+  user-visible performance improvement has not been measured.
+
 ## [0.13.2] - 2026-09-13
 
 ### Changed
