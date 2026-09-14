@@ -23,6 +23,7 @@ use forge_core_store::sha256_content_hash;
 use serde::Serialize;
 
 mod adapter;
+mod collaboration;
 mod domain_pack;
 mod policy;
 mod promotion;

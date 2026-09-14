@@ -8,6 +8,17 @@
 // by value so callers cannot reuse them after a durable transition.
 #![allow(clippy::missing_errors_doc, clippy::needless_pass_by_value)]
 
+#[cfg(test)]
+use super::collaboration::current_work_collaboration_summary_from_owner_sets;
+use super::collaboration::{
+    current_work_collaboration_detail_from_existing_state, current_work_collaboration_summary,
+};
+#[cfg(test)]
+use forge_core_contracts::{
+    WorkflowCurrentWorkCollaborationClaimState, WorkflowCurrentWorkCollaborationLaneState,
+    WorkflowCurrentWorkCollaborationPromotionState,
+};
+
 use super::{
     admit_effective_workflow_governance_bundle, derive_core_only_workflow_effective_identity,
     derive_domain_pack_core_binding, domain_pack_generation_transition_event,
@@ -89,11 +100,6 @@ use forge_core_contracts::{
     WorkflowCooperativeMaterialScenarioKind, WorkflowCooperativeObjectiveInput,
     WorkflowCooperativeObjectiveProposal, WorkflowCooperativePriorEvidenceCandidate,
     WorkflowCooperativePriorEvidenceReference, WorkflowCurrentWorkAuthority,
-    WorkflowCurrentWorkCollaborationClaimState, WorkflowCurrentWorkCollaborationDetail,
-    WorkflowCurrentWorkCollaborationIsolationValidation,
-    WorkflowCurrentWorkCollaborationLaneDetail, WorkflowCurrentWorkCollaborationLaneState,
-    WorkflowCurrentWorkCollaborationLaneSummary, WorkflowCurrentWorkCollaborationOwnerDetail,
-    WorkflowCurrentWorkCollaborationPromotionState, WorkflowCurrentWorkCollaborationSummary,
     WorkflowCurrentWorkContext, WorkflowCurrentWorkDetail, WorkflowCurrentWorkDetailFocus,
     WorkflowCurrentWorkPreparationAuthority, WorkflowCurrentWorkPreparationBinding,
     WorkflowCurrentWorkPreparationOperation, WorkflowCurrentWorkPreparationPacket,
@@ -13762,351 +13768,6 @@ fn compact_current_work_summary_text(value: &str) -> String {
     format!("{}{}", &value[..end], SUFFIX)
 }
 
-fn current_work_collaboration_summary(
-    plan: &WorkflowCollaborationPlan,
-    continuity: &WorkflowReplacementContinuity,
-) -> WorkflowCurrentWorkCollaborationSummary {
-    let owners = current_work_collaboration_owner_sets(continuity);
-    current_work_collaboration_summary_from_owner_sets(
-        plan,
-        &owners.integrated,
-        &owners.active,
-        &owners.blocked,
-    )
-}
-
-struct CurrentWorkCollaborationOwnerSets {
-    integrated: BTreeSet<StableId>,
-    active: BTreeSet<StableId>,
-    blocked: BTreeSet<StableId>,
-}
-
-fn current_work_collaboration_owner_sets(
-    continuity: &WorkflowReplacementContinuity,
-) -> CurrentWorkCollaborationOwnerSets {
-    let integrated_isolations = continuity
-        .promotions
-        .iter()
-        .filter(|promotion| promotion.status == WorkflowReplacementPromotionStatus::Completed)
-        .map(|promotion| promotion.isolation_id.clone())
-        .collect::<BTreeSet<_>>();
-    let active_isolations = continuity
-        .isolations
-        .iter()
-        .filter(|isolation| {
-            matches!(
-                isolation.contract.status,
-                IsolationStatus::Active | IsolationStatus::Merging
-            )
-        })
-        .map(|isolation| isolation.contract.id.clone())
-        .collect::<BTreeSet<_>>();
-    let mut blocked_isolations = continuity
-        .gaps
-        .iter()
-        .filter(|gap| gap.blocking)
-        .filter_map(|gap| gap.isolation_id.clone())
-        .collect::<BTreeSet<_>>();
-    blocked_isolations.extend(
-        continuity
-            .promotions
-            .iter()
-            .filter(|promotion| {
-                matches!(
-                    promotion.status,
-                    WorkflowReplacementPromotionStatus::Recoverable
-                        | WorkflowReplacementPromotionStatus::BlockedCorrupt
-                )
-            })
-            .map(|promotion| promotion.isolation_id.clone()),
-    );
-    blocked_isolations.extend(
-        continuity
-            .isolations
-            .iter()
-            .filter(|isolation| {
-                matches!(
-                    isolation.contract.status,
-                    IsolationStatus::Merged | IsolationStatus::Abandoned
-                )
-            })
-            .map(|isolation| isolation.contract.id.clone()),
-    );
-    CurrentWorkCollaborationOwnerSets {
-        integrated: integrated_isolations,
-        active: active_isolations,
-        blocked: blocked_isolations,
-    }
-}
-
-fn current_work_collaboration_summary_from_owner_sets(
-    plan: &WorkflowCollaborationPlan,
-    integrated_isolations: &BTreeSet<StableId>,
-    active_isolations: &BTreeSet<StableId>,
-    blocked_isolations: &BTreeSet<StableId>,
-) -> WorkflowCurrentWorkCollaborationSummary {
-    let integrated_lanes = plan
-        .lanes
-        .iter()
-        .filter(|lane| {
-            lane.isolation_id
-                .as_ref()
-                .is_some_and(|isolation_id| integrated_isolations.contains(isolation_id))
-        })
-        .map(|lane| lane.lane_id.clone())
-        .collect::<BTreeSet<_>>();
-
-    let mut ready_lane_count = 0usize;
-    let mut active_lane_count = 0usize;
-    let mut blocked_lane_count = 0usize;
-    let mut integrated_lane_count = 0usize;
-    let mut next_ready_lane = None;
-
-    for lane in &plan.lanes {
-        match current_work_collaboration_lane_state(
-            lane,
-            &integrated_lanes,
-            active_isolations,
-            blocked_isolations,
-        ) {
-            WorkflowCurrentWorkCollaborationLaneState::Ready => {
-                ready_lane_count += 1;
-                if next_ready_lane.is_none() {
-                    next_ready_lane = Some(WorkflowCurrentWorkCollaborationLaneSummary {
-                        lane_id: lane.lane_id.clone(),
-                        outcome: lane.outcome.clone(),
-                        isolation_id: lane.isolation_id.clone(),
-                    });
-                }
-            }
-            WorkflowCurrentWorkCollaborationLaneState::Active => active_lane_count += 1,
-            WorkflowCurrentWorkCollaborationLaneState::Blocked => blocked_lane_count += 1,
-            WorkflowCurrentWorkCollaborationLaneState::Integrated => integrated_lane_count += 1,
-        }
-    }
-
-    WorkflowCurrentWorkCollaborationSummary {
-        lane_count: plan.lanes.len(),
-        ready_lane_count,
-        active_lane_count,
-        blocked_lane_count,
-        integrated_lane_count,
-        next_ready_lane,
-    }
-}
-
-fn current_work_collaboration_lane_state(
-    lane: &forge_core_contracts::WorkflowCollaborationLane,
-    integrated_lanes: &BTreeSet<StableId>,
-    active_isolations: &BTreeSet<StableId>,
-    blocked_isolations: &BTreeSet<StableId>,
-) -> WorkflowCurrentWorkCollaborationLaneState {
-    if integrated_lanes.contains(&lane.lane_id) {
-        WorkflowCurrentWorkCollaborationLaneState::Integrated
-    } else if !lane
-        .depends_on
-        .iter()
-        .all(|dependency| integrated_lanes.contains(dependency))
-        || lane
-            .isolation_id
-            .as_ref()
-            .is_some_and(|isolation_id| blocked_isolations.contains(isolation_id))
-    {
-        WorkflowCurrentWorkCollaborationLaneState::Blocked
-    } else if lane
-        .isolation_id
-        .as_ref()
-        .is_some_and(|isolation_id| active_isolations.contains(isolation_id))
-    {
-        WorkflowCurrentWorkCollaborationLaneState::Active
-    } else {
-        WorkflowCurrentWorkCollaborationLaneState::Ready
-    }
-}
-
-fn current_work_collaboration_detail_from_existing_state(
-    plan: &WorkflowCollaborationPlan,
-    claims: &[ReplacementClaimProjection],
-    workspace: &super::promotion::ReplacementWorkspaceInspection,
-) -> WorkflowCurrentWorkCollaborationDetail {
-    let integrated_isolations = workspace
-        .promotions
-        .iter()
-        .filter(|promotion| {
-            promotion.status == super::promotion::ReplacementPromotionStatus::Completed
-        })
-        .map(|promotion| promotion.isolation_id.clone())
-        .collect::<BTreeSet<_>>();
-    let active_isolations = workspace
-        .isolations
-        .iter()
-        .filter(|isolation| {
-            matches!(
-                isolation.contract.status,
-                IsolationStatus::Active | IsolationStatus::Merging
-            )
-        })
-        .map(|isolation| isolation.contract.id.clone())
-        .collect::<BTreeSet<_>>();
-    let mut blocked_isolations = workspace
-        .gaps
-        .iter()
-        .filter(|gap| gap.blocking)
-        .filter_map(|gap| gap.isolation_id.clone())
-        .collect::<BTreeSet<_>>();
-    blocked_isolations.extend(
-        workspace
-            .promotions
-            .iter()
-            .filter(|promotion| {
-                matches!(
-                    promotion.status,
-                    super::promotion::ReplacementPromotionStatus::Recoverable
-                        | super::promotion::ReplacementPromotionStatus::BlockedCorrupt
-                )
-            })
-            .map(|promotion| promotion.isolation_id.clone()),
-    );
-    for isolation in &workspace.isolations {
-        if matches!(
-            isolation.contract.status,
-            IsolationStatus::Merged | IsolationStatus::Abandoned
-        ) {
-            blocked_isolations.insert(isolation.contract.id.clone());
-            continue;
-        }
-        let Some(claim_id) = isolation.contract.claim_id.as_ref() else {
-            continue;
-        };
-        let claim = claims.iter().find(|claim| claim.claim.id.0 == claim_id.0);
-        let claim_blocks = match claim {
-            None => true,
-            Some(claim) if claim.claim.claim.claimant_agent_id != isolation.contract.agent_id => {
-                true
-            }
-            Some(claim) if claim.liveness == ReplacementClaimLiveness::Live => false,
-            Some(_) => linked_claim_liveness_gap_is_blocking(
-                isolation.contract.status,
-                workspace
-                    .promotions
-                    .iter()
-                    .find(|promotion| promotion.isolation_id == isolation.contract.id)
-                    .map(|promotion| promotion.status),
-            ),
-        };
-        if claim_blocks {
-            blocked_isolations.insert(isolation.contract.id.clone());
-        }
-    }
-    let integrated_lanes = plan
-        .lanes
-        .iter()
-        .filter(|lane| {
-            lane.isolation_id
-                .as_ref()
-                .is_some_and(|id| integrated_isolations.contains(id))
-        })
-        .map(|lane| lane.lane_id.clone())
-        .collect::<BTreeSet<_>>();
-    let lanes = plan
-        .lanes
-        .iter()
-        .map(|lane| {
-            let isolation = lane.isolation_id.as_ref().and_then(|id| {
-                workspace
-                    .isolations
-                    .iter()
-                    .find(|isolation| isolation.contract.id == *id)
-            });
-            let promotion = lane.isolation_id.as_ref().and_then(|id| {
-                workspace
-                    .promotions
-                    .iter()
-                    .find(|promotion| promotion.isolation_id == *id)
-            });
-            WorkflowCurrentWorkCollaborationLaneDetail {
-                lane_id: lane.lane_id.clone(),
-                state: current_work_collaboration_lane_state(
-                    lane,
-                    &integrated_lanes,
-                    &active_isolations,
-                    &blocked_isolations,
-                ),
-                owner: isolation.map(|isolation| {
-                    let claim_state = isolation.contract.claim_id.as_ref().map(|claim_id| {
-                        claims
-                            .iter()
-                            .find(|claim| claim.claim.id.0 == claim_id.0)
-                            .map_or(
-                                WorkflowCurrentWorkCollaborationClaimState::Missing,
-                                |claim| match claim.liveness {
-                                    ReplacementClaimLiveness::Live => {
-                                        WorkflowCurrentWorkCollaborationClaimState::Live
-                                    }
-                                    ReplacementClaimLiveness::Expired => {
-                                        WorkflowCurrentWorkCollaborationClaimState::Expired
-                                    }
-                                    ReplacementClaimLiveness::NonActive => {
-                                        WorkflowCurrentWorkCollaborationClaimState::NonActive
-                                    }
-                                },
-                            )
-                    });
-                    WorkflowCurrentWorkCollaborationOwnerDetail {
-                        isolation_id: isolation.contract.id.clone(),
-                        agent_id: isolation.contract.agent_id.clone(),
-                        branch_name: isolation.contract.branch_name.clone(),
-                        worktree_path: isolation.contract.worktree_path.clone(),
-                        isolation_status: isolation.contract.status,
-                        isolation_validation: match isolation.validation {
-                            super::promotion::ReplacementIsolationValidation::Valid => {
-                                WorkflowCurrentWorkCollaborationIsolationValidation::Valid
-                            }
-                            super::promotion::ReplacementIsolationValidation::ProposedNotCreated => {
-                                WorkflowCurrentWorkCollaborationIsolationValidation::ProposedNotCreated
-                            }
-                            super::promotion::ReplacementIsolationValidation::RetiredWorktreeAbsent => {
-                                WorkflowCurrentWorkCollaborationIsolationValidation::RetiredWorktreeAbsent
-                            }
-                            super::promotion::ReplacementIsolationValidation::Missing => {
-                                WorkflowCurrentWorkCollaborationIsolationValidation::Missing
-                            }
-                            super::promotion::ReplacementIsolationValidation::Mismatched => {
-                                WorkflowCurrentWorkCollaborationIsolationValidation::Mismatched
-                            }
-                        },
-                        claim_id: isolation.contract.claim_id.clone(),
-                        claim_state,
-                    }
-                }),
-                promotion_status: promotion.map(|promotion| match promotion.status {
-                    super::promotion::ReplacementPromotionStatus::NotStarted => {
-                        WorkflowCurrentWorkCollaborationPromotionState::NotStarted
-                    }
-                    super::promotion::ReplacementPromotionStatus::Recoverable => {
-                        WorkflowCurrentWorkCollaborationPromotionState::Recoverable
-                    }
-                    super::promotion::ReplacementPromotionStatus::Completed => {
-                        WorkflowCurrentWorkCollaborationPromotionState::Completed
-                    }
-                    super::promotion::ReplacementPromotionStatus::BlockedCorrupt => {
-                        WorkflowCurrentWorkCollaborationPromotionState::BlockedCorrupt
-                    }
-                }),
-                promotion_receipt_digest: promotion.and_then(|promotion| {
-                    (promotion.status == super::promotion::ReplacementPromotionStatus::Completed)
-                        .then(|| promotion.receipt_digest.clone())
-                        .flatten()
-                }),
-            }
-        })
-        .collect();
-    WorkflowCurrentWorkCollaborationDetail {
-        plan: plan.clone(),
-        lanes,
-    }
-}
-
 fn compact_current_work_summary_ref(value: Option<&str>) -> Option<String> {
     value
         .filter(|value| value.len() <= MAX_CURRENT_WORK_SUMMARY_TEXT_BYTES)
@@ -14129,7 +13790,7 @@ fn replacement_projection_digest(
     Ok(sha256_content_hash(&material))
 }
 
-fn linked_claim_liveness_gap_is_blocking(
+pub(super) fn linked_claim_liveness_gap_is_blocking(
     isolation_status: IsolationStatus,
     promotion_status: Option<super::promotion::ReplacementPromotionStatus>,
 ) -> bool {
@@ -16167,6 +15828,45 @@ mod tests {
             }],
             gaps: Vec::new(),
         };
+
+        // A completed promotion remains integrated even with a stale or missing claim.
+        for (claim_kind, expected) in [
+            (0, WorkflowCurrentWorkCollaborationLaneState::Active),
+            (1, WorkflowCurrentWorkCollaborationLaneState::Blocked),
+            (2, WorkflowCurrentWorkCollaborationLaneState::Blocked),
+            (3, WorkflowCurrentWorkCollaborationLaneState::Blocked),
+            (4, WorkflowCurrentWorkCollaborationLaneState::Blocked),
+        ] {
+            let mut observed_claims = claims.clone();
+            match claim_kind {
+                1 => observed_claims.clear(),
+                2 => observed_claims[0].liveness = ReplacementClaimLiveness::Expired,
+                3 => observed_claims[0].liveness = ReplacementClaimLiveness::NonActive,
+                4 => {
+                    observed_claims[0].claim.claim.claimant_agent_id =
+                        StableId("agent.other".to_owned())
+                }
+                _ => {}
+            }
+            let detail = current_work_collaboration_detail_from_existing_state(
+                &plan,
+                &observed_claims,
+                &workspace,
+            );
+            assert_eq!(detail.lanes[0].state, expected, "claim kind {claim_kind}");
+            let mut integrated_workspace = workspace.clone();
+            integrated_workspace.promotions[0].status =
+                super::super::promotion::ReplacementPromotionStatus::Completed;
+            let integrated = current_work_collaboration_detail_from_existing_state(
+                &plan,
+                &observed_claims,
+                &integrated_workspace,
+            );
+            assert_eq!(
+                integrated.lanes[0].state,
+                WorkflowCurrentWorkCollaborationLaneState::Integrated
+            );
+        }
 
         let detail =
             current_work_collaboration_detail_from_existing_state(&plan, &claims, &workspace);
