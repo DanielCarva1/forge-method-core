@@ -39,7 +39,14 @@ against using a frontend framework when component complexity warrants it.
 - Preview content must never share privileged application IPC access.
 - The approved C direction uses lavender, deep plum, coral and editorial art.
   This shell establishes layout and typography, not the final illustration assets.
-  The small solid application icon is a development placeholder, not brand artwork.
+  The application icon uses approved direction C: coral/lavender petals on a plum
+  rounded tile. `src-tauri/icons/source.png` is the retained raster master;
+  `src-tauri/icons/export.ps1` exports the PNG and multi-resolution Windows ICO
+  (16, 20, 24, 32, 48, 64, 128 and 256 pixels) using Windows System.Drawing.
+  The built-in image tool produced the isolated asset from the approved C board,
+  then removed the baked checkerboard to obtain actual alpha transparency.
+  Prompt intent: preserve direction C, isolate one icon, no wordmark or labels,
+  transparent corners. This icon change does not publish an installer.
 - Responsive styling does not establish mobile agent execution or remote access.
 - Documentation is English; the initial user-facing UI is Portuguese.
 
