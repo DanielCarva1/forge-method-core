@@ -67,14 +67,65 @@ const assert = require('node:assert/strict');
       await assert.rejects(access(path.join(profile, '.forge-method.yaml')), { code: 'ENOENT' });
       await assert.rejects(access(path.join(profile, '.forge-method')), { code: 'ENOENT' });
       console.log('PASS: real Forge project resolution, invalid folder, unlinked folder, stale identity hidden.');
+      if (process.env.FORGE_TEST_AGENT === '1') {
+        await field.fill(process.env.FORGE_TEST_PROJECT);
+        await submit.click();
+        await page.locator('#project-status').filter({ hasText: 'Projeto encontrado' }).waitFor({ timeout: 15000 });
+        await page.evaluate(() => {
+          window.forgeDeltaCount = 0;
+          const NativeChannel = window.__TAURI__.core.Channel;
+          const ObservedChannel = class extends NativeChannel {
+            set onmessage(callback) { super.onmessage = event => { if (event.kind === 'delta') window.forgeDeltaCount++; callback(event); }; }
+            get onmessage() { return super.onmessage; }
+          };
+          window.__TAURI__ = { ...window.__TAURI__, core: { ...window.__TAURI__.core, Channel: ObservedChannel } };
+        });
+        await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+        await page.locator('#agent-status').filter({ hasText: 'Codex conectado ao projeto' }).waitFor({ timeout: 100000 });
+        assert.equal(await field.isDisabled(), true);
+        const composer = page.getByRole('textbox', { name: 'Conte sua ideia' });
+        await composer.fill('Esta é uma verificação somente de leitura. Não altere arquivos nem registros de estado, não publique nada, não instale nada. Consulte forge-core project resolve --root . --json para confirmar o projeto e leia apps/desktop/README.md. Em até 5 frases em português, explique quais capacidades do app estão documentadas e o que ainda falta. Não faça implementação.');
+        await page.getByRole('button', { name: 'Enviar', exact: true }).click();
+        try {
+          await page.waitForFunction(() => /Resposta recebida|Atualize o Codex|execução falhou|conexão foi encerrada/.test(document.getElementById('agent-status').textContent), { }, { timeout: 180000 });
+          assert.match(await page.locator('#agent-status').textContent(), /Resposta recebida/);
+        } catch (error) {
+          console.error('Native conversation status:', await page.locator('#agent-status').textContent());
+          console.error('Streamed message events:', await page.evaluate(() => window.forgeDeltaCount));
+          throw error;
+        }
+        assert.ok(await page.evaluate(() => window.forgeDeltaCount > 0));
+        assert.ok((await page.locator('#messages').textContent()).includes('Codex'));
+        await composer.fill('Sem usar ferramentas, escreva uma lista de 1000 exemplos de nomes de projetos, um por linha. Este pedido será interrompido para testar o botão.');
+        await page.getByRole('button', { name: 'Enviar', exact: true }).click();
+        const interrupt = page.getByRole('button', { name: 'Interromper', exact: true });
+        await page.waitForFunction(() => !document.getElementById('interrupt-agent').disabled);
+        await interrupt.click();
+        await page.locator('#agent-status').filter({ hasText: 'Interrompido.' }).waitFor({ timeout: 30000 });
+        await composer.fill('Sem ferramentas, responda apenas: Podemos continuar.');
+        await page.getByRole('button', { name: 'Enviar', exact: true }).click();
+        await page.locator('#agent-status').filter({ hasText: 'Resposta recebida' }).waitFor({ timeout: 90000 });
+        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor({ timeout: 10000 });
+        assert.equal(await field.isDisabled(), false);
+        console.log('PASS: actual ChatGPT-authenticated Codex response, streamed deltas, interruption, subsequent turn and disconnect.');
+      } else { console.log('NOT_RUN: actual Codex conversation (FORGE_TEST_AGENT not set).'); }
     } else {
       console.log('NOT_RUN: real project resolution (FORGE_TEST_PROJECT not set).');
     }
     if (process.env.FORGE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_SCREENSHOT, fullPage: true });
-    console.log('PASS: real native window, frontend-to-Rust identity and retry; agent connection remains absent.');
+    console.log('PASS: real native window, frontend-to-Rust identity and retry.');
   } finally {
     try {
-      if (browser) await browser.close();
+      if (browser) {
+        try {
+          const page = browser.contexts()[0]?.pages()[0];
+          if (page) await page.evaluate(() => Promise.race([
+            window.__TAURI__?.core?.invoke('disconnect_agent').catch(() => {}),
+            new Promise(resolve => setTimeout(resolve, 5000)),
+          ]));
+        } finally { await browser.close(); }
+      }
     } finally {
       try {
         if (child.pid && child.exitCode === null && child.signalCode === null) {

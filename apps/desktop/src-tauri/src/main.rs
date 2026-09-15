@@ -1,6 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod agent;
+mod codex_transport;
 mod project;
+use tauri::Manager;
 
 #[derive(serde::Serialize)]
 struct AppInfo {
@@ -19,7 +22,28 @@ fn app_info() -> AppInfo {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_info, project::inspect_project])
+        .manage(agent::AgentState::default())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                if !agent::begin_close(&window.state::<agent::AgentState>()) {
+                    return;
+                }
+                let window = window.clone();
+                tauri::async_runtime::spawn(async move {
+                    agent::shutdown(&window.state::<agent::AgentState>()).await;
+                    let _ = window.destroy();
+                });
+            }
+        })
+        .invoke_handler(tauri::generate_handler![
+            app_info,
+            project::inspect_project,
+            agent::connect_agent,
+            agent::send_message,
+            agent::interrupt_agent,
+            agent::disconnect_agent
+        ])
         .run(tauri::generate_context!())
         .expect("failed to run the Forge desktop application");
 }

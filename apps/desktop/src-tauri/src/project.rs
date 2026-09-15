@@ -21,8 +21,8 @@ struct ResolvedProject {
 
 #[derive(Serialize)]
 pub struct ProjectSummary {
-    project_id: String,
-    project_root: String,
+    pub project_id: String,
+    pub project_root: String,
 }
 
 fn installed_runtime() -> Result<PathBuf, &'static str> {

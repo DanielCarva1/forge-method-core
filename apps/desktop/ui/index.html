@@ -31,7 +31,7 @@
       </div>
     </section>
     <section id="connection" class="connection" aria-labelledby="connection-title">
-      <div><p class="eyebrow">ESTRUTURA INICIAL · EM DESENVOLVIMENTO</p><h2 id="connection-title">Um aplicativo do Forge</h2><p id="native-status" role="status" aria-live="polite">Verificando o aplicativo…</p><p>Nenhum agente conectado. Por enquanto, você pode conferir um projeto existente abaixo.</p></div>
+      <div><p class="eyebrow">ESTRUTURA INICIAL · EM DESENVOLVIMENTO</p><h2 id="connection-title">Um aplicativo do Forge</h2><p id="native-status" role="status" aria-live="polite">Verificando o aplicativo…</p><p>Confira seu projeto abaixo para conversar com seu agente.</p></div>
       <button id="retry" type="button" disabled>Verificar novamente</button>
     </section>
     <section class="project" aria-labelledby="project-title">
@@ -44,7 +44,19 @@
         <button id="inspect-project" type="submit">Conferir projeto</button>
       </form>
       <p id="project-status" role="status" aria-live="polite"></p>
-      <div id="project-result" hidden><h3 id="project-name"></h3><p id="confirmed-root"></p><p>Projeto identificado. A conversa com o agente ainda não está disponível nesta versão.</p></div>
+      <div id="project-result" hidden><h3 id="project-name"></h3><p id="confirmed-root"></p><p>Projeto identificado. Confira o caminho antes de conectar o agente.</p></div>
+    </section>
+    <section class="project" aria-labelledby="chat-title">
+      <h2 id="chat-title">Vamos criar juntos</h2>
+      <p id="agent-status" role="status" aria-live="polite">Nenhum agente conectado. Confira um projeto para começar.</p>
+      <p>O Codex usa seu login existente e pode alterar arquivos ao executar suas tarefas. Nesta versão, desconectar inicia outra conversa; a retomada pela tela ainda está em desenvolvimento.</p>
+      <div class="chat-actions"><button id="connect-agent" disabled>Conectar Codex</button><button id="disconnect-agent" disabled>Desconectar</button></div>
+      <div id="messages" aria-label="Conversa"></div>
+      <form id="message-form">
+        <label for="message-text">Conte sua ideia ou peça uma mudança</label>
+        <textarea id="message-text" rows="3" required disabled></textarea>
+        <div class="chat-actions"><button id="send-message" disabled>Enviar</button><button id="interrupt-agent" type="button" disabled>Interromper</button></div>
+      </form>
     </section>
   </main>
   <footer>Forge · Ideias com espaço para crescer.</footer>

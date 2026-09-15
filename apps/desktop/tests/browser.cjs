@@ -10,6 +10,7 @@ const assets = new Map([
   ['/styles.css', ['styles.css', 'text/css']],
   ['/main.mjs', ['main.mjs', 'text/javascript']],
   ['/connection.mjs', ['connection.mjs', 'text/javascript']],
+  ['/chat.mjs', ['chat.mjs', 'text/javascript']],
 ]);
 
 (async () => {
@@ -49,6 +50,69 @@ const assets = new Map([
     await page.getByText('Nenhum agente conectado.', { exact: false }).waitFor();
     await page.emulateMedia({ colorScheme: 'dark' });
     assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme), 'dark');
+    // Controlled protocol double: exercise UI ordering, not real authentication.
+    await page.evaluate(() => {
+      window.sendCalls = 0; window.disconnectCalls = 0;
+      window.__TAURI__.core.Channel = class {};
+      window.__TAURI__.core.invoke = async (command, args) => {
+        if (command === 'inspect_project') return { project_id: 'test-project', project_root: 'D:\\test-project' };
+        if (command === 'connect_agent') { window.agentEvents = args.events; return 'test-thread'; }
+        if (command === 'send_message') {
+          window.sendCalls++;
+          return new Promise((resolve, reject) => { window.resolveSend = resolve; window.rejectSend = reject; });
+        }
+        if (command === 'disconnect_agent') {
+          window.disconnectCalls++;
+          if (window.delayDisconnect) return new Promise(resolve => { window.resolveDisconnect = resolve; });
+        }
+      };
+    });
+    await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\test-project');
+    await page.getByRole('button', { name: 'Conferir projeto' }).click();
+    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor();
+    const composer = page.getByRole('textbox', { name: 'Conte sua ideia' });
+    await composer.fill('🎨'.repeat(17000));
+    await page.getByRole('button', { name: 'Enviar', exact: true }).click();
+    assert.equal(await page.evaluate(() => window.sendCalls), 0);
+    assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isEnabled(), true);
+    await composer.fill('First message');
+    await page.getByRole('button', { name: 'Enviar', exact: true }).click();
+    await page.evaluate(() => window.agentEvents.onmessage({ kind: 'completed' }));
+    await composer.fill('Keep this new draft');
+    await page.evaluate(() => window.resolveSend({}));
+    assert.equal(await composer.inputValue(), 'Keep this new draft');
+    await page.evaluate(() => { window.delayDisconnect = true; });
+    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await page.evaluate(() => window.agentEvents.onmessage({ kind: 'running' }));
+    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true);
+    assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isDisabled(), true);
+    await page.evaluate(() => window.resolveDisconnect());
+    await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
+    await page.evaluate(() => { window.delayDisconnect = false; });
+    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await composer.fill('Rejected request');
+    await page.getByRole('button', { name: 'Enviar', exact: true }).click();
+    await page.evaluate(() => window.rejectSend('Test rejection'));
+    await page.locator('#agent-status').filter({ hasText: 'Test rejection' }).waitFor();
+    assert.equal(await page.evaluate(() => window.disconnectCalls), 2);
+    assert.equal(await page.getByRole('button', { name: 'Conectar Codex', exact: true }).isEnabled(), true);
+    await page.evaluate(() => {
+      const invoke = window.__TAURI__.core.invoke;
+      window.__TAURI__.core.invoke = async (command, args) => {
+        if (command === 'connect_agent') {
+          args.events.onmessage({ kind: 'disconnected' });
+          return 'already-ended-thread';
+        }
+        return invoke(command, args);
+      };
+    });
+    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await page.locator('#agent-status').filter({ hasText: 'A conexão foi encerrada' }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true);
+    assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isEnabled(), true);
+    console.log('PASS: disconnect-before-connect-ack never enables sending.');
+    console.log('PASS: oversized Unicode remains recoverable, completion-before-ack preserves draft, pending disconnect locks controls, send rejection releases session.');
     console.log('PASS: desktop/mobile overflow, mobile text, retry, keyboard entry, dark theme, honest agent status. Native IPC NOT_RUN.');
   } finally {
     if (browser) await browser.close();

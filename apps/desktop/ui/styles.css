@@ -42,6 +42,10 @@ footer { color: var(--muted); padding-block: 8px 32px; font-size: .85rem; }
 .project input { min-width: 0; width: 100%; min-height: 48px; padding: 12px; border: 1px solid var(--muted); border-radius: 12px; background: var(--canvas); color: var(--ink); }
 .project button { justify-self: start; }
 .project p { overflow-wrap: anywhere; }
+.chat-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-block: 16px; }
+textarea { width: 100%; min-width: 0; resize: vertical; font: inherit; color: var(--ink); background: var(--canvas); border: 1px solid var(--muted); border-radius: 12px; padding: 12px; }
+#messages { display: grid; gap: 16px; margin-block: 24px; }
+#messages p { white-space: pre-wrap; }
 .skip { position: absolute; left: 16px; top: -100px; padding: 12px; background: var(--surface); z-index: 1; }
 .skip:focus { top: 8px; }
 @media (max-width: 700px) {
