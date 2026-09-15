@@ -49,7 +49,7 @@ against using a frontend framework when component complexity warrants it.
   `%LOCALAPPDATA%/Programs/forge-core/bin/forge-core.exe`. Host configuration can
   override it with an absolute `FORGE_CORE_EXE`; the webview cannot choose commands
   or executables. No PATH search occurs inside the selected project.
-- Resolution has a 10-second timeout and 64 KiB output limit, hides the subprocess
+- Each CLI query has a 15-second timeout and 64 KiB output limit, hides the subprocess
   console, terminates unfinished child processes, and does not expose stderr.
 - No shell/filesystem plugins, network listener, credentials or project database.
 - Forge retains project-state ownership; Codex retains conversation history.
@@ -126,3 +126,26 @@ agent execution is explicitly NOT_RUN. Browser doubles test event-ordering and
 error recovery only, never authentication or actual agent behavior.
 
 Protocol reference: https://developers.openai.com/codex/app-server/
+
+## Recorded work (#86)
+
+The manual Last Forge Record panel calls `inspect_progress`, resolving project
+identity before a bounded `workflow resume` query. It reuses the existing CLI
+query boundary: 15 seconds and 64 KiB per command, hidden child and cleanup.
+Two sequential commands mean at most two query timeouts; there is no interval,
+background resume refresh or new project-state store. `workflow report` is not
+cheaper: it calls the same backend resume observer. The observer captures project
+state, so automatic refresh on every conversation event is deliberately avoided.
+
+The adapter validates project identity, summary/context versions and read-only
+authority before exposing a narrow work record. Unknown versions fail visibly
+rather than inventing compatibility. The observed v10 summary can contain an
+old accepted focus marked current; therefore the UI labels it recorded work,
+not live progress, and labels its timestamp as retrieval time. It reports open
+decision count without pretending to provide a decision form. Backend strings
+are rendered as plain text, not translated or interpreted as instructions.
+
+Project changes and agent turn/disconnection events invalidate displayed or
+pending readbacks. Failures hide earlier results but never disable conversation.
+Full workflow stage/decision interaction remains separate work. Package release
+scope and readiness are tracked in GitHub issue #97, not per-commit version bumps.

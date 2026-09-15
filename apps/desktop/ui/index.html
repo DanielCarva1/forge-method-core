@@ -50,6 +50,18 @@
           <button id="retry" type="button" disabled>Verificar novamente</button>
           <p class="hint">O Codex usa seu login existente e pode alterar arquivos. Nesta versão, reconectar começa outra conversa. A retomada pela tela ainda está em desenvolvimento.</p>
         </details>
+        <section class="record" aria-labelledby="record-heading">
+          <h3 id="record-heading">Último registro do Forge</h3>
+          <p class="hint">O que ficou registrado sobre o trabalho. Não é uma transmissão ao vivo do agente.</p>
+          <button id="refresh-progress" type="button" disabled>Consultar registro</button>
+          <p id="progress-status" role="status" aria-live="polite" tabindex="-1">Confira um projeto antes de consultar seus registros.</p>
+          <div id="progress-result" hidden>
+            <h4 id="record-title"></h4>
+            <p><strong>Atividade registrada</strong></p><p id="record-activity"></p>
+            <p><strong>Próximo passo registrado</strong></p><p id="record-next"></p>
+            <p id="record-decisions"></p>
+          </div>
+        </section>
       </aside>
       <section class="conversation panel" aria-labelledby="chat-title">
         <div class="conversation-heading"><div><p class="eyebrow">UMA CONVERSA, MUITAS POSSIBILIDADES</p><h2 id="chat-title">Da ideia ao próximo passo</h2></div><span class="agent-badge">Agente · Codex</span></div>

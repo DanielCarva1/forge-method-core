@@ -44,6 +44,7 @@ input:disabled, textarea:disabled { background: var(--canvas); }
 #confirmed-root { font-family: ui-monospace, monospace; }
 summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 650; }
 .connection { margin-top: 24px; border-top: 1px solid var(--line); }
+.record { margin-top: 24px; border-top: 1px solid var(--line); }
 .conversation-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .agent-badge { padding: 6px 14px; border-radius: 30px; background: var(--soft); }
 .chat-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-block: 16px; }

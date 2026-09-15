@@ -2,6 +2,7 @@
 
 mod agent;
 mod codex_transport;
+mod progress;
 mod project;
 use tauri::Manager;
 
@@ -39,6 +40,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             app_info,
             project::inspect_project,
+            progress::inspect_progress,
             agent::connect_agent,
             agent::send_message,
             agent::interrupt_agent,

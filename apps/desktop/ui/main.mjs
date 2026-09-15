@@ -1,5 +1,6 @@
 import { readAppInfo } from './connection.mjs';
 import { setProject } from './chat.mjs';
+import { setProgressProject } from './progress.mjs';
 
 const status = document.querySelector('#native-status');
 const retry = document.querySelector('#retry');
@@ -24,6 +25,7 @@ const resultPanel = document.querySelector('#project-result');
 const projectRoot = document.querySelector('#project-root');
 projectRoot.addEventListener('input', () => {
   setProject(null);
+  setProgressProject(null);
   resultPanel.hidden = true;
   projectStatus.textContent = '';
 });
@@ -32,6 +34,7 @@ form.addEventListener('submit', async event => {
   if (inspect.disabled) return;
   inspect.disabled = true;
   setProject(null);
+  setProgressProject(null);
   projectRoot.disabled = true;
   resultPanel.hidden = true;
   projectStatus.textContent = 'Conferindo o projeto…';
@@ -45,6 +48,7 @@ form.addEventListener('submit', async event => {
     document.querySelector('#confirmed-root').textContent = project.project_root;
     resultPanel.hidden = false;
     setProject(project);
+    setProgressProject(project);
     projectStatus.textContent = 'Projeto encontrado. Confira se esta é a pasta que você quer usar.';
   } catch (error) {
     projectStatus.textContent = typeof error === 'string' ? error : 'Não foi possível conferir o projeto. Tente novamente.';

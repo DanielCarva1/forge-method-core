@@ -1,3 +1,4 @@
+import { invalidateProgress } from './progress.mjs';
 const byId = id => document.getElementById(id);
 const status = byId('agent-status');
 const connect = byId('connect-agent');
@@ -61,6 +62,7 @@ function message(id, role, text, append = false) {
 }
 
 function receive(event) {
+  if (['running', 'completed', 'interrupted', 'failed', 'disconnected'].includes(event.kind)) invalidateProgress();
   if (event.kind === 'delta' || event.kind === 'message') {
     message(event.id, 'Codex', event.text, event.kind === 'delta');
     return;

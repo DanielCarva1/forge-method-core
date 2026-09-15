@@ -13,6 +13,7 @@ const assets = new Map([
   ['/chat.mjs', ['chat.mjs', 'text/javascript']],
   ['/assets/forge.png', ['assets/forge.png', 'image/png']],
   ['/appearance.js', ['appearance.js', 'text/javascript']],
+  ['/progress.mjs', ['progress.mjs', 'text/javascript']],
 ]);
 
 (async () => {
@@ -70,6 +71,12 @@ const assets = new Map([
       window.sendCalls = 0; window.disconnectCalls = 0;
       window.__TAURI__.core.Channel = class {};
       window.__TAURI__.core.invoke = async (command, args) => {
+        if (command === 'inspect_progress') {
+          window.progressCalls = (window.progressCalls || 0) + 1;
+          if (window.delayProgress) return new Promise(resolve => { window.resolveProgress = resolve; });
+          if (window.progressFailure) throw new Error('Unavailable');
+          return { status: window.progressState || 'current', focus: { title: 'Recorded task', current_activity: 'Recorded activity', next_step: 'Recorded next step', open_decision_count: 1 } };
+        }
         if (command === 'inspect_project') return { project_id: 'test-project', project_root: 'D:\\test-project' };
         if (command === 'connect_agent') { window.agentEvents = args.events; return 'test-thread'; }
         if (command === 'send_message') {
@@ -84,6 +91,27 @@ const assets = new Map([
     });
     await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\test-project');
     await page.getByRole('button', { name: 'Conferir projeto' }).click();
+    assert.equal(await page.evaluate(() => window.progressCalls || 0), 0);
+    for (const state of ['current', 'stale', 'blocked', 'completed', 'abandoned', 'absent']) {
+      await page.evaluate(state => { window.progressState = state; }, state);
+      await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+      await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
+      assert.equal(await page.locator('#progress-result').isVisible(), state !== 'absent');
+    }
+    await page.evaluate(() => { window.progressFailure = true; });
+    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+    await page.locator('#progress-status').filter({ hasText: 'Não foi possível consultar' }).waitFor();
+    assert.equal(await page.locator('#progress-result').isVisible(), false);
+    await page.evaluate(() => { window.progressFailure = false; window.progressState = 'current'; });
+    await page.evaluate(() => { window.delayProgress = true; });
+    await page.getByRole('button', { name: 'Consultar registro', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'progress-status');
+    await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\another-project');
+    await page.evaluate(() => { window.resolveProgress({ status: 'current', focus: { title: 'Obsolete response' } }); window.delayProgress = false; });
+    assert.equal(await page.locator('#progress-result').isVisible(), false);
+    await page.getByRole('button', { name: 'Conferir projeto' }).click();
+    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
     await page.getByRole('button', { name: 'Conectar Codex', exact: true }).focus();
     await page.keyboard.press('Enter');
     await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor();
@@ -91,8 +119,13 @@ const assets = new Map([
     assert.equal(await page.evaluate(() => document.activeElement.id), 'message-text');
     await page.keyboard.press('Shift+Tab');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'disconnect-agent');
+    await page.evaluate(() => { window.delayProgress = true; });
+    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+    await page.evaluate(() => { window.agentEvents.onmessage({ kind: 'running' }); window.resolveProgress({ status: 'current', focus: { title: 'Obsolete response' } }); window.delayProgress = false; });
+    assert.equal(await page.locator('#progress-result').isVisible(), false);
     for (const [kind, state] of [['running', 'working'], ['completed', 'completed'], ['interrupted', 'interrupted'], ['failed', 'error']]) {
       await page.evaluate(kind => window.agentEvents.onmessage({ kind }), kind);
+      assert.equal(await page.locator('#progress-result').isVisible(), false);
       assert.equal(await page.locator('#agent-status').getAttribute('data-state'), state);
       assert.equal(await page.locator('#agent-status .status-icon').getAttribute('aria-hidden'), 'true');
       assert.ok((await page.locator('#agent-status span:last-child').textContent()).length > 15);
@@ -155,7 +188,8 @@ const assets = new Map([
     for (const width of [390, 1180]) {
       await page.setViewportSize({ width, height: 844 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-      assert.equal(await page.locator('button, input, textarea').evaluateAll(nodes => nodes.filter(n => n.getClientRects().length).every(n => n.scrollWidth <= n.clientWidth + 2 && n.scrollHeight <= n.clientHeight + 2)), true);
+      // Single-line paths scroll within their field by design; button labels must not clip.
+      assert.equal(await page.locator('button, input, textarea').evaluateAll(nodes => nodes.filter(n => n.getClientRects().length).every(n => (n.tagName === 'INPUT' || n.scrollWidth <= n.clientWidth + 2) && n.scrollHeight <= n.clientHeight + 2)), true);
     }
     await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
     await page.emulateMedia({ forcedColors: 'active' });

@@ -53,6 +53,9 @@ const assert = require('node:assert/strict');
       await page.locator('#project-status').filter({ hasText: 'Projeto encontrado' }).waitFor({ timeout: 15000 });
       assert.equal(await page.locator('#confirmed-root').textContent(), process.env.FORGE_TEST_PROJECT);
       assert.ok((await page.locator('#project-name').textContent()).length > 0);
+      await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+      await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 35000 });
+      console.log('PASS: actual bounded Forge workflow readback displayed separately from agent activity.');
       // A failed lookup must hide the preceding project's identity.
       await field.fill(path.join(profile, 'missing-folder'));
       assert.equal(await page.locator('#project-result').isVisible(), false);
@@ -63,7 +66,7 @@ const assert = require('node:assert/strict');
       // Existing but unlinked folder: do not initialize or repair it silently.
       await field.fill(profile);
       await submit.click();
-      await page.locator('#project-status').filter({ hasText: 'Não foi possível identificar' }).waitFor({ timeout: 15000 });
+      await page.locator('#project-status').filter({ hasText: 'Não foi possível consultar' }).waitFor({ timeout: 20000 });
       assert.equal(await page.locator('#project-result').isVisible(), false);
       await assert.rejects(access(path.join(profile, '.forge-method.yaml')), { code: 'ENOENT' });
       await assert.rejects(access(path.join(profile, '.forge-method')), { code: 'ENOENT' });
