@@ -59,5 +59,7 @@ value before styles are loaded to avoid a mismatched initial theme. This is a
 device UI preference, not project state or history. OS theme changes apply only
 in System mode; OS increased contrast and forced colors remain respected.
 Storage errors leave the UI usable and produce an explicit unsaved notice.
-No animation is introduced. Complete status-icon and keyboard-order auditing
-remain open; this does not close all #84 criteria or establish conformance.
+No animation is introduced. Status icons supplement readable text without
+claiming workflow completion. Focused tests cover initial keyboard traversal,
+connected controls, long-conversation focus visibility and reduced motion.
+This does not establish screen-reader certification or a published user release.

@@ -16,7 +16,22 @@ let channel;
 const items = new Map();
 const invoke = (command, args) => globalThis.__TAURI__.core.invoke(command, args);
 
+// Icons supplement readable text; these are connection/turn states, not workflow progress.
+const statusIcons = { idle: '○', working: '◷', connected: '↔', completed: '✓', interrupted: 'Ⅱ', error: '!', disconnected: '○' };
+function showStatus(text, kind = 'idle') {
+  const icon = document.createElement('span');
+  icon.className = 'status-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = statusIcons[kind] ?? statusIcons.idle;
+  const label = document.createElement('span');
+  label.textContent = text;
+  status.replaceChildren(icon, label);
+  status.dataset.state = kind;
+}
+showStatus(status.textContent);
+
 function controls() {
+  const focused = document.activeElement;
   connect.disabled = transitioning || connected || !project;
   disconnect.disabled = transitioning || !connected;
   send.disabled = transitioning || !connected || busy || broken;
@@ -24,6 +39,7 @@ function controls() {
   stop.disabled = transitioning || !connected || !busy || broken;
   byId('project-root').disabled = transitioning || connected;
   byId('inspect-project').disabled = transitioning || connected;
+  if (focused?.disabled) status.focus();
 }
 
 export function setProject(value) {
@@ -58,7 +74,10 @@ function receive(event) {
     disconnected: 'A conexão foi encerrada. Confira o que já foi feito antes de reconectar.',
     interaction_required: 'O Codex pediu uma interação que esta tela ainda não oferece. Nada foi aprovado automaticamente.',
   };
-  if (labels[event.kind] && !transitioning) status.textContent = labels[event.kind];
+  if (labels[event.kind] && !transitioning) {
+    const kind = { running: 'working', activity: 'working', completed: 'completed', interrupted: 'interrupted', failed: 'error', update_required: 'error', disconnected: 'disconnected', interaction_required: 'error' }[event.kind];
+    showStatus(labels[event.kind], kind);
+  }
   if (event.kind === 'running') busy = true;
   if (['completed', 'interrupted', 'failed', 'disconnected', 'update_required'].includes(event.kind)) busy = false;
   // Keep disconnect available after a connection failure to release the native session.
@@ -69,7 +88,7 @@ function receive(event) {
 connect.addEventListener('click', async () => {
   const current = ++generation;
   transitioning = true; broken = false; controls();
-  status.textContent = 'Conectando ao Codex com seu login…';
+  showStatus('Conectando ao Codex com seu login…', 'working');
   try {
     channel = new globalThis.__TAURI__.core.Channel();
     channel.onmessage = event => { if (current === generation) receive(event); };
@@ -77,10 +96,10 @@ connect.addEventListener('click', async () => {
     if (current !== generation) return;
     connected = true; busy = false;
     messages.replaceChildren(); items.clear();
-    status.textContent = broken
+    showStatus(broken
       ? 'A conexão foi encerrada. Desconecte antes de tentar novamente.'
-      : `Codex conectado ao projeto ${project.project_id}. Pode mandar sua ideia.`;
-  } catch (error) { if (current !== generation) return; ++generation; status.textContent = typeof error === 'string' ? error : 'Não foi possível conectar ao Codex.'; }
+      : `Codex conectado ao projeto ${project.project_id}. Pode mandar sua ideia.`, broken ? 'disconnected' : 'connected');
+  } catch (error) { if (current !== generation) return; ++generation; showStatus(typeof error === 'string' ? error : 'Não foi possível conectar ao Codex.', 'error'); }
   transitioning = false;
   controls();
 });
@@ -90,13 +109,13 @@ byId('message-form').addEventListener('submit', async event => {
   if (!connected || busy || transitioning || broken || !input.value.trim()) return;
   const text = input.value;
   if (new TextEncoder().encode(text).length > 64000) {
-    status.textContent = 'A mensagem está muito longa. Divida em partes menores; sua conexão continua ativa.';
+    showStatus('A mensagem está muito longa. Divida em partes menores; sua conexão continua ativa.', 'error');
     return;
   }
   const current = generation;
   input.value = '';
   busy = true; controls(); stop.disabled = true;
-  status.textContent = 'Enviando sua mensagem…';
+  showStatus('Enviando sua mensagem…', 'working');
   const id = `user-${Date.now()}`;
   message(id, 'Você', text);
   try {
@@ -110,29 +129,31 @@ byId('message-form').addEventListener('submit', async event => {
     if (current !== generation) return;
     busy = false; connected = broken; transitioning = false; ++generation;
     if (!input.value) input.value = text;
-    status.textContent = `${typeof error === 'string' ? error : 'Falha ao enviar.'} Confira possíveis efeitos antes de reconectar.`;
+    showStatus(`${typeof error === 'string' ? error : 'Falha ao enviar.'} Confira possíveis efeitos antes de reconectar.`, 'error');
     controls();
   }
 });
 
 stop.addEventListener('click', async () => {
   const current = generation;
+  const hadFocus = document.activeElement === stop;
   stop.disabled = true;
-  status.textContent = 'Pedindo ao Codex para interromper…';
+  if (hadFocus) status.focus();
+  showStatus('Pedindo ao Codex para interromper…', 'working');
   try { await invoke('interrupt_agent'); }
-  catch (error) { if (current !== generation || !busy) return; status.textContent = typeof error === 'string' ? error : 'Não foi possível interromper.'; controls(); }
+  catch (error) { if (current !== generation || !busy) return; showStatus(typeof error === 'string' ? error : 'Não foi possível interromper.', 'error'); controls(); }
 });
 
 disconnect.addEventListener('click', async () => {
   const current = ++generation;
   transitioning = true; controls();
-  status.textContent = 'Desconectando…';
+  showStatus('Desconectando…', 'working');
   try {
     await invoke('disconnect_agent');
     if (current !== generation) return;
     connected = false; busy = false; broken = false; channel = null;
-    status.textContent = 'Desconectado. As alterações já feitas no projeto permanecem.';
-  } catch { if (current !== generation) return; status.textContent = 'Não foi possível desconectar. Tente novamente.'; }
+    showStatus('Desconectado. As alterações já feitas no projeto permanecem.', 'disconnected');
+  } catch { if (current !== generation) return; showStatus('Não foi possível desconectar. Tente novamente.', 'error'); }
   transitioning = false;
   controls();
 });

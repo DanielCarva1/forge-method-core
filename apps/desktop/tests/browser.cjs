@@ -30,6 +30,16 @@ const assets = new Map([
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
     const url = `http://127.0.0.1:${server.address().port}`;
+    const keyboardPage = await browser.newPage();
+    await keyboardPage.goto(url);
+    for (const selector of ['.skip', '.brand', 'nav a:first-child', 'nav a:last-child', '.appearance summary', '#appearance-theme', '#appearance-contrast', '#project-root', '#inspect-project', '#connection summary', '#retry', '#about summary']) {
+      await keyboardPage.keyboard.press('Tab');
+      assert.equal(await keyboardPage.locator(selector).evaluate(node => node === document.activeElement), true, `Keyboard order: ${selector}`);
+      assert.ok(await keyboardPage.locator(selector).evaluate(node => parseFloat(getComputedStyle(node).outlineWidth) >= 3), `Visible focus: ${selector}`);
+      if (selector === '.appearance summary' || selector === '#connection summary') await keyboardPage.keyboard.press('Enter');
+    }
+    await keyboardPage.close();
+    console.log('PASS: keyboard traversal of all initially available controls, disclosures and visible focus.');
     for (const width of [390, 1180]) {
       await page.setViewportSize({ width, height: 844 });
       await page.goto(url);
@@ -74,21 +84,44 @@ const assets = new Map([
     });
     await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\test-project');
     await page.getByRole('button', { name: 'Conferir projeto' }).click();
-    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).focus();
+    await page.keyboard.press('Enter');
     await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor();
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'message-text');
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'disconnect-agent');
+    for (const [kind, state] of [['running', 'working'], ['completed', 'completed'], ['interrupted', 'interrupted'], ['failed', 'error']]) {
+      await page.evaluate(kind => window.agentEvents.onmessage({ kind }), kind);
+      assert.equal(await page.locator('#agent-status').getAttribute('data-state'), state);
+      assert.equal(await page.locator('#agent-status .status-icon').getAttribute('aria-hidden'), 'true');
+      assert.ok((await page.locator('#agent-status span:last-child').textContent()).length > 15);
+    }
     const composer = page.getByRole('textbox', { name: 'Conte sua ideia' });
     await composer.fill('🎨'.repeat(17000));
     await page.getByRole('button', { name: 'Enviar', exact: true }).click();
     assert.equal(await page.evaluate(() => window.sendCalls), 0);
     assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isEnabled(), true);
     await composer.fill('First message');
-    await page.getByRole('button', { name: 'Enviar', exact: true }).click();
+    await page.evaluate(() => window.agentEvents.onmessage({ kind: 'message', id: 'long-response', text: 'A long conversation line.\n'.repeat(100) }));
+    await composer.focus();
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'send-message');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'agent-status');
+    assert.equal(await page.locator('#agent-status').evaluate(node => { const box = node.getBoundingClientRect(); return box.bottom > 0 && box.top < innerHeight; }), true);
+    await page.evaluate(() => window.agentEvents.onmessage({ kind: 'running' }));
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'interrupt-agent');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'agent-status');
     await page.evaluate(() => window.agentEvents.onmessage({ kind: 'completed' }));
     await composer.fill('Keep this new draft');
     await page.evaluate(() => window.resolveSend({}));
     assert.equal(await composer.inputValue(), 'Keep this new draft');
     await page.evaluate(() => { window.delayDisconnect = true; });
-    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await page.getByRole('button', { name: 'Desconectar', exact: true }).focus();
+    await page.keyboard.press('Enter');
     await page.evaluate(() => window.agentEvents.onmessage({ kind: 'running' }));
     assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true);
     assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isDisabled(), true);
@@ -128,6 +161,8 @@ const assets = new Map([
     await page.emulateMedia({ forcedColors: 'active' });
     assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isVisible(), true);
     await page.emulateMedia({ forcedColors: 'none', colorScheme: 'light' });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    assert.equal(await page.locator('button, .status-icon').evaluateAll(nodes => nodes.every(node => getComputedStyle(node).animationName === 'none' && getComputedStyle(node).transitionDuration === '0s')), true);
     for (const colorScheme of ['light', 'dark']) {
       await page.emulateMedia({ colorScheme });
       await page.waitForFunction(theme => document.documentElement.dataset.theme === theme, colorScheme);
