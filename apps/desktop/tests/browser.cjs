@@ -11,6 +11,7 @@ const assets = new Map([
   ['/main.mjs', ['main.mjs', 'text/javascript']],
   ['/connection.mjs', ['connection.mjs', 'text/javascript']],
   ['/chat.mjs', ['chat.mjs', 'text/javascript']],
+  ['/assets/forge.png', ['assets/forge.png', 'image/png']],
 ]);
 
 (async () => {
@@ -31,6 +32,7 @@ const assets = new Map([
     for (const width of [390, 1180]) {
       await page.setViewportSize({ width, height: 844 });
       await page.goto(url);
+      await page.locator('#connection summary').click();
       await page.getByRole('status').filter({ hasText: 'Não foi possível' }).waitFor();
       await page.getByRole('button', { name: 'Verificar novamente' }).click();
       await page.getByRole('status').filter({ hasText: 'Não foi possível' }).waitFor();
@@ -43,6 +45,7 @@ const assets = new Map([
     await page.goto(url);
     await page.keyboard.press('Tab');
     assert.equal(await page.locator(':focus').textContent(), 'Pular para o conteúdo');
+    await page.locator('#connection summary').click();
     // Explicit test double for UI presentation only, not agent/native evidence.
     await page.evaluate(() => { window.__TAURI__ = { core: { invoke: async () => ({ name: 'Forge', version: '0.1.0' }) } }; });
     await page.getByRole('button', { name: 'Verificar novamente' }).click();
@@ -112,6 +115,37 @@ const assets = new Map([
     assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true);
     assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isEnabled(), true);
     console.log('PASS: disconnect-before-connect-ack never enables sending.');
+    // Long text and text enlargement must not hide controls or introduce sideways scrolling.
+    await page.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
+    for (const width of [390, 1180]) {
+      await page.setViewportSize({ width, height: 844 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+      assert.equal(await page.locator('button, input, textarea').evaluateAll(nodes => nodes.filter(n => n.getClientRects().length).every(n => n.scrollWidth <= n.clientWidth + 2 && n.scrollHeight <= n.clientHeight + 2)), true);
+    }
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.emulateMedia({ forcedColors: 'active' });
+    assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isVisible(), true);
+    await page.emulateMedia({ forcedColors: 'none', colorScheme: 'light' });
+    for (const colorScheme of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme });
+      const contrast = await page.evaluate(() => {
+        const css = getComputedStyle(document.documentElement);
+        const luminance = token => {
+          const hex = css.getPropertyValue(token).trim().slice(1);
+          const rgb = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4);
+          return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
+        };
+        return ['--ink', '--muted'].flatMap(text => ['--surface', '--canvas', '--soft'].map(bg => {
+          const a = luminance(text), b = luminance(bg);
+          return (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
+        }));
+      });
+      assert.ok(contrast.every(ratio => ratio >= 4.5), `${colorScheme} text contrast: ${contrast}`);
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.setViewportSize({ width: 1440, height: 1080 });
+    if (process.env.FORGE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_SCREENSHOT, fullPage: true });
+    console.log('PASS: enlarged mobile text and forced-color controls.');
     console.log('PASS: oversized Unicode remains recoverable, completion-before-ack preserves draft, pending disconnect locks controls, send rejection releases session.');
     console.log('PASS: desktop/mobile overflow, mobile text, retry, keyboard entry, dark theme, honest agent status. Native IPC NOT_RUN.');
   } finally {

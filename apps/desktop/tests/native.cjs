@@ -40,6 +40,7 @@ const assert = require('node:assert/strict');
     if (!browser) throw new Error('Native WebView did not become available within 20 seconds');
     const context = browser.contexts()[0];
     const page = context.pages()[0] || await context.waitForEvent('page', { timeout: 5000 });
+    await page.locator('#connection summary').click();
     await page.getByRole('status').filter({ hasText: 'Aplicativo iniciado' }).waitFor({ timeout: 5000 });
     await page.getByRole('button', { name: 'Verificar novamente' }).click();
     await page.getByRole('status').filter({ hasText: 'Aplicativo iniciado' }).waitFor({ timeout: 5000 });

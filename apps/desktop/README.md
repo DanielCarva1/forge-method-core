@@ -5,6 +5,10 @@ user release. It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
 
+Approved references, visual rules and remaining illustration gaps are maintained
+in [design/README.md](design/README.md). The conversation shell uses those rules
+without fabricating previews or project progress.
+
 ## Run and test
 
 From the repository root (Rust and Windows WebView2 prerequisites required):

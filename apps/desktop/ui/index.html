@@ -11,53 +11,60 @@
 <body>
   <a class="skip" href="#main">Pular para o conteúdo</a>
   <header>
-    <a class="brand" href="#main" aria-label="Forge, início"><span aria-hidden="true">✿</span> Forge</a>
-    <nav aria-label="Navegação principal"><a href="#about">Conheça o Forge</a><a href="#connection">Conexão</a></nav>
+    <a class="brand" href="#main" aria-label="Forge, início"><img src="assets/forge.png" alt="" width="44" height="44">Forge</a>
+    <nav aria-label="Navegação principal"><a href="#workspace">Minha conversa</a><a href="#about">Conheça o Forge</a></nav>
+    <span class="development">Em desenvolvimento</span>
   </header>
   <main id="main">
     <section class="hero" aria-labelledby="welcome">
-      <p class="eyebrow">UM ESPAÇO PARA SUAS IDEIAS</p>
-      <h1 id="welcome">Grandes coisas começam<br>com uma conversa.</h1>
-      <p class="intro">Uma ideia nova, uma tarefa para simplificar ou um projeto para melhorar. O Forge acompanha você e seu agente, um passo de cada vez.</p>
-      <a class="button" href="#about">Descubra como funciona <span aria-hidden="true">→</span></a>
-      <p class="reassurance">Você não precisa ter todas as respostas para começar.</p>
+      <p class="eyebrow">SUAS IDEIAS, COM COMPANHIA</p>
+      <h1 id="welcome">Vamos criar juntos.</h1>
+      <p class="intro">Traga uma ideia ou continue seu projeto. Você conhece o que precisa; seu agente ajuda a encontrar o caminho.</p>
     </section>
-    <section id="about" aria-labelledby="about-title">
-      <h2 id="about-title">Sua ideia. Um caminho mais claro.</h2>
+    <div id="workspace" class="workspace">
+      <aside class="project panel" aria-labelledby="project-title">
+        <p class="eyebrow">SEU PONTO DE PARTIDA</p>
+        <h2 id="project-title">Qual projeto vamos continuar?</h2>
+        <p>Escolha um projeto que já usa o Forge. Esta conferência não modifica seus arquivos.</p>
+        <form id="project-form">
+          <label for="project-root">Pasta do projeto</label>
+          <input id="project-root" name="project-root" type="text" required autocomplete="off" spellcheck="false" aria-describedby="path-help" placeholder="D:\MeusProjetos\MeuSite">
+          <p id="path-help" class="hint">Copie o caminho da barra do Explorador de Arquivos.</p>
+          <button id="inspect-project" type="submit">Conferir projeto <span aria-hidden="true">→</span></button>
+        </form>
+        <p id="project-status" role="status" aria-live="polite"></p>
+        <div id="project-result" hidden><h3 id="project-name"></h3><p id="confirmed-root"></p><p>Confira se esta é a pasta que você quer usar.</p></div>
+        <details class="connection" id="connection">
+          <summary>Sobre a conexão</summary>
+          <p id="native-status" role="status" aria-live="polite">Verificando o aplicativo…</p>
+          <button id="retry" type="button" disabled>Verificar novamente</button>
+          <p class="hint">O Codex usa seu login existente e pode alterar arquivos. Nesta versão, reconectar começa outra conversa. A retomada pela tela ainda está em desenvolvimento.</p>
+        </details>
+      </aside>
+      <section class="conversation panel" aria-labelledby="chat-title">
+        <div class="conversation-heading"><div><p class="eyebrow">UMA CONVERSA, MUITAS POSSIBILIDADES</p><h2 id="chat-title">Da ideia ao próximo passo</h2></div><span class="agent-badge">Agente · Codex</span></div>
+        <div class="chat-actions"><button id="connect-agent" disabled>Conectar Codex</button><button id="disconnect-agent" disabled>Desconectar</button></div>
+        <p class="hint">Seu agente pode alterar arquivos. Ao reconectar, você começa outra conversa nesta versão.</p>
+        <p id="agent-status" class="status" role="status" aria-live="polite">Nenhum agente conectado. Confira um projeto para começar.</p>
+        <div class="conversation-body">
+          <div id="messages" aria-label="Conversa"></div>
+          <div class="empty-conversation"><img src="assets/forge.png" alt="" width="64" height="64"><h3>Não precisa ter tudo planejado.</h3><p>Depois de conectar, conte o que você quer melhorar.<br>Uma dúvida também é um bom começo.</p></div>
+        </div>
+        <form id="message-form">
+          <label for="message-text">Conte sua ideia ou peça uma mudança</label>
+          <textarea id="message-text" rows="3" required disabled placeholder="O que você gostaria de criar ou melhorar?"></textarea>
+          <div class="chat-actions"><button id="send-message" class="primary" disabled>Enviar <span aria-hidden="true">→</span></button><button id="interrupt-agent" type="button" disabled>Interromper</button></div>
+        </form>
+      </section>
+    </div>
+    <details id="about" class="about panel">
+      <summary>Primeira vez aqui? Conheça o Forge</summary>
       <div class="cards">
         <article><span class="step">01</span><h3>Conte o que tem em mente</h3><p>Converse sobre o que você quer criar e para quem. Seu conhecimento do problema importa.</p></article>
         <article><span class="step">02</span><h3>Encontre um caminho</h3><p>Seu agente ajuda a pesquisar e planejar. O Forge mantém por perto o que vocês combinaram.</p></article>
-        <article><span class="step">03</span><h3>Veja a ideia ganhar forma</h3><p>Confira o resultado, peça mudanças e acompanhe os próximos passos, sem perder o contexto.</p></article>
+        <article><span class="step">03</span><h3>Confira o resultado</h3><p>Peça mudanças e decida os próximos passos. Uma resposta do agente não significa que o trabalho terminou.</p></article>
       </div>
-    </section>
-    <section id="connection" class="connection" aria-labelledby="connection-title">
-      <div><p class="eyebrow">ESTRUTURA INICIAL · EM DESENVOLVIMENTO</p><h2 id="connection-title">Um aplicativo do Forge</h2><p id="native-status" role="status" aria-live="polite">Verificando o aplicativo…</p><p>Confira seu projeto abaixo para conversar com seu agente.</p></div>
-      <button id="retry" type="button" disabled>Verificar novamente</button>
-    </section>
-    <section class="project" aria-labelledby="project-title">
-      <h2 id="project-title">Qual projeto vamos continuar?</h2>
-      <p>Informe a pasta de um projeto que já usa o Forge. Vamos apenas conferir o vínculo, sem modificar seus arquivos.</p>
-      <form id="project-form">
-        <label for="project-root">Pasta do projeto</label>
-        <p id="path-help">Copie o caminho da barra do Explorador de Arquivos. Exemplo: D:\MeusProjetos\MeuSite</p>
-        <input id="project-root" name="project-root" type="text" required autocomplete="off" spellcheck="false" aria-describedby="path-help">
-        <button id="inspect-project" type="submit">Conferir projeto</button>
-      </form>
-      <p id="project-status" role="status" aria-live="polite"></p>
-      <div id="project-result" hidden><h3 id="project-name"></h3><p id="confirmed-root"></p><p>Projeto identificado. Confira o caminho antes de conectar o agente.</p></div>
-    </section>
-    <section class="project" aria-labelledby="chat-title">
-      <h2 id="chat-title">Vamos criar juntos</h2>
-      <p id="agent-status" role="status" aria-live="polite">Nenhum agente conectado. Confira um projeto para começar.</p>
-      <p>O Codex usa seu login existente e pode alterar arquivos ao executar suas tarefas. Nesta versão, desconectar inicia outra conversa; a retomada pela tela ainda está em desenvolvimento.</p>
-      <div class="chat-actions"><button id="connect-agent" disabled>Conectar Codex</button><button id="disconnect-agent" disabled>Desconectar</button></div>
-      <div id="messages" aria-label="Conversa"></div>
-      <form id="message-form">
-        <label for="message-text">Conte sua ideia ou peça uma mudança</label>
-        <textarea id="message-text" rows="3" required disabled></textarea>
-        <div class="chat-actions"><button id="send-message" disabled>Enviar</button><button id="interrupt-agent" type="button" disabled>Interromper</button></div>
-      </form>
-    </section>
+    </details>
   </main>
   <footer>Forge · Ideias com espaço para crescer.</footer>
 </body>

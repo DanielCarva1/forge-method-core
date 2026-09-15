@@ -35,6 +35,7 @@ function message(id, role, text, append = false) {
   let node = items.get(id);
   if (!node) {
     const article = document.createElement('article');
+    article.dataset.role = role === 'Você' ? 'user' : 'agent';
     const title = document.createElement('strong');
     title.textContent = role;
     node = document.createElement('p');
