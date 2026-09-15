@@ -1,0 +1,26 @@
+[package]
+name = "forge-desktop"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+authors = ["Stable Studio"]
+description = "Independent desktop companion for Forge"
+publish = false
+
+# Keep UI dependencies and its lockfile out of the core's build graph.
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "2.11.3", features = [] }
+serde = { version = "1", features = ["derive"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.dev]
+debug = 0
+incremental = false

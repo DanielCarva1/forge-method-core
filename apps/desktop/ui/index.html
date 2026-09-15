@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Forge — Vamos criar juntos</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="main.mjs"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Pular para o conteúdo</a>
+  <header>
+    <a class="brand" href="#main" aria-label="Forge, início"><span aria-hidden="true">✿</span> Forge</a>
+    <nav aria-label="Navegação principal"><a href="#about">Conheça o Forge</a><a href="#connection">Conexão</a></nav>
+  </header>
+  <main id="main">
+    <section class="hero" aria-labelledby="welcome">
+      <p class="eyebrow">UM ESPAÇO PARA SUAS IDEIAS</p>
+      <h1 id="welcome">Grandes coisas começam<br>com uma conversa.</h1>
+      <p class="intro">Uma ideia nova, uma tarefa para simplificar ou um projeto para melhorar. O Forge acompanha você e seu agente, um passo de cada vez.</p>
+      <a class="button" href="#about">Descubra como funciona <span aria-hidden="true">→</span></a>
+      <p class="reassurance">Você não precisa ter todas as respostas para começar.</p>
+    </section>
+    <section id="about" aria-labelledby="about-title">
+      <h2 id="about-title">Sua ideia. Um caminho mais claro.</h2>
+      <div class="cards">
+        <article><span class="step">01</span><h3>Conte o que tem em mente</h3><p>Converse sobre o que você quer criar e para quem. Seu conhecimento do problema importa.</p></article>
+        <article><span class="step">02</span><h3>Encontre um caminho</h3><p>Seu agente ajuda a pesquisar e planejar. O Forge mantém por perto o que vocês combinaram.</p></article>
+        <article><span class="step">03</span><h3>Veja a ideia ganhar forma</h3><p>Confira o resultado, peça mudanças e acompanhe os próximos passos, sem perder o contexto.</p></article>
+      </div>
+    </section>
+    <section id="connection" class="connection" aria-labelledby="connection-title">
+      <div><p class="eyebrow">ESTRUTURA INICIAL · EM DESENVOLVIMENTO</p><h2 id="connection-title">Um aplicativo do Forge</h2><p id="native-status" role="status" aria-live="polite">Verificando o aplicativo…</p><p>Nenhum agente conectado. A conversa e a seleção de projetos entram na próxima etapa.</p></div>
+      <button id="retry" type="button" disabled>Verificar novamente</button>
+    </section>
+  </main>
+  <footer>Forge · Ideias com espaço para crescer.</footer>
+</body>
+</html>
