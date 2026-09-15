@@ -48,7 +48,7 @@
           <summary>Sobre a conexão</summary>
           <p id="native-status" role="status" aria-live="polite">Verificando o aplicativo…</p>
           <button id="retry" type="button" disabled>Verificar novamente</button>
-          <p class="hint">O Codex usa seu login existente e pode alterar arquivos. Nesta versão, reconectar começa outra conversa. A retomada pela tela ainda está em desenvolvimento.</p>
+          <p class="hint">O Codex usa seu login existente e guarda o histórico. Ao conectar, retomamos a última conversa aberta aqui para este projeto, quando disponível.</p>
         </details>
         <section class="record" aria-labelledby="record-heading">
           <h3 id="record-heading">Último registro do Forge</h3>
@@ -66,7 +66,8 @@
       <section class="conversation panel" aria-labelledby="chat-title">
         <div class="conversation-heading"><div><p class="eyebrow">UMA CONVERSA, MUITAS POSSIBILIDADES</p><h2 id="chat-title">Da ideia ao próximo passo</h2></div><span class="agent-badge">Agente · Codex</span></div>
         <div class="chat-actions"><button id="connect-agent" disabled>Conectar Codex</button><button id="disconnect-agent" disabled>Desconectar</button></div>
-        <p class="hint">Seu agente pode alterar arquivos. Ao reconectar, você começa outra conversa nesta versão.</p>
+        <label class="check-label"><input type="checkbox" id="new-conversation"> Começar outra conversa</label>
+        <p class="hint">Seu agente pode alterar arquivos. Retomar uma conversa não repete ações sozinho. Começar outra não apaga o histórico anterior do Codex.</p>
         <p id="agent-status" class="status" role="status" aria-live="polite" tabindex="-1">Nenhum agente conectado. Confira um projeto para começar.</p>
         <div class="conversation-body">
           <div id="messages" aria-label="Conversa"></div>

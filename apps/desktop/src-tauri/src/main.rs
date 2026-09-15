@@ -2,6 +2,7 @@
 
 mod agent;
 mod codex_transport;
+mod history;
 mod progress;
 mod project;
 use tauri::Manager;

@@ -6,7 +6,10 @@ use tokio::{
     io::AsyncWriteExt,
     sync::{mpsc, oneshot},
 };
-use tokio_util::codec::{FramedRead, LinesCodec};
+use tokio_util::codec::{FramedRead, LinesCodec, LinesCodecError};
+
+const MAX_FRAME_BYTES: usize = 1024 * 1024;
+const OVERSIZED_REPLY: &str = "O histórico ou a resposta ultrapassou o limite de leitura deste app. Nada foi apagado. Continue essa conversa pelo Codex CLI; não é necessário repetir o trabalho.";
 
 type Reply = Result<Value, &'static str>;
 struct Request {
@@ -58,7 +61,9 @@ impl Transport {
         let stdout = child.stdout.take().ok_or("O Codex não abriu a conexão.")?;
         let (requests, mut incoming) = mpsc::channel::<Request>(8);
         let task = tauri::async_runtime::spawn(async move {
-            let mut lines = FramedRead::new(stdout, LinesCodec::new_with_max_length(1024 * 1024));
+            let mut lines =
+                FramedRead::new(stdout, LinesCodec::new_with_max_length(MAX_FRAME_BYTES));
+            let mut failure = "A conexão com o Codex foi encerrada.";
             let mut pending = HashMap::<u64, (&'static str, oneshot::Sender<Reply>)>::new();
             let mut id = 0u64;
             loop {
@@ -72,7 +77,14 @@ impl Transport {
                         if stdin.write_all(&bytes).await.is_err() { break; }
                     }
                     line = lines.next() => {
-                        let Some(Ok(line)) = line else { break };
+                        let line = match line {
+                            Some(Ok(line)) => line,
+                            Some(Err(LinesCodecError::MaxLineLengthExceeded)) => {
+                                failure = OVERSIZED_REPLY;
+                                break;
+                            }
+                            _ => break,
+                        };
                         let Ok(value) = serde_json::from_str::<Value>(&line) else { break };
                         if value.get("method").is_some() {
                             if let Some(request_id) = value.get("id") {
@@ -96,7 +108,7 @@ impl Transport {
                 }
             }
             for (_, (_, reply)) in pending {
-                let _ = reply.send(Err("A conexão com o Codex foi encerrada."));
+                let _ = reply.send(Err(failure));
             }
             let _ = child.kill().await;
             event(json!({"method":"forge/disconnected"}));
@@ -124,5 +136,24 @@ impl Transport {
         })
         .await
         .map_err(|_| "O Codex demorou para responder. Desconecte e tente novamente.")?
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn oversized_history_is_rejected_without_truncation() {
+        let bytes = vec![b'x'; MAX_FRAME_BYTES + 1];
+        let mut lines = FramedRead::new(
+            bytes.as_slice(),
+            LinesCodec::new_with_max_length(MAX_FRAME_BYTES),
+        );
+        assert!(matches!(
+            lines.next().await,
+            Some(Err(LinesCodecError::MaxLineLengthExceeded))
+        ));
+        assert!(OVERSIZED_REPLY.contains("Nada foi apagado"));
     }
 }

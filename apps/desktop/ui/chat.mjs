@@ -1,4 +1,5 @@
 import { invalidateProgress } from './progress.mjs';
+import { readReference, saveReference } from './conversation-reference.mjs';
 const byId = id => document.getElementById(id);
 const status = byId('agent-status');
 const connect = byId('connect-agent');
@@ -7,6 +8,7 @@ const send = byId('send-message');
 const stop = byId('interrupt-agent');
 const input = byId('message-text');
 const messages = byId('messages');
+const newConversation = byId('new-conversation');
 let project = null;
 let connected = false;
 let busy = false;
@@ -15,6 +17,8 @@ let broken = false;
 let generation = 0;
 let channel;
 const items = new Map();
+const sessionReferences = new Map();
+const referenceKey = () => JSON.stringify([project.project_id, project.project_root]);
 const invoke = (command, args) => globalThis.__TAURI__.core.invoke(command, args);
 
 // Icons supplement readable text; these are connection/turn states, not workflow progress.
@@ -34,6 +38,7 @@ showStatus(status.textContent);
 function controls() {
   const focused = document.activeElement;
   connect.disabled = transitioning || connected || !project;
+  newConversation.disabled = transitioning || connected;
   disconnect.disabled = transitioning || !connected;
   send.disabled = transitioning || !connected || busy || broken;
   input.disabled = transitioning || !connected || busy || broken;
@@ -92,15 +97,25 @@ connect.addEventListener('click', async () => {
   transitioning = true; broken = false; controls();
   showStatus('Conectando ao Codex com seu login…', 'working');
   try {
+    let threadId = null;
+    if (!newConversation.checked) {
+      try { threadId = sessionReferences.get(referenceKey()) ?? readReference(localStorage, project); }
+      catch { throw 'Não foi possível consultar a conversa salva neste dispositivo. Para seguir sem retomá-la, marque “Começar outra conversa”.'; }
+    }
     channel = new globalThis.__TAURI__.core.Channel();
     channel.onmessage = event => { if (current === generation) receive(event); };
-    await invoke('connect_agent', { projectRoot: project.project_root, events: channel });
+    const conversation = await invoke('connect_agent', { projectRoot: project.project_root, threadId, events: channel });
     if (current !== generation) return;
     connected = true; busy = false;
     messages.replaceChildren(); items.clear();
+    for (const item of conversation.messages) message(item.id, item.role === 'user' ? 'Você' : item.incomplete ? 'Codex · resposta incompleta' : 'Codex', item.text);
+    sessionReferences.set(referenceKey(), conversation.thread_id);
+    let saved = true;
+    try { saveReference(localStorage, project, conversation.thread_id); } catch { saved = false; }
+    newConversation.checked = false;
     showStatus(broken
       ? 'A conexão foi encerrada. Desconecte antes de tentar novamente.'
-      : `Codex conectado ao projeto ${project.project_id}. Pode mandar sua ideia.`, broken ? 'disconnected' : 'connected');
+      : `${conversation.resumed ? 'Conversa retomada. Confira o último registro do Forge e o que já foi feito antes de continuar.' : `Codex conectado ao projeto ${project.project_id}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}`, broken ? 'disconnected' : 'connected');
   } catch (error) { if (current !== generation) return; ++generation; showStatus(typeof error === 'string' ? error : 'Não foi possível conectar ao Codex.', 'error'); }
   transitioning = false;
   controls();

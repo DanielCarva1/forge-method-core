@@ -113,6 +113,21 @@ const assert = require('node:assert/strict');
         await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor({ timeout: 10000 });
         assert.equal(await field.isDisabled(), false);
         console.log('PASS: actual ChatGPT-authenticated Codex response, streamed deltas, interruption, subsequent turn and disconnect.');
+        const previousHistory = await page.locator('#messages').innerText();
+        await page.reload();
+        await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(process.env.FORGE_TEST_PROJECT);
+        await page.getByRole('button', { name: 'Conferir projeto' }).click();
+        await page.locator('#project-status').filter({ hasText: 'Projeto encontrado' }).waitFor({ timeout: 15000 });
+        await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+        await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor({ timeout: 100000 });
+        const restoredHistory = await page.locator('#messages').innerText();
+        assert.ok(restoredHistory.includes('Podemos continuar'));
+        assert.ok(restoredHistory.includes('Esta é uma verificação somente de leitura.'));
+        assert.ok(previousHistory.includes('Podemos continuar'));
+        assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isEnabled(), true);
+        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
+        console.log('PASS: history restored from Codex after transport shutdown and WebView reload, without resending a turn.');
       } else { console.log('NOT_RUN: actual Codex conversation (FORGE_TEST_AGENT not set).'); }
     } else {
       console.log('NOT_RUN: real project resolution (FORGE_TEST_PROJECT not set).');

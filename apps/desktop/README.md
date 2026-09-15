@@ -113,14 +113,31 @@ does not roll back completed file changes or guarantee cleanup after an OS crash
 The session slot is not held while awaiting provider RPCs. Cleanup is serialized
 separately so repeated close requests cannot bypass an in-progress shutdown.
 
-This slice keeps the active thread handle in memory. Codex owns saved history,
-but the UI cannot yet reopen it (#93). Disconnect/reconnect starts a new thread;
-this limitation is displayed. Provider subscriptions/usage limits still apply.
+Codex owns saved history. The UI stores only a thread bookmark, scoped to the
+resolved project ID and canonical folder, in `forge.conversation.v1` localStorage
+keys. Reconnect reads the stored thread summary and validates its folder and ID
+before resuming; the returned transcript is validated again and rendered as text.
+Interrupted/failed-turn answers are marked incomplete. No turn is sent by resume.
+Users can explicitly start another conversation without deleting Codex history.
+A failed resume never silently falls back to a new thread. No conversation list,
+credentials, decisions or Forge state are copied into this bookmark store.
+
+A failed bookmark write keeps the latest reference in memory for reconnects and
+warns that restarting the app may reveal the older saved conversation. It does
+not claim persistence. Very large histories exceeding the existing 1 MiB frame
+limit fail visibly without truncation; users can continue through Codex CLI.
+Bounded history pagination remains follow-up work before claiming unrestricted
+long-running conversation recovery. Codex may not persist an empty thread until
+its first turn; unavailable empty references receive the same explicit recovery.
+Provider subscriptions/usage limits still apply.
 Responsive desktop layout does not provide remote mobile connectivity (#96).
 
 Opt-in real-agent test: additionally set `FORGE_TEST_AGENT=1` before running the
 native test. It consumes model usage, asks a read-only project question, verifies
 streamed deltas, interrupts a second turn, sends another message, and disconnects.
+It then reloads the WebView and restores the transcript through a fresh Codex
+transport without submitting another turn. Full installed-app restart/upgrade
+verification belongs to the package journey, not this reload check.
 It creates a Codex conversation; no fake response is used. Without this flag,
 agent execution is explicitly NOT_RUN. Browser doubles test event-ordering and
 error recovery only, never authentication or actual agent behavior.

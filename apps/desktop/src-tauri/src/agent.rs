@@ -1,5 +1,5 @@
 //! Application session only. Codex owns conversation history; Forge owns project truth.
-use crate::{codex_transport::Transport, project};
+use crate::{codex_transport::Transport, history, project};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::{
@@ -118,9 +118,10 @@ fn project_event(value: Value, activity: &Mutex<Activity>) -> Option<AgentEvent>
 #[tauri::command]
 pub async fn connect_agent(
     project_root: String,
+    thread_id: Option<String>,
     events: Channel<AgentEvent>,
     state: State<'_, AgentState>,
-) -> Result<String, &'static str> {
+) -> Result<history::Conversation, &'static str> {
     let project = project::inspect_project(project_root).await?;
     let shutdown_guard = state.shutdown.lock().await;
     if state.closing.load(Ordering::SeqCst) {
@@ -146,14 +147,18 @@ pub async fn connect_agent(
     *slot = Some(session.clone());
     drop(slot);
     drop(shutdown_guard);
-    let result = initialize(&session, &project.project_root).await;
+    let result = initialize(&session, &project.project_root, thread_id.as_deref()).await;
     if result.is_err() {
         release(&state, &session).await;
     }
     result
 }
 
-async fn initialize(session: &Session, project_root: &str) -> Result<String, &'static str> {
+async fn initialize(
+    session: &Session,
+    project_root: &str,
+    thread_id: Option<&str>,
+) -> Result<history::Conversation, &'static str> {
     let transport = &session.transport;
     transport
         .request(
@@ -168,25 +173,35 @@ async fn initialize(session: &Session, project_root: &str) -> Result<String, &'s
         return Err("Entre na sua conta ChatGPT pelo Codex CLI e tente conectar novamente.");
     }
     let instructions = "You are the user's agent inside Forge desktop. Work only on the selected project unless the user explicitly requests otherwise. Use the installed start-forge skill once at the beginning of this conversation, and follow its structured handoff. Forge owns project continuity; use its public interfaces and do not create another state store. Explain progress in the user's language, clearly and simply. A completed response is not proof that the user's task is complete. Treat exploration as conversation, not acceptance. After interruption, reconcile actual effects before continuing. The interface currently cannot display interactive tool forms; ask the user in ordinary conversation when a decision is needed.";
-    let result = transport.request("thread/start", json!({"cwd":project_root,"approvalPolicy":"never","sandbox":"danger-full-access","developerInstructions":instructions})).await?;
-    let returned_root = result["thread"]["cwd"]
-        .as_str()
-        .ok_or("O Codex não confirmou a pasta.")?;
-    let returned = Path::new(returned_root)
-        .canonicalize()
-        .map_err(|_| "Não foi possível conferir a pasta do Codex.")?;
-    let requested = Path::new(project_root)
-        .canonicalize()
-        .map_err(|_| "A pasta do projeto não está mais disponível.")?;
-    if returned != requested {
-        return Err("O Codex abriu uma pasta diferente. A conversa não foi liberada.");
+    let mut params = json!({"cwd":project_root,"approvalPolicy":"never","sandbox":"danger-full-access","developerInstructions":instructions});
+    let method = if let Some(id) = thread_id {
+        if id.is_empty() || id.len() > 200 {
+            return Err("A referência da conversa é inválida.");
+        }
+        let stored = transport.request("thread/read", json!({"threadId":id,"includeTurns":false})).await
+            .map_err(|_| "Não foi possível abrir a conversa salva. Tente novamente ou escolha começar outra; o histórico não será apagado.")?;
+        history::validate(&stored["thread"], project_root, Some(id))?;
+        params["threadId"] = json!(id);
+        "thread/resume"
+    } else {
+        "thread/start"
+    };
+    let result = transport.request(method, params).await?;
+    let thread = history::validate(&result["thread"], project_root, thread_id)?;
+    let messages = if thread_id.is_some() {
+        history::messages(&result["thread"])?
+    } else {
+        Vec::new()
+    };
+    if result["thread"]["status"]["type"] == "active" {
+        return Err("Esta conversa ainda está em execução. Aguarde antes de retomá-la.");
     }
-    let thread = result["thread"]["id"]
-        .as_str()
-        .ok_or("O Codex não informou a conversa.")?
-        .to_owned();
     *session.thread.lock().unwrap_or_else(|e| e.into_inner()) = Some(thread.clone());
-    Ok(thread)
+    Ok(history::Conversation {
+        thread_id: thread,
+        messages,
+        resumed: thread_id.is_some(),
+    })
 }
 
 #[tauri::command]

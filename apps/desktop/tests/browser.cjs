@@ -11,6 +11,7 @@ const assets = new Map([
   ['/main.mjs', ['main.mjs', 'text/javascript']],
   ['/connection.mjs', ['connection.mjs', 'text/javascript']],
   ['/chat.mjs', ['chat.mjs', 'text/javascript']],
+  ['/conversation-reference.mjs', ['conversation-reference.mjs', 'text/javascript']],
   ['/assets/forge.png', ['assets/forge.png', 'image/png']],
   ['/appearance.js', ['appearance.js', 'text/javascript']],
   ['/progress.mjs', ['progress.mjs', 'text/javascript']],
@@ -33,7 +34,7 @@ const assets = new Map([
     const url = `http://127.0.0.1:${server.address().port}`;
     const keyboardPage = await browser.newPage();
     await keyboardPage.goto(url);
-    for (const selector of ['.skip', '.brand', 'nav a:first-child', 'nav a:last-child', '.appearance summary', '#appearance-theme', '#appearance-contrast', '#project-root', '#inspect-project', '#connection summary', '#retry', '#about summary']) {
+    for (const selector of ['.skip', '.brand', 'nav a:first-child', 'nav a:last-child', '.appearance summary', '#appearance-theme', '#appearance-contrast', '#project-root', '#inspect-project', '#connection summary', '#retry', '#new-conversation', '#about summary']) {
       await keyboardPage.keyboard.press('Tab');
       assert.equal(await keyboardPage.locator(selector).evaluate(node => node === document.activeElement), true, `Keyboard order: ${selector}`);
       assert.ok(await keyboardPage.locator(selector).evaluate(node => parseFloat(getComputedStyle(node).outlineWidth) >= 3), `Visible focus: ${selector}`);
@@ -78,7 +79,7 @@ const assets = new Map([
           return { status: window.progressState || 'current', focus: { title: 'Recorded task', current_activity: 'Recorded activity', next_step: 'Recorded next step', open_decision_count: 1 } };
         }
         if (command === 'inspect_project') return { project_id: 'test-project', project_root: 'D:\\test-project' };
-        if (command === 'connect_agent') { window.agentEvents = args.events; return 'test-thread'; }
+          if (command === 'connect_agent') { window.agentEvents = args.events; window.connectedThread = args.threadId; return { thread_id: 'test-thread', messages: args.threadId ? [{ id: 'saved-user', role: 'user', text: 'Saved decision' }, { id: 'saved-agent', role: 'agent', text: 'Partial reply' }] : [], resumed: !!args.threadId }; }
         if (command === 'send_message') {
           window.sendCalls++;
           return new Promise((resolve, reject) => { window.resolveSend = resolve; window.rejectSend = reject; });
@@ -162,18 +163,61 @@ const assets = new Map([
     await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
     await page.evaluate(() => { window.delayDisconnect = false; });
     await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.equal(await page.evaluate(() => window.connectedThread), 'test-thread');
+    assert.match(await page.locator('#messages').textContent(), /Saved decision/);
+    assert.match(await page.locator('#messages').textContent(), /Partial reply/);
+    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
+    await page.getByLabel('Começar outra conversa', { exact: true }).check();
+    await page.evaluate(() => {
+      const invoke = window.__TAURI__.core.invoke;
+      window.beforeBookmarkInvoke = invoke;
+      window.__TAURI__.core.invoke = async (command, args) => {
+        if (command === 'connect_agent') {
+          window.connectedThread = args.threadId;
+          return { thread_id: 'new-thread', messages: [], resumed: !!args.threadId };
+        }
+        return invoke(command, args);
+      };
+      window.beforeBookmarkSet = Storage.prototype.setItem;
+      Storage.prototype.setItem = () => { throw new Error('disk unavailable'); };
+    });
+    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Não foi possível salvar o acesso' }).waitFor();
+    assert.equal(await page.evaluate(() => window.connectedThread), null);
+    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.equal(await page.evaluate(() => window.connectedThread), 'new-thread');
+    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await page.evaluate(() => {
+      Storage.prototype.setItem = window.beforeBookmarkSet;
+      window.__TAURI__.core.invoke = async (command, args) => {
+        if (command === 'connect_agent') throw 'Saved conversation unavailable';
+        return window.beforeBookmarkInvoke(command, args);
+      };
+    });
+    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Saved conversation unavailable' }).waitFor();
+    assert.equal(await composer.isDisabled(), true);
+    await page.evaluate(() => { window.__TAURI__.core.invoke = window.beforeBookmarkInvoke; });
+    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    console.log('PASS: restored transcript, explicit new conversation, failed save keeps latest session bookmark, unavailable resume never silently starts anew.');
+    const disconnectsBeforeRejection = await page.evaluate(() => window.disconnectCalls);
     await composer.fill('Rejected request');
     await page.getByRole('button', { name: 'Enviar', exact: true }).click();
     await page.evaluate(() => window.rejectSend('Test rejection'));
     await page.locator('#agent-status').filter({ hasText: 'Test rejection' }).waitFor();
-    assert.equal(await page.evaluate(() => window.disconnectCalls), 2);
+    assert.equal(await page.evaluate(() => window.disconnectCalls), disconnectsBeforeRejection + 1);
     assert.equal(await page.getByRole('button', { name: 'Conectar Codex', exact: true }).isEnabled(), true);
     await page.evaluate(() => {
       const invoke = window.__TAURI__.core.invoke;
       window.__TAURI__.core.invoke = async (command, args) => {
         if (command === 'connect_agent') {
           args.events.onmessage({ kind: 'disconnected' });
-          return 'already-ended-thread';
+          return { thread_id: 'already-ended-thread', messages: [], resumed: false };
         }
         return invoke(command, args);
       };
