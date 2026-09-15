@@ -166,3 +166,99 @@ Project changes and agent turn/disconnection events invalidate displayed or
 pending readbacks. Failures hide earlier results but never disable conversation.
 Full workflow stage/decision interaction remains separate work. Package release
 scope and readiness are tracked in GitHub issue #97, not per-commit version bumps.
+
+## Session checkpoint — 2026-09-15
+
+Work paused at the maintainer's request. This checkpoint is a resumption aid,
+not another plan or a release-readiness claim. Package scope remains in
+[#97](https://github.com/DanielCarva1/forge-method-core/issues/97#issuecomment-5674332707);
+the latest recovery evidence is in
+[#93](https://github.com/DanielCarva1/forge-method-core/issues/93#issuecomment-5674461395).
+
+### Source and delivered slices
+
+- Checkout: `D:\Forge-method-core`, branch `codex/desktop-shell`.
+- Latest implementation: `be00ce31`, pushed to origin. Worktree was clean before
+  this documentation update. No desktop release has been published.
+- Core remains `0.13.3`; independent desktop development version is `0.1.0`.
+- `6ddf54de`: approved conversation visual direction.
+- `9f9dcbbc`: persistent light/dark/system and contrast preferences.
+- `9a9ec87d`: readable status icons and keyboard-focus recovery.
+- `0d9cbd9a`: manual, bounded Last Forge Record panel. It is a recorded work
+  snapshot, not a claim about the agent's live activity; no background polling.
+- `be00ce31`: reopen Codex-owned conversation history with a project-scoped UI
+  bookmark, folder/thread validation, incomplete-answer labels and explicit
+  new-conversation choice. Resume never sends another turn automatically.
+
+### Verification completed
+
+- PASS: 10 desktop Rust tests and 7 Node unit tests.
+- PASS: focused browser suite including mobile overflow, enlarged text,
+  keyboard focus, appearance persistence, progress invalidation, transcript
+  restoration, explicit new conversation and bookmark-write failure recovery.
+- PASS: real Tauri window with authenticated standalone Codex CLI `0.154.0`:
+  streamed reply, interruption, subsequent turn, disconnect, WebView reload
+  and restored transcript through a fresh Codex process without a new turn.
+- PASS: final rebuilt native smoke for project resolution and preferences.
+  Model execution was not repeated for the final presentation adjustments.
+- PASS: separate native/standards and UI/spec reviews; findings addressed.
+- NOT_RUN: installed-app process restart, installation/upgrade journey and
+  published-artifact verification. WebView reload is not a full app restart.
+- No CI runs were returned for this branch at the final check. No core-wide
+  test suite or core release was triggered for these desktop-only changes.
+
+### Resume here, without repeating finished work
+
+1. Read #93 and the accepted Package 1 scope in #97. Inspect current status
+   and source before editing; use `eng` and `ask-matt`.
+2. Resolve bounded recovery for long conversations. The current transport
+   rejects frames over 1 MiB; full-history resume can exceed it. An explicit
+   non-destructive CLI fallback is implemented, but pagination is not. Inspect
+   the supported installed Codex protocol before choosing an implementation;
+   do not simply remove bounds or duplicate history in Forge.
+3. Continue #97: package Windows + Codex, verify full close/reopen and upgrade
+   preservation using the actual package, then publish a coherent update.
+   Tauri currently has `bundle.active=false`. The existing core release workflow
+   binds `v*` tags to the core version; do not use it blindly for desktop `0.1.0`.
+4. Preserve source ownership: Codex owns conversation history; Forge owns
+   project state; UI storage contains preferences and conversation references.
+   If bookmark writes fail, same-session reconnect uses the in-memory reference;
+   after app restart an older saved reference can remain, as the UI warns.
+
+### Fast local verification and paths
+
+```powershell
+$env:CARGO_TARGET_DIR='D:\forge-method-core-build-cache\main-target'
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --offline --locked -j2
+cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --offline --locked -j2
+node --test apps/desktop/tests/connection.test.mjs apps/desktop/tests/conversation-reference.test.mjs
+$env:PLAYWRIGHT_MODULE='C:\Users\User\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\node_modules\playwright'
+node apps/desktop/tests/browser.cjs
+$env:FORGE_DESKTOP_EXE='D:\forge-method-core-build-cache\main-target\debug\forge-desktop.exe'
+$env:TEMP='D:\Temp\User'
+$env:FORGE_TEST_PROJECT='D:\Forge-method-core'
+node apps/desktop/tests/native.cjs
+```
+
+Real-model testing is opt-in (`FORGE_TEST_AGENT=1`) and consumes subscription
+usage. The verified CLI override was
+`D:\Temp\User\forge-cli-0154-probe\package\vendor\x86_64-pc-windows-msvc\bin\codex.exe`
+via `FORGE_CODEX_EXE`; recheck this temporary path before use. Default npm CLI
+`0.144.6` previously failed because it did not support the selected Astra model.
+No global CLI replacement was made. Reuse build/browser caches; avoid downloads
+or broad builds because disk space and time are constrained.
+
+Approved art references are under
+`D:\Forge-method-core\apps\desktop\design\references`; the native development
+executable is the `FORGE_DESKTOP_EXE` path above, not a published installer.
+
+### Working agreement for the next session
+
+Use simple Portuguese in conversation and English in documentation. Keep changes
+small and auditable, but report meaningful package progress rather than requesting
+approval after every commit. Publish working packages, not every small slice.
+Never add AI authorship/co-authorship. The maintainer explicitly authorizes
+delegating suitable narrow tasks to cheaper available models such as Luna;
+use Spark only if actually available. Keep coordination and integration with the
+main agent, pass compact task-local context, and avoid redundant reviews or
+large test runs. No new agent work is needed while this session is paused.
