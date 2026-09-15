@@ -50,3 +50,14 @@ Still separate work: illustrations for Explore (#88), backend-driven progress
 (#86), preview (#91), reopening saved conversations (#93), manual appearance
 preferences (#84) and distribution (#97). System-theme support alone does not
 establish complete accessibility conformance or mobile remote-agent access.
+
+## Appearance preferences (#84, incremental)
+
+The native HTML offers System/Light/Dark and an independent increased-contrast
+checkbox. `ui/appearance.js` reads a validated `forge.appearance.v1` localStorage
+value before styles are loaded to avoid a mismatched initial theme. This is a
+device UI preference, not project state or history. OS theme changes apply only
+in System mode; OS increased contrast and forced colors remain respected.
+Storage errors leave the UI usable and produce an explicit unsaved notice.
+No animation is introduced. Complete status-icon and keyboard-order auditing
+remain open; this does not close all #84 criteria or establish conformance.

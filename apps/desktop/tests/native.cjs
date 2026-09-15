@@ -114,6 +114,13 @@ const assert = require('node:assert/strict');
     } else {
       console.log('NOT_RUN: real project resolution (FORGE_TEST_PROJECT not set).');
     }
+    await page.locator('.appearance summary').click();
+    await page.getByLabel('Tema', { exact: true }).selectOption('dark');
+    await page.getByLabel('Reforçar contraste').check();
+    await page.reload();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
+    assert.equal(await page.getByLabel('Reforçar contraste').isChecked(), true);
+    console.log('PASS: native WebView appearance preference survives reload.');
     if (process.env.FORGE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_SCREENSHOT, fullPage: true });
     console.log('PASS: real native window, frontend-to-Rust identity and retry.');
   } finally {

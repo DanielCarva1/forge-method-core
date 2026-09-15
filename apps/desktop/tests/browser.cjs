@@ -12,6 +12,7 @@ const assets = new Map([
   ['/connection.mjs', ['connection.mjs', 'text/javascript']],
   ['/chat.mjs', ['chat.mjs', 'text/javascript']],
   ['/assets/forge.png', ['assets/forge.png', 'image/png']],
+  ['/appearance.js', ['appearance.js', 'text/javascript']],
 ]);
 
 (async () => {
@@ -52,6 +53,7 @@ const assets = new Map([
     await page.getByRole('status').filter({ hasText: 'Aplicativo iniciado' }).waitFor();
     await page.getByText('Nenhum agente conectado.', { exact: false }).waitFor();
     await page.emulateMedia({ colorScheme: 'dark' });
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
     assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme), 'dark');
     // Controlled protocol double: exercise UI ordering, not real authentication.
     await page.evaluate(() => {
@@ -128,6 +130,7 @@ const assets = new Map([
     await page.emulateMedia({ forcedColors: 'none', colorScheme: 'light' });
     for (const colorScheme of ['light', 'dark']) {
       await page.emulateMedia({ colorScheme });
+      await page.waitForFunction(theme => document.documentElement.dataset.theme === theme, colorScheme);
       const contrast = await page.evaluate(() => {
         const css = getComputedStyle(document.documentElement);
         const luminance = token => {
@@ -146,6 +149,31 @@ const assets = new Map([
     await page.setViewportSize({ width: 1440, height: 1080 });
     if (process.env.FORGE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_SCREENSHOT, fullPage: true });
     console.log('PASS: enlarged mobile text and forced-color controls.');
+    await page.locator('.appearance summary').click();
+    await page.getByLabel('Tema', { exact: true }).selectOption('dark');
+    await page.getByLabel('Reforçar contraste').check();
+    await page.reload();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
+    assert.equal(await page.evaluate(() => document.documentElement.hasAttribute('data-high-contrast')), true);
+    await page.locator('.appearance summary').click();
+    await page.getByLabel('Tema', { exact: true }).selectOption('light');
+    await page.emulateMedia({ colorScheme: 'dark' });
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light');
+    await page.getByLabel('Tema', { exact: true }).selectOption('system');
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+    await page.getByLabel('Reforçar contraste').focus();
+    await page.keyboard.press('Space');
+    assert.equal(await page.getByLabel('Reforçar contraste').isChecked(), false);
+    await page.emulateMedia({ contrast: 'more' });
+    assert.equal(await page.evaluate(() => {
+      const css = getComputedStyle(document.documentElement);
+      return ['--muted', '--line'].every(token => css.getPropertyValue(token).trim() === css.getPropertyValue('--ink').trim());
+    }), true);
+    await page.evaluate(() => { Storage.prototype.setItem = () => { throw new Error('Unavailable'); }; });
+    await page.getByLabel('Tema', { exact: true }).selectOption('light');
+    await page.locator('#appearance-status').filter({ hasText: 'não foi possível salvar' }).waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light');
+    console.log('PASS: appearance survives reload, overrides OS, follows OS, supports keyboard and tolerates storage failure.');
     console.log('PASS: oversized Unicode remains recoverable, completion-before-ack preserves draft, pending disconnect locks controls, send rejection releases session.');
     console.log('PASS: desktop/mobile overflow, mobile text, retry, keyboard entry, dark theme, honest agent status. Native IPC NOT_RUN.');
   } finally {

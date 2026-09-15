@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>Forge — Vamos criar juntos</title>
+  <script src="appearance.js"></script>
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="main.mjs"></script>
 </head>
@@ -16,6 +17,15 @@
     <span class="development">Em desenvolvimento</span>
   </header>
   <main id="main">
+    <details class="appearance">
+      <summary>Aparência e conforto</summary>
+      <div class="appearance-options">
+        <label for="appearance-theme">Tema</label>
+        <select id="appearance-theme"><option value="system">Acompanhar o sistema</option><option value="light">Claro</option><option value="dark">Escuro</option></select>
+        <label class="check-label"><input id="appearance-contrast" type="checkbox">Reforçar contraste</label>
+      </div>
+      <p id="appearance-status" role="status" aria-live="polite">A escolha vale para este aplicativo, não muda seu projeto.</p>
+    </details>
     <section class="hero" aria-labelledby="welcome">
       <p class="eyebrow">SUAS IDEIAS, COM COMPANHIA</p>
       <h1 id="welcome">Vamos criar juntos.</h1>
