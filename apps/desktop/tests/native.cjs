@@ -2,10 +2,11 @@
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const { spawn } = require('node:child_process');
 const { createServer } = require('node:net');
-const { mkdtemp, rm } = require('node:fs/promises');
+const { mkdtemp, rm, access } = require('node:fs/promises');
 const { once } = require('node:events');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
+const assert = require('node:assert/strict');
 
 (async () => {
   if (!process.env.FORGE_DESKTOP_EXE) throw new Error('Set FORGE_DESKTOP_EXE to the built development executable');
@@ -43,6 +44,32 @@ const path = require('node:path');
     await page.getByRole('button', { name: 'Verificar novamente' }).click();
     await page.getByRole('status').filter({ hasText: 'Aplicativo iniciado' }).waitFor({ timeout: 5000 });
     await page.getByText('Nenhum agente conectado.', { exact: false }).waitFor();
+    if (process.env.FORGE_TEST_PROJECT) {
+      const field = page.getByRole('textbox', { name: 'Pasta do projeto' });
+      const submit = page.getByRole('button', { name: 'Conferir projeto' });
+      await field.fill(process.env.FORGE_TEST_PROJECT);
+      await submit.click();
+      await page.locator('#project-status').filter({ hasText: 'Projeto encontrado' }).waitFor({ timeout: 15000 });
+      assert.equal(await page.locator('#confirmed-root').textContent(), process.env.FORGE_TEST_PROJECT);
+      assert.ok((await page.locator('#project-name').textContent()).length > 0);
+      // A failed lookup must hide the preceding project's identity.
+      await field.fill(path.join(profile, 'missing-folder'));
+      assert.equal(await page.locator('#project-result').isVisible(), false);
+      assert.equal(await page.locator('#project-status').textContent(), '');
+      await submit.click();
+      await page.locator('#project-status').filter({ hasText: 'pasta que existe' }).waitFor();
+      assert.equal(await page.locator('#project-result').isVisible(), false);
+      // Existing but unlinked folder: do not initialize or repair it silently.
+      await field.fill(profile);
+      await submit.click();
+      await page.locator('#project-status').filter({ hasText: 'Não foi possível identificar' }).waitFor({ timeout: 15000 });
+      assert.equal(await page.locator('#project-result').isVisible(), false);
+      await assert.rejects(access(path.join(profile, '.forge-method.yaml')), { code: 'ENOENT' });
+      await assert.rejects(access(path.join(profile, '.forge-method')), { code: 'ENOENT' });
+      console.log('PASS: real Forge project resolution, invalid folder, unlinked folder, stale identity hidden.');
+    } else {
+      console.log('NOT_RUN: real project resolution (FORGE_TEST_PROJECT not set).');
+    }
     if (process.env.FORGE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_SCREENSHOT, fullPage: true });
     console.log('PASS: real native window, frontend-to-Rust identity and retry; agent connection remains absent.');
   } finally {

@@ -31,8 +31,20 @@
       </div>
     </section>
     <section id="connection" class="connection" aria-labelledby="connection-title">
-      <div><p class="eyebrow">ESTRUTURA INICIAL · EM DESENVOLVIMENTO</p><h2 id="connection-title">Um aplicativo do Forge</h2><p id="native-status" role="status" aria-live="polite">Verificando o aplicativo…</p><p>Nenhum agente conectado. A conversa e a seleção de projetos entram na próxima etapa.</p></div>
+      <div><p class="eyebrow">ESTRUTURA INICIAL · EM DESENVOLVIMENTO</p><h2 id="connection-title">Um aplicativo do Forge</h2><p id="native-status" role="status" aria-live="polite">Verificando o aplicativo…</p><p>Nenhum agente conectado. Por enquanto, você pode conferir um projeto existente abaixo.</p></div>
       <button id="retry" type="button" disabled>Verificar novamente</button>
+    </section>
+    <section class="project" aria-labelledby="project-title">
+      <h2 id="project-title">Qual projeto vamos continuar?</h2>
+      <p>Informe a pasta de um projeto que já usa o Forge. Vamos apenas conferir o vínculo, sem modificar seus arquivos.</p>
+      <form id="project-form">
+        <label for="project-root">Pasta do projeto</label>
+        <p id="path-help">Copie o caminho da barra do Explorador de Arquivos. Exemplo: D:\MeusProjetos\MeuSite</p>
+        <input id="project-root" name="project-root" type="text" required autocomplete="off" spellcheck="false" aria-describedby="path-help">
+        <button id="inspect-project" type="submit">Conferir projeto</button>
+      </form>
+      <p id="project-status" role="status" aria-live="polite"></p>
+      <div id="project-result" hidden><h3 id="project-name"></h3><p id="confirmed-root"></p><p>Projeto identificado. A conversa com o agente ainda não está disponível nesta versão.</p></div>
     </section>
   </main>
   <footer>Forge · Ideias com espaço para crescer.</footer>

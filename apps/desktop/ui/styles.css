@@ -37,6 +37,11 @@ article p { color: var(--muted); }
 button { border: 1px solid var(--ink); color: var(--ink); background: var(--surface); cursor: pointer; flex-shrink: 0; }
 button:disabled { cursor: wait; opacity: .65; }
 footer { color: var(--muted); padding-block: 8px 32px; font-size: .85rem; }
+.project { background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 28px; margin-block: 32px; }
+.project form { display: grid; gap: 12px; }
+.project input { min-width: 0; width: 100%; min-height: 48px; padding: 12px; border: 1px solid var(--muted); border-radius: 12px; background: var(--canvas); color: var(--ink); }
+.project button { justify-self: start; }
+.project p { overflow-wrap: anywhere; }
 .skip { position: absolute; left: 16px; top: -100px; padding: 12px; background: var(--surface); z-index: 1; }
 .skip:focus { top: 8px; }
 @media (max-width: 700px) {

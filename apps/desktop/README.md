@@ -33,7 +33,19 @@ against using a frontend framework when component complexity warrants it.
 
 ## Boundaries
 
-- Rust exposes only `app_info`, an identity read with no project access.
+- `app_info` is an identity read with no project access.
+- Rust also exposes `inspect_project`: a read-only call to the existing
+  `forge-core project resolve` command. The backend remains the link/state owner;
+  the UI never infers progress from its compatibility phase field.
+- Project selection currently accepts an absolute folder path; a native folder
+  picker and agent conversation are not implemented. Only already-linked projects
+  with available state are identified. Failed lookups hide earlier results.
+- On Windows the adapter uses the installed executable under
+  `%LOCALAPPDATA%/Programs/forge-core/bin/forge-core.exe`. Host configuration can
+  override it with an absolute `FORGE_CORE_EXE`; the webview cannot choose commands
+  or executables. No PATH search occurs inside the selected project.
+- Resolution has a 10-second timeout and 64 KiB output limit, hides the subprocess
+  console, terminates unfinished child processes, and does not expose stderr.
 - No shell/filesystem plugins, network listener, credentials or project database.
 - Forge retains project-state ownership; an agent adapter will be added separately.
 - Preview content must never share privileged application IPC access.
@@ -51,3 +63,8 @@ against using a frontend framework when component complexity warrants it.
 - Documentation is English; the initial user-facing UI is Portuguese.
 
 Work tracking: GitHub issues #81, #82 and #83. Full agent conversation is #85.
+
+For the optional real-project check, set `FORGE_TEST_PROJECT` to the exact absolute
+path of an existing linked project before running `tests/native.cjs`. This checks
+the native resolver, displayed root, invalid/unlinked folders and stale identity
+removal. It does not start an agent, initialize state or prove conversation readiness.

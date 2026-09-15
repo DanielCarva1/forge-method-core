@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod project;
+
 #[derive(serde::Serialize)]
 struct AppInfo {
     name: &'static str,
@@ -17,7 +19,7 @@ fn app_info() -> AppInfo {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![app_info])
+        .invoke_handler(tauri::generate_handler![app_info, project::inspect_project])
         .run(tauri::generate_context!())
         .expect("failed to run the Forge desktop application");
 }
