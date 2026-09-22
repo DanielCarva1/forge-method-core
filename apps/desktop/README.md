@@ -715,9 +715,9 @@ For the next coherent Windows alpha update (#97), retain this explicit ledger:
 3. **DONE in source:** desktop `0.1.1` is set in Tauri, Cargo and Cargo.lock;
    draft release notes exist. This alone is not an available update.
 4. **PARTIAL:** final checks, one candidate build, exact hash and a silent
-   `0.1.0` to `0.1.1` install-over test are recorded below. Installed runtime
-   restart and conversation/preference continuity remain NOT_RUN under the
-   user's headless-only constraint.
+   `0.1.0` to `0.1.1` install-over test are recorded below. Installed runtime,
+   project shortcut and preference continuity passed on an isolated invisible
+   Windows desktop. Conversation continuity remains NOT_RUN.
 5. **PENDING — maintainer publication decision:** present the release content,
    supported scope and limitations for acceptance. Only then publish the agreed
    GitHub release/installer and verify the downloaded file has the recorded hash
@@ -803,12 +803,21 @@ product version `0.1.1`, and no Forge desktop process remained. The candidate
 hash was unchanged after installation. This is a **PASS for silent package
 upgrade/version readback**, not a full installed-app journey.
 
-A one-off attempt to start the installed app on an isolated invisible Windows
-desktop exited before exposing a WebView debug endpoint. No visible app was
-opened, but project, preference and conversation recovery after the installed
-upgrade remain **NOT_RUN**. Do not claim installed runtime continuity from the
-silent install. The native development smoke also had one intermittent generic
-record lookup failure; five direct CLI reads succeeded and subsequent native
-smokes passed, but the cause is not established. Keep this as a known alpha
-limitation, not a resolved bug. Publication awaits maintainer acceptance of
-`RELEASE_NOTES-0.1.1.md` and downloadable-artifact verification.
+The first isolated-desktop launch exited because its one-off test helper closed
+the Windows desktop handle too early; keeping that handle open corrected the
+helper. The installed `0.1.1` app then launched on an invisible Windows desktop,
+reported version `0.1.1`, resolved `D:\Forge-method-core`, read its record, and
+retained theme, contrast and the My Projects shortcut after a full process
+restart. A second controlled headless run set theme, contrast and the project
+shortcut in installed `0.1.0`, silently installed the **same** hashed `0.1.1`
+candidate over it, and confirmed all three survived the cross-version upgrade.
+Opening the saved project shortcut again returned **Projeto encontrado** with
+the same canonical root. No app window appeared on the user's current desktop;
+the owned hidden processes were stopped, and local `0.1.1` remains installed.
+This is a **PASS for installed runtime and preference/project shortcut upgrade
+continuity**, not conversation continuity: no Codex conversation was run across
+versions, so that remains **NOT_RUN**. The native development smoke also had an
+intermittent generic record lookup failure; five direct CLI reads succeeded and
+subsequent native smokes passed, but the cause is not established. Keep this as
+a known alpha limitation, not a resolved bug. Publication awaits maintainer
+acceptance of `RELEASE_NOTES-0.1.1.md` and downloadable-artifact verification.

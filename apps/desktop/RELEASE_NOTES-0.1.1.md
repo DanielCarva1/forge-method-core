@@ -36,7 +36,8 @@ building-block update, not a claim that the whole Forge product is complete.
 
 One local `0.1.1` NSIS candidate was built and silently installed over a local
 `0.1.0` alpha. Installer exit, Windows registration, and installed executable
-version passed; SHA-256 is recorded in `README.md`. Under the current
-headless-only testing requirement, post-upgrade app runtime, preferences and
-conversation continuity are **NOT_RUN**. The candidate is not release-approved
-or downloadable.
+version passed; SHA-256 is recorded in `README.md`. Headless installed-app
+verification passed for launch, saved project shortcut and theme/contrast
+preferences across the `0.1.0` to `0.1.1` upgrade. Conversation continuity
+across versions remains **NOT_RUN**. The candidate is not release-approved or
+downloadable.
