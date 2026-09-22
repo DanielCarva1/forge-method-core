@@ -3,6 +3,9 @@ use crate::project;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+// One desktop process should not make its own read-only resume calls contend.
+static RESUME_READ: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[derive(Deserialize)]
 struct Resume {
     schema_version: String,
@@ -50,6 +53,7 @@ fn validate(value: Resume, project_id: &str) -> Result<Progress, &'static str> {
 #[tauri::command]
 pub async fn inspect_progress(project_root: String) -> Result<Progress, &'static str> {
     let project = project::inspect_project(project_root).await?;
+    let _read = RESUME_READ.lock().await;
     let resume = project::query(
         Path::new(&project.project_root),
         &["workflow", "resume"],

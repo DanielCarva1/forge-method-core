@@ -714,10 +714,10 @@ For the next coherent Windows alpha update (#97), retain this explicit ledger:
    intermittent native record lookup failure in the release limitations.
 3. **DONE in source:** desktop `0.1.1` is set in Tauri, Cargo and Cargo.lock;
    draft release notes exist. This alone is not an available update.
-4. **PARTIAL:** final checks, one candidate build, exact hash and a silent
-   `0.1.0` to `0.1.1` install-over test are recorded below. Installed runtime,
-   project shortcut and preference continuity passed on an isolated invisible
-   Windows desktop. Conversation continuity remains NOT_RUN.
+4. **PARTIAL:** final checks, a replacement candidate with its exact hash and
+   a silent `0.1.0` to `0.1.1` install-over test are recorded below. Installed
+   runtime, project shortcut and preference continuity passed on an isolated
+   invisible Windows desktop. Conversation continuity remains NOT_RUN.
 5. **PENDING — maintainer publication decision:** present the release content,
    supported scope and limitations for acceptance. Only then publish the agreed
    GitHub release/installer and verify the downloaded file has the recorded hash
@@ -821,3 +821,46 @@ intermittent generic record lookup failure; five direct CLI reads succeeded and
 subsequent native smokes passed, but the cause is not established. Keep this as
 a known alpha limitation, not a resolved bug. Publication awaits maintainer
 acceptance of `RELEASE_NOTES-0.1.1.md` and downloadable-artifact verification.
+
+## Read-conflict fix and replacement candidate — 2026-09-22
+
+Headless reproduction isolated the earlier generic record error: 15 sequential
+installed-app `inspect_progress` calls and 12 sequential UI consultations
+passed, but paired calls could return one success and one failure. The same
+paired `forge-core workflow resume --json` calls returned `conflict` from the
+governance ledger or `rejected_by_gate` from claim-WAL quiescence. A narrower
+probe also observed `rejected_by_gate` when the read-only replacement snapshot
+changed during inspection. These are actual CLI envelopes, not a frontend
+formatting or 64 KiB output-limit failure. The original single native smoke
+failure was not traced at the time, so its exact trigger cannot be proven
+retroactively; this reproduced the same user-visible error.
+
+The desktop adapter now retries only the identified transient read conflicts,
+within four attempts and a 20-second overall bound; permanent errors still
+fail. Its record command also serializes its own in-process resume reads so
+the app cannot contend with itself. Forge core and its locking contract were
+not changed. The typed-envelope classification test passed, as did desktop
+`cargo check`, all 20 desktop Rust tests, strict Clippy, seven Node tests,
+browser smoke, five headless pairs of native app calls, four app-versus-CLI
+contention rounds, invalid-root rejection, and installed UI record readback.
+Direct concurrent `forge-core` CLI calls can still return conflict; this is a
+desktop resilience fix, not a claim that core now serializes every reader.
+
+The earlier candidate with SHA-256
+`3D630CE98FDBCF794399EA422FB808EE9A2263B88649369067BF561E7B8CCB51`
+is **superseded** and retained under the build cache's `nsis/superseded/`
+directory, not for publication. The replacement candidate is
+`D:\forge-method-core-build-cache\main-target\release\bundle\nsis\Forge_0.1.1_x64-setup.exe`,
+4,478,683 bytes, SHA-256
+`DC7429FB4FDE6190EDED7323B45F190D980D1E23A3EAB4CDCE040E6F88FA08C8`.
+It installed silently over the prior local `0.1.1` binary (which changed),
+then was tested again as an exact `0.1.0` to `0.1.1` silent upgrade. The `0.1.0`
+baseline package in the current build cache hashed
+`7BBA88E3B9D772A2F8D1EB383F06425954C2E1B0FC76C06467EAE2973C6D22F8`;
+this is distinct from the earlier initial-package hash above. All three
+installer operations exited 0. The final installed `0.1.1` app launched on an
+invisible Windows desktop; dark theme, enhanced contrast, saved project,
+project resolution and record readback passed. Three more pairs of installed
+app record queries passed. No test app process remains. The replacement
+candidate has not been published or download-verified, and a real Codex
+conversation was not run across this exact upgrade.

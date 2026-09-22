@@ -26,18 +26,23 @@ building-block update, not a claim that the whole Forge product is complete.
 - The screens do not yet expose every Forge workflow action or full decision
   forms. A recorded status must not be read as live progress or whole-product
   completion. Mobile remote access is not provided.
-- Native development checks intermittently failed to read the Forge record;
-  the cause is not established. The UI keeps the old record hidden and offers
-  another consultation. Do not treat this as a reliable live status feed.
+- Parallel record reads exposed temporary Forge core lock conflicts. The
+  desktop now serializes its own record reads and retries only recognized
+  transient conflicts within a bounded period. Direct parallel core CLI reads
+  can still conflict, and the record remains a snapshot, not a live status
+  feed. If consultation ultimately fails, the UI hides the old record and
+  offers another attempt.
 - Publication and download verification require maintainer approval; a source
   commit or local installer is not a downloadable release.
 
 ## Candidate verification
 
-One local `0.1.1` NSIS candidate was built and silently installed over a local
-`0.1.0` alpha. Installer exit, Windows registration, and installed executable
-version passed; SHA-256 is recorded in `README.md`. Headless installed-app
-verification passed for launch, saved project shortcut and theme/contrast
-preferences across the `0.1.0` to `0.1.1` upgrade. Conversation continuity
-across versions remains **NOT_RUN**. The candidate is not release-approved or
-downloadable.
+The original local `0.1.1` candidate was superseded after the record-read fix.
+The exact replacement candidate has SHA-256
+`DC7429FB4FDE6190EDED7323B45F190D980D1E23A3EAB4CDCE040E6F88FA08C8`.
+It was silently installed over the prior local `0.1.1` and then tested as a
+silent `0.1.0` to `0.1.1` upgrade. Headless installed-app checks passed for
+launch, saved project shortcut, theme/contrast preferences and record readback;
+paired record consultations passed under the tested contention. Conversation
+continuity across this exact upgrade remains **NOT_RUN**. The candidate is not
+release-approved or downloadable.

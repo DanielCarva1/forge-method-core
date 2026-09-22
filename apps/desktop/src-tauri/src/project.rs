@@ -15,6 +15,36 @@ struct Envelope<T> {
     data: Option<T>,
 }
 #[derive(Deserialize)]
+struct FailureEnvelope {
+    command: String,
+    ok: bool,
+    exit_reason: Option<String>,
+    error: Option<FailureDetail>,
+}
+#[derive(Deserialize)]
+struct FailureDetail {
+    code: String,
+    message: String,
+}
+enum QueryError {
+    RetryableReadConflict,
+    Other(&'static str),
+}
+
+fn retryable_read_conflict(bytes: &[u8], expected: &str) -> bool {
+    let Ok(response) = serde_json::from_slice::<FailureEnvelope>(bytes) else {
+        return false;
+    };
+    response.command == expected
+        && !response.ok
+        && response.error.as_ref().is_some_and(|error| {
+            response.exit_reason.as_deref() == Some(error.code.as_str())
+                && matches!(error.code.as_str(), "conflict" | "rejected_by_gate")
+                && (error.message.contains("this process already holds quiescence for ")
+                    || error.message == "replacement continuity is unavailable: isolation or promotion state changed during read-only replacement inspection")
+        })
+}
+#[derive(Deserialize)]
 struct ResolvedProject {
     project_id: String,
     project_root: String,
@@ -75,14 +105,42 @@ pub async fn query<T: DeserializeOwned>(
     args: &[&str],
     expected: &str,
 ) -> Result<T, &'static str> {
-    let runtime = installed_runtime()?;
+    tokio::time::timeout(Duration::from_secs(20), async {
+        for attempt in 0..4 {
+            match query_once(root, args, expected).await {
+                Ok(value) => return Ok(value),
+                Err(QueryError::RetryableReadConflict) if attempt < 3 => {
+                    tokio::time::sleep(Duration::from_millis(300)).await;
+                }
+                Err(QueryError::RetryableReadConflict) => {
+                    return Err("O Forge está ocupado. Tente consultar o registro novamente.");
+                }
+                Err(QueryError::Other(message)) => return Err(message),
+            }
+        }
+        unreachable!("bounded query attempts return above")
+    })
+    .await
+    .map_err(|_| "O Forge demorou para responder. Você pode tentar novamente.")?
+}
+
+async fn query_once<T: DeserializeOwned>(
+    root: &Path,
+    args: &[&str],
+    expected: &str,
+) -> Result<T, QueryError> {
+    let runtime = installed_runtime().map_err(QueryError::Other)?;
     let mut command = tokio::process::Command::new(&runtime);
     command
         .args(args)
         .arg("--root")
         .arg(root)
         .arg("--json")
-        .current_dir(runtime.parent().ok_or("Instalação do Forge inválida.")?)
+        .current_dir(
+            runtime
+                .parent()
+                .ok_or(QueryError::Other("Instalação do Forge inválida."))?,
+        )
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -91,26 +149,31 @@ pub async fn query<T: DeserializeOwned>(
     command.creation_flags(0x08000000);
     let mut child = command
         .spawn()
-        .map_err(|_| "Não foi possível iniciar a consulta ao Forge.")?;
+        .map_err(|_| QueryError::Other("Não foi possível iniciar a consulta ao Forge."))?;
     let stdout = child
         .stdout
         .take()
-        .ok_or("Não foi possível ler a consulta.")?;
+        .ok_or(QueryError::Other("Não foi possível ler a consulta."))?;
     let result = tokio::time::timeout(Duration::from_secs(15), async {
         let mut bytes = Vec::new();
-        stdout.take(65537).read_to_end(&mut bytes).await.map_err(|_| "Não foi possível ler a resposta do Forge.")?;
-        if bytes.len() > 65536 { return Err("A resposta do Forge excedeu o tamanho esperado."); }
-        if !child.wait().await.map_err(|_| "A consulta ao Forge falhou.")?.success() {
-            return Err("Não foi possível consultar o projeto. Confira a pasta e o vínculo com o Forge; nada foi alterado.");
+        stdout.take(65537).read_to_end(&mut bytes).await.map_err(|_| QueryError::Other("Não foi possível ler a resposta do Forge."))?;
+        if bytes.len() > 65536 { return Err(QueryError::Other("A resposta do Forge excedeu o tamanho esperado.")); }
+        if !child.wait().await.map_err(|_| QueryError::Other("A consulta ao Forge falhou."))?.success() {
+            if retryable_read_conflict(&bytes, expected) {
+                return Err(QueryError::RetryableReadConflict);
+            }
+            return Err(QueryError::Other("Não foi possível consultar o projeto. Confira a pasta e o vínculo com o Forge; nada foi alterado."));
         }
-        let envelope: Envelope<T> = serde_json::from_slice(&bytes).map_err(|_| "O Forge retornou uma resposta incompatível.")?;
-        if !envelope.ok || envelope.command != expected { return Err("O Forge não confirmou essa consulta."); }
-        envelope.data.ok_or("O Forge não informou os dados da consulta.")
+        let envelope: Envelope<T> = serde_json::from_slice(&bytes).map_err(|_| QueryError::Other("O Forge retornou uma resposta incompatível."))?;
+        if !envelope.ok || envelope.command != expected { return Err(QueryError::Other("O Forge não confirmou essa consulta.")); }
+        envelope.data.ok_or(QueryError::Other("O Forge não informou os dados da consulta."))
     }).await;
     if child.id().is_some() {
         let _ = child.kill().await;
     }
-    result.map_err(|_| "O Forge demorou para responder. Você pode tentar novamente.")?
+    result.map_err(|_| {
+        QueryError::Other("O Forge demorou para responder. Você pode tentar novamente.")
+    })?
 }
 
 #[tauri::command]
@@ -136,4 +199,26 @@ pub async fn inspect_project(project_root: String) -> Result<ProjectSummary, &'s
         project_id: data.project_id,
         project_root: data.project_root,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retries_only_matching_transient_read_conflicts() {
+        let conflict = br#"{"command":"workflow.resume","ok":false,"exit_reason":"conflict","error":{"code":"conflict","message":"governance ledger failed: workflow-governance lock failed: producer boundary: this process already holds quiescence for project"}}"#;
+        assert!(retryable_read_conflict(conflict, "workflow.resume"));
+        assert!(!retryable_read_conflict(conflict, "project.resolve"));
+        let claim_wal_conflict = br#"{"command":"workflow.resume","ok":false,"exit_reason":"rejected_by_gate","error":{"code":"rejected_by_gate","message":"claim WAL projection failed: recover claim WAL failed: lock WAL failed: this process already holds quiescence for project"}}"#;
+        assert!(retryable_read_conflict(
+            claim_wal_conflict,
+            "workflow.resume"
+        ));
+        let snapshot_drift = br#"{"command":"workflow.resume","ok":false,"exit_reason":"rejected_by_gate","error":{"code":"rejected_by_gate","message":"replacement continuity is unavailable: isolation or promotion state changed during read-only replacement inspection"}}"#;
+        assert!(retryable_read_conflict(snapshot_drift, "workflow.resume"));
+        let other_conflict = br#"{"command":"workflow.resume","ok":false,"exit_reason":"conflict","error":{"code":"conflict","message":"durable workflow state changed"}}"#;
+        assert!(!retryable_read_conflict(other_conflict, "workflow.resume"));
+        assert!(!retryable_read_conflict(b"not-json", "workflow.resume"));
+    }
 }
