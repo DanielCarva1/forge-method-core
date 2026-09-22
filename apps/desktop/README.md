@@ -709,9 +709,9 @@ For the next coherent Windows alpha update (#97), retain this explicit ledger:
 
 1. **DONE:** source package committed and pushed; local Windows x64 NSIS build,
    native WebView smoke and focused tests passed within the recorded limits.
-2. **PARTIAL:** the UI slice and actual Windows folder selection were checked.
-   Commit and push remain pending; preserve the intermittent native record
-   lookup failure in the release limitations.
+2. **DONE for source delivery:** the UI slice and actual Windows folder
+   selection were checked and committed/pushed as `92bf259d`. Preserve the
+   intermittent native record lookup failure in the release limitations.
 3. **DONE in source:** desktop `0.1.1` is set in Tauri, Cargo and Cargo.lock;
    draft release notes exist. This alone is not an available update.
 4. **PARTIAL:** final checks, one candidate build, exact hash and a silent
@@ -781,8 +781,8 @@ project lookup, record readback, invalid/unlinked folders and preferences, but
 one earlier run of this package returned a generic record lookup failure. That
 intermittent failure remains under diagnosis and is not represented as stable
 PASS. Real Codex conversation was NOT_RUN in this source slice. The local
-candidate and silent upgrade are recorded below; commit/push and publication
-remain pending.
+candidate and silent upgrade are recorded below. Source commit `92bf259d` was
+pushed to `origin/codex/desktop-shell`; publication remains pending.
 
 ## Local installer candidate — 2026-09-22
 
