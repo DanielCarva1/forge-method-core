@@ -15,5 +15,19 @@
       "capabilities": []
     }
   },
-  "bundle": { "active": false, "icon": ["icons/icon.ico", "icons/icon.png"] }
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Stable Studio",
+    "category": "DeveloperTool",
+    "shortDescription": "Desktop companion for Forge projects",
+    "longDescription": "A Windows desktop companion for working with existing Forge projects through a supported Codex CLI installation.",
+    "homepage": "https://github.com/DanielCarva1/forge-method-core",
+    "icon": ["icons/icon.ico", "icons/icon.png"],
+    "windows": {
+      "allowDowngrades": false,
+      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
+      "nsis": { "installMode": "currentUser" }
+    }
+  }
 }

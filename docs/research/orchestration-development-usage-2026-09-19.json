@@ -1,0 +1,72 @@
+{
+  "kind": "completed_development_usage_observation",
+  "date": "2026-09-19",
+  "scope": "Two completed root turns and attributed history_protocol child responses. Includes coordination, implementation, review and failed validation attempts within those turns; not entire project/account usage.",
+  "method": "Bounded read-only audit of five same-day logs by usage_probe. Per-response counters summed once; no duplicate response IDs observed; per-file cumulative reconciliation reported successful.",
+  "source_threads": [
+    "01a0bb60-4f1b-7541-932b-779226f93ba6",
+    "01a0bb91-4f75-76b2-ab1a-11e7f62a9be7"
+  ],
+  "exclusions": [
+    "Earlier research/documentation pilot",
+    "Unrelated child stages",
+    "RAM diagnosis",
+    "Current measurement and subsequent work"
+  ],
+  "counter_interpretation": "Cached input is included in input; reasoning output is included in output. total=input+output. These are cumulative processed tokens across responses, not unique context size.",
+  "monetary_status": "UNKNOWN: no verified per-model BRL tariff or Pro quota conversion. No monetary savings or Astra-only/Sol-only baseline established.",
+  "observations": [
+    {
+      "stage": "development",
+      "root_turn_id": "01a0bb90-ec0c-7d12-8b42-d5e0ede32832",
+      "model": "gpt-6-astra",
+      "response_records": 64,
+      "input_tokens": 5699808,
+      "cached_input_tokens": 5575936,
+      "output_tokens": 16601,
+      "reasoning_output_tokens": 1896,
+      "total_tokens": 5716409
+    },
+    {
+      "stage": "development",
+      "root_turn_id": "01a0bb90-ec0c-7d12-8b42-d5e0ede32832",
+      "model": "gpt-5.6-sol",
+      "response_records": 57,
+      "input_tokens": 5399168,
+      "cached_input_tokens": 5286272,
+      "output_tokens": 23531,
+      "reasoning_output_tokens": 5479,
+      "total_tokens": 5422699
+    },
+    {
+      "stage": "native_validation",
+      "root_turn_id": "01a0bbb1-672f-7482-91f9-f056b8217851",
+      "model": "gpt-6-astra",
+      "response_records": 37,
+      "input_tokens": 4884117,
+      "cached_input_tokens": 4833792,
+      "output_tokens": 8259,
+      "reasoning_output_tokens": 2473,
+      "total_tokens": 4892376
+    },
+    {
+      "stage": "native_validation",
+      "root_turn_id": "01a0bbb1-672f-7482-91f9-f056b8217851",
+      "model": "gpt-5.6-sol",
+      "response_records": 42,
+      "input_tokens": 3122070,
+      "cached_input_tokens": 3020288,
+      "output_tokens": 25171,
+      "reasoning_output_tokens": 6203,
+      "total_tokens": 3147241
+    }
+  ],
+  "totals": {
+    "response_records": 200,
+    "input_tokens": 19105163,
+    "cached_input_tokens": 18716288,
+    "output_tokens": 73562,
+    "reasoning_output_tokens": 16051,
+    "total_tokens": 19178725
+  }
+}

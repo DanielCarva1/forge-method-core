@@ -12,8 +12,8 @@
 <body>
   <a class="skip" href="#main">Pular para o conteúdo</a>
   <header>
-    <a class="brand" href="#main" aria-label="Forge, início"><img src="assets/forge.png" alt="" width="44" height="44">Forge</a>
-    <nav aria-label="Navegação principal"><a href="#workspace">Minha conversa</a><a href="#about">Conheça o Forge</a></nav>
+    <a class="brand" href="#home" aria-label="Forge, início"><img src="assets/forge.png" alt="" width="44" height="44">Forge</a>
+    <nav aria-label="Navegação principal"><a href="#home" data-route="home">Início</a><a href="#explore" data-route="explore">Explorar</a><a href="#projects" data-route="projects">Meus projetos</a><a href="#workspace" data-route="workspace">Minha conversa</a><a href="#about">Como funciona</a></nav>
     <span class="development">Em desenvolvimento</span>
   </header>
   <main id="main">
@@ -26,12 +26,103 @@
       </div>
       <p id="appearance-status" role="status" aria-live="polite">A escolha vale para este aplicativo, não muda seu projeto.</p>
     </details>
-    <section class="hero" aria-labelledby="welcome">
-      <p class="eyebrow">SUAS IDEIAS, COM COMPANHIA</p>
-      <h1 id="welcome">Vamos criar juntos.</h1>
-      <p class="intro">Traga uma ideia ou continue seu projeto. Você conhece o que precisa; seu agente ajuda a encontrar o caminho.</p>
+    <section id="home" class="screen home-screen" data-screen="home" aria-labelledby="welcome">
+      <div class="hero">
+        <p class="eyebrow">SUAS IDEIAS, COM COMPANHIA</p>
+        <h1 id="welcome" tabindex="-1">Vamos criar juntos.</h1>
+        <p class="intro">Traga uma ideia ou continue um projeto. Você conhece o que precisa; o Forge mantém o contexto enquanto seu agente ajuda a construir.</p>
+        <div class="home-actions">
+          <a class="action-link primary" href="#projects">Continuar um projeto <span aria-hidden="true">→</span></a>
+          <a class="action-link" href="#explore">Ver ideias para começar</a>
+        </div>
+      </div>
+      <section id="start-ideas" class="starter-section" aria-labelledby="starter-title">
+        <p class="eyebrow">COMECE DO SEU JEITO</p>
+        <h2 id="starter-title">Você não precisa chegar com tudo planejado.</h2>
+        <div class="starter-grid">
+          <article class="starter-card"><span class="step">01</span><h3>Continuar algo existente</h3><p>Abra um projeto que já usa o Forge e retome a conversa de onde parou.</p><a href="#projects">Abrir meu projeto</a></article>
+          <article class="starter-card"><span class="step">02</span><h3>Melhorar uma ideia</h3><p>Leve uma dúvida, um problema ou uma vontade de mudança para a conversa.</p><a href="#workspace">Conversar sobre uma ideia</a></article>
+          <article class="starter-card"><span class="step">03</span><h3>Entender o próximo passo</h3><p>Consulte o que ficou registrado e converse com seu agente sem decifrar arquivos técnicos.</p><a href="#workspace">Ver meu trabalho</a></article>
+        </div>
+      </section>
+      <details id="about" class="about panel">
+        <summary>Primeira vez aqui? Conheça o Forge</summary>
+        <div class="cards">
+          <article><span class="step">01</span><h3>Conte o que tem em mente</h3><p>Converse sobre o que você quer criar e para quem. Seu conhecimento do problema importa.</p></article>
+          <article><span class="step">02</span><h3>Encontre um caminho</h3><p>Seu agente ajuda a pesquisar e planejar. O Forge mantém por perto o que vocês combinaram.</p></article>
+          <article><span class="step">03</span><h3>Confira o resultado</h3><p>Peça mudanças e decida os próximos passos. Uma resposta do agente não significa que o trabalho terminou.</p></article>
+        </div>
+      </details>
     </section>
-    <div id="workspace" class="workspace">
+    <section id="explore" class="screen explore-screen" data-screen="explore" aria-labelledby="explore-title" hidden>
+      <div class="explore-heading">
+        <div>
+          <p class="eyebrow">EXPLORE POSSIBILIDADES</p>
+          <h1 id="explore-title" tabindex="-1">Siga sua curiosidade.</h1>
+          <p class="intro">Escolha um tema. Você não precisa ter uma ideia pronta.</p>
+        </div>
+        <form id="category-search" class="category-search" role="search">
+          <label for="category-query">O que te interessa?</label>
+          <input id="category-query" type="search" autocomplete="off" placeholder="Busque um tema">
+        </form>
+      </div>
+      <p id="category-status" class="visually-hidden" role="status" aria-live="polite"></p>
+      <div class="category-grid" aria-label="Temas para explorar">
+        <a class="category-card" href="#workspace" data-category="Trabalho e produtividade" data-starter="Quero conversar sobre uma ideia para facilitar meu trabalho ou organizar melhor minha rotina.">
+          <span class="category-art art-work" aria-hidden="true"></span><span class="category-name">Trabalho e produtividade <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="category-card" href="#workspace" data-category="Arte e criação" data-starter="Quero criar algo artístico. Me ajude a transformar o que tenho em mente em um projeto possível.">
+          <span class="category-art art-art" aria-hidden="true"></span><span class="category-name">Arte e criação <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="category-card" href="#workspace" data-category="Estudos e descobertas" data-starter="Quero aprender ou pesquisar um assunto. Me ajude a encontrar um bom caminho para começar.">
+          <span class="category-art art-study" aria-hidden="true"></span><span class="category-name">Estudos e descobertas <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="category-card" href="#workspace" data-category="Esportes" data-starter="Tenho uma ideia relacionada a esportes e quero ajuda para desenvolvê-la.">
+          <span class="category-art art-sports" aria-hidden="true"></span><span class="category-name">Esportes <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="category-card" href="#workspace" data-category="Casa e dia a dia" data-starter="Quero melhorar alguma coisa em casa ou no meu dia a dia. Me ajude a organizar essa ideia.">
+          <span class="category-art art-home" aria-hidden="true"></span><span class="category-name">Casa e dia a dia <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="category-card" href="#workspace" data-category="Música" data-starter="Tenho uma ideia relacionada a música e quero ajuda para tirá-la do papel.">
+          <span class="category-art art-music" aria-hidden="true"></span><span class="category-name">Música <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="category-card" href="#workspace" data-category="Tecnologia" data-starter="Quero criar ou melhorar algo usando tecnologia, mas ainda não sei qual é o melhor caminho.">
+          <span class="category-art art-tech" aria-hidden="true"></span><span class="category-name">Tecnologia <span aria-hidden="true">→</span></span>
+        </a>
+        <a class="category-card" href="#workspace" data-category="Jogos" data-starter="Tenho uma ideia para um jogo e quero ajuda para desenvolvê-la passo a passo.">
+          <span class="category-art art-games" aria-hidden="true"></span><span class="category-name">Jogos <span aria-hidden="true">→</span></span>
+        </a>
+      </div>
+      <div class="open-idea panel">
+        <div><h2>Sua ideia não cabe numa categoria?</h2><p>Tudo bem. Conte o que você tem em mente.</p></div>
+        <a class="action-link primary" href="#workspace" data-starter="Quero conversar sobre uma ideia que ainda não sei como definir.">Começar uma conversa <span aria-hidden="true">→</span></a>
+      </div>
+    </section>
+    <section id="projects" class="screen projects-screen" data-screen="projects" aria-labelledby="projects-title" hidden>
+      <div class="projects-heading">
+        <div>
+          <p class="eyebrow">UM LUGAR PARA VOLTAR</p>
+          <h1 id="projects-title" tabindex="-1">Meus projetos</h1>
+          <p class="intro">Volte aos projetos que você já abriu neste aplicativo.</p>
+        </div>
+        <a class="action-link primary" href="#workspace">Abrir outro projeto <span aria-hidden="true">→</span></a>
+      </div>
+      <p id="projects-status" role="status" aria-live="polite"></p>
+      <div id="recent-projects" class="recent-projects" aria-label="Projetos abertos neste aplicativo"></div>
+      <div id="projects-empty" class="projects-empty panel">
+        <img src="assets/forge.png" alt="" width="56" height="56">
+        <div><h2>Seu espaço começa aqui.</h2><p>Quando você conferir um projeto, ele aparecerá nesta lista para facilitar a próxima visita.</p></div>
+        <a class="action-link" href="#workspace">Abrir um projeto</a>
+      </div>
+      <p class="hint">Esta lista contém apenas atalhos salvos neste dispositivo. Os arquivos e as conversas dos seus projetos não ficam aqui.</p>
+    </section>
+    <section id="workspace" class="screen workspace-screen" data-screen="workspace" aria-labelledby="workspace-title" hidden>
+      <div class="screen-heading">
+        <a class="back-link" href="#home"><span aria-hidden="true">←</span> Voltar ao início</a>
+        <p class="eyebrow">SEU ESPAÇO DE TRABALHO</p>
+        <h1 id="workspace-title" tabindex="-1">Projeto e conversa, lado a lado.</h1>
+      </div>
+      <div class="workspace">
       <aside class="project panel" aria-labelledby="project-title">
         <p class="eyebrow">SEU PONTO DE PARTIDA</p>
         <h2 id="project-title">Qual projeto vamos continuar?</h2>
@@ -39,7 +130,8 @@
         <form id="project-form">
           <label for="project-root">Pasta do projeto</label>
           <input id="project-root" name="project-root" type="text" required autocomplete="off" spellcheck="false" aria-describedby="path-help" placeholder="D:\MeusProjetos\MeuSite">
-          <p id="path-help" class="hint">Copie o caminho da barra do Explorador de Arquivos.</p>
+          <p id="path-help" class="hint">Navegue até a pasta do projeto ou cole o caminho aqui.</p>
+          <button id="browse-project" type="button">Escolher pasta…</button>
           <button id="inspect-project" type="submit">Conferir projeto <span aria-hidden="true">→</span></button>
         </form>
         <p id="project-status" role="status" aria-live="polite"></p>
@@ -79,15 +171,8 @@
           <div class="chat-actions"><button id="send-message" class="primary" disabled>Enviar <span aria-hidden="true">→</span></button><button id="interrupt-agent" type="button" disabled>Interromper</button></div>
         </form>
       </section>
-    </div>
-    <details id="about" class="about panel">
-      <summary>Primeira vez aqui? Conheça o Forge</summary>
-      <div class="cards">
-        <article><span class="step">01</span><h3>Conte o que tem em mente</h3><p>Converse sobre o que você quer criar e para quem. Seu conhecimento do problema importa.</p></article>
-        <article><span class="step">02</span><h3>Encontre um caminho</h3><p>Seu agente ajuda a pesquisar e planejar. O Forge mantém por perto o que vocês combinaram.</p></article>
-        <article><span class="step">03</span><h3>Confira o resultado</h3><p>Peça mudanças e decida os próximos passos. Uma resposta do agente não significa que o trabalho terminou.</p></article>
       </div>
-    </details>
+    </section>
   </main>
   <footer>Forge · Ideias com espaço para crescer.</footer>
 </body>

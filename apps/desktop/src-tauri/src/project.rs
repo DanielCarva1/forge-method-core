@@ -5,6 +5,7 @@ use std::{
     process::Stdio,
     time::Duration,
 };
+use tauri_plugin_dialog::DialogExt;
 use tokio::io::AsyncReadExt;
 
 #[derive(Deserialize)]
@@ -23,6 +24,36 @@ struct ResolvedProject {
 pub struct ProjectSummary {
     pub project_id: String,
     pub project_root: String,
+}
+
+/// Only returns the chosen path. Project validity remains owned by inspect_project.
+#[tauri::command]
+pub async fn choose_project_folder(
+    window: tauri::WebviewWindow,
+) -> Result<Option<String>, &'static str> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    window
+        .dialog()
+        .file()
+        .set_title("Escolha a pasta do projeto")
+        .set_parent(&window)
+        .pick_folder(move |selection| {
+            let _ = sender.send(selection);
+        });
+    let selection = receiver
+        .await
+        .map_err(|_| "Não foi possível abrir a seleção de pastas.")?;
+    selection
+        .map(|path| {
+            path.into_path()
+                .map_err(|_| "A pasta escolhida não tem um caminho local válido.")
+                .and_then(|path| {
+                    path.into_os_string()
+                        .into_string()
+                        .map_err(|_| "A pasta escolhida não tem um caminho de texto válido.")
+                })
+        })
+        .transpose()
 }
 
 fn installed_runtime() -> Result<PathBuf, &'static str> {

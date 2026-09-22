@@ -10,7 +10,7 @@ pub struct Conversation {
     pub resumed: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct Message {
     pub id: String,
     pub role: &'static str,
@@ -44,8 +44,17 @@ pub fn messages(thread: &Value) -> Result<Vec<Message>, &'static str> {
     let turns = thread["turns"]
         .as_array()
         .ok_or("O Codex não retornou o histórico. Tente conectar novamente.")?;
+    messages_from_turns(turns)
+}
+
+pub fn messages_from_turns(turns: &[Value]) -> Result<Vec<Message>, &'static str> {
     let mut messages = Vec::new();
     for turn in turns {
+        match turn.get("itemsView") {
+            None => {}
+            Some(Value::String(view)) if view == "full" => {}
+            _ => return Err("O histórico recebido está incompleto."),
+        }
         for item in turn["items"]
             .as_array()
             .ok_or("O histórico recebido está incompleto.")?

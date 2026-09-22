@@ -1,6 +1,9 @@
 import { readAppInfo } from './connection.mjs';
 import { setProject } from './chat.mjs';
 import { setProgressProject } from './progress.mjs';
+import { rememberProject } from './recent-projects.mjs';
+import './navigation.mjs';
+import './explore.mjs';
 
 const status = document.querySelector('#native-status');
 const retry = document.querySelector('#retry');
@@ -23,6 +26,28 @@ const inspect = document.querySelector('#inspect-project');
 const projectStatus = document.querySelector('#project-status');
 const resultPanel = document.querySelector('#project-result');
 const projectRoot = document.querySelector('#project-root');
+const browse = document.querySelector('#browse-project');
+browse.addEventListener('click', async () => {
+  if (browse.disabled || projectRoot.disabled) return;
+  browse.disabled = true;
+  projectStatus.textContent = 'Abrindo suas pastas…';
+  try {
+    const invoke = globalThis.__TAURI__?.core?.invoke;
+    if (!invoke) throw 'Abra esta tela pelo aplicativo Forge para escolher uma pasta.';
+    const path = await invoke('choose_project_folder');
+    if (!path || projectRoot.disabled) {
+      projectStatus.textContent = path ? '' : 'Seleção cancelada. Nenhum projeto foi alterado.';
+      return;
+    }
+    projectRoot.value = path;
+    projectRoot.dispatchEvent(new Event('input', { bubbles: true }));
+    form.requestSubmit();
+  } catch (error) {
+    projectStatus.textContent = typeof error === 'string' ? error : 'Não foi possível abrir a seleção de pastas.';
+  } finally {
+    if (!projectRoot.disabled) browse.disabled = false;
+  }
+});
 projectRoot.addEventListener('input', () => {
   setProject(null);
   setProgressProject(null);
@@ -33,6 +58,7 @@ form.addEventListener('submit', async event => {
   event.preventDefault();
   if (inspect.disabled) return;
   inspect.disabled = true;
+  browse.disabled = true;
   setProject(null);
   setProgressProject(null);
   projectRoot.disabled = true;
@@ -49,11 +75,13 @@ form.addEventListener('submit', async event => {
     resultPanel.hidden = false;
     setProject(project);
     setProgressProject(project);
+    rememberProject(project);
     projectStatus.textContent = 'Projeto encontrado. Confira se esta é a pasta que você quer usar.';
   } catch (error) {
     projectStatus.textContent = typeof error === 'string' ? error : 'Não foi possível conferir o projeto. Tente novamente.';
   } finally {
     inspect.disabled = false;
     projectRoot.disabled = false;
+    browse.disabled = false;
   }
 });

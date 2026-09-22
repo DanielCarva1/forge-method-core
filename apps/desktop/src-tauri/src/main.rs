@@ -24,6 +24,7 @@ fn app_info() -> AppInfo {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(agent::AgentState::default())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -40,6 +41,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             app_info,
+            project::choose_project_folder,
             project::inspect_project,
             progress::inspect_progress,
             agent::connect_agent,

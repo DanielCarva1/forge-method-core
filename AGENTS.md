@@ -1,5 +1,14 @@
 # Repository agent instructions
 
+## Orchestration and continuity agreement
+
+Before resuming work, and after every context compaction or context reset, read
+`docs/agents/orchestration.md`. For desktop work, also read the latest session
+checkpoint in `apps/desktop/README.md`. The parent agent owns model routing,
+integration, verification, and honest cost reporting; the human should not have
+to manage subagents or open separate chats. These are operating instructions,
+not a replacement for Forge runtime authority or the development plan.
+
 ## Agent skills
 
 ### Issue tracker

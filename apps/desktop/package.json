@@ -1,0 +1,11 @@
+{
+  "name": "forge-desktop-build",
+  "private": true,
+  "scripts": {
+    "build:nsis": "tauri build --bundles nsis --ci",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.0"
+  }
+}

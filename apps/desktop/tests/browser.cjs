@@ -9,10 +9,14 @@ const assets = new Map([
   ['/', ['index.html', 'text/html']],
   ['/styles.css', ['styles.css', 'text/css']],
   ['/main.mjs', ['main.mjs', 'text/javascript']],
+  ['/navigation.mjs', ['navigation.mjs', 'text/javascript']],
+  ['/explore.mjs', ['explore.mjs', 'text/javascript']],
+  ['/recent-projects.mjs', ['recent-projects.mjs', 'text/javascript']],
   ['/connection.mjs', ['connection.mjs', 'text/javascript']],
   ['/chat.mjs', ['chat.mjs', 'text/javascript']],
   ['/conversation-reference.mjs', ['conversation-reference.mjs', 'text/javascript']],
   ['/assets/forge.png', ['assets/forge.png', 'image/png']],
+  ['/assets/explore-artwork.png', ['assets/explore-artwork.png', 'image/png']],
   ['/appearance.js', ['appearance.js', 'text/javascript']],
   ['/progress.mjs', ['progress.mjs', 'text/javascript']],
 ]);
@@ -29,23 +33,156 @@ const assets = new Map([
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   let browser;
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({
+      headless: true,
+      executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH || undefined,
+    });
     const page = await browser.newPage();
     const url = `http://127.0.0.1:${server.address().port}`;
+    const workspaceUrl = `${url}#workspace`;
+    await page.goto(url);
+    assert.equal(await page.locator('#home').isVisible(), true);
+    assert.equal(await page.locator('#workspace').isHidden(), true);
+    assert.equal(await page.locator('nav a[data-route="home"]').getAttribute('aria-current'), 'page');
+    await page.getByRole('link', { name: 'Continuar um projeto' }).click();
+    await page.locator('#projects').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#projects-empty').isVisible(), true);
+    await page.getByRole('link', { name: 'Abrir outro projeto' }).click();
+    await page.locator('#workspace').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#workspace').isVisible(), true);
+    assert.equal(await page.locator('#home').isHidden(), true);
+    assert.equal(await page.locator('nav a[data-route="workspace"]').getAttribute('aria-current'), 'page');
+    console.log('PASS: home and workspace are distinct, reachable screens with current navigation.');
+    await page.getByRole('link', { name: 'Explorar', exact: true }).click();
+    await page.locator('#explore').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#home').isHidden(), true);
+    assert.equal(await page.locator('#workspace').isHidden(), true);
+    assert.equal(await page.locator('nav a[data-route="explore"]').getAttribute('aria-current'), 'page');
+    assert.equal(await page.locator('.category-card').count(), 8);
+    if (process.env.FORGE_EXPLORE_SCREENSHOT) {
+      await page.screenshot({ path: process.env.FORGE_EXPLORE_SCREENSHOT, fullPage: true });
+    }
+    for (const width of [390, 1180]) {
+      await page.setViewportSize({ width, height: 844 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+      assert.equal(await page.locator('.category-card:visible').count(), 8);
+      if (width === 390 && process.env.FORGE_EXPLORE_MOBILE_SCREENSHOT) {
+        await page.screenshot({ path: process.env.FORGE_EXPLORE_MOBILE_SCREENSHOT, fullPage: true });
+      }
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.getByRole('searchbox', { name: 'O que te interessa?' }).fill('musica');
+    assert.equal(await page.locator('.category-card:visible').count(), 1);
+    await page.getByRole('link', { name: /Música/ }).click();
+    await page.locator('#workspace').waitFor({ state: 'visible' });
+    assert.match(await page.getByRole('textbox', { name: 'Conte sua ideia' }).inputValue(), /música/i);
+    console.log('PASS: Explore filters eight approachable themes and carries the chosen idea into the conversation.');
+    const projectsPage = await browser.newPage();
+    await projectsPage.addInitScript(() => {
+      window.projectChecks = [];
+      window.__TAURI__ = { core: { invoke: async (command, args) => {
+        if (command === 'app_info') return { name: 'Forge', version: '0.1.0' };
+        if (command === 'choose_project_folder') {
+          if (window.folderError) throw 'Não foi possível abrir a seleção de pastas.';
+          return window.folderChoice ?? null;
+        }
+        if (command === 'inspect_project') {
+          window.projectChecks.push(args.projectRoot);
+          if (window.rejectProject) throw 'Este projeto não está disponível.';
+          const root = args.projectRoot;
+          return { project_id: root.endsWith('two') ? 'second-project' : 'first-project', project_root: root };
+        }
+      } } };
+    });
+    await projectsPage.goto(`${url}#projects`);
+    assert.equal(await projectsPage.locator('#projects-empty').isVisible(), true);
+    await projectsPage.getByRole('link', { name: 'Abrir outro projeto' }).click();
+    await projectsPage.evaluate(() => { window.folderChoice = 'D:\\one'; });
+    await projectsPage.getByRole('button', { name: 'Escolher pasta' }).click();
+    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto encontrado' }).waitFor();
+    assert.equal(await projectsPage.locator('#project-root').inputValue(), 'D:\\one');
+    await projectsPage.evaluate(() => { window.folderChoice = null; });
+    await projectsPage.getByRole('button', { name: 'Escolher pasta' }).click();
+    await projectsPage.locator('#project-status').filter({ hasText: 'Seleção cancelada' }).waitFor();
+    assert.equal(await projectsPage.locator('#project-root').inputValue(), 'D:\\one');
+    assert.equal(await projectsPage.locator('#project-result').isVisible(), true);
+    await projectsPage.evaluate(() => { window.folderError = true; });
+    await projectsPage.getByRole('button', { name: 'Escolher pasta' }).click();
+    await projectsPage.locator('#project-status').filter({ hasText: 'Não foi possível abrir' }).waitFor();
+    assert.equal(await projectsPage.locator('#project-root').inputValue(), 'D:\\one');
+    await projectsPage.evaluate(() => { window.folderError = false; });
+    await projectsPage.getByRole('link', { name: 'Meus projetos' }).click();
+    assert.equal(await projectsPage.locator('.recent-project').count(), 1);
+    assert.equal(await projectsPage.locator('#projects-empty').isHidden(), true);
+    if (process.env.FORGE_PROJECTS_SCREENSHOT) {
+      await projectsPage.screenshot({ path: process.env.FORGE_PROJECTS_SCREENSHOT, fullPage: true });
+    }
+    await projectsPage.reload();
+    assert.equal(await projectsPage.locator('.recent-project').count(), 1);
+    await projectsPage.getByRole('button', { name: 'Abrir first-project' }).click();
+    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto encontrado' }).waitFor();
+    assert.deepEqual(await projectsPage.evaluate(() => window.projectChecks), ['D:\\one']);
+    await projectsPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\two');
+    await projectsPage.getByRole('button', { name: 'Conferir projeto' }).click();
+    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto encontrado' }).waitFor();
+    await projectsPage.getByRole('link', { name: 'Meus projetos' }).click();
+    assert.equal(await projectsPage.locator('.recent-project').count(), 2);
+    await projectsPage.locator('#project-root').evaluate(input => { input.disabled = true; });
+    await projectsPage.getByRole('button', { name: 'Abrir first-project' }).click();
+    await projectsPage.locator('#projects-status').filter({ hasText: 'Encerre a conversa atual' }).waitFor();
+    assert.equal(await projectsPage.locator('#project-root').inputValue(), 'D:\\two');
+    await projectsPage.locator('#project-root').evaluate(input => { input.disabled = false; });
+    await projectsPage.evaluate(() => { window.rejectProject = true; });
+    await projectsPage.getByRole('button', { name: 'Abrir first-project' }).click();
+    await projectsPage.locator('#project-status').filter({ hasText: 'não está disponível' }).waitFor();
+    assert.equal(await projectsPage.locator('#project-result').isHidden(), true);
+    assert.equal(await projectsPage.locator('#connect-agent').isDisabled(), true);
+    await projectsPage.getByRole('link', { name: 'Meus projetos' }).click();
+    await projectsPage.getByRole('button', { name: 'Remover first-project da lista' }).click();
+    await projectsPage.getByRole('button', { name: 'Remover second-project da lista' }).click();
+    assert.equal(await projectsPage.locator('#projects-empty').isVisible(), true);
+    await projectsPage.evaluate(() => { Storage.prototype.setItem = () => { throw new Error('Unavailable'); }; window.rejectProject = false; });
+    await projectsPage.getByRole('link', { name: 'Abrir outro projeto' }).click();
+    await projectsPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\three');
+    await projectsPage.getByRole('button', { name: 'Conferir projeto' }).click();
+    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto encontrado' }).waitFor();
+    await projectsPage.getByRole('link', { name: 'Meus projetos' }).click();
+    assert.equal(await projectsPage.locator('.recent-project').count(), 1);
+    await projectsPage.locator('#projects-status').filter({ hasText: 'Não foi possível guardar' }).waitFor();
+    for (const width of [390, 1180]) {
+      await projectsPage.setViewportSize({ width, height: 844 });
+      assert.equal(await projectsPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    }
+    await projectsPage.close();
+    console.log('PASS: My Projects empty state, verified shortcuts, reload, revalidation, unavailable project, removal, storage failure and narrow layout.');
     const keyboardPage = await browser.newPage();
     await keyboardPage.goto(url);
-    for (const selector of ['.skip', '.brand', 'nav a:first-child', 'nav a:last-child', '.appearance summary', '#appearance-theme', '#appearance-contrast', '#project-root', '#inspect-project', '#connection summary', '#retry', '#new-conversation', '#about summary']) {
+    for (const selector of ['.skip', '.brand', 'nav a:first-child', 'nav a:nth-child(2)', 'nav a:nth-child(3)', 'nav a:nth-child(4)', 'nav a:last-child', '.appearance summary', '#appearance-theme', '#appearance-contrast', '.home-actions a:first-child', '.home-actions a:last-child', '.starter-card:nth-child(1) a', '.starter-card:nth-child(2) a', '.starter-card:nth-child(3) a', '#about summary']) {
       await keyboardPage.keyboard.press('Tab');
       assert.equal(await keyboardPage.locator(selector).evaluate(node => node === document.activeElement), true, `Keyboard order: ${selector}`);
       assert.ok(await keyboardPage.locator(selector).evaluate(node => parseFloat(getComputedStyle(node).outlineWidth) >= 3), `Visible focus: ${selector}`);
-      if (selector === '.appearance summary' || selector === '#connection summary') await keyboardPage.keyboard.press('Enter');
+      if (selector === '.appearance summary') await keyboardPage.keyboard.press('Enter');
+    }
+    await keyboardPage.locator('nav a[data-route="workspace"]').click();
+    await keyboardPage.waitForFunction(() => document.activeElement?.id === 'workspace-title');
+    assert.equal(await keyboardPage.locator('#workspace-title').evaluate(node => node === document.activeElement), true);
+    await keyboardPage.keyboard.press('Shift+Tab');
+    assert.equal(await keyboardPage.locator('.back-link').evaluate(node => node === document.activeElement), true);
+    assert.ok(await keyboardPage.locator('.back-link').evaluate(node => parseFloat(getComputedStyle(node).outlineWidth) >= 3));
+    for (const selector of ['#project-root', '#browse-project', '#inspect-project', '#connection summary', '#retry', '#new-conversation']) {
+      await keyboardPage.keyboard.press('Tab');
+      assert.equal(await keyboardPage.locator(selector).evaluate(node => node === document.activeElement), true, `Workspace keyboard order: ${selector}`);
+      assert.ok(await keyboardPage.locator(selector).evaluate(node => parseFloat(getComputedStyle(node).outlineWidth) >= 3), `Visible focus: ${selector}`);
+      if (selector === '#connection summary') await keyboardPage.keyboard.press('Enter');
     }
     await keyboardPage.close();
     console.log('PASS: keyboard traversal of all initially available controls, disclosures and visible focus.');
     for (const width of [390, 1180]) {
       await page.setViewportSize({ width, height: 844 });
-      await page.goto(url);
-      await page.locator('#connection summary').click();
+      await page.goto(workspaceUrl);
+      if (!await page.locator('#connection').evaluate(details => details.open)) {
+        await page.locator('#connection summary').click();
+      }
       await page.getByRole('status').filter({ hasText: 'Não foi possível' }).waitFor();
       await page.getByRole('button', { name: 'Verificar novamente' }).click();
       await page.getByRole('status').filter({ hasText: 'Não foi possível' }).waitFor();
@@ -56,8 +193,11 @@ const assets = new Map([
       }
     }
     await page.goto(url);
+    await page.reload();
     await page.keyboard.press('Tab');
     assert.equal(await page.locator(':focus').textContent(), 'Pular para o conteúdo');
+    await page.goto(workspaceUrl);
+    await page.locator('#workspace').waitFor({ state: 'visible' });
     await page.locator('#connection summary').click();
     // Explicit test double for UI presentation only, not agent/native evidence.
     await page.evaluate(() => { window.__TAURI__ = { core: { invoke: async () => ({ name: 'Forge', version: '0.1.0' }) } }; });
@@ -116,6 +256,7 @@ const assets = new Map([
     await page.getByRole('button', { name: 'Conectar Codex', exact: true }).focus();
     await page.keyboard.press('Enter');
     await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor();
+    assert.equal(await page.locator('#browse-project').isDisabled(), true);
     await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'message-text');
     await page.keyboard.press('Shift+Tab');

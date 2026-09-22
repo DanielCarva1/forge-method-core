@@ -8,7 +8,9 @@ use tokio::{
 };
 use tokio_util::codec::{FramedRead, LinesCodec, LinesCodecError};
 
-const MAX_FRAME_BYTES: usize = 1024 * 1024;
+pub(crate) const MAX_FRAME_BYTES: usize = 1024 * 1024;
+pub(crate) const REQUEST_REJECTED: &str =
+    "O Codex não aceitou a solicitação. Confira a conexão e tente novamente.";
 const OVERSIZED_REPLY: &str = "O histórico ou a resposta ultrapassou o limite de leitura deste app. Nada foi apagado. Continue essa conversa pelo Codex CLI; não é necessário repetir o trabalho.";
 
 type Reply = Result<Value, &'static str>;
@@ -95,12 +97,10 @@ impl Transport {
                             } else { event(value); }
                         } else if let Some((method, reply)) = value["id"].as_u64().and_then(|id| pending.remove(&id)) {
                             if value.get("error").is_some() {
-                                let _ = reply.send(Err("O Codex não aceitou a solicitação. Confira a conexão e tente novamente."));
+                                let _ = reply.send(Err(REQUEST_REJECTED));
                             } else if let Some(result) = value.get("result") {
                                 // Protocol initialization requires a notification, not another request.
-                                if method == "initialize" {
-                                    if stdin.write_all(b"{\"method\":\"initialized\",\"params\":{}}\n").await.is_err() { break; }
-                                }
+                                if method == "initialize" && stdin.write_all(b"{\"method\":\"initialized\",\"params\":{}}\n").await.is_err() { break; }
                                 let _ = reply.send(Ok(result.clone()));
                             } else { let _ = reply.send(Err("Resposta incompatível do Codex.")); }
                         }
@@ -155,5 +155,20 @@ mod tests {
             Some(Err(LinesCodecError::MaxLineLengthExceeded))
         ));
         assert!(OVERSIZED_REPLY.contains("Nada foi apagado"));
+    }
+
+    #[tokio::test]
+    async fn multiple_bounded_history_frames_can_exceed_one_frame_in_aggregate() {
+        let line = format!("{{\"data\":\"{}\"}}\n", "x".repeat(600_000));
+        assert!(line.len() < MAX_FRAME_BYTES);
+        let bytes = format!("{line}{line}");
+        assert!(bytes.len() > MAX_FRAME_BYTES);
+        let mut lines = FramedRead::new(
+            bytes.as_bytes(),
+            LinesCodec::new_with_max_length(MAX_FRAME_BYTES),
+        );
+        assert!(matches!(lines.next().await, Some(Ok(_))));
+        assert!(matches!(lines.next().await, Some(Ok(_))));
+        assert!(lines.next().await.is_none());
     }
 }

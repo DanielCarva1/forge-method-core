@@ -11,9 +11,11 @@ The two original, unmodified user-approved concept images are retained here:
 - `references/explore-approved.png`: editorial category illustrations and the
   lavender/plum/coral visual family.
 
-These are reference boards, not backgrounds or executable UI. Do not reproduce
-fictitious project progress or previews to match a picture. Category illustration
-assets and mobile-specific reference boards are not yet consolidated here.
+These are reference boards, not executable UI. Do not reproduce fictitious
+project progress or previews to match a picture. The eight approved Explore
+illustrations are reused as bounded crops from `references/explore-approved.png`
+in `../ui/assets/explore-artwork.png`; no replacement artwork was generated.
+Mobile-specific reference boards are not yet consolidated here.
 The approved C app icon is reused at `../ui/assets/forge.png`; its export source
 remains `../src-tauri/icons/source.png`. No new art direction was generated.
 
@@ -46,8 +48,8 @@ Focused browser checks cover existing event/error behavior, narrow layouts,
 packaged HTML and project lookup. Visual review compares hierarchy, palette,
 message shapes and readable spacing against the retained concepts.
 
-Still separate work: illustrations for Explore (#88), backend-driven progress
-(#86), preview (#91), reopening saved conversations (#93), manual appearance
+Still separate work: backend-driven progress (#86), preview (#91), reopening
+saved conversations (#93), manual appearance
 preferences (#84) and distribution (#97). System-theme support alone does not
 establish complete accessibility conformance or mobile remote-agent access.
 

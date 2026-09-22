@@ -44,6 +44,7 @@ function controls() {
   input.disabled = transitioning || !connected || busy || broken;
   stop.disabled = transitioning || !connected || !busy || broken;
   byId('project-root').disabled = transitioning || connected;
+  byId('browse-project').disabled = transitioning || connected;
   byId('inspect-project').disabled = transitioning || connected;
   if (focused?.disabled) status.focus();
 }

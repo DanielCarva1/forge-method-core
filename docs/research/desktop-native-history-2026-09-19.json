@@ -1,0 +1,134 @@
+{
+  "verdict": "PASS",
+  "scope": "Real unchanged Tauri/WebView/Rust with deterministic fake external Codex stdio; NOT real Codex acceptance or provider history",
+  "app": {
+    "path": "D:\\forge-method-core-build-cache\\main-target\\debug\\forge-desktop.exe",
+    "sha256": "c28e10e4c02e6f5185df3656808b13027b61e07d6168d695cb41fa7fc15d1841",
+    "pids": [
+      43368,
+      24852
+    ],
+    "gracefulClose": [
+      {
+        "wmCloseWindows": 1,
+        "exitCode": 0,
+        "forcedAfterWmClose": false,
+        "observedWindows": [
+          "Tauri Window|Forge",
+          "Tao Thread Event Target|"
+        ]
+      },
+      {
+        "wmCloseWindows": 1,
+        "exitCode": 0,
+        "forcedAfterWmClose": false,
+        "observedWindows": [
+          "Tauri Window|Forge",
+          "Tao Thread Event Target|"
+        ]
+      }
+    ]
+  },
+  "fake": {
+    "path": "D:\\Temp\\User\\forge-native-fake-history-20260919\\fake-codex.exe",
+    "sha256": "c41d7f8181c5dbcadeee53c168cdea0334770337bc6e8546ecc7ca331208c566",
+    "pids": [
+      10772,
+      45448
+    ],
+    "requestCount": 16,
+    "methodsByPid": [
+      [
+        "initialize",
+        "initialized",
+        "account/read",
+        "thread/read",
+        "thread/resume",
+        "thread/turns/list",
+        "thread/turns/list",
+        "thread/turns/list"
+      ],
+      [
+        "initialize",
+        "initialized",
+        "account/read",
+        "thread/read",
+        "thread/resume",
+        "thread/turns/list",
+        "thread/turns/list",
+        "thread/turns/list"
+      ]
+    ],
+    "forbiddenStartRequests": 0,
+    "commandSentinelReplayed": false
+  },
+  "profile": {
+    "path": "D:\\Temp\\User\\forge-native-fake-history-20260919\\webview-profile",
+    "sameProfileBothLaunches": true,
+    "bookmarkKey": "forge.conversation.v1:[\"forge-method-core\",\"D:\\\\Forge-method-core\"]",
+    "bookmarkValue": "fake-long-history-thread-0001"
+  },
+  "history": {
+    "turnPages": 3,
+    "messageCount": 6,
+    "aggregateRenderedBodyBytes": 1200150,
+    "eachProtocolPageExpectedBelowBytes": 1048576,
+    "bodies": [
+      {
+        "role": "user",
+        "title": "Você",
+        "bytes": 200024,
+        "sha256": "feac5735b3cd8e381046d92d381a911a92ad3356a3bb93b5d2f429be7be5ab9e",
+        "prefix": "USER-0-BEGIN|aaaaaaaaaaa",
+        "suffix": "aaaaaaaaaaaaa|USER-0-END"
+      },
+      {
+        "role": "agent",
+        "title": "Codex",
+        "bytes": 200026,
+        "sha256": "e5778529e84163ff607343dd49db937eaf0ae64a2f9e906631bb8cc783f09a6c",
+        "prefix": "AGENT-0-BEGIN|xxxxxxxxxx",
+        "suffix": "xxxxxxxxxxxx|AGENT-0-END"
+      },
+      {
+        "role": "user",
+        "title": "Você",
+        "bytes": 200024,
+        "sha256": "2f17909575409d52c62504b9792d69ceefcfd39231d33e85640f332ee72b5db2",
+        "prefix": "USER-1-BEGIN|bbbbbbbbbbb",
+        "suffix": "bbbbbbbbbbbbb|USER-1-END"
+      },
+      {
+        "role": "agent",
+        "title": "Codex",
+        "bytes": 200026,
+        "sha256": "22425a01641fe24e19355b47b3384e596094f907a5f97dca8b78731d9290610c",
+        "prefix": "AGENT-1-BEGIN|wwwwwwwwww",
+        "suffix": "wwwwwwwwwwww|AGENT-1-END"
+      },
+      {
+        "role": "user",
+        "title": "Você",
+        "bytes": 200024,
+        "sha256": "c7841dd7327aaf6765f97716ee90c821e6000492fb501fcf8d7e28f0349d3e06",
+        "prefix": "USER-2-BEGIN|ccccccccccc",
+        "suffix": "ccccccccccccc|USER-2-END"
+      },
+      {
+        "role": "agent",
+        "title": "Codex · resposta incompleta",
+        "bytes": 200026,
+        "sha256": "f21b6f0e9ed12edb6e10a16115c1b4f3f62709e3be93bf8d1334785a1c81128f",
+        "prefix": "AGENT-2-BEGIN|vvvvvvvvvv",
+        "suffix": "vvvvvvvvvvvv|AGENT-2-END"
+      }
+    ],
+    "restartBodiesIdentical": true,
+    "incompleteTitleVerified": true,
+    "exactOrderVerified": true
+  },
+  "limitations": [
+    "Fake Codex protocol fixture, not real Codex 0.154 persisted-rollout acceptance",
+    "Real Codex synthetic rollout remained unavailable after bounded fixture attempts"
+  ]
+}

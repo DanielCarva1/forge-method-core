@@ -1,0 +1,92 @@
+{
+  "kind": "desktop_windows_package_journey",
+  "date": "2026-09-20",
+  "verdict": "PASS_WITH_RELEASE_LIMITATIONS",
+  "scope": "Unsigned local Windows x64 NSIS alpha; install, real short Codex journey, in-place upgrade, state recovery, uninstall. No publication or automatic updater.",
+  "source_version": "0.1.0",
+  "upgrade_test_version": "0.1.1 temporary Tauri config overlay; not a source version change",
+  "configuration": {
+    "bundle": "nsis",
+    "install_mode": "currentUser",
+    "allow_downgrades": false,
+    "webview_install_mode": "downloadBootstrapper",
+    "identifier": "com.stablestudio.forge",
+    "codex": "external authenticated standalone CLI 0.154.0 via host-only FORGE_CODEX_EXE"
+  },
+  "build_tooling": {
+    "entry_point": "apps/desktop/package.json build:nsis",
+    "lockfile": "apps/desktop/package-lock.json",
+    "tauri_cli": "2.11.0 exact",
+    "clean_install": "npm ci PASS",
+    "repeat_builds": "PASS 2/2",
+    "byte_reproducible": false
+  },
+  "artifacts": [
+    {
+      "version": "0.1.0",
+      "path": "D:\\forge-method-core-build-cache\\package-target\\release\\bundle\\nsis\\Forge_0.1.0_x64-setup.exe",
+      "bytes": 2142904,
+      "sha256": "15FEE75969CECBE34F0E39286582BEE6C354C624CC27B24CDE2C70372B2AA273",
+      "authenticode": "NotSigned"
+    },
+    {
+      "version": "0.1.1-test",
+      "path": "D:\\forge-method-core-build-cache\\package-target\\release\\bundle\\nsis\\Forge_0.1.1_x64-setup.exe",
+      "bytes": 2143501,
+      "sha256": "8B9688C3CA93FBDD3F46B7598D2C20A825D2E620BD3D95E56E706AB61E668DB7",
+      "authenticode": "NotSigned"
+    }
+  ],
+  "observations": {
+    "install_0_1_0": true,
+    "windows_registration_0_1_0": true,
+    "installed_real_codex_reply": true,
+    "upgrade_exit_zero": true,
+    "windows_registration_0_1_1": true,
+    "same_install_location": true,
+    "dark_theme_preserved": true,
+    "enhanced_contrast_preserved": true,
+    "conversation_bookmark_preserved": true,
+    "real_conversation_history_preserved": true,
+    "resume_without_new_turn": true,
+    "uninstall_exit_zero": true,
+    "install_directory_removed": true,
+    "uninstall_registration_removed": true
+  },
+  "repository_owned_rebuilds": [
+    {
+      "version": "0.1.0",
+      "bytes": 2143910,
+      "sha256": "86E971EDA1D24C1DAF92F61DAACDEE6E34202F0DBB97128895D0E604A6EE2331",
+      "authenticode": "NotSigned",
+      "journey_retest": "NOT_RUN; build repeatability check only"
+    },
+    {
+      "version": "0.1.0",
+      "bytes": 2143357,
+      "sha256": "BAFC6C5C8CC2AA4224B635665A7D98EA571DB79288C5FE91725F3B90DF0338A7",
+      "authenticode": "NotSigned",
+      "journey_retest": "NOT_RUN; build repeatability check only"
+    }
+  ],
+  "verification": {
+    "cargo_check": "PASS",
+    "desktop_rust_tests": "PASS 19/19",
+    "node_connection_tests": "PASS 5/5",
+    "release_bundle": "PASS",
+    "installed_journey": "PASS",
+    "upgrade_journey": "PASS"
+  },
+  "harness_notes": [
+    "The full native.cjs run stopped before its agent section because the separate Last Forge Record readback timed out. The isolated package journey exercised the installed agent path directly.",
+    "The first post-upgrade browser attempt raced initial WebView navigation; a bounded retry waited for the actual heading and passed. This is harness timing, not evidence of a product failure."
+  ],
+  "limitations": [
+    "Installers are not Authenticode signed.",
+    "No GitHub release or downloadable artifact was published.",
+    "No in-app automatic updater was added; upgrade was verified by installing the newer NSIS package over the older version.",
+    "Codex CLI is a declared external prerequisite and was not bundled or updated.",
+    "Only Windows x64 was exercised.",
+    "The locked build command is repeatable, but consecutive unsigned NSIS outputs were not byte-identical; hash the exact final candidate and verify that same artifact after publication."
+  ]
+}

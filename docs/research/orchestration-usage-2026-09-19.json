@@ -1,0 +1,101 @@
+{
+  "kind": "sanitized_usage_observation",
+  "observed_at_utc": "2026-09-19T21:09:56.0749583Z",
+  "scope": "Documentation and telemetry discovery only; current parent turn plus explicitly dispatched usage_probe. Earlier research child is shown for reconciliation but excluded from current slice by root_turn_id.",
+  "root_turn_id": "01a0bb7d-6674-7420-8dd3-e54aef4957cc",
+  "completeness": "PARTIAL: parent turn still running, later documentation/verification/final response excluded; bounded three-file observation, not a guaranteed full account/tree inventory.",
+  "counter_interpretation": "Per-response usage summed once; turn/thread totals are cumulative. Observed total=input+output; cached input and reasoning output are reported separately and must not be added to total.",
+  "monetary_status": "NOT_RUN: no verified pricing/FX conversion in this slice; no Pro per-task BRL mapping. No savings or causal comparison established.",
+  "prior_child_inclusion": "Earlier research Luna has zero records for this root_turn_id and is excluded from this pilot slice.",
+  "account_allowance_snapshot": {
+    "observed_utc": "2026-09-19T21:06:42Z",
+    "plan": "pro",
+    "used_percent": 1,
+    "window_minutes": 10080,
+    "limitation": "Rounded aggregate account snapshot, no task attribution or savings inference."
+  },
+  "cross_file_duplicate_response_ids": 0,
+  "observations": [
+    {
+      "source_path": "D:\\CodexData\\.codex\\sessions\\2026\\09\\19\\rollout-2026-09-19T17-34-06-01a0bb60-4f1b-7541-932b-779226f93ba6.jsonl",
+      "models_observed": [
+        "gpt-6-astra"
+      ],
+      "usage_records": 31,
+      "last_record_utc": "2026-09-19T21:09:55.234Z",
+      "whole_thread_totals": {
+        "input_tokens": 2571327,
+        "cached_input_tokens": 2449024,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 14598,
+        "reasoning_output_tokens": 2219,
+        "total_tokens": 2585925
+      },
+      "sum_response_totals_equals_thread_total": true,
+      "duplicate_response_ids": 0,
+      "current_slice_records": 10,
+      "current_slice_usage": {
+        "input_tokens": 1093043,
+        "cached_input_tokens": 1072768,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 6940,
+        "reasoning_output_tokens": 1556,
+        "total_tokens": 1099983
+      }
+    },
+    {
+      "source_path": "D:\\CodexData\\.codex\\sessions\\2026\\09\\19\\rollout-2026-09-19T17-42-22-01a0bb67-df87-7fd0-a532-e1530a64a972.jsonl",
+      "models_observed": [
+        "gpt-5.6-luna"
+      ],
+      "usage_records": 8,
+      "last_record_utc": "2026-09-19T20:43:32.803Z",
+      "whole_thread_totals": {
+        "input_tokens": 441463,
+        "cached_input_tokens": 368640,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 1888,
+        "reasoning_output_tokens": 310,
+        "total_tokens": 443351
+      },
+      "sum_response_totals_equals_thread_total": true,
+      "duplicate_response_ids": 0,
+      "current_slice_records": 0,
+      "current_slice_usage": {
+        "input_tokens": 0,
+        "cached_input_tokens": 0,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_output_tokens": 0,
+        "total_tokens": 0
+      }
+    },
+    {
+      "source_path": "D:\\CodexData\\.codex\\sessions\\2026\\09\\19\\rollout-2026-09-19T18-06-29-01a0bb7d-f5c9-75a1-8aee-4dd752fa9137.jsonl",
+      "models_observed": [
+        "gpt-5.6-luna"
+      ],
+      "usage_records": 9,
+      "last_record_utc": "2026-09-19T21:08:22.585Z",
+      "whole_thread_totals": {
+        "input_tokens": 351367,
+        "cached_input_tokens": 317184,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3689,
+        "reasoning_output_tokens": 707,
+        "total_tokens": 355056
+      },
+      "sum_response_totals_equals_thread_total": true,
+      "duplicate_response_ids": 0,
+      "current_slice_records": 9,
+      "current_slice_usage": {
+        "input_tokens": 351367,
+        "cached_input_tokens": 317184,
+        "cache_write_input_tokens": 0,
+        "output_tokens": 3689,
+        "reasoning_output_tokens": 707,
+        "total_tokens": 355056
+      }
+    }
+  ]
+}

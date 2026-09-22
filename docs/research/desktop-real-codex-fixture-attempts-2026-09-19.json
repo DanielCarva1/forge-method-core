@@ -1,0 +1,47 @@
+{
+  "test": "desktop long-history native recovery",
+  "verdict": "NOT_RUN",
+  "date": "2026-09-19",
+  "scope": "Synthetic persisted fixture through real Codex 0.154 app-server and planned real Tauri; not provider-generated history",
+  "executable": {
+    "path": "D:\\Temp\\User\\forge-cli-0154-probe\\package\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+    "version": "codex-cli 0.154.0",
+    "sha256": "BE96B992178B1E467C225800DA0D65F2C86D5EBA1EF0B14632F65DB381CBDFDE"
+  },
+  "officialSources": [
+    "https://github.com/openai/codex/blob/main/codex-rs/app-server/tests/common/rollout.rs",
+    "https://github.com/openai/codex/blob/main/codex-rs/app-server/tests/suite/v2/thread_read.rs"
+  ],
+  "attempts": [
+    {
+      "root": "D:\\Temp\\User\\forge-native-long-history-20260919-a",
+      "result": "thread/read discovered fixture; thread/turns/list empty",
+      "networkIncident": "thread/resume attempted Responses websocket and received HTTP 401; no turn/start and no generated output"
+    },
+    {
+      "root": "D:\\Temp\\User\\forge-native-long-history-20260919-b",
+      "result": "thread/read discovered fixture and preview; thread/turns/list empty despite task events",
+      "accountRead": "account null; requiresOpenaiAuth true",
+      "networkIsolation": "HTTP_PROXY/HTTPS_PROXY/ALL_PROXY loopback-dead; no resume/turn-start"
+    }
+  ],
+  "blockers": [
+    "Synthetic rollout did not yield turn-bearing paginated history",
+    "No validated isolated dummy ChatGPT auth fixture"
+  ],
+  "nativeLaunch": {
+    "performed": false,
+    "reason": "Stopped after two bounded fixture/auth attempts without valid turn-bearing history",
+    "expectedExe": "D:\\forge-method-core-build-cache\\main-target\\debug\\forge-desktop.exe"
+  },
+  "assertions": {
+    "over1MiB": "NOT_RUN",
+    "processRestart": "NOT_RUN",
+    "exactOrder": "NOT_RUN",
+    "fullTextHashes": "NOT_RUN",
+    "incompleteMarker": "NOT_RUN",
+    "noReplay": "NOT_RUN"
+  },
+  "repositoryMutation": false,
+  "personalCredentialsAccessed": false
+}
