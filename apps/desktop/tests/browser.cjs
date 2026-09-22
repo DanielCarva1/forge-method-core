@@ -41,6 +41,7 @@ const assets = new Map([
     const url = `http://127.0.0.1:${server.address().port}`;
     const workspaceUrl = `${url}#workspace`;
     await page.goto(url);
+    if (process.env.FORGE_HOME_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_HOME_SCREENSHOT, fullPage: true });
     assert.equal(await page.locator('#home').isVisible(), true);
     assert.equal(await page.locator('#workspace').isHidden(), true);
     assert.equal(await page.locator('nav a[data-route="home"]').getAttribute('aria-current'), 'page');
@@ -95,6 +96,7 @@ const assets = new Map([
       } } };
     });
     await projectsPage.goto(`${url}#projects`);
+    if (process.env.FORGE_PROJECTS_SCREENSHOT) await projectsPage.screenshot({ path: process.env.FORGE_PROJECTS_SCREENSHOT, fullPage: true });
     assert.equal(await projectsPage.locator('#projects-empty').isVisible(), true);
     await projectsPage.getByRole('link', { name: 'Abrir outro projeto' }).click();
     await projectsPage.evaluate(() => { window.folderChoice = 'D:\\one'; });
@@ -216,7 +218,7 @@ const assets = new Map([
           window.progressCalls = (window.progressCalls || 0) + 1;
           if (window.delayProgress) return new Promise(resolve => { window.resolveProgress = resolve; });
           if (window.progressFailure) throw new Error('Unavailable');
-          return { status: window.progressState || 'current', focus: { title: 'Recorded task', current_activity: 'Recorded activity', next_step: 'Recorded next step', open_decision_count: 1 } };
+          return { status: window.progressState || 'current', focus: window.progressMissingFocus ? null : { title: 'Recorded task', current_activity: 'Recorded activity', next_step: 'Recorded next step', open_decision_count: window.progressDecisionCount ?? 1 } };
         }
         if (command === 'inspect_project') return { project_id: 'test-project', project_root: 'D:\\test-project' };
           if (command === 'connect_agent') { window.agentEvents = args.events; window.connectedThread = args.threadId; return { thread_id: 'test-thread', messages: args.threadId ? [{ id: 'saved-user', role: 'user', text: 'Saved decision' }, { id: 'saved-agent', role: 'agent', text: 'Partial reply' }] : [], resumed: !!args.threadId }; }
@@ -233,12 +235,32 @@ const assets = new Map([
     await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\test-project');
     await page.getByRole('button', { name: 'Conferir projeto' }).click();
     assert.equal(await page.evaluate(() => window.progressCalls || 0), 0);
+    const stateNames = { current: 'Em andamento no registro', stale: 'Registro desatualizado', blocked: 'Pendência registrada', completed: 'Concluído no registro', abandoned: 'Encerrado sem concluir' };
     for (const state of ['current', 'stale', 'blocked', 'completed', 'abandoned', 'absent']) {
       await page.evaluate(state => { window.progressState = state; }, state);
       await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
       await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
       assert.equal(await page.locator('#progress-result').isVisible(), state !== 'absent');
+      if (state === 'absent') assert.match(await page.locator('#progress-status').textContent(), /Sem trabalho registrado/);
+      else {
+        assert.equal(await page.locator('#record-state').textContent(), stateNames[state]);
+        assert.equal(await page.locator('#progress-result').getAttribute('data-state'), state);
+        assert.equal(await page.locator('#record-next').textContent(), 'Recorded next step');
+        assert.match(await page.locator('#record-decisions').textContent(), /1 decisão aberta/);
+        if (state === 'current' && process.env.FORGE_PROGRESS_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_PROGRESS_SCREENSHOT, fullPage: true });
+      }
     }
+    await page.evaluate(() => { window.progressState = 'current'; window.progressDecisionCount = 0; });
+    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+    assert.match(await page.locator('#record-decisions').textContent(), /Nenhuma decisão aberta/);
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.evaluate(() => { window.progressMissingFocus = true; });
+    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+    await page.locator('#progress-status').filter({ hasText: 'Não foi possível consultar' }).waitFor();
+    assert.equal(await page.locator('#progress-result').isVisible(), false);
+    await page.evaluate(() => { window.progressMissingFocus = false; window.progressDecisionCount = 1; });
     await page.evaluate(() => { window.progressFailure = true; });
     await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
     await page.locator('#progress-status').filter({ hasText: 'Não foi possível consultar' }).waitFor();

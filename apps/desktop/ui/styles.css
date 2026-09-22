@@ -76,7 +76,7 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 .projects-empty h2 { margin: 0; }
 .projects-empty p { color: var(--muted); }
 .projects-empty .action-link { margin-left: auto; }
-.workspace { display: grid; grid-template-columns: minmax(280px, .75fr) minmax(0, 1.6fr); gap: 24px; align-items: start; scroll-margin-top: 20px; }
+.workspace { display: grid; grid-template-columns: minmax(330px, .95fr) minmax(0, 1.55fr); gap: 24px; align-items: start; scroll-margin-top: 20px; }
 .panel { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 28px; box-shadow: var(--shadow); }
 button { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 48px; border: 1px solid var(--muted); border-radius: 28px; padding: 10px 22px; font-weight: 650; color: var(--ink); background: var(--surface); cursor: pointer; }
 button:not(:disabled):hover { box-shadow: 0 0 0 2px var(--line); }
@@ -92,10 +92,16 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 input:disabled, textarea:disabled { background: var(--canvas); }
 .hint, .project > p { color: var(--muted); }
 #project-result { border-left: 3px solid var(--focus); padding-left: 16px; }
+#project-result h3 { margin: 4px 0; overflow-wrap: anywhere; }
 #confirmed-root { font-family: ui-monospace, monospace; }
 summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 650; }
 .connection { margin-top: 24px; border-top: 1px solid var(--line); }
 .record { margin-top: 24px; border-top: 1px solid var(--line); }
+.record h4 { font-size: 1.2rem; margin: 12px 0 20px; overflow-wrap: anywhere; }
+.record-state { display: inline-block; margin: 8px 0 0; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--soft); font-weight: 700; }
+.record-detail { margin-top: 16px; }
+.record-detail p, .record-question p { margin: 6px 0 0; }
+.record-question { margin-top: 20px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--canvas); }
 .conversation-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .agent-badge { padding: 6px 14px; border-radius: 30px; background: var(--soft); }
 .chat-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-block: 16px; }

@@ -188,7 +188,7 @@ async fn initialize(
     transport
         .request(
             "initialize",
-            json!({"clientInfo":{"name":"forge_desktop","version":"0.1.0"}}),
+            json!({"clientInfo":{"name":"forge_desktop","version":env!("CARGO_PKG_VERSION")}}),
         )
         .await?;
     let account = transport

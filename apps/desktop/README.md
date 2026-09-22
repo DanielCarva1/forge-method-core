@@ -63,8 +63,8 @@ built and the published candidate must be the exact artifact later verified.
 - Rust also exposes `inspect_project`: a read-only call to the existing
   `forge-core project resolve` command. The backend remains the link/state owner;
   the UI never infers progress from its compatibility phase field.
-- First-time project selection currently accepts an absolute folder path; a native
-  folder picker is not implemented. Only already-linked projects with available
+- Project selection accepts a local folder path through the native Windows
+  folder picker or the text field. Only already-linked projects with available
   state are identified. Failed lookups hide earlier results. The **Meus projetos**
   screen keeps up to eight local shortcuts after successful confirmation, in
   `forge.projects.v1` localStorage. Each shortcut is checked again through
@@ -696,3 +696,119 @@ The native OS folder-dialog **selection itself is NOT_RUN in automated UI
 testing**; the browser test uses a native-call double, while Rust compilation
 and the release build cover plugin registration. The installer remains local,
 unsigned and unpublished. Next UI slice: friendly project/progress presentation.
+
+## Update delivery ledger — 2026-09-21
+
+**Code is not an update download.** Commit `7262fdf1` was pushed to
+`codex/desktop-shell`; no release tag or downloadable installer was published.
+The local `0.1.0` NSIS build is a verification artifact, not an update for an
+existing `0.1.0` installation. The desktop source version was `0.1.0` at the
+time of this ledger; a later checkpoint records the `0.1.1` candidate work.
+
+For the next coherent Windows alpha update (#97), retain this explicit ledger:
+
+1. **DONE:** source package committed and pushed; local Windows x64 NSIS build,
+   native WebView smoke and focused tests passed within the recorded limits.
+2. **PARTIAL:** the UI slice and actual Windows folder selection were checked.
+   Commit and push remain pending; preserve the intermittent native record
+   lookup failure in the release limitations.
+3. **DONE in source:** desktop `0.1.1` is set in Tauri, Cargo and Cargo.lock;
+   draft release notes exist. This alone is not an available update.
+4. **PARTIAL:** final checks, one candidate build, exact hash and a silent
+   `0.1.0` to `0.1.1` install-over test are recorded below. Installed runtime
+   restart and conversation/preference continuity remain NOT_RUN under the
+   user's headless-only constraint.
+5. **PENDING — maintainer publication decision:** present the release content,
+   supported scope and limitations for acceptance. Only then publish the agreed
+   GitHub release/installer and verify the downloaded file has the recorded hash
+   and completes a short installed-app journey. A commit or branch push alone
+   does not satisfy this step.
+
+Until step 5, users cannot obtain this update from a release page. There is no
+automatic in-app updater; updating the current alpha means installing the newer
+NSIS package. Do not mark #97 delivered merely because a local installer exists.
+
+## Project record presentation — 2026-09-21
+
+The workspace now presents the confirmed project and the latest Forge record
+before the technical connection details. The record has a separate, readable
+status, recorded activity, recorded next step and open-decision callout; its
+states are projections of `inspect_progress`, not agent-chat inference or a
+live completion meter. Missing focus or unavailable data does not show a stale
+record. No Rust query or domain contract was changed.
+
+Browser checks PASS for current, stale, blocked, completed, abandoned, absent,
+zero decisions, malformed/missing details, lookup failure, mobile width,
+keyboard and existing conversation behavior. A development build PASS. The
+native WebView read the actual linked project and displayed its record and
+decision text in four subsequent runs; an initial run had timed out waiting
+for a successful record, so native readback is **not claimed perfectly stable**.
+Direct CLI `workflow resume --json` succeeded in roughly 5–8 seconds with an
+approximately 56 KB response. The intermittent native failure was not
+reproduced reliably enough to justify changing timeouts or query architecture.
+An isolated native WebView run opened the actual Windows folder dialog; closing
+that dialog returned "Seleção cancelada. Nenhum projeto foi alterado." in the
+app. This proves native open/cancel, **not** folder selection: an attempted
+keyboard selection did not complete, so selection remains NOT_RUN. The
+one-off harness used a temporary WebView profile and did not install or publish
+anything. Real Codex interaction was NOT_RUN in this UI-only slice. This work
+remains uncommitted and unpublished; the update ledger above still applies.
+Next smallest task: verify an actual Windows folder selection, then continue
+the remaining UI screens before selecting a release candidate.
+
+## Alpha 0.1.1 preparation — 2026-09-22
+
+The native Windows folder dialog was driven through an isolated test app using
+the real project path `D:\Forge-method-core`: the dialog displayed that folder,
+returned the canonical path, and the app displayed **Projeto encontrado** and
+the confirmed root. Replacing the field with a nonexistent folder hid the
+earlier project and reported the invalid path. The test script's initial
+over-escaped path was corrected before this PASS; it was a harness error, not
+evidence of an app defect. The dialog cancellation proof remains separate.
+
+Desktop source version is now `0.1.1` in Tauri and Cargo; Cargo.lock followed
+through focused Cargo verification. The Codex client version now reads the
+Cargo package version rather than retaining a hard-coded `0.1.0`. These source
+changes are **not** an installed update or a published release. Draft content
+and known limitations are in `RELEASE_NOTES-0.1.1.md`.
+
+Visual review of Home, Explore, My Projects and the project/record/conversation
+screen found no additional concrete layout defect to justify redesign. Browser
+checks PASS; they use doubles for native calls. Focused desktop `cargo check`,
+agent module tests (12), full desktop crate tests (19), Node tests (7),
+formatting and strict Clippy PASS. Native `0.1.1` WebView smoke passed for
+project lookup, record readback, invalid/unlinked folders and preferences, but
+one earlier run of this package returned a generic record lookup failure. That
+intermittent failure remains under diagnosis and is not represented as stable
+PASS. Real Codex conversation was NOT_RUN in this source slice. The local
+candidate and silent upgrade are recorded below; commit/push and publication
+remain pending.
+
+## Local installer candidate — 2026-09-22
+
+The user requested **headless-only** further verification while using the
+machine. Do not launch more visible native app tests or interactive installers
+without a new arrangement. The earlier native folder selection PASS predates
+this request; no Forge desktop process was left running afterward.
+
+The pinned repository build command produced one unsigned Windows x64 NSIS
+candidate: `D:\forge-method-core-build-cache\main-target\release\bundle\nsis\Forge_0.1.1_x64-setup.exe`,
+4,468,745 bytes, SHA-256
+`3D630CE98FDBCF794399EA422FB808EE9A2263B88649369067BF561E7B8CCB51`.
+This exact file was not rebuilt or modified after hashing. `0.1.0` was silently
+installed into an initially absent `%LOCALAPPDATA%\Forge`; the same candidate
+then silently upgraded it. Both installer processes exited 0, Windows
+uninstall registration reports `0.1.1`, the installed executable reports
+product version `0.1.1`, and no Forge desktop process remained. The candidate
+hash was unchanged after installation. This is a **PASS for silent package
+upgrade/version readback**, not a full installed-app journey.
+
+A one-off attempt to start the installed app on an isolated invisible Windows
+desktop exited before exposing a WebView debug endpoint. No visible app was
+opened, but project, preference and conversation recovery after the installed
+upgrade remain **NOT_RUN**. Do not claim installed runtime continuity from the
+silent install. The native development smoke also had one intermittent generic
+record lookup failure; five direct CLI reads succeeded and subsequent native
+smokes passed, but the cause is not established. Keep this as a known alpha
+limitation, not a resolved bug. Publication awaits maintainer acceptance of
+`RELEASE_NOTES-0.1.1.md` and downloadable-artifact verification.

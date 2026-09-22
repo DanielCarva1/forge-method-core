@@ -57,7 +57,13 @@ const assert = require('node:assert/strict');
       assert.equal(await page.locator('#confirmed-root').textContent(), process.env.FORGE_TEST_PROJECT);
       assert.ok((await page.locator('#project-name').textContent()).length > 0);
       await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
-      await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 35000 });
+      await page.locator('#progress-status').filter({ hasText: /Consultado às|Não foi possível consultar/ }).waitFor({ timeout: 35000 });
+      const progressStatus = await page.locator('#progress-status').textContent();
+      assert.match(progressStatus, /Consultado às/, 'Native Forge record lookup must succeed, not merely finish');
+      assert.ok((await page.locator('#record-state').textContent()).length > 0);
+      assert.ok((await page.locator('#record-title').textContent()).length > 0);
+      assert.ok((await page.locator('#record-next').textContent()).length > 0);
+      assert.match(await page.locator('#record-decisions').textContent(), /neste registro/);
       console.log('PASS: actual bounded Forge workflow readback displayed separately from agent activity.');
       // A failed lookup must hide the preceding project's identity.
       await field.fill(path.join(profile, 'missing-folder'));

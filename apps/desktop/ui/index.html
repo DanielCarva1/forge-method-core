@@ -135,25 +135,26 @@
           <button id="inspect-project" type="submit">Conferir projeto <span aria-hidden="true">→</span></button>
         </form>
         <p id="project-status" role="status" aria-live="polite"></p>
-        <div id="project-result" hidden><h3 id="project-name"></h3><p id="confirmed-root"></p><p>Confira se esta é a pasta que você quer usar.</p></div>
-        <details class="connection" id="connection">
-          <summary>Sobre a conexão</summary>
-          <p id="native-status" role="status" aria-live="polite">Verificando o aplicativo…</p>
-          <button id="retry" type="button" disabled>Verificar novamente</button>
-          <p class="hint">O Codex usa seu login existente e guarda o histórico. Ao conectar, retomamos a última conversa aberta aqui para este projeto, quando disponível.</p>
-        </details>
+        <div id="project-result" hidden><p class="eyebrow">PROJETO ENCONTRADO</p><h3 id="project-name"></h3><p id="confirmed-root"></p><p class="hint">Esta é a pasta que o Forge confirmou. Você pode conversar sobre este projeto.</p></div>
         <section class="record" aria-labelledby="record-heading">
           <h3 id="record-heading">Último registro do Forge</h3>
           <p class="hint">O que ficou registrado sobre o trabalho. Não é uma transmissão ao vivo do agente.</p>
           <button id="refresh-progress" type="button" disabled>Consultar registro</button>
           <p id="progress-status" role="status" aria-live="polite" tabindex="-1">Confira um projeto antes de consultar seus registros.</p>
           <div id="progress-result" hidden>
+            <p id="record-state" class="record-state"></p>
             <h4 id="record-title"></h4>
-            <p><strong>Atividade registrada</strong></p><p id="record-activity"></p>
-            <p><strong>Próximo passo registrado</strong></p><p id="record-next"></p>
-            <p id="record-decisions"></p>
+            <div class="record-detail"><strong>O que ficou registrado</strong><p id="record-activity"></p></div>
+            <div class="record-detail"><strong>Próximo passo registrado</strong><p id="record-next"></p></div>
+            <div class="record-question"><strong>Precisa de você?</strong><p id="record-decisions"></p></div>
           </div>
         </section>
+        <details class="connection" id="connection">
+          <summary>Sobre a conexão</summary>
+          <p id="native-status" role="status" aria-live="polite">Verificando o aplicativo…</p>
+          <button id="retry" type="button" disabled>Verificar novamente</button>
+          <p class="hint">O Codex usa seu login existente e guarda o histórico. Ao conectar, retomamos a última conversa aberta aqui para este projeto, quando disponível.</p>
+        </details>
       </aside>
       <section class="conversation panel" aria-labelledby="chat-title">
         <div class="conversation-heading"><div><p class="eyebrow">UMA CONVERSA, MUITAS POSSIBILIDADES</p><h2 id="chat-title">Da ideia ao próximo passo</h2></div><span class="agent-badge">Agente · Codex</span></div>
