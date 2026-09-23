@@ -218,7 +218,7 @@ const assets = new Map([
           window.progressCalls = (window.progressCalls || 0) + 1;
           if (window.delayProgress) return new Promise(resolve => { window.resolveProgress = resolve; });
           if (window.progressFailure) throw new Error('Unavailable');
-          return { status: window.progressState || 'current', focus: window.progressMissingFocus ? null : { title: 'Recorded task', current_activity: 'Recorded activity', next_step: 'Recorded next step', open_decision_count: window.progressDecisionCount ?? 1 } };
+          return { status: window.progressState || 'current', phase: window.progressPhase || '1-discovery', focus: window.progressMissingFocus ? null : { title: 'Recorded task', intended_outcome: 'Accepted outcome', current_activity: 'Recorded activity', next_step: 'Recorded next step', open_decision_count: window.progressDecisionCount ?? 1 } };
         }
         if (command === 'inspect_project') return { project_id: 'test-project', project_root: 'D:\\test-project' };
           if (command === 'connect_agent') { window.agentEvents = args.events; window.connectedThread = args.threadId; return { thread_id: 'test-thread', messages: args.threadId ? [{ id: 'saved-user', role: 'user', text: 'Saved decision' }, { id: 'saved-agent', role: 'agent', text: 'Partial reply' }] : [], resumed: !!args.threadId }; }
@@ -245,6 +245,8 @@ const assets = new Map([
       else {
         assert.equal(await page.locator('#record-state').textContent(), stateNames[state]);
         assert.equal(await page.locator('#progress-result').getAttribute('data-state'), state);
+        assert.equal(await page.locator('#record-phase').textContent(), 'Descoberta');
+        assert.equal(await page.locator('#record-outcome').textContent(), 'Accepted outcome');
         assert.equal(await page.locator('#record-next').textContent(), 'Recorded next step');
         assert.match(await page.locator('#record-decisions').textContent(), /1 decisão aberta/);
         if (state === 'current' && process.env.FORGE_PROGRESS_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_PROGRESS_SCREENSHOT, fullPage: true });

@@ -864,3 +864,28 @@ project resolution and record readback passed. Three more pairs of installed
 app record queries passed. No test app process remains. The replacement
 candidate has not been published or download-verified, and a real Codex
 conversation was not run across this exact upgrade.
+
+## Project stage and accepted outcome presentation — 2026-09-23
+
+The existing manual **Last Forge Record** consultation now also presents the
+project lifecycle stage in plain Portuguese and the accepted Work Focus outcome.
+Both values come from the same validated `workflow resume` response as the
+existing activity and next-step fields. The desktop adapter requires matching
+resume, journey-guidance and Work Focus phases before returning the projection;
+it does not infer a stage from chat, create another progress store or add
+polling. Unknown future phase labels use a neutral explanation instead of
+inventing completion.
+
+PASS: four focused Rust projection tests, desktop `cargo check`, browser UI
+checks, seven Node tests, and a real native WebView readback on an invisible
+Windows desktop. The native app resolved `D:\Forge-method-core`, displayed
+**Descoberta**, and displayed the accepted desktop-UI outcome returned by Forge.
+Visual review used a headless screenshot; no window appeared on the user's
+current desktop and no Forge desktop process remained afterward.
+
+This is an incremental presentation slice toward #92, not the complete decision
+history or artifact preview in #91. The unpublished `0.1.1` installer candidate
+above is still the exact artifact built from commit `92c608fe`; it does **not**
+contain this later UI slice. Do not silently treat a source commit as a newer
+download or rebuild the recorded candidate in place. Package these later UI
+changes only in a subsequent explicitly versioned candidate.

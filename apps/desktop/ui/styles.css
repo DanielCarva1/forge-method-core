@@ -99,7 +99,12 @@ summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 6
 .record { margin-top: 24px; border-top: 1px solid var(--line); }
 .record h4 { font-size: 1.2rem; margin: 12px 0 20px; overflow-wrap: anywhere; }
 .record-state { display: inline-block; margin: 8px 0 0; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--soft); font-weight: 700; }
+.record-stage { margin: 16px 0; padding: 18px; border-radius: 18px; background: var(--soft); }
+.record-stage .eyebrow { margin-bottom: 4px; }
+.record-stage h4 { margin: 0; font-size: 1.35rem; }
+.record-stage p:last-child { margin: 6px 0 0; color: var(--muted); }
 .record-detail { margin-top: 16px; }
+.record-outcome { margin-top: 0; }
 .record-detail p, .record-question p { margin: 6px 0 0; }
 .record-question { margin-top: 20px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--canvas); }
 .conversation-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
