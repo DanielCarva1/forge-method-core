@@ -82,6 +82,7 @@ const assert = require('node:assert/strict');
       const skillHash = createHash('sha256').update(await readFile(skill)).digest('hex');
       assert.equal(skillHash, '10581e17d5dbb98bda3e0f3bc0b6a152736499451e1424e093dbecfafd8f0b06');
       assert.ok(params.developerInstructions.includes('Do not use a separately installed Start Forge skill'));
+      assert.ok(params.developerInstructions.includes('write the file, invoke Forge, and clean up in separate tool calls'));
       console.log('PASS: native fixture login preserves the draft; first send supplies the installed bundled Start Forge path to the Codex thread. Provider login and agent skill execution NOT_RUN.');
     } else {
       await page.locator('#finish-login').click();

@@ -989,8 +989,14 @@ async function openConversation(page) {
     assert.equal(await page.locator('#progress-result').isVisible(), false);
     assert.equal(await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).isEnabled(), true);
     for (const [kind, state] of [['running', 'working'], ['completed', 'completed'], ['interrupted', 'interrupted'], ['failed', 'error']]) {
+      const priorProgressReads = await page.evaluate(() => window.progressCalls || 0);
       await page.evaluate(kind => window.agentEvents.onmessage({ kind }), kind);
-      assert.equal(await page.locator('#progress-result').isVisible(), false);
+      if (kind === 'running') assert.equal(await page.locator('#progress-result').isVisible(), false);
+      else {
+        await page.waitForFunction(previous => (window.progressCalls || 0) > previous, priorProgressReads);
+        await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
+        assert.equal(await page.locator('#progress-result').isVisible(), true, 'A finished turn refreshes the Forge record without asking the person to click');
+      }
       assert.equal(await page.locator('#agent-status').getAttribute('data-state'), state);
       assert.equal(await page.locator('#agent-status .status-icon').getAttribute('aria-hidden'), 'true');
       assert.ok((await page.locator('#agent-status span:last-child').textContent()).length > 15);

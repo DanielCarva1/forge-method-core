@@ -1,4 +1,4 @@
-import { invalidateProgress } from './progress.mjs';
+import { invalidateProgress, refreshProgressAfterTurn } from './progress.mjs';
 import { readReference, saveReference, readUnconfirmedSend, markUnconfirmedSend, clearUnconfirmedSend } from './conversation-reference.mjs';
 import { renderAgentMessage } from './message-format.mjs';
 import { previewLinkedFile, refreshPreviewAfterTurn } from './preview.mjs';
@@ -394,6 +394,7 @@ function message(id, role, text, append = false, complete = false) {
 
 function receive(event) {
   if (['running', 'completed', 'interrupted', 'failed', 'disconnected'].includes(event.kind)) invalidateProgress();
+  if (['completed', 'interrupted', 'failed'].includes(event.kind)) refreshProgressAfterTurn();
   if (event.kind === 'completed') void refreshPreviewAfterTurn();
   if (event.kind === 'delta' || event.kind === 'message') {
     message(event.id, 'Codex', event.text, event.kind === 'delta', event.kind === 'message');

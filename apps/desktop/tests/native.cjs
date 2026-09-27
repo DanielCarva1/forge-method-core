@@ -417,6 +417,38 @@ async function operatePreviewDialog(page, file) {
       console.log('PASS: one folder action initialized a new project and its Forge record without a second setup command.');
       assert.equal(await page.locator('#connect-agent').isEnabled(), true);
       assert.equal(await page.locator('#send-message').isEnabled(), true);
+      if (process.env.FORGE_TEST_TERMINAL_RECORD === '1') {
+        await page.evaluate(() => {
+          const originalCore = window.__TAURI__.core;
+          const invoke = originalCore.invoke;
+          const facade = Object.create(originalCore);
+          window.terminalRecordReads = 0;
+          Object.defineProperty(facade, 'invoke', { value: async (command, args) => {
+            if (command === 'inspect_progress') window.terminalRecordReads++;
+            if (command === 'connect_agent') {
+              window.terminalRecordEvents = args.events;
+              return { thread_id: 'controlled-native-record-thread', resumed: false, messages: [] };
+            }
+            if (command === 'disconnect_agent') return;
+            return invoke(command, args);
+          } });
+          window.__TAURI__.core = facade;
+          window.restoreTerminalRecordInvoke = () => { window.__TAURI__.core = originalCore; };
+        });
+        await openConversation(page);
+        await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor();
+        await page.evaluate(() => window.terminalRecordEvents.onmessage({ kind: 'running' }));
+        assert.equal(await page.locator('#progress-result').isVisible(), false);
+        const readsBefore = await page.evaluate(() => window.terminalRecordReads);
+        await page.evaluate(() => window.terminalRecordEvents.onmessage({ kind: 'completed' }));
+        await page.waitForFunction(before => window.terminalRecordReads > before, readsBefore);
+        await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 35000 });
+        assert.equal(await page.locator('#progress-result').isVisible(), true);
+        assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem trabalho registrado');
+        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await page.evaluate(() => window.restoreTerminalRecordInvoke());
+        console.log('PASS: native WebView terminal event automatically re-reads the unchanged, authoritative Forge project record (controlled agent event; no real Codex turn).');
+      }
       assert.equal(await page.locator('#agent-access-note').isVisible(), true);
       assert.match(await page.locator('#agent-access-note').textContent(), /sem pedir confirmação/);
       const composerSize = await page.locator('#message-text').evaluate(node => node.getBoundingClientRect().height);

@@ -546,7 +546,7 @@ fn developer_instructions(resource_dir: Option<&Path>) -> Result<String, &'stati
         #[cfg(debug_assertions)]
         "Use the installed start-forge skill once at the beginning of this conversation, and follow its structured handoff.".to_string()
     };
-    Ok(format!("You are the user's agent inside Forge desktop. Work only on the selected project unless the user explicitly requests otherwise. {start} Forge owns project continuity; use its public interfaces and do not create another state store. Explain progress in the user's language, clearly and simply. A completed response is not proof that the user's task is complete. Treat exploration as conversation, not acceptance. After interruption, reconcile actual effects before continuing. When you create or substantially change a reviewable local file, identify only files that actually exist and include a Markdown link with a path relative to the project root, such as [Ver página](site/index.html), so the user can inspect it in the app. Do not imply a local file is published or that an unsupported output has a visual preview. The interface currently cannot display interactive tool forms; ask the user in ordinary conversation when a decision is needed."))
+    Ok(format!("You are the user's agent inside Forge desktop. Work only on the selected project unless the user explicitly requests otherwise. {start} Forge owns project continuity; use its public interfaces and do not create another state store. For a Forge command requiring a temporary JSON input, write the file, invoke Forge, and clean up in separate tool calls; never compose all three operations into one shell command. If the host blocks an operation, do not bypass its policy. Explain progress in the user's language, clearly and simply. A completed response is not proof that the user's task is complete. Treat exploration as conversation, not acceptance. After interruption, reconcile actual effects before continuing. When you create or substantially change a reviewable local file, identify only files that actually exist and include a Markdown link with a path relative to the project root, such as [Ver página](site/index.html), so the user can inspect it in the app. Do not imply a local file is published or that an unsupported output has a visual preview. The interface currently cannot display interactive tool forms; ask the user in ordinary conversation when a decision is needed."))
 }
 
 async fn resume_saved<P: Protocol>(
@@ -835,6 +835,7 @@ mod tests {
         let instructions = developer_instructions(Some(&base)).unwrap();
         assert!(instructions.contains(&skill.display().to_string()));
         assert!(instructions.contains("Do not use a separately installed Start Forge skill"));
+        assert!(instructions.contains("write the file, invoke Forge, and clean up in separate tool calls"));
         assert!(!instructions.contains("Use the installed start-forge skill"));
         std::fs::remove_dir_all(base).unwrap();
     }

@@ -5299,3 +5299,124 @@ Decision Request path through a bounded real app-agent command, without
 weakening safety, then verify fresh-account/clean-machine first use when a
 suitable fixture or human login is available. Avoid repeating the full Start
 Forge activation just to gather another token count.
+
+### Decision-request command boundary diagnosis — 2026-09-27
+
+The earlier failure was at the **host shell-tool policy**, before Forge ran:
+the real agent had composed temporary JSON creation, the read-only
+`workflow intent accept-cooperative` call and `Remove-Item` cleanup into one
+PowerShell command. Re-reading that exact Codex trace confirms the rejection
+was `CreateProcess ... blocked by policy`, not a Forge validation response.
+No authorization or shell policy was weakened.
+
+**PASS (installed core, standalone; not app-agent proof):** on the disposable
+`C:/ForgeFast/forge-skill-probe-0116-20260927/project` fixture, the installed
+bundled `forge-core 0.13.2` published a current Solo Cooperative objective
+packet. A 538-byte UTF-8 `decision_required` input was written outside the
+project in a separate tool call, and a separate direct Forge CLI call returned
+`ok: true`, `status: decision_required`, the two exact alternatives and the
+recommended option. Before and after, all 15 fixture files had the same
+combined SHA-256 manifest
+`784e45b45e7066ecba6907cd6f2df72ed6ca64a50c2e5ef5028db3f73f8ca6b6`;
+no ledger write occurred. The input file was deleted separately with an
+exact-file patch and its absence verified. Recursive removal of the earlier
+fixture directory remains host-policy-blocked, so the fixture remains.
+
+**Source change, not installed:** `src-tauri/src/agent.rs` now tells the app
+agent to write JSON, invoke Forge and clean up in separate tool calls, never
+as one composed shell command, and not to bypass host policy if blocked.
+The focused Rust test, Desktop `cargo check`, and all 49 Desktop unit tests
+pass. `tests/native-auth.cjs` will assert the new instruction at the next
+native package check. No new real Codex turn, desktop build, installer,
+commit, push or publication was made in this slice. The public/installed
+desktop is still 0.1.16 and does **not** contain this new instruction.
+
+**PARTIAL:** the installed core's typed read-only return is proven; the app
+agent following the revised instruction in a real turn is still NOT_RUN. The
+previous real agent did ask the relevant question in chat without a typed
+return. Do not claim an app flow fix until a native app-agent check exercises
+it. This slice collected no new model-token counter or BRL estimate; those
+remain UNKNOWN. **Next exact step:** continue the user-facing desktop journey
+review, then package the agent-instruction correction with a meaningful UI
+improvement. Verify the native protocol fixture on that candidate; decide
+whether one additional real decision turn is justified before release rather
+than repeatedly spending a full Start Forge activation on this narrow check.
+
+### Automatic project-record readback after a conversation turn — 2026-09-27
+
+**Goal/phase:** make the folder-to-conversation journey easier without adding
+another source of truth. A finished agent turn now automatically asks Forge for
+the project's current record, instead of requiring the person to click
+“Atualizar andamento” after every response. The record is invalidated while
+the turn runs; completed, interrupted, and failed turns trigger a read-only
+refresh. A failed or unavailable Forge read leaves no inferred result and the
+manual retry remains available. Disconnection alone does not imply a settled
+turn and does not trigger this read.
+
+**Changed, uncommitted:** `ui/chat.mjs` and `ui/progress.mjs` implement the
+project-bound readback; `tests/browser.cjs` checks running/terminal states and
+the resulting Forge record. The independent agent-command-boundary correction
+and native instruction assertion described above are still in the same local
+diff. No version bump, installer or publication has been made for either.
+
+**PASS:** controlled browser suite, including the new automatic readback
+assertion; all eight frontend unit tests; Desktop debug build; hidden native
+WebView smoke (layout, first-use help, draft preservation, appearance and
+frontend-to-Rust identity). The native fixture also opened a disposable Forge
+project, simulated a terminal agent event, observed a fresh real Rust/Forge
+`inspect_progress` call and displayed the unchanged authoritative empty
+record. It sent no real Codex turn and did not create fake progress. The first
+native attempt failed because the harness clicked a control inside a closed
+disclosure; the test was corrected to use its existing `openConversation`
+helper, then the full hidden native smoke passed. The earlier Desktop
+`cargo check`, focused agent test and all 49 crate tests passed after the Rust
+instruction change. The read-only decision request was proven with installed
+`forge-core` alone, not through a real app agent. No new provider token counts
+were collected; cost and per-task subscription consumption remain UNKNOWN.
+
+**Next exact step:** inspect the integrated diff and prepare one coherent next
+alpha candidate. Verify the revised developer instruction in the native Codex
+protocol fixture. Do not claim actual agent obedience from that fixture; a
+bounded real decision turn remains separately NOT_RUN. Preserve the existing
+disposable fixture because recursive cleanup was blocked by host policy; do
+not bypass that policy.
+
+### Desktop 0.1.17 alpha candidate — 2026-09-27
+
+**Scope:** one coherent package of automatic Forge record readback after a
+terminal conversation event and the separated-tool-call instruction for
+temporary Forge JSON. Version/lock/config are 0.1.17; release scope and
+limitations are in `RELEASE_NOTES-0.1.17.md`. The larger folder-to-chat-to-
+result-to-restart goal remains active.
+
+**PASS:** Desktop `cargo check`, all 49 crate tests, strict Clippy, eight
+frontend unit tests, controlled browser suite, pinned-core verification, and
+one NSIS release build. The unsigned candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.17_x64-setup.exe`
+is 123,090,502 bytes, SHA-256
+`FD53B3133956F15FC4A34E0B4EA521FD67E3D3F902DE551C66BCA0C94AA7138A`.
+Silent installation over public 0.1.16 returned exit 0; installed app version
+0.1.17, executable SHA-256
+`CA2C1657B54A4EA8EB95B0C19E30363AD16BCAD442AC6AFD9A536D84599FEB50`.
+Bundled core SHA-256 is the pinned
+`CFD6F81B1710D0469A53D12B374258CC122676EA7865F26926B1CDB4C7541EDF`;
+bundled skill SHA-256 is the pinned
+`10581E17D5DBB98BDA3E0F3BC0B6A152736499451E1424E093DBECFAFD8F0B06`.
+The installed hidden native WebView passed the disposable-project journey,
+including a controlled terminal agent event followed by an actual Rust/Forge
+record read. The installed native Codex-protocol fixture captured the revised
+instruction and skill path with fake auth completion; it did not log in to a
+provider or run a real agent. No manual GitHub CI ran.
+
+**Limits:** app-agent obedience for a typed Decision Request, fresh-account
+browser login completion, a clean Windows machine and manual accessibility
+remain NOT_RUN. This slice used no new real model turn; task-specific BRL and
+Pro allowance costs remain UNKNOWN. The fixture retained under `C:/ForgeFast`
+remains because host policy blocked recursive cleanup. The candidate is only
+installed locally, not yet committed/pushed/published.
+
+**Next exact step:** inspect final staged diff and selectively commit/push
+0.1.17; under the maintainer's standing publication authorization, publish
+only the byte-exact tested installer, then verify an unauthenticated download
+hash and reinstall those downloaded bytes. Do not rerun NSIS or real Start
+Forge activation merely to produce a second candidate or token sample.

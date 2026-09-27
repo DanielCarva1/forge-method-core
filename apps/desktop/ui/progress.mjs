@@ -163,6 +163,9 @@ export function invalidateProgress() {
   pending = false;
   controls();
 }
+export function refreshProgressAfterTurn() {
+  void loadProgress();
+}
 async function loadProgress() {
   if (!project || pending) return;
   const current = ++generation;
