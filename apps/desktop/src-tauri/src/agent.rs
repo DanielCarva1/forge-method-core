@@ -13,7 +13,7 @@ use std::{
         Arc, Mutex,
     },
 };
-use tauri::{ipc::Channel, State};
+use tauri::{ipc::Channel, Manager, State};
 
 // One turn per frame avoids an arbitrary batch becoming oversized. A single giant turn still
 // fails through the transport's existing per-frame boundary rather than being truncated.
@@ -140,6 +140,7 @@ fn conversation_page(value: Value, root: &str) -> Result<ConversationPage, &'sta
 pub async fn list_conversations(
     project_root: String,
     cursor: Option<String>,
+    app: tauri::AppHandle,
 ) -> Result<ConversationPage, &'static str> {
     if cursor
         .as_ref()
@@ -149,7 +150,8 @@ pub async fn list_conversations(
     }
     let project = project::inspect_project(project_root).await?;
     let root = Path::new(&project.project_root);
-    let transport = Transport::start(&executable()?, root, |_| {})?;
+    let resource_dir = app.path().resource_dir().ok();
+    let transport = Transport::start(&executable(resource_dir.as_deref())?, root, |_| {})?;
     let result = async {
         transport
             .request(
@@ -187,21 +189,34 @@ pub fn begin_close(state: &AgentState) -> bool {
     !state.closing.swap(true, Ordering::SeqCst)
 }
 
-fn executable() -> Result<PathBuf, &'static str> {
+fn executable(resource_dir: Option<&Path>) -> Result<PathBuf, &'static str> {
     let explicit = std::env::var_os("FORGE_CODEX_EXE").map(PathBuf::from);
+    let bundled = resource_dir.and_then(bundled_codex);
     let desktop = std::env::var_os("LOCALAPPDATA")
         .map(PathBuf::from)
         .and_then(|base| desktop_codex(&base));
     let npm = std::env::var_os("APPDATA").map(|base| PathBuf::from(base).join(
         "npm/node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe"));
-    let path = explicit
-        .or(desktop)
-        .or(npm)
+    let path = preferred_executable(explicit, bundled, desktop, npm)
         .ok_or("Instale o Codex CLI e entre na sua conta antes de conectar.")?;
     if !path.is_absolute() || !path.is_file() {
         return Err("Codex CLI não encontrado. Confira a instalação.");
     }
     Ok(path)
+}
+
+fn bundled_codex(resource_dir: &Path) -> Option<PathBuf> {
+    let path = resource_dir.join("codex-cli/bin/codex.exe");
+    path.is_file().then_some(path)
+}
+
+fn preferred_executable(
+    explicit: Option<PathBuf>,
+    bundled: Option<PathBuf>,
+    desktop: Option<PathBuf>,
+    npm: Option<PathBuf>,
+) -> Option<PathBuf> {
+    explicit.or(bundled).or(desktop).or(npm)
 }
 
 fn desktop_codex(local_app_data: &Path) -> Option<PathBuf> {
@@ -290,6 +305,7 @@ pub async fn connect_agent(
     thread_id: Option<String>,
     events: Channel<AgentEvent>,
     state: State<'_, AgentState>,
+    app: tauri::AppHandle,
 ) -> Result<history::Conversation, &'static str> {
     let project = project::inspect_project(project_root).await?;
     let shutdown_guard = state.shutdown.lock().await;
@@ -303,7 +319,8 @@ pub async fn connect_agent(
     let root = Path::new(&project.project_root);
     let activity = Arc::new(Mutex::new(Activity::default()));
     let observed = activity.clone();
-    let transport = Transport::start(&executable()?, root, move |value| {
+    let resource_dir = app.path().resource_dir().ok();
+    let transport = Transport::start(&executable(resource_dir.as_deref())?, root, move |value| {
         if let Some(event) = project_event(value, &observed) {
             let _ = events.send(event);
         }
@@ -614,6 +631,27 @@ mod tests {
         std::fs::write(&executable, b"fixture").unwrap();
         assert_eq!(desktop_codex(&base), Some(executable));
         std::fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn bundled_codex_is_used_only_when_present_and_precedes_machine_installs() {
+        let base =
+            std::env::temp_dir().join(format!("forge-codex-resource-{}", uuid::Uuid::new_v4()));
+        let bundled = base.join("codex-cli/bin/codex.exe");
+        let old = PathBuf::from("C:/old/codex.exe");
+        assert_eq!(bundled_codex(&base), None);
+        std::fs::create_dir_all(bundled.parent().unwrap()).unwrap();
+        std::fs::write(&bundled, b"fixture").unwrap();
+        assert_eq!(bundled_codex(&base), Some(bundled.clone()));
+        assert_eq!(
+            preferred_executable(None, Some(bundled.clone()), Some(old.clone()), None),
+            Some(bundled.clone())
+        );
+        assert_eq!(
+            preferred_executable(Some(old.clone()), Some(bundled), None, None),
+            Some(old)
+        );
+        std::fs::remove_dir_all(base).unwrap();
     }
 
     struct FakeProtocol {

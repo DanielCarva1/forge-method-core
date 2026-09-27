@@ -1,9 +1,8 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.6` is the published alpha
-prerelease. Desktop `0.1.7` is a tested installer candidate installed locally,
-but it is not yet publicly available. The public 0.1.6 installer was downloaded
-back and verified byte-for-byte by SHA-256 before this upgrade.
+Independent Tauri application. Desktop `0.1.10` is the published alpha
+prerelease. Source `0.1.11` is under development; no `0.1.11` installer is
+publicly available until its exact candidate is tested and downloaded back.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -41,10 +40,11 @@ when the test must run on an isolated Windows desktop without taking focus.
 
 The app has an independent Cargo workspace and lockfile so desktop dependencies
 do not expand core builds. Static frontend assets need no npm install, dev
-server, CDN or runtime download. Packaging uses the exact Tauri CLI version in
-`apps/desktop/package-lock.json`; this build-only dependency does not add a
-frontend runtime. This is a small first slice, not a commitment against using a
-frontend framework when component complexity warrants it.
+server, CDN or runtime download. Packaging uses the exact Tauri CLI and Codex
+CLI versions in `apps/desktop/package-lock.json`. Codex CLI is a native Windows
+x64 runtime resource, not a frontend dependency, and increases installer size.
+`npm ci` fetches it during the build; installed app startup does not download it.
+This is not a commitment against using a frontend framework when warranted.
 
 To repeat the Windows NSIS build from the repository with the same Tauri CLI:
 
@@ -115,18 +115,22 @@ removal. It does not start an agent, initialize state or prove conversation read
 
 ## Codex conversation
 
-The Windows adapter locates the native executable in the standard per-user npm
-Codex installation. `FORGE_CODEX_EXE` may specify an absolute standalone Codex
-executable as host configuration; it is never supplied by webview content. The app
-does not install/update Codex or use the Codex Desktop bundled runtime. Sign in
-through the supported Codex CLI login flow. The current slice requires a ChatGPT
-account; API-key login, ZCode and in-app login are not implemented.
+For the `0.1.11` source, the Windows adapter prefers Codex CLI `0.157.1`
+bundled from the pinned npm package. It falls back to an installed Codex
+Desktop or per-user npm executable only if the bundled file is absent.
+`FORGE_CODEX_EXE` remains a development override and takes precedence; webview
+content cannot set it. The app does not modify global CLI installations. Sign
+in through the Codex CLI login flow; a ChatGPT account is required. API-key
+login, ZCode, in-app login and automatic Codex updates are not implemented.
+Bundling Codex does not bundle `forge-core`, WebView2 or account credentials;
+this is not yet a fully self-contained clean-machine installer.
 
-The integration was exercised with standalone Codex CLI 0.154.0. The installed
-0.144.6 authenticated successfully but the provider rejected its use of
-gpt-6-astra with an explicit CLI-upgrade requirement. The UI translates that
-failure into an update instruction, without forwarding raw provider errors.
-Authentication alone does not establish model/client compatibility.
+Earlier integration used standalone Codex CLI 0.154.0. The older machine CLI
+0.144.6 authenticated but the provider rejected its use of gpt-6-astra with
+an explicit upgrade requirement. The `0.1.11` installed candidate instead
+sent and restored a real response with bundled 0.157.1 and no host override.
+The UI still translates upgrade failures without exposing raw provider errors;
+pinning a version does not guarantee future model/client compatibility.
 
 Rust starts `codex app-server --listen stdio://`, initializes it once, reads only
 the account type for admission and starts one thread bound to the resolved root.
@@ -4562,3 +4566,52 @@ Do not call it clean-machine or self-contained. Investigate a safe, maintainable
 setup/update path before another UI-only release. Manual screen-reader/contrast
 acceptance, auto-update and mobile remain open. Model-specific token and BRL
 costs remain UNKNOWN.
+
+## Desktop 0.1.11 bundled Codex candidate — 2026-09-27
+
+**Objective and scope:** remove the ordinary user's need to supply a compatible
+Codex CLI while preserving Forge/Codex ownership, host override for development
+and safe fallback on older source. No subagents were used; model routing and
+cost attribution remain with the parent. Model-specific usage and BRL are
+UNKNOWN, not zero.
+
+The source pins `@openai/codex@0.157.1` in Desktop's npm lockfile and includes
+its full Windows x64 native vendor tree as a Tauri resource. Runtime resolution
+prefers the bundled executable after an explicit `FORGE_CODEX_EXE` override and
+before older per-user installations. The upstream tag's LICENSE and NOTICE are
+included; no binary is tracked in Git. `apps/desktop/third-party/codex-0.157.1/README.md`
+records provenance. Source version is 0.1.11; public release remains 0.1.10
+until a public download is checked. No project-state or UI-data path changed.
+
+**PASS:** pinned `npm ci`; Desktop `cargo check`, 18 agent tests, all 45 Desktop
+Rust tests, strict Desktop Clippy, eight Node tests, browser suite and NSIS
+release build. A hidden native run of the debug app with `FORGE_CODEX_EXE`
+unset sent to real authenticated Codex and restored the reply after WebView
+reload. The exact NSIS candidate silently upgraded installed 0.1.10 with exit
+0; installed resource `codex-cli/bin/codex.exe` reports 0.157.1 and hashes to
+`8CB0E69E99FF2A158C54815DB82D0F2E524D8F301BC30184722CFD1AE5973574`.
+Installed app without override again sent a real reply and restored it after
+WebView reload. A focused hidden native controlled-history full-process restart
+then reopened a local file, retained distinct citations and rejected an
+outside path. The first native attempt failed only because Playwright was not
+configured in that test shell; it passed when the existing module path was set.
+No GitHub CI was manually triggered. Rust work stayed scoped to Desktop.
+
+**One candidate:**
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.11_x64-setup.exe`,
+111,295,705 bytes, SHA-256
+`00E4E5F1C749C395A5844A50A926B88F6D62833934911F998B19D96CF6F1E6E4`.
+Do not rebuild after hashing. Installed executable SHA-256 is
+`FCF8AFB036789F070891541BBA3A66CC7CC194D9DC685CAE19C0BF1C14BD3A04`.
+Exact limitations are in `apps/desktop/RELEASE_NOTES-0.1.11.md`: Forge core
+still separate, no in-app sign-in, auto-updater, signing, clean-machine proof,
+manual accessibility acceptance or mobile. A future provider change can make
+the pinned Codex stale; a fresh real artifact create/change and full process
+restart of that same real conversation are NOT_RUN on installed 0.1.11.
+
+**Next exact step:** review the source/notes and Git diff, selectively commit
+and push, tag this source, publish only the exact tested installer candidate
+under the maintainer's standing alpha permission, then fresh-download it
+without authentication, compare size/SHA-256 and install those downloaded
+bytes before calling 0.1.11 publicly available. After that, continue the
+journey with Forge core installation and genuinely clean-machine setup.
