@@ -5420,3 +5420,32 @@ installed locally, not yet committed/pushed/published.
 only the byte-exact tested installer, then verify an unauthenticated download
 hash and reinstall those downloaded bytes. Do not rerun NSIS or real Start
 Forge activation merely to produce a second candidate or token sample.
+
+### Desktop 0.1.17 public release readback — 2026-09-27
+
+**PASS:** commit `893ed600ffeb27fc1de9eef058745396835f0ce9` was pushed.
+Annotated tag `desktop-v0.1.17-alpha.1` resolves to that commit and was
+pushed. The public prerelease is
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.17-alpha.1`.
+GitHub reports one installer asset, 123,090,502 bytes, digest SHA-256
+`FD53B3133956F15FC4A34E0B4EA521FD67E3D3F902DE551C66BCA0C94AA7138A`.
+An unauthenticated direct download to
+`C:/ForgeFast/forge-alpha-0117-public-20260927/Forge_0.1.17_x64-setup.exe`
+matched the exact tested candidate. Silent reinstall of those downloaded
+bytes returned exit 0; installed app version 0.1.17, executable SHA-256
+`CA2C1657B54A4EA8EB95B0C19E30363AD16BCAD442AC6AFD9A536D84599FEB50`,
+bundled core and skill hashes all matched the tested installation. A hidden
+native fixture-login/first-send regression on the downloaded installation
+again confirmed the new developer instruction and installed skill path/hash.
+It did not complete provider login or run a real agent. No manual GitHub CI
+was started.
+
+The installer is now available publicly. The unsigned/no-auto-update,
+real app-agent Decision Request, fresh-account/clean-machine and manual
+accessibility limits in the release notes still apply. The disposable Forge
+probe directory remains because recursive cleanup was rejected by host
+policy. The broader goal remains active. **Next exact step:** review the
+remaining user-facing journey gaps with native evidence. Prioritize a bounded
+real typed Decision Request in the app agent, then fresh-account/clean-machine
+first use when a suitable isolated fixture exists. Do not let this narrow
+validation displace core UI completion or create a second authority store.
