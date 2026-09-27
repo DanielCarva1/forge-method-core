@@ -109,7 +109,7 @@ async function openExisting(page) {
       assert.equal(await page.locator('#record-direction-card').isVisible(), !!before.active_objective, 'Native UI direction must match Forge authority');
       assert.equal(await page.locator('#record-work').isVisible(), before.current_work.status !== 'absent', 'Native UI Work Focus must match Forge authority');
       if (before.active_objective) assert.equal(await page.locator('#record-direction-outcome').textContent(), before.active_objective.proposal.outcome);
-      if (before.current_work.status === 'current') {
+      if (before.current_work.status === 'current' || before.current_work.status === 'completed') {
         assert.equal(await page.locator('#record-title').textContent(), before.current_work.focus.title);
         assert.equal(await page.locator('#record-outcome').textContent(), before.current_work.focus.intended_outcome);
         assert.equal(await page.locator('#record-next').textContent(), before.current_work.focus.next_step);
@@ -120,6 +120,17 @@ async function openExisting(page) {
       if (process.env.FORGE_EXPECT_DIRECTION_COPY === '1') {
         assert.equal(await page.locator('#record-state').textContent(), 'Direção registrada; próximo trabalho pendente');
         assert.match(await page.locator('#record-empty-help').textContent(), /O objetivo está registrado.*próximo trabalho ainda não foi definido/);
+      }
+      if (process.env.FORGE_EXPECT_PERSONAL_COMPLETE === '1') {
+        assert.equal(before.current_work.status, 'completed', 'Forge must report the exact accepted Work Focus as completed');
+        assert.match(await page.locator('#record-state').textContent(), /conclu[ií]do/i);
+        const finalFile = page.locator('#messages article[data-role="agent"]').last().locator('.message-file-link[data-preview-path="site/index.html"]');
+        assert.equal(await finalFile.isVisible(), true, 'The final answer must render the local file as an actionable button');
+        await finalFile.click();
+        await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 30000 });
+        assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
+        await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias renovado', exact: true }).waitFor({ timeout: 30000 });
+        assert.equal(await page.evaluate(() => window.readOnlySendCount), 0, 'Opening the final result must not send another turn');
       }
       if (process.env.FORGE_EXPECT_PRIOR_RESULT === '1') {
         const resultAlreadyOpen = await page.locator('#preview-result').isVisible();

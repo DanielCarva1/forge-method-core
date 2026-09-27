@@ -6201,3 +6201,51 @@ controlled, same-thread compaction pilot can reduce repeated context cost
 without losing the Forge handoff or project facts. Only after that, complete
 one real result/change/closeout journey in the installed app. Do not add a
 second persistence system. The full desktop goal remains active.
+
+### Desktop real-result closeout and observer checkpoint — 2026-09-27
+
+The disposable native project at
+`D:/Temp/User/forge-desktop-webview-ENrGgT/new-project` now has a functional
+personal ideas page. A third message in the **same** Codex chat
+(`01a0e25f-27b4-7f73-b3e8-9298bccdde2f`) asked only to finish the existing
+Forge record and answer with the result; it was sent **once**, at 22:05:41 UTC,
+and completed at 22:10:35 UTC. Do not resend it. The final reply linked
+`site/index.html` and identified the protected Forge preview as noninteractive.
+The authoritative Forge Work Focus `focus.jardim-ideias-v1-funcional` is now
+`completed`, record digest
+`sha256:f43e52e3b1213f2ee3e5b4ae7f3b0927373158e240fa30727cbbfde435719509`,
+with explicit Quick Cycle closeouts for all five lifecycle stages. Those
+closeouts are cooperative agent evidence, not independent compliance proof.
+
+**PASS:** Earlier independent Chromium local-file checks covered add, list,
+reload/persist, remove and reload. The installed public 0.1.21 app passed a
+hidden native **read-only** restart of this same real chat: completed Forge
+Work Focus and direction visible, final local-file button actionable, protected
+preview displaying the result, zero new sends, unchanged project files. Their
+SHA-256 hashes are `2B580FEAB7A754ECDFBD239AD5D5CFD48F83FA4F2DB30CAEEF7E5930F3E9B120`
+(`site/index.html`), `1783A7A76F0201516400F17BD4945265DB9BDF76D3F0D8D687F1793FF8794BDA`
+(`site/assets/site.css`), and `358A78547E688CDE64831DAA0263483F0ABEF9D3F76C26A3454E3CF6EE566643`
+(`site/assets/site.js`). The one-shot finalization harness initially reported
+a **test-only false failure**: it searched the rendered message's `innerText`
+for raw Markdown syntax, while the correct UI renders the link as a button.
+Its assertion now checks that button; the provider turn was not repeated.
+
+The native test harness now uses a progress-aware bounded observer rather than
+a fixed 600-second wait. Three focused Node tests, script syntax checks and
+`git diff --check` pass. This is test/checkpoint work only; no product binary
+changed and no new installer is warranted. The third real `gpt-6-sol` high turn
+reported 957,949 input tokens including 831,360 cached and 4,629 output
+including 2,158 reasoning (962,578 total). The three-turn journey reports
+3,184,228 observed tokens in total, but no controlled Astra/Sol comparison.
+The shared Pro weekly gauge remained 49% before/after the last turn; rounded
+and shared values cannot attribute per-turn allowance use. Task BRL cost and
+API-equivalent cost are **UNKNOWN**; do not equate raw token totals with a Pro
+bill or a saving. No subagents were used.
+
+**NOT_RUN:** a real request to change this result in the same chat, clean-machine
+or fresh-account setup, manual accessibility acceptance, or mobile. The
+finished Forge record is not a publication of the disposable page. **Next
+exact step:** run one bounded, reversible change request in the existing native
+chat and verify the modified local file, Forge's new/current Work Focus,
+native result link and restart. Do not resend either interrupted implementation
+turn or the completed finalization turn. Keep the full desktop goal active.
