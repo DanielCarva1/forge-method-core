@@ -676,7 +676,7 @@ async function openConversation(page) {
           ] };
         }
         if (command === 'start_project' || command === 'inspect_project') return { project_id: 'test-project', project_root: args.projectRoot };
-          if (command === 'connect_agent') { window.agentEvents = args.events; window.connectedThread = args.threadId; return { thread_id: 'test-thread', messages: args.threadId ? [{ id: 'saved-user', role: 'user', text: 'Saved decision' }, { id: 'saved-agent', role: 'agent', text: '## Partial reply\n- Saved item' }, { id: 'saved-incomplete', role: 'agent', text: '## Still incomplete', incomplete: true }] : [], resumed: !!args.threadId }; }
+          if (command === 'connect_agent') { window.agentEvents = args.events; window.connectedThread = args.threadId; return { thread_id: 'test-thread', messages: args.threadId ? window.resumeMessages || [{ id: 'saved-user', role: 'user', text: 'Saved decision' }, { id: 'saved-agent', role: 'agent', text: '## Partial reply\n- Saved item' }, { id: 'saved-incomplete', role: 'agent', text: '## Still incomplete', incomplete: true }] : [], resumed: !!args.threadId }; }
         if (command === 'send_message') {
           window.sendCalls++;
           return new Promise((resolve, reject) => { window.resolveSend = resolve; window.rejectSend = reject; });
@@ -955,6 +955,7 @@ async function openConversation(page) {
     if (process.env.FORGE_FORMATTED_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_FORMATTED_SCREENSHOT, fullPage: true });
     assert.equal(await formattedBubble.locator('script, a[href^="javascript:"]').count(), 0);
     assert.equal(await formattedBubble.locator('.message-file-link').count(), 4, 'Only project-file candidates become actions');
+    assert.equal(await page.locator('#preview-last-result').getAttribute('hidden'), '', 'Several distinct files must not be guessed as one result');
     assert.equal(await formattedBubble.getByRole('button', { name: 'Ver arquivo local: site/index.html' }).count(), 1, 'An inline-code file reference should offer the same safe preview action');
     assert.equal(await formattedBubble.locator('code').filter({ hasText: 'https://example.com/outside.html' }).count(), 1, 'An inline-code URL must remain inert text');
     assert.match(await formattedBubble.textContent(), /\[web\]\(https:\/\/example.com\)/);
@@ -1058,6 +1059,23 @@ async function openConversation(page) {
     assert.equal(await page.locator('#messages article[data-role="agent"] h3').textContent(), 'Partial reply');
     assert.equal(await page.locator('#messages article[data-role="agent"]').last().locator('h3').count(), 0);
     assert.equal(await page.locator('#messages article[data-role="user"] .message-avatar').getAttribute('aria-hidden'), 'true');
+    assert.equal(await page.locator('#preview-last-result').isHidden(), true, 'An incomplete latest reply must not suggest a result');
+    await page.evaluate(() => { window.resumeMessages = [
+      { id: 'result-user', role: 'user', text: 'Crie uma página simples.' },
+      { id: 'result-agent', role: 'agent', text: 'Pronto: [Ver página](site/index.html).' },
+    ]; });
+    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
+    await openConversation(page);
+    await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.equal(await page.locator('#preview-last-result').isVisible(), true, 'A single file in the restored completed reply should be easy to reopen');
+    assert.match(await page.locator('#preview-intro').textContent(), /resposta cita um arquivo/);
+    await page.getByRole('button', { name: 'Ver texto original' }).click();
+    assert.equal(await page.locator('#preview-last-result').isVisible(), true, 'Reading the original answer must not lose its file shortcut');
+    await page.getByRole('button', { name: 'Conferir arquivo citado' }).click();
+    await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.linkPreviewReads.at(-1)), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\site\\index.html' });
+    await page.evaluate(() => { window.resumeMessages = null; });
     if (process.env.FORGE_CONVERSATION_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_CONVERSATION_SCREENSHOT, fullPage: true });
     if (process.env.FORGE_CONVERSATION_LIGHT_SCREENSHOT) {
       const previousTheme = await page.evaluate(() => document.documentElement.dataset.theme);

@@ -108,6 +108,8 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 .workspace.preview-loaded .preview-empty { display: none; }
 .preview-empty { margin: 4px 0 0; }
 .preview-empty p { margin: 0; }
+.preview-empty #preview-last-result { margin-top: 12px; }
+.preview-empty #preview-last-result[hidden] { display: none; }
 .preview-empty .hint { margin-top: 4px; font-size: .9rem; }
 .preview #preview-status { margin-block: 14px; color: var(--muted); font-size: .9rem; }
 .preview #preview-status[hidden] { display: none; }

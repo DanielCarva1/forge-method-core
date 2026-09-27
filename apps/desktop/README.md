@@ -4318,3 +4318,98 @@ visual direction. Choose a substantive user-visible gap and verify it in
 the hidden native app; do not add Forge core complexity just to populate a
 screen. Keep the overall journey goal active. Model-specific tokens and BRL
 cost remain UNKNOWN.
+
+## Desktop result-resume slice in progress — 2026-09-27
+
+**Objective:** make an actual local file cited by the latest completed Codex
+reply easy to find again after resuming a conversation. In the current public
+0.1.8 app, the transcript restores but the transient preview does not; the
+person must find its link in chat or browse for the file. The product goal
+remains the nontechnical folder → conversation → real result → change request
+→ full restart journey; this is one small UI slice, not completion of it.
+
+**Source pending, not installed or published:** `ui/chat.mjs`,
+`ui/message-format.mjs`, `ui/index.html`, `ui/styles.css` and
+`tests/browser.cjs`. A compact **Conferir arquivo citado** action appears
+only when the latest completed agent message contains exactly one distinct
+supported local-file candidate. It also appears on resumed history, and
+remains available in raw-text view. Multiple files, an incomplete answer or
+a later user message do not cause a guessed result. The path is derived from
+the Codex-owned transcript in memory; Forge does not copy the transcript or
+store a new file bookmark. Clicking it uses the existing native,
+project-bound `inspect_preview` validation and may still report that the
+file is unavailable or outside the project. It is a cited file, not a claim
+that a result was built or published.
+
+**Evidence:** the controlled browser suite failed on the missing resume
+action before the change, then passed after it; eight Node tests, JS syntax
+and `git diff --check` passed. An offline locked Desktop-only debug build
+passed; no Rust source changed, and no workspace-wide Rust checks were run.
+The focused hidden native test `tests/native-result-shortcut.cjs` now passes:
+it uses a controlled Codex-history response, a real project-contained file,
+the real native `inspect_preview`, a full app-process stop/restart, and an
+outside-project path rejected by native validation. It sends no Codex turn.
+`tests/native-hidden.ps1` accepts this focused test. The visual capture
+`C:/ForgeFast/forge-result-shortcut-native.png` shows the cited-file action
+and honest local-preview language in the actual WebView. The first hidden
+test attempt proved behavior but failed cleanup on a transient WebView lock;
+after bounded cleanup retries were added, two runs passed. One old disposable
+profile under `D:/Temp/User/forge-result-shortcut-ktYUZC` may remain because
+an attempted manual removal was policy-blocked; do not claim cleanup of it.
+No real Codex artifact turn was run for this UI slice; its native history
+response was controlled. No worker was used; model-specific tokens and BRL
+cost are UNKNOWN. No commit, push, version bump, installer or release for this
+pending slice; 0.1.8 remains the latest public build.
+
+**Next smallest step:** review the integrated diff and the next substantial
+gap in the nontechnical result/change-request journey, rather than publishing
+this tiny action alone. For the next coherent alpha package, re-run the full
+native journey with real Codex, verify the installed upgrade/restart, then
+version, commit/push and publish under the existing release rules. Do not
+manually start GitHub CI for each UI edit.
+
+## Desktop 0.1.9 candidate verification — 2026-09-27
+
+The resumed-file shortcut now joins the actual result/change-request journey:
+the hidden native focused test also checks that **Pedir mudança neste arquivo**
+prepares a draft in the same restored conversation, without sending a turn.
+The standalone browser suite, eight Node tests, Desktop-only offline locked
+check and all 44 Desktop Rust tests, formatting, strict Desktop Clippy, JS
+syntax and `git diff --check` passed. The Desktop-only debug and release
+builds passed. No separate Forge core workspace or manual GitHub CI run.
+
+**PASS, real Codex on the same UI source before the 0.1.9 metadata bump:**
+the complete hidden native journey
+initialized an empty folder, sent to authenticated Codex, created actual
+`site/index.html`, previewed it, asked for and received a visible change in
+the same conversation, reloaded and then restarted the entire app process.
+The real conversation returned in order without resend. The first attempted
+command omitted the harness's required `FORGE_TEST_PROJECT` and executed no
+real project journey; the corrected command passed. This was a disposable
+project, not a user workspace. The new shortcut is conditional on a unique
+citation; that condition was proved separately in the controlled hidden
+native test, not asserted for every real model reply.
+
+**PASS, release candidate and installed upgrade:** one NSIS candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.9_x64-setup.exe`
+is 4,621,160 bytes, SHA-256
+`E16351D7DAE468968FDF43D0F3811C835DEBB428C407A2D8ED2D5185ADE1DDA9`;
+its sidecar is beside it. The release executable passed the focused hidden
+native restart/preview/path-rejection test. The same installer silently
+upgraded the local 0.1.8 installation with exit 0. Installed version is
+0.1.9; installed executable SHA-256 is
+`6EA8B9B72E46A3806F93AA316FABC367BFE04095B0A1DCE6E81C7AE960A25DBD`.
+The installed binary again passed the focused hidden native test and resumed
+an older disposable real Codex user/reply pair without a new Send. That
+history fixture predates 0.1.8; the installation itself was 0.1.8 → 0.1.9.
+No installer rebuild occurred after hashing. The exact candidate is not yet
+publicly available; do not call it published until upload and downloaded-file
+verification pass.
+
+**Limits and next step:** complete manual screen-reader/contrast acceptance,
+clean-machine separate core/Codex setup, auto-update, self-contained
+distribution and mobile remain unfinished. No worker was used; per-model
+tokens and BRL cost remain UNKNOWN. Review the package diff, commit and push
+selected source/docs, tag and publish the exact candidate under the
+maintainer's standing release permission, then verify fresh public downloads
+and installed readback. Do not trigger GitHub CI manually.

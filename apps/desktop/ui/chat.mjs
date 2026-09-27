@@ -30,6 +30,8 @@ const projectResultHint = byId('project-result-hint');
 const conversationStep = byId('conversation-step');
 const emptyDescription = byId('empty-conversation-description');
 const resumeLastConversation = byId('resume-last-conversation');
+const previewLastResult = byId('preview-last-result');
+const previewIntro = byId('preview-intro');
 const confirmReviewedSend = byId('confirm-reviewed-send');
 let project = null;
 let connected = false;
@@ -39,6 +41,8 @@ let broken = false;
 let generation = 0;
 let channel;
 const items = new Map();
+let latestItem = null;
+let lastResultPath = null;
 let rawMessageView = false;
 let restoringHistory = false;
 let listGeneration = 0;
@@ -131,8 +135,11 @@ function controls() {
 
 export function setProject(value) {
   project = value;
+  lastResultPath = null;
+  previewLastResult.hidden = true;
+  previewIntro.textContent = 'Quando houver um arquivo, confira o resultado aqui.';
   if (!project) {
-    messages.replaceChildren(); items.clear();
+    messages.replaceChildren(); items.clear(); latestItem = null;
     rawMessageView = false;
     messageView.hidden = true;
     messageView.textContent = 'Ver texto original';
@@ -256,14 +263,30 @@ previousConversations.addEventListener('click', () => loadConversationChoices(pa
 moreConversations.addEventListener('click', () => loadConversationChoices(pageNumber + 1, listCursor));
 
 function paintMessage(item) {
-  if (item.isUser || !item.complete) { item.content.textContent = item.raw; return; }
+  if (item.isUser || !item.complete) { item.previewPaths = []; item.content.textContent = item.raw; return; }
+  const formatted = document.createElement('div');
+  renderAgentMessage(formatted, item.raw, previewLinkedFile);
+  item.previewPaths = [...new Set([...formatted.querySelectorAll('.message-file-link')].map(button => button.dataset.previewPath))];
   if (rawMessageView) {
     const raw = document.createElement('pre');
     raw.className = 'message-raw';
     raw.textContent = item.raw;
     item.content.replaceChildren(raw);
-  } else renderAgentMessage(item.content, item.raw, previewLinkedFile);
+  } else item.content.replaceChildren(...formatted.childNodes);
 }
+
+function updateLastResultAction() {
+  lastResultPath = project && latestItem && !latestItem.isUser && latestItem.complete && latestItem.previewPaths?.length === 1
+    ? latestItem.previewPaths[0] : null;
+  previewLastResult.hidden = !lastResultPath;
+  previewIntro.textContent = lastResultPath
+    ? 'A resposta cita um arquivo. Confira-o aqui antes de pedir mudanças.'
+    : 'Quando houver um arquivo, confira o resultado aqui.';
+}
+
+previewLastResult.addEventListener('click', () => {
+  if (lastResultPath) void previewLinkedFile(lastResultPath);
+});
 
 function nearLatestMessage() {
   return conversationBody.scrollHeight - conversationBody.clientHeight - conversationBody.scrollTop <= 72;
@@ -276,6 +299,7 @@ messageView.addEventListener('click', () => {
   rawMessageView = !rawMessageView;
   messageView.textContent = rawMessageView ? 'Ver texto formatado' : 'Ver texto original';
   for (const item of items.values()) paintMessage(item);
+  updateLastResultAction();
   if (followLatest) showLatestMessage();
 });
 
@@ -305,10 +329,12 @@ function message(id, role, text, append = false, complete = false) {
     item = { article, title, content, raw: '', isUser, complete: false };
     bubble.append(title, content);
     article.append(avatar, bubble); messages.append(article); items.set(id, item);
+    latestItem = item;
   }
   item.raw = append ? item.raw + text : text;
   item.complete = complete;
   paintMessage(item);
+  updateLastResultAction();
   if (complete && !item.isUser) messageView.hidden = false;
   if (followLatest) showLatestMessage();
   return item;
@@ -373,7 +399,7 @@ async function connectCurrent(explicitThreadId = null) {
     }
     connected = true; busy = false;
     conversationPicker.open = false;
-    messages.replaceChildren(); items.clear(); rawMessageView = false;
+    messages.replaceChildren(); items.clear(); latestItem = null; rawMessageView = false;
     messageView.hidden = true; messageView.textContent = 'Ver texto original';
     restoringHistory = true;
     try {

@@ -1,0 +1,125 @@
+// Focused Windows WebView smoke: a restored Codex file citation opens through
+// the real project-bound native preview after a full process restart.
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const { spawn } = require('node:child_process');
+const { createServer } = require('node:net');
+const { mkdtemp, mkdir, rm, writeFile } = require('node:fs/promises');
+const { tmpdir } = require('node:os');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+
+async function freePort() {
+  const server = createServer();
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  await new Promise(resolve => server.close(resolve));
+  return port;
+}
+
+async function launch(exe, profile, port) {
+  const child = spawn(exe, [], {
+    windowsHide: true, stdio: 'ignore',
+    env: { ...process.env, WEBVIEW2_USER_DATA_FOLDER: profile,
+      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1` },
+  });
+  let launchError;
+  child.on('error', error => { launchError = error; });
+  const deadline = Date.now() + 25000;
+  while (Date.now() < deadline) {
+    if (launchError) throw launchError;
+    if (child.exitCode !== null) throw new Error(`Application exited: ${child.exitCode}`);
+    try {
+      const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`, { timeout: 1000 });
+      const context = browser.contexts()[0];
+      const page = context.pages()[0] || await context.waitForEvent('page', { timeout: 5000 });
+      await page.locator('#home').waitFor({ state: 'visible' });
+      return { child, browser, page };
+    } catch { await new Promise(resolve => setTimeout(resolve, 200)); }
+  }
+  child.kill();
+  throw new Error('Native WebView did not become available');
+}
+
+async function stop(app) {
+  if (!app) return;
+  try { await app.browser.close(); } catch { /* Process may already be gone. */ }
+  if (app.child.exitCode === null && app.child.signalCode === null) {
+    const exited = new Promise(resolve => app.child.once('exit', resolve));
+    app.child.kill();
+    await exited;
+  }
+}
+
+async function openProject(page, root) {
+  await page.locator('nav a[data-route="workspace"]').click();
+  await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(root);
+  await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+  await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 90000 });
+}
+
+async function resumeFixture(page, citation) {
+  await page.evaluate(file => {
+    const native = window.__TAURI__.core;
+    window.__TAURI__ = { ...window.__TAURI__, core: { ...native, invoke: (command, args) => {
+      if (command === 'connect_agent') return Promise.resolve({ thread_id: 'controlled-result-thread', resumed: true, messages: [
+        { id: 'fixture-user', role: 'user', text: 'Crie uma página para mim.' },
+        { id: 'fixture-agent', role: 'agent', text: `Aqui está: [Ver arquivo](${file}).` },
+      ] });
+      if (command === 'disconnect_agent') return Promise.resolve();
+      return native.invoke(command, args);
+    } } };
+  }, citation);
+  await page.locator('#conversation-picker summary').click();
+  await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
+  await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+  if (citation === 'result.txt' && process.env.FORGE_RESULT_SHORTCUT_SCREENSHOT) {
+    await page.screenshot({ path: process.env.FORGE_RESULT_SHORTCUT_SCREENSHOT });
+  }
+  await page.getByRole('button', { name: 'Conferir arquivo citado' }).click();
+}
+
+(async () => {
+  assert.ok(process.env.FORGE_DESKTOP_EXE, 'Set FORGE_DESKTOP_EXE');
+  const profile = await mkdtemp(path.join(tmpdir(), 'forge-result-shortcut-'));
+  const project = path.join(profile, 'new-project');
+  const outside = path.join(profile, 'outside.txt');
+  const port = await freePort();
+  let app;
+  try {
+    await mkdir(project);
+    app = await launch(process.env.FORGE_DESKTOP_EXE, profile, port);
+    await openProject(app.page, project);
+    await writeFile(path.join(project, 'result.txt'), 'Real local file from this project.');
+    await writeFile(outside, 'This file is outside the project.');
+    // First process establishes the project and a resumable bookmark only.
+    await resumeFixture(app.page, 'result.txt');
+    await app.page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.equal(await app.page.locator('#preview-text').textContent(), 'Real local file from this project.');
+    await stop(app); app = null;
+
+    // The WebView and desktop process are new; no preview path was persisted.
+    app = await launch(process.env.FORGE_DESKTOP_EXE, profile, port);
+    await openProject(app.page, project);
+    assert.equal(await app.page.locator('#preview-result').isHidden(), true);
+    await resumeFixture(app.page, 'result.txt');
+    await app.page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.equal(await app.page.locator('#preview-text').textContent(), 'Real local file from this project.');
+    assert.equal(await app.page.locator('#preview-path').textContent(), 'result.txt');
+    const messageCount = await app.page.locator('#messages article').count();
+    await app.page.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
+    assert.match(await app.page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).inputValue(), /result\.txt/);
+    assert.equal(await app.page.locator('#messages article').count(), messageCount, 'Preparing a change must not send a turn');
+    console.log('PASS: hidden native full-process restart reopened the real file and prepared a change in the same conversation without sending a turn.');
+
+    await app.page.reload();
+    await openProject(app.page, project);
+    await resumeFixture(app.page, outside.replaceAll('\\', '/'));
+    await app.page.locator('#preview-status').filter({ hasText: 'não pertence ao projeto' }).waitFor();
+    assert.equal(await app.page.locator('#preview-result').isHidden(), true);
+    console.log('PASS: the same shortcut refused an outside-project path through native validation.');
+  } finally {
+    await stop(app);
+    const resolved = path.resolve(profile);
+    if (resolved.startsWith(`${path.resolve(tmpdir())}${path.sep}`)) await rm(resolved, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+  }
+})().catch(error => { console.error(error); process.exitCode = 1; });

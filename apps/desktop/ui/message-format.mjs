@@ -12,6 +12,7 @@ function fileAction(path, label, onLocalFile, inlineCode = false) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'message-file-link';
+  button.dataset.previewPath = path;
   button.setAttribute('aria-label', `Ver arquivo local: ${label}`);
   if (inlineCode) {
     const code = document.createElement('code');
