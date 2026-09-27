@@ -33,10 +33,12 @@ and Codex CLI 0.157.1.
 
 ## Limits
 
-In the activation probe, the agent attempted to record a pending decision,
-but its shell tool rejected that composed command before execution. Therefore
-durable decision writing and full Forge governance continuity are **not**
-claimed. Completing a fresh ChatGPT login in a browser, the default-browser
+In the activation probe, the agent attempted Forge's `decision_required`
+request, but its shell tool rejected the composed command before execution.
+That request is **read-only by design**; no durable decision write should occur
+before the person chooses. The agent asked the person a question, but a typed
+Forge Decision Request through this app remains **unverified**. Completing a
+fresh ChatGPT login in a browser, the default-browser
 button, and clean-machine availability of the Start Forge skill have not been
 verified. The installer is unsigned and has no automatic updater. Manual
 accessibility acceptance and mobile remain open. This is an alpha building
@@ -57,3 +59,11 @@ bytes again passed the real Windows folder picker, real Codex send/reply,
 WebView reload and full process restart without resending. The longer
 Forge-activation probe ran on the byte-identical candidate before publication;
 the public-download regression used a no-tools prompt instead.
+
+A further hidden native run on the installed public bytes completed the full
+local-result journey: Codex created an HTML page in a temporary project, the
+app opened it in its isolated preview, a follow-up in the same conversation
+changed that file and refreshed the preview, and the ordered conversation
+survived a full desktop process restart. The Windows folder and preview-file
+pickers were both exercised. This proves the tested journey, not arbitrary
+projects or clean-machine first use.

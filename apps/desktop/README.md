@@ -5080,14 +5080,16 @@ ordered conversation after WebView reload and full desktop process restart,
 without sending the prompt again. This restart probe used the bounded
 no-tools prompt, not another Forge-activation turn.
 
-**PARTIAL:** the activation agent tried to record a pending decision, but its
-shell tool rejected the composed write command by host policy before execution.
-No decision write or full agent governance continuity is claimed. **NOT_RUN:**
+**PARTIAL:** the activation agent tried Forge's `decision_required` request,
+but its shell tool rejected the composed command by host policy before
+execution. That request is read-only by design; no durable decision write
+should have been expected before the human answers. The typed runtime return
+remains unverified. **NOT_RUN:**
 fresh-account browser authorization, default-browser launch, and clean-machine
 skill/core/Codex setup. No subagents; model-specific token/BRL economics remain
 UNKNOWN. Source changes remain local/uncommitted; installed/public 0.1.14 is
 unchanged. **Next exact step:** package and verify the coherent first-use 0.1.15
-alpha, then investigate the pending-decision command rejection without
+alpha, then investigate the rejected decision-request command without
 weakening the app's authorization boundary or inventing acceptance.
 
 ### Desktop 0.1.15 installed alpha candidate — 2026-09-27
@@ -5113,8 +5115,9 @@ bundled Forge core path for `start`; the reply used the project's discovery
 state, asked a relevant question, and made no files or publications. The
 installed test used the host-installed Start Forge skill. No manual GH CI ran.
 
-**PARTIAL:** durable pending-decision writing remains unproven because the
-earlier controlled agent command was rejected before execution. **NOT_RUN:**
+**PARTIAL:** the typed read-only `decision_required` return remains unproven
+because the earlier controlled agent command was rejected before execution.
+No durable write is expected before the human chooses. **NOT_RUN:**
 fresh-account browser login completion, default-browser button, clean-machine
 skill availability, manual accessibility acceptance and mobile. This is a
 tested local candidate, not yet a public installer. Model-specific tokens and
@@ -5147,11 +5150,44 @@ public-download regression used a bounded no-tools prompt; the separate
 byte-identical local-candidate probe established Forge activation/core 0.13.2.
 No manual GH CI was started. **NOT_RUN:** genuine new-account browser login
 completion, default-browser button, clean-machine skill setup, manual
-accessibility acceptance and mobile. Durable pending-decision writing remains
-unproven. Per-model tokens/BRL cost remain UNKNOWN.
+accessibility acceptance and mobile. The typed read-only decision request
+remains unproven; no durable decision write is expected before the human
+chooses. Per-model tokens/BRL cost remain UNKNOWN.
 
-**Next exact step:** investigate the rejected pending-decision agent command
+**Next exact step:** investigate the rejected read-only decision-request command
 without weakening authorization; then verify clean-machine first use,
 including Start Forge guidance and browser login. Continue improving the
 nontechnical UI journey in coherent packages rather than treating 0.1.15 as
 feature complete.
+
+### Desktop 0.1.15 full installed journey and decision-request correction — 2026-09-27
+
+**PASS:** a further hidden native run on the installed public 0.1.15 bytes,
+with executable overrides unset, completed the full temporary-project path:
+real Windows folder picker, Forge onboarding, real authenticated Codex chat,
+local HTML creation, isolated in-app preview, a follow-up change to that file
+in the same conversation, preview refresh, actual Windows preview-file picker,
+WebView reload, and full desktop process restart with ordered history and no
+resend. The harness exited 0; its temporary project was cleaned up. A separate
+installed native screenshot at `C:/ForgeFast/forge-0115-project-native.png`
+was visually inspected. It shows the real project/chat/Forge context layout;
+that image alone does not prove the full interaction. No code change or manual
+GH CI was needed for this regression.
+
+**Correction:** the attempted `workflow intent accept-cooperative` input in the
+earlier recipe-site probe used the `decision_required` variant. The installed
+Start Forge guidance and current kernel/CLI tests show this variant validates
+the packet and returns a typed Decision Request **without a ledger write**.
+Therefore the previous expectation of a durable pending-decision write at
+that stage was wrong. The agent's composed shell command was blocked by host
+policy before Forge ran, so the typed return remains **NOT_RUN** in the app;
+the question in chat is not equivalent proof. No accepted audience or new
+durable objective is claimed. Do not weaken command safety or manufacture a
+write to make this test pass.
+
+**Next exact step:** test a bounded read-only `decision_required` call through
+the real app agent with separate file/command/cleanup operations if needed,
+then tackle clean-machine first use. Continue direct UI/visual review with
+the approved artwork; the one inspected native project screen is not a
+complete visual acceptance of all screens. Model-specific BRL cost remains
+UNKNOWN.
