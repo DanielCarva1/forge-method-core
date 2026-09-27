@@ -1,6 +1,6 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.18` is the published alpha
+Independent Tauri application. Desktop `0.1.19` is the published alpha
 prerelease. Its exact installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
@@ -5750,3 +5750,29 @@ step:** inspect the complete scoped diff, selectively commit/push the 0.1.19
 package, publish only this tested candidate under the standing maintainer
 authorization, then verify its unauthenticated downloaded bytes and install
 that exact download. Do not rebuild the candidate merely to publish it.
+
+### Desktop 0.1.19 public release readback — 2026-09-27
+
+Source commit `32090e5c4a1eef16b29caab6e243b3109f8e0837` was pushed.
+Annotated tag `desktop-v0.1.19-alpha.1` resolves to that commit and was
+pushed. The public prerelease is
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.19-alpha.1`.
+GitHub reports one installer, 123,086,775 bytes, SHA-256
+`E96CC0BCE5664DD56140F48CE8FDB0831A65EDE9F8D17ACAD36FEAAD0FEC44A9`,
+plus its checksum sidecar. An unauthenticated direct download to
+`C:/ForgeFast/forge-alpha-0119-public-20260927/Forge_0.1.19_x64-setup.exe`
+matched the exact tested candidate size/hash. Silent reinstallation of those
+downloaded bytes returned exit 0; installed app version and executable/core
+hashes matched the tested candidate. Hidden native WebView smoke on that
+downloaded installation passed real Forge record/project readback, onboarding
+and isolated local preview. No manual GitHub CI was run.
+
+This proves publication and installed-byte continuity, not a fresh real Codex
+turn obeying the new bundled-path guidance, fresh-account/clean-machine setup,
+manual accessibility or a real agent decision. No new provider-model turn was
+run for this package; task-specific BRL and Pro allowance attribution remain
+UNKNOWN. The full nontechnical end-to-end goal stays active. **Next exact
+step:** use the now-installed 0.1.19 app to examine a bounded first-use or
+decision-turn path without repeating the expensive full Start Forge activation
+solely for a fixture; if a safe real-agent proof is not cost-justified, work
+on the next concrete UX/integration gap found in native use.
