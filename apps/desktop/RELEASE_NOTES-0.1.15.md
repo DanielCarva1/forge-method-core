@@ -48,5 +48,12 @@ UNKNOWN.
 The single tested NSIS candidate is `Forge_0.1.15_x64-setup.exe`, 123,028,746
 bytes, SHA-256
 `4491A0B935B190F02A0990A2C276FA1A258FB18D2F892FA07C18C6B5FC8B47DB`.
-Public download verification is pending. A commit alone does not make this
-version available to install.
+The public prerelease and its asset were verified after publication. GitHub
+reports the same size and SHA-256; an unauthenticated download matched the
+candidate exactly. That downloaded installer reinstalled with exit 0, and
+the installed executable and bundled core/Codex hashes matched the local
+tested installation. A bounded hidden native regression on those downloaded
+bytes again passed the real Windows folder picker, real Codex send/reply,
+WebView reload and full process restart without resending. The longer
+Forge-activation probe ran on the byte-identical candidate before publication;
+the public-download regression used a no-tools prompt instead.

@@ -5122,3 +5122,36 @@ BRL cost remain UNKNOWN. **Next exact step:** selectively commit/push this
 package, publish the exact tested installer under the maintainer's standing
 alpha authorization, verify an unauthenticated download against this SHA-256,
 install those downloaded bytes and rerun a bounded hidden native smoke.
+
+### Desktop 0.1.15 public release readback — 2026-09-27
+
+**PASS:** source commit `3e8110582dd05788420273a77b4a2b3808f9633d`
+was pushed; annotated tag `desktop-v0.1.15-alpha.1` resolves to that commit.
+Public prerelease:
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.15-alpha.1`.
+GitHub reports one installer asset of 123,028,746 bytes with SHA-256
+`4491A0B935B190F02A0990A2C276FA1A258FB18D2F892FA07C18C6B5FC8B47DB`.
+An unauthenticated download to
+`C:/ForgeFast/forge-alpha-0115-public-20260927/Forge_0.1.15_x64-setup.exe`
+matched the exact local candidate. Reinstalling that downloaded file silently
+returned exit 0. Installed product version 0.1.15 and executable SHA-256
+`48F8485E7D24D5DD0DEF1DD3A99AF782388F33FAF4FD27BBC1E132990A54CDC2`
+match the locally tested installation; bundled core and Codex hashes are
+`CFD6F81B1710D0469A53D12B374258CC122676EA7865F26926B1CDB4C7541EDF`
+and `8CB0E69E99FF2A158C54815DB82D0F2E524D8F301BC30184722CFD1AE5973574`.
+
+**PASS:** those downloaded installed bytes passed hidden native folder-dialog
+cancel/select, project readback, real Codex send/reply, WebView reload and full
+process restart without resending, with executable overrides unset. This
+public-download regression used a bounded no-tools prompt; the separate
+byte-identical local-candidate probe established Forge activation/core 0.13.2.
+No manual GH CI was started. **NOT_RUN:** genuine new-account browser login
+completion, default-browser button, clean-machine skill setup, manual
+accessibility acceptance and mobile. Durable pending-decision writing remains
+unproven. Per-model tokens/BRL cost remain UNKNOWN.
+
+**Next exact step:** investigate the rejected pending-decision agent command
+without weakening authorization; then verify clean-machine first use,
+including Start Forge guidance and browser login. Continue improving the
+nontechnical UI journey in coherent packages rather than treating 0.1.15 as
+feature complete.
