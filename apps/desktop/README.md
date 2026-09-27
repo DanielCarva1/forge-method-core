@@ -6184,9 +6184,20 @@ No manual GitHub CI or additional provider-model turn was run.
 This confirms public availability and installed-byte continuity of the
 interruption recovery, not completion of the agent's interrupted Work Focus or
 economic improvement. The two real Sol turns are still costly and lacked a
-final response. **Next exact step:** investigate why the long Codex thread
-spent so much cached context per tool call and why the host did not finish the
-already-tested work before interruption; choose a bounded product-side
-mitigation rather than launching another costly provider turn or adding a
-second persistence system. Then continue the nontechnical end-to-end journey
-on the same app/conversation. The full desktop goal remains active.
+final response. A read-only trace audit of the continuation shows 11 model
+responses/tool calls; per-response input grew from 101,045 to 115,201 tokens,
+mostly cached. The agent implemented the page, ran browser checks, and began
+the Forge Work Focus update at 21:39:53 UTC. The harness's fixed 600-second
+limit interrupted it at 21:41:20 UTC, just after preparing the update input;
+this evidence does **not** prove the app or Codex was stalled. The local Codex
+0.157.1 app-server schema exposes `thread/compact/start` and token-usage
+notifications, but this package does not call either; potential context-cost
+benefit, continuity quality, and quota effect remain untested.
+
+**Next exact step:** replace the fixture's crude fixed wait with a bounded
+progress-aware observation that does not kill an actively advancing turn;
+test that logic without sending a provider turn. Then decide whether a
+controlled, same-thread compaction pilot can reduce repeated context cost
+without losing the Forge handoff or project facts. Only after that, complete
+one real result/change/closeout journey in the installed app. Do not add a
+second persistence system. The full desktop goal remains active.
