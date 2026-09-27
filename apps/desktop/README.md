@@ -6340,3 +6340,33 @@ and push 0.1.22, publish the exact candidate under the maintainer's standing
 alpha authorization, then download unauthenticated and compare bytes before
 calling it available. Do not rebuild merely to publish. The wider journey
 goal remains active.
+
+### Desktop 0.1.22 public release readback — 2026-09-27
+
+Source commit `fa73bfe2e1b4b01505d2b41ee5bb042609432df1` was pushed.
+Annotated tag `desktop-v0.1.22-alpha.1` points to it and was pushed. The
+public prerelease is
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.22-alpha.1`.
+GitHub lists one installer (123,049,545 bytes) and its checksum sidecar. An
+unauthenticated direct download to
+`C:/ForgeFast/forge-alpha-0122-public-20260927/Forge_0.1.22_x64-setup.exe`
+matched the exact tested candidate SHA-256
+`3C619DBCE8451760C091BF34B754FFE3B7D0E467786348789F3FA91C402669C1`;
+the downloaded sidecar matched too. Silent installation of **those downloaded
+bytes** returned exit 0. Installed app and bundled core hashes matched the
+candidate readback. A hidden native read-only restart of the real completed
+Codex conversation again passed Forge state, final file, browser-action
+visibility, invalid-file rejection and zero sends. No manual GitHub CI or
+new provider-model turn was run.
+
+This proves public installer availability and installed-byte continuity, not
+successful launch into the default browser, clean-machine/fresh-account
+setup, or a fresh change request after the completed result. `cargo fmt
+--check` was attempted but does not pass on the Desktop workspace's existing
+unformatted Rust files (including portions of the touched preview module);
+no broad formatting rewrite was made. Compilation, all crate tests and strict
+Clippy passed. **Next exact step:** choose a bounded change to the disposable
+result in the same chat, then verify the changed file, Forge record and native
+restart without duplicate sends. Separately, test the positive browser-open
+action only in a safe isolated environment that cannot surface a window on the
+maintainer's active desktop. Keep the full nontechnical journey goal active.
