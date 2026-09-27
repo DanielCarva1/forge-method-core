@@ -188,7 +188,7 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('.project #project-record').count(), 0);
       if (await page.evaluate(() => innerWidth > 900)) {
         assert.equal(await page.evaluate(() => document.querySelector('#project-preview').getBoundingClientRect().top < document.querySelector('.project').getBoundingClientRect().top), true);
-        assert.equal(await page.evaluate(() => document.querySelector('#project-preview').getBoundingClientRect().top < document.querySelector('#project-record').getBoundingClientRect().top), true);
+        assert.equal(await page.evaluate(() => document.querySelector('#project-record').getBoundingClientRect().top < document.querySelector('#project-preview').getBoundingClientRect().top), true);
         const nativeViewport = await page.evaluate(() => {
           window.scrollTo(0, 0);
           const history = document.querySelector('.conversation-body').getBoundingClientRect();
@@ -197,7 +197,6 @@ async function operatePreviewDialog(page, file) {
           const send = document.getElementById('send-message').getBoundingClientRect();
           return { width: innerWidth, height: innerHeight, history: { top: history.top, bottom: history.bottom, height: history.height }, invitation: { top: invitation.top, bottom: invitation.bottom }, form: { top: form.top }, send: { top: send.top, bottom: send.bottom } };
         });
-        if (process.env.FORGE_NATIVE_VIEWPORT_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_NATIVE_VIEWPORT_SCREENSHOT });
         assert.equal(nativeViewport.history.height >= 150 && nativeViewport.invitation.top >= nativeViewport.history.top &&
           nativeViewport.invitation.bottom <= nativeViewport.history.bottom && nativeViewport.history.bottom <= nativeViewport.form.top + 1 &&
           nativeViewport.send.top >= 0 && nativeViewport.send.bottom <= nativeViewport.height + 2,
@@ -263,6 +262,10 @@ async function operatePreviewDialog(page, file) {
         progressStatus = await page.locator('#progress-status').textContent();
       }
       assert.match(progressStatus, /Consultado às/, 'Native Forge record lookup must succeed, not merely finish');
+      if (process.env.FORGE_NATIVE_VIEWPORT_SCREENSHOT) {
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await page.screenshot({ path: process.env.FORGE_NATIVE_VIEWPORT_SCREENSHOT });
+      }
       await page.evaluate(() => window.restoreProgressInvoke());
       assert.ok((await page.locator('#record-state').textContent()).length > 0);
       assert.ok((await page.locator('#record-phase').textContent()).length > 0);
@@ -278,6 +281,11 @@ async function operatePreviewDialog(page, file) {
         assert.ok((await page.locator('#record-title').textContent()).length > 0);
         assert.ok((await page.locator('#record-next').textContent()).length > 0);
         assert.equal(await page.locator('#record-activity').isVisible(), true, 'Recorded current activity must be visible without opening details');
+        if (await page.evaluate(() => innerWidth === 1180 && innerHeight === 820)) assert.equal(await page.evaluate(() => {
+          window.scrollTo(0, 0);
+          const activity = document.getElementById('record-activity').getBoundingClientRect();
+          return activity.top >= 0 && activity.top < innerHeight;
+        }), true, 'Native real recorded activity should begin in the initial workspace viewport');
         assert.equal(await page.locator('#record-next').isVisible(), true, 'Recorded next step must be visible without opening details');
         assert.equal(await page.locator('#record-outcome').isVisible(), false, 'Supporting details begin collapsed');
         assert.match(await page.locator('#record-decisions').textContent(), /neste registro/);

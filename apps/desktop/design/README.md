@@ -98,10 +98,18 @@ useful part of #92, not completion of its full decision-history requirement.
 The workspace now keeps folder/project switching, preview, and Forge record in
 separate panels. Before a project is confirmed, the record stays hidden. After
 confirmation, the conversation remains the dominant column and the right side
-stacks project, local preview, and recorded context; a loaded preview rises to
-the top as in the approved conversation reference. At narrow widths the DOM
-order remains project setup, conversation, preview, then record. This fixes the
-previous giant project-setup panel without fabricating preview or stage data.
+keeps the project, local preview and recorded context in separate cards. A
+loaded preview rises to the top as in the approved conversation reference.
+This fixes the previous giant project-setup panel without fabricating preview
+or stage data.
+
+In the later 0.1.8 hierarchy, a *still-empty* preview no longer outranks the
+real Forge record: the record comes first and the placeholder is compact.
+Choosing a real file moves its preview above the record, with DOM and visual
+order changing together. On narrow screens the confirmed-project order is
+conversation, record, empty preview, folder until a file is opened; then it
+is conversation, loaded preview, record, folder. No illustrative preview or
+stage was copied from the concept board.
 
 The manual **Abrir conversa** action is explicitly optional because the first
 Send can open the conversation; it also lets a person inspect prior messages

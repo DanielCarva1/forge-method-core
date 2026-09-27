@@ -3,6 +3,7 @@ import { renderAgentMessage } from './message-format.mjs';
 const panel = document.getElementById('project-preview');
 const workspace = document.querySelector('.workspace');
 const projectPanel = workspace.querySelector('.project');
+const recordPanel = workspace.querySelector('.record');
 const choose = document.getElementById('choose-preview');
 const refresh = document.getElementById('refresh-preview');
 const status = document.getElementById('preview-status');
@@ -99,14 +100,25 @@ function clearResult() {
   pathLabel.textContent = '';
 }
 
+function promotePreview() {
+  if (workspace.classList.contains('preview-engaged')) return;
+  const focused = panel.contains(document.activeElement) ? document.activeElement : null;
+  workspace.insertBefore(panel, recordPanel);
+  workspace.classList.add('preview-engaged');
+  focused?.focus({ preventScroll: true });
+}
+
 export function setPreviewProject(value) {
   if (project && (!value || value.project_root !== project.project_root)) {
     try { void globalThis.__TAURI__?.core?.invoke('clear_preview_site').catch(() => {}); } catch { /* UI remains safe if native cleanup fails. */ }
   }
   project = value;
-  // Keep keyboard and reading order aligned with the visible board: setup first
-  // before a project is ready, then conversation, result, record and folder.
-  if (value && workspace.lastElementChild !== projectPanel) workspace.append(projectPanel);
+  // A real record precedes an empty preview. Once the person opens a file,
+  // the result becomes primary; DOM and visual order change together.
+  if (value) {
+    workspace.insertBefore(recordPanel, panel);
+    if (workspace.lastElementChild !== projectPanel) workspace.append(projectPanel);
+  }
   if (!value && workspace.firstElementChild !== projectPanel) workspace.prepend(projectPanel);
   filePath = null;
   generation++;
@@ -116,7 +128,9 @@ export function setPreviewProject(value) {
   panel.hidden = !value;
   workspace.classList.toggle('project-ready', !!value);
   workspace.classList.remove('preview-loaded');
-  status.textContent = 'Nenhum arquivo escolhido.';
+  workspace.classList.remove('preview-engaged');
+  status.hidden = true;
+  status.textContent = '';
   controls();
 }
 
@@ -128,6 +142,7 @@ async function loadPreview() {
   pending = true;
   clearResult();
   controls();
+  status.hidden = false;
   status.textContent = 'Conferindo o arquivo local…';
   try {
     const preview = await globalThis.__TAURI__.core.invoke('inspect_preview', { projectRoot: root, filePath: selected });
@@ -174,6 +189,7 @@ choose.addEventListener('click', async () => {
   const current = ++generation;
   pending = true;
   controls();
+  status.hidden = false;
   status.textContent = 'Escolhendo um arquivo do projeto…';
   try {
     const selected = await globalThis.__TAURI__.core.invoke('choose_preview_file');
@@ -184,7 +200,9 @@ choose.addEventListener('click', async () => {
     }
     if (typeof selected !== 'string') throw new Error('Invalid path');
     filePath = selected;
+    promotePreview();
     clearResult();
+    document.getElementById('preview-heading').focus({ preventScroll: true });
   } catch {
     if (current === generation) status.textContent = 'Não foi possível escolher um arquivo. Tente novamente.';
     return;
@@ -215,6 +233,7 @@ export async function previewLinkedFile(candidate) {
       : null;
   if (!rooted) return;
   filePath = rooted;
+  promotePreview();
   controls();
   await loadPreview();
   // Keep both the result and any validation error visible to the reader.

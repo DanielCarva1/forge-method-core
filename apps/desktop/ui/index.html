@@ -184,13 +184,12 @@
         </form>
       </section>
       <section class="preview panel" id="project-preview" aria-labelledby="preview-heading" hidden>
-        <div class="preview-heading-row"><div><p class="eyebrow">RESULTADO DO PROJETO</p><h2 id="preview-heading">Prévia do resultado</h2></div><button id="open-preview" type="button" hidden>Abrir prévia <span aria-hidden="true">↗</span></button></div>
+        <div class="preview-heading-row"><div><p class="eyebrow">RESULTADO DO PROJETO</p><h2 id="preview-heading" tabindex="-1">Prévia do resultado</h2></div><button id="open-preview" type="button" hidden>Abrir prévia <span aria-hidden="true">↗</span></button></div>
         <div class="preview-empty">
-          <span class="preview-empty-mark" aria-hidden="true"><img src="assets/forge.png" alt=""></span>
-          <p class="preview-intro">Seu agente pode criar textos, imagens ou páginas. Quando houver um arquivo, abra-o aqui para conferir o resultado.</p>
+          <p class="preview-intro">Quando houver um arquivo, confira o resultado aqui.</p>
           <p class="hint">A prévia é local; não confirma publicação.</p>
         </div>
-        <p id="preview-status" role="status" aria-live="polite">Nenhum arquivo escolhido.</p>
+        <p id="preview-status" role="status" aria-live="polite" hidden></p>
         <div id="preview-result" hidden>
           <img id="preview-image" alt="" hidden>
           <iframe id="preview-site" title="Prévia visual local, sem interação" sandbox="" referrerpolicy="no-referrer" tabindex="-1" hidden></iframe>
@@ -203,10 +202,7 @@
         <div class="preview-actions"><button id="choose-preview" type="button">Escolher arquivo</button><button id="refresh-preview" type="button" disabled hidden>Atualizar prévia</button><button id="preview-source-toggle" type="button" hidden>Ver código</button></div>
       </section>
       <section class="record panel" id="project-record" aria-labelledby="record-heading" hidden>
-        <p class="eyebrow">CONTEXTO DO PROJETO</p>
-        <h3 id="record-heading">Onde estamos</h3>
-        <p class="hint">Consulte o que ficou registrado no Forge. A conversa pode estar mais adiantada.</p>
-        <button id="refresh-progress" type="button" disabled>Consultar registro</button>
+        <div class="record-heading-row"><div><p class="eyebrow">CONTEXTO DO PROJETO</p><h3 id="record-heading">Onde estamos</h3></div><button id="refresh-progress" type="button" disabled>Consultar registro</button></div>
         <p id="progress-status" role="status" aria-live="polite" tabindex="-1">Confira um projeto antes de consultar seus registros.</p>
         <div id="progress-result" hidden>
           <p id="record-state" class="record-state"></p>

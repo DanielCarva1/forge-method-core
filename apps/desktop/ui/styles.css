@@ -95,8 +95,10 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 .workspace.project-ready { grid-template-columns: minmax(0, 1.12fr) minmax(340px, 1fr); }
 .workspace.project-ready .project { grid-column: 2; grid-row: 3; }
 .workspace.project-ready .conversation { grid-column: 1; grid-row: 1 / span 3; }
-.workspace.project-ready .preview { grid-column: 2; grid-row: 1; }
-.workspace.project-ready .record { grid-column: 2; grid-row: 2; }
+.workspace.project-ready .record { grid-column: 2; grid-row: 1; }
+.workspace.project-ready .preview { grid-column: 2; grid-row: 2; }
+.workspace.project-ready.preview-engaged .preview { grid-row: 1; }
+.workspace.project-ready.preview-engaged .record { grid-row: 2; }
 .preview[hidden], #preview-result[hidden], #preview-image[hidden], #preview-text[hidden], #preview-markdown[hidden], #preview-site[hidden], #preview-site-note[hidden], #open-preview[hidden], #refresh-preview[hidden], #preview-source-toggle[hidden], #preview-dialog-image[hidden], #preview-dialog-text[hidden], #preview-dialog-markdown[hidden], #preview-dialog-site[hidden], #preview-dialog-source-toggle[hidden], #preview-dialog-more[hidden] { display: none; }
 .preview .eyebrow { margin: 0; }
 .preview h2 { margin: 8px 0; }
@@ -104,12 +106,13 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 .preview-heading-row > div { min-width: 0; }
 .preview-heading-row #open-preview { flex: 0 0 auto; }
 .workspace.preview-loaded .preview-empty { display: none; }
-.preview-empty { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 4px 16px; margin: 16px 0 8px; padding: 18px; border: 1px dashed var(--line); border-radius: 22px; background: radial-gradient(circle at 50% 25%, var(--soft), transparent 65%), var(--preview-wash); }
-.preview-empty-mark { grid-row: 1 / span 2; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; background: var(--surface); box-shadow: var(--shadow); transform: rotate(-7deg); }
-.preview-empty-mark img { width: 44px; height: 44px; border: 0; background: none; transform: rotate(7deg); }
+.preview-empty { margin: 4px 0 0; }
 .preview-empty p { margin: 0; }
-.preview-empty .hint { font-size: .9rem; }
+.preview-empty .hint { margin-top: 4px; font-size: .9rem; }
 .preview #preview-status { margin-block: 14px; color: var(--muted); font-size: .9rem; }
+.preview #preview-status[hidden] { display: none; }
+.workspace.project-ready:not(.preview-loaded) .preview { padding-block: 20px; }
+.workspace.project-ready:not(.preview-loaded) .preview-actions { margin-top: 12px; padding-top: 12px; }
 .workspace.preview-loaded .preview #preview-status { margin-block: 4px 8px; }
 .preview-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
 .preview-origin { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
@@ -221,13 +224,14 @@ summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 6
 .connection { margin-top: 24px; border-top: 1px solid var(--line); }
 .record { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
 .record.panel { margin-top: 0; padding-top: 28px; }
-.record > .eyebrow { margin: 0; }
-.record > h3 { margin: 4px 0 8px; }
-.record > .hint { margin-bottom: 16px; }
+.record-heading-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.record-heading-row .eyebrow { margin: 0; }
+.record-heading-row h3 { margin: 4px 0 8px; }
+.record #progress-status { margin: 8px 0; }
 #progress-status { font-size: .9rem; }
 .record h4 { font-size: 1.2rem; margin: 12px 0 20px; overflow-wrap: anywhere; }
 .record-state { display: inline-block; margin: 8px 0 0; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--soft); font-weight: 700; }
-.record-stage { margin: 16px 0; padding: 18px; border-radius: 18px; background: var(--soft); }
+.record-stage { margin: 12px 0; padding: 14px 18px; border-radius: 18px; background: var(--soft); }
 .record-stage .eyebrow { margin-bottom: 4px; }
 .record-stage h4 { margin: 0; font-size: 1.35rem; }
 .record-stage p:last-child { margin: 6px 0 0; color: var(--muted); }
@@ -338,7 +342,8 @@ footer { color: var(--muted); padding-block: 8px 32px; }
   .workspace, .cards, .starter-grid { grid-template-columns: 1fr; }
   .workspace.project-ready { grid-template-columns: 1fr; }
   .workspace.project-ready .project, .workspace.project-ready .conversation, .workspace.project-ready .preview, .workspace.project-ready .record,
-  .workspace.project-ready.preview-loaded .project, .workspace.project-ready.preview-loaded .preview { grid-column: auto; grid-row: auto; }
+  .workspace.project-ready.preview-loaded .project, .workspace.project-ready.preview-loaded .preview,
+  .workspace.project-ready.preview-engaged .preview, .workspace.project-ready.preview-engaged .record { grid-column: auto; grid-row: auto; }
   .category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .projects-heading, .projects-empty, .recent-project { align-items: stretch; flex-direction: column; }
   .projects-empty .action-link { margin-left: 0; align-self: flex-start; }

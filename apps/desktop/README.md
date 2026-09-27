@@ -4249,3 +4249,54 @@ approved visual direction and pick one coherent, user-visible gap in the
 nontechnical folder → project → conversation → local-result journey. Reproduce
 it with a hidden native acceptance test before changing code. Keep the
 overall journey goal active and do not add Forge core complexity to fill UI.
+
+## Desktop 0.1.8 project context and preview hierarchy — 2026-09-27
+
+**Observed defect:** in installed 0.1.7 at 1180 × 820, the empty local
+preview consumed the top of the workspace's right column; the real Forge
+record activity was below the first viewport. Hidden native screenshot:
+`C:/ForgeFast/forge-017-empty-preview-before.png`. A new browser assertion
+reproduced this as FAIL before editing. This was not an absent backend state:
+the real record existed but was visually secondary to a placeholder.
+
+**Implemented:** with no file selected, the actual Forge record precedes a
+compact, honest preview prompt. Its header puts the read action beside the
+heading and removes duplicate prose; status still warns that the record may
+lag behind the conversation. Once a file is chosen or linked from a completed
+Codex reply, the preview moves ahead of the record. DOM/keyboard order and
+visual grid order agree in both states; choosing a file focuses its heading.
+No invented project progress, preview, transcript store or core command was
+added. Changed UI: `index.html`, `styles.css`, `preview.mjs`; acceptance in
+`browser.cjs` and `native.cjs`. Desktop version is `0.1.8` in its Cargo
+manifest, lockfile and Tauri config; `RELEASE_NOTES-0.1.8.md` describes the
+candidate and limits.
+
+**PASS:** browser suite, eight Node tests, JS syntax, offline locked
+desktop-only `cargo check`, 44 desktop Rust tests, `cargo fmt --check`, strict
+desktop Clippy and `git diff --check`. A debug and then the release executable
+passed hidden native WebView smokes. The installed 0.1.8 candidate passed
+native real Forge readback, the actual Windows file picker, safe preview and
+message-to-file action (controlled reply fixture), and resumed an existing
+real Codex user/reply pair without a new Send after silent upgrade from 0.1.7.
+The installed screenshot `C:/ForgeFast/forge-018-record-native.png` shows the
+actual phase and activity, plus the start of the next step, beside the empty
+conversation. Tests ran on an isolated Windows desktop, not the user's
+visible one. A new real Codex artifact turn was NOT_RUN for this UI-only
+package; earlier installed 0.1.6 journey evidence remains separate.
+
+**Candidate:** one NSIS installer at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.8_x64-setup.exe`,
+4,624,036 bytes, SHA-256
+`733CA93C5D0389BAC67C7213BF5CB71B0AF8A3C384E5A59CFAE9578842F93CDC`.
+Its sidecar is beside it. Installed candidate version is 0.1.8 and executable
+SHA-256 is
+`B3BFB9CC7C13AEF235143A88EC958C4F81949B0EDA6CB09CB35BF00A70FF1BF0`.
+No rebuild after hashing. GitHub CI was not manually run. Complete manual
+screen-reader/contrast acceptance, clean-machine core/Codex setup,
+auto-update and mobile remain unfinished. No worker was used; model-specific
+tokens and BRL cost are UNKNOWN.
+
+**Next:** review and commit the exact source package, publish the candidate
+and sidecar, freshly download and compare public bytes, reinstall the public
+download and confirm continuity. Keep the broader nontechnical UI journey
+goal active afterward.

@@ -191,13 +191,17 @@ async function openConversation(page) {
     await projectsPage.locator('#project-location summary').click();
     assert.equal(await projectsPage.locator('#project-preview').isVisible(), true);
     assert.equal(await projectsPage.locator('.preview-empty').isVisible(), true, 'An actual empty state precedes any local result');
-    assert.equal(await projectsPage.evaluate(() => document.querySelector('.preview').getBoundingClientRect().top < document.querySelector('.project').getBoundingClientRect().top), true, 'The preview stays above project details before a file is chosen');
+    assert.equal(await projectsPage.locator('#preview-status').isVisible(), false, 'The untouched empty state does not repeat the same message');
+    assert.equal(await projectsPage.evaluate(() => document.querySelector('#project-record').getBoundingClientRect().top < document.querySelector('.preview').getBoundingClientRect().top), true, 'The real record precedes an empty preview');
+    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['conversation', 'project-record', 'project-preview', 'project']);
     assert.equal(await projectsPage.locator('#refresh-preview').isVisible(), false, 'No refresh action before choosing a file');
     assert.equal(await projectsPage.locator('#project-record').isVisible(), true);
     assert.equal(await projectsPage.locator('.project #project-record').count(), 0, 'Record is a separate panel, not folder setup');
     await projectsPage.evaluate(() => { window.previewChoice = 'D:\\one\\result.txt'; });
     await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
     await projectsPage.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.equal(await projectsPage.evaluate(() => document.activeElement?.id), 'preview-heading', 'Moving the preview above the record gives keyboard focus to its result heading');
+    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['conversation', 'project-preview', 'project-record', 'project']);
     assert.equal(await projectsPage.locator('#refresh-preview').isVisible(), true);
     assert.equal(await projectsPage.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), true);
     assert.equal(await projectsPage.evaluate(() => {
@@ -699,6 +703,11 @@ async function openConversation(page) {
           historyBox.bottom <= formBox.top + 1;
       }), true, `Project-ready invitation, history and Send must fit without overlap at ${width}x${height}`);
       if (width === 1180 && process.env.FORGE_COMPOSER_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_COMPOSER_SCREENSHOT });
+      if (width === 1180) assert.equal(await page.evaluate(() => {
+        window.scrollTo(0, 0);
+        const activity = document.getElementById('record-activity').getBoundingClientRect();
+        return activity.top >= 0 && activity.bottom <= innerHeight;
+      }), true, 'The real recorded activity should be readable alongside an empty conversation at 1180x820');
     }
     await page.setViewportSize({ width: 1280, height: 720 });
     assert.equal(await page.locator('#project-record').isVisible(), true);
