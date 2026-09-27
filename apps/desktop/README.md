@@ -3408,3 +3408,36 @@ the exact pinned prebuilt installer as a prerelease (not a CI rebuild), then
 download that public asset to a fresh path, compare size/hash and install/test
 the downloaded bytes headlessly. Keep the unsigned/no-auto-update and
 separately-required `forge-core`/Codex limits in the release text.
+
+## Desktop 0.1.2 alpha published and public-download verification — 2026-09-27
+
+The maintainer approved publication and asked not to run slow GitHub CI for
+every small change. The reviewed desktop package was committed as
+`31594f953c611f5a6be8d651dbde623ba4e1b610` on `codex/desktop-shell` and
+pushed once. Local prepublication checks included eight Node tests, the full
+controlled browser UI suite, the installed-binary hidden native smoke, real
+cross-version conversation resume, and staged `git diff --check`. Earlier
+package-boundary desktop Rust, Clippy and release build checks are recorded
+above. The annotated `desktop-v0.1.2-alpha.1` tag points to that source commit;
+its name does not match the core release workflow's `v*` trigger. No desktop
+CI rebuild was requested. The published prerelease is
+<https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.2-alpha.1>.
+
+**PASS:** the release contains only `Forge_0.1.2_x64-setup.exe` and its
+`.sha256` sidecar. The GitHub asset reports 4,623,866 bytes and SHA-256
+`F8C57185E3CDD96C5329A8D70C5DC426EAD793BB5DFEF894E02EB93A3B251EA1`.
+An unauthenticated direct download of both assets to fresh
+`C:\ForgeFast\forge-alpha-012-public-20260927` returned exactly that size/hash
+and matching sidecar content. The downloaded installer exited 0 when silently
+installed; installed product version remained `0.1.2` and executable SHA-256
+remained `E21FFB1CFF1710A49197F651D66D449EC1D7FE2DB579F885A78ED20B36C40774`.
+The hidden installed-binary resume check again found exactly the real
+pre-upgrade user/reply pair without a new Send. The public artifact is now
+available; this is not a claim of full UI coverage or exactly-once delivery.
+
+**Remaining:** visual/product coverage beyond this package, authoritative
+historical decision details for #92, an untested real process-crash mid-send,
+and no automatic updater/signature. Codex CLI and `forge-core` are still
+separate dependencies. Per-model token count and BRL cost are UNKNOWN. Next
+development slice should target a coherent remaining UI journey, not rebuild
+or republish this verified `0.1.2` package for each small edit.

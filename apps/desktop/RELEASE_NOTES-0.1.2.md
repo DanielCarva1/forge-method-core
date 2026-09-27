@@ -1,7 +1,8 @@
-# Forge Desktop 0.1.2 alpha — local candidate, not published
+# Forge Desktop 0.1.2 alpha — published prerelease
 
-**Review draft, not a release announcement.** Current unsigned Windows x64
-NSIS candidate:
+Published prerelease:
+<https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.2-alpha.1>.
+The unsigned Windows x64 NSIS file was built locally at:
 `D:\forge-method-core-build-cache\main-target\release\bundle\nsis\Forge_0.1.2_x64-setup.exe`
 (4,623,866 bytes; SHA-256
 `F8C57185E3CDD96C5329A8D70C5DC426EAD793BB5DFEF894E02EB93A3B251EA1`).
@@ -11,8 +12,8 @@ projeto** project-boundary fixes. The earlier files with hashes
 `75F9DCBFB1CAF09D97DDD5ADCFCC79C45CF313788952CF10420292313662180C`
 (and the older `D86273A6...` file) are superseded. This exact new candidate
 was installed silently over `0.1.1` and passed the installed-binary checks
-below. The maintainer approved publication. It has not yet been uploaded or
-checked after download.
+below. The maintainer approved publication. The public download was checked
+and installed afterward.
 
 ## What changes from 0.1.1
 
@@ -136,8 +137,16 @@ executable passed project onboarding, real Windows folder/file dialogs, Forge
 record readback, local preview, project switching, and appearance persistence.
 It did **not** send another real Codex turn.
 
-**NOT_RUN at this point:** public downloaded-file hash check and installation
-from that public download. A real Codex message caught mid-delivery during a
-process crash also remains untested. Do not call this update available to users
-until the approved installer has been published and its public download
-verified.
+**PASS for publication:** tag `desktop-v0.1.2-alpha.1` resolves to source
+commit `31594f953c611f5a6be8d651dbde623ba4e1b610`. The GitHub prerelease
+contains the installer and matching `.sha256` sidecar. An unauthenticated
+download to a fresh path returned 4,623,866 bytes with the same installer
+SHA-256 as above; the sidecar content matched. That downloaded file exited 0
+when installed silently. The installed executable again reported `0.1.2` and
+the same hash. A hidden resume of the retained real Codex pair passed again,
+without sending a new turn. No GitHub CI rebuild was used for this desktop
+prerelease; the tested prebuilt file was uploaded.
+
+**Still untested:** a real Codex message caught mid-delivery during a process
+crash, full-product visual/accessibility acceptance, and all possible upgrade
+paths. Model-specific token counts and BRL cost remain UNKNOWN.
