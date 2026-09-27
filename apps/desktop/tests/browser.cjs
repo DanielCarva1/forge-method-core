@@ -777,6 +777,7 @@ async function openConversation(page) {
     assert.equal(await page.locator('#record-constraints-list li').textContent(), '<script>changed</script>');
     assert.equal(await page.locator('#record-direction script').count(), 0);
     assert.match(await page.locator('#record-pending-count').textContent(), /1 decisão pendente foi recuperada/);
+    assert.match(await page.locator('#record-pending-count').textContent(), /texto original da escolha não está disponível aqui/);
     const stateNames = { current: 'Em andamento no registro', stale: 'Registro desatualizado', blocked: 'Pendência registrada', completed: 'Concluído no registro', abandoned: 'Encerrado sem concluir' };
     for (const state of ['current', 'stale', 'blocked', 'completed', 'abandoned', 'absent']) {
       await page.evaluate(state => { window.progressState = state; }, state);
@@ -925,7 +926,7 @@ async function openConversation(page) {
         if (command !== 'inspect_preview') return previous(command, args);
         window.linkPreviewReads.push(args);
         if (args.filePath.includes('outside')) return Promise.reject('Este arquivo não pertence ao projeto aberto.');
-        return Promise.resolve({ kind: 'text', content: 'Arquivo real do projeto', relative_path: 'result.txt', size_bytes: 23 });
+        return Promise.resolve({ kind: 'text', content: window.linkPreviewContent || 'Arquivo real do projeto', relative_path: 'result.txt', size_bytes: 23 });
       };
     });
     const formattedReply = '# Plano\n- **Criar** uma tela\n- Mostrar `resultado` em `site/index.html`; `https://example.com/outside.html` é apenas texto.\n\n```rust\n// site/index.html must remain code, not an action\nfn main() { println!("<script>"); }\n```\n> Confirme o **resultado** antes de publicar.\n\n| Etapa | Situação | Observação |\n| --- | --- | --- |\n| Tela | `pronta` | Leia antes de publicar |\n| Arquivo | [abrir](result.txt) | Local |\n\n---\n<script>alert(1)</script>\n[arquivo](result.txt) [fora](D:/outside.md) [web](https://example.com) [abrir](javascript:alert(1))';
@@ -960,9 +961,24 @@ async function openConversation(page) {
     await formattedBubble.getByRole('button', { name: 'Ver arquivo local: site/index.html' }).click();
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.deepEqual(await page.evaluate(() => window.linkPreviewReads[1]), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\site\\index.html' });
+    await page.evaluate(() => { window.linkPreviewContent = 'Arquivo alterado pelo Codex'; window.agentEvents.onmessage({ kind: 'completed' }); });
+    await page.locator('#preview-text').filter({ hasText: 'Arquivo alterado pelo Codex' }).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.linkPreviewReads[2]), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\site\\index.html' }, 'A completed turn refreshes only the selected project file');
+    await page.getByRole('button', { name: 'Abrir prévia' }).click();
+    const readsBeforeDialogCompletion = await page.evaluate(() => window.linkPreviewReads.length);
+    await page.evaluate(() => { window.linkPreviewContent = 'Arquivo mudado durante leitura'; window.agentEvents.onmessage({ kind: 'completed' }); });
+    assert.equal(await page.locator('#preview-dialog').evaluate(node => node.open), true, 'A completed turn must not close an enlarged preview being read');
+    assert.equal(await page.evaluate(() => window.linkPreviewReads.length), readsBeforeDialogCompletion, 'An open dialog defers the native file read');
+    assert.match(await page.locator('#preview-dialog-status').textContent(), /atualizada ao fechar/);
+    await page.getByRole('button', { name: 'Fechar prévia' }).click();
+    await page.locator('#preview-text').filter({ hasText: 'Arquivo mudado durante leitura' }).waitFor();
+    assert.equal(await page.evaluate(() => window.linkPreviewReads.length), readsBeforeDialogCompletion + 1, 'Closing the dialog refreshes once');
     await formattedBubble.getByRole('button', { name: 'Ver arquivo local: fora' }).click();
     await page.locator('#preview-status').filter({ hasText: 'não pertence ao projeto' }).waitFor();
     assert.equal(await page.locator('#preview-result').isVisible(), false);
+    const readsAfterInvalidFile = await page.evaluate(() => window.linkPreviewReads.length);
+    await page.evaluate(() => window.agentEvents.onmessage({ kind: 'completed' }));
+    assert.equal(await page.evaluate(() => window.linkPreviewReads.length), readsAfterInvalidFile, 'A failed preview is not retried implicitly after a turn');
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.ok(await formattedBubble.locator('.message-table-scroll').evaluate(node => node.scrollWidth > node.clientWidth), 'A wide response table should scroll within its message');

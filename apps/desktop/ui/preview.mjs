@@ -36,6 +36,7 @@ let renderUrl = null;
 let formattedMarkdown = false;
 let sourceVisible = false;
 let dialogSiteHeight = 560;
+let refreshAfterDialog = false;
 
 function showSource(value) {
   sourceVisible = value;
@@ -110,6 +111,7 @@ export function setPreviewProject(value) {
   filePath = null;
   generation++;
   pending = false;
+  refreshAfterDialog = false;
   clearResult();
   panel.hidden = !value;
   workspace.classList.toggle('project-ready', !!value);
@@ -192,6 +194,17 @@ choose.addEventListener('click', async () => {
   if (current === generation) void loadPreview();
 });
 refresh.addEventListener('click', loadPreview);
+export async function refreshPreviewAfterTurn() {
+  // A completed Codex turn may have changed the selected file. Reuse the
+  // native project-bound read; never infer another file from reply text.
+  if (!project || !filePath || result.hidden || pending) return;
+  if (dialog.open) {
+    refreshAfterDialog = true;
+    dialogStatus.textContent = 'O Codex terminou. A prévia será atualizada ao fechar esta janela.';
+    return;
+  }
+  await loadPreview();
+}
 export async function previewLinkedFile(candidate) {
   if (!project || pending || typeof candidate !== 'string' || candidate.length > 1024) return;
   const path = candidate.replace(/\//g, '\\');
@@ -236,8 +249,14 @@ dialogMore.addEventListener('click', () => {
   dialogMore.hidden = dialogSiteHeight >= 8000;
 });
 closePreview.addEventListener('click', () => dialog.close());
-dialog.addEventListener('close', clearExpanded);
-addEventListener('hashchange', clearExpanded);
+dialog.addEventListener('close', () => {
+  clearExpanded();
+  if (refreshAfterDialog) {
+    refreshAfterDialog = false;
+    void refreshPreviewAfterTurn();
+  }
+});
+addEventListener('hashchange', () => { refreshAfterDialog = false; clearExpanded(); });
 
 function prepareChangeRequest() {
   if (!project || result.hidden) return;

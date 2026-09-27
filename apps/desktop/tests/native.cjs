@@ -443,6 +443,13 @@ async function operatePreviewDialog(page, file) {
       await writeFile(previewText, 'updated fixture');
       await page.getByRole('button', { name: 'Atualizar prévia' }).click();
       await page.locator('#preview-text').filter({ hasText: 'updated fixture' }).waitFor({ timeout: 20000 });
+      await page.getByRole('button', { name: 'Abrir prévia' }).click();
+      await writeFile(previewText, 'updated while enlarged');
+      await page.evaluate(async () => { const { refreshPreviewAfterTurn } = await import('./preview.mjs'); await refreshPreviewAfterTurn(); });
+      assert.equal(await page.locator('#preview-dialog').evaluate(node => node.open), true);
+      assert.match(await page.locator('#preview-dialog-status').textContent(), /atualizada ao fechar/);
+      await page.getByRole('button', { name: 'Fechar prévia' }).click();
+      await page.locator('#preview-text').filter({ hasText: 'updated while enlarged' }).waitFor({ timeout: 20000 });
       const markdownFile = path.join(newProject, 'notes.md');
       await writeFile(markdownFile, '# Resultado\n- **Item** local\n<script>não executar</script>\n[fora](https://outside.example/)');
       await page.evaluate(file => { window.__TAURI__ = { ...window.__TAURI__, core: { ...window.nativePreviewCore, invoke: (command, args) => command === 'choose_preview_file' ? Promise.resolve(file) : window.nativePreviewInvoke(command, args) } }; }, markdownFile);
@@ -525,7 +532,7 @@ async function operatePreviewDialog(page, file) {
         fixture.remove();
       });
       await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
-      assert.equal(await page.locator('#preview-text').textContent(), 'updated fixture');
+      assert.equal(await page.locator('#preview-text').textContent(), 'updated while enlarged');
       await page.evaluate(async () => {
         const [{ renderAgentMessage }, { previewLinkedFile }] = await Promise.all([
           import('./message-format.mjs'), import('./preview.mjs'),
@@ -540,7 +547,7 @@ async function operatePreviewDialog(page, file) {
         fixture.remove();
       });
       await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
-      assert.equal(await page.locator('#preview-text').textContent(), 'updated fixture');
+      assert.equal(await page.locator('#preview-text').textContent(), 'updated while enlarged');
       await page.evaluate(async () => {
         const [{ renderAgentMessage }, { previewLinkedFile }] = await Promise.all([
           import('./message-format.mjs'), import('./preview.mjs'),
@@ -594,8 +601,9 @@ async function operatePreviewDialog(page, file) {
           await page.locator('#messages article[data-role="agent"]').nth(2).waitFor({ timeout: 180000 });
           await page.locator('#agent-status').filter({ hasText: 'Resposta recebida' }).waitFor({ timeout: 180000 });
           assert.match(await readFile(generatedFile, 'utf8'), /Jardim de ideias renovado/);
+          await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias renovado' }).waitFor({ timeout: 20000 });
           assert.equal(await page.locator('#messages article[data-role="user"]').count(), 3);
-          console.log('PASS: real Codex-created local HTML opened in the isolated preview and changed after a follow-up in the same conversation.');
+          console.log('PASS: real Codex-created local HTML opened in the isolated preview and refreshed automatically after a follow-up in the same conversation.');
         }
         await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
         await page.locator('#agent-status').filter({ hasText: 'Desconectado' }).waitFor({ timeout: 10000 });

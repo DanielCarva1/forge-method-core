@@ -225,7 +225,7 @@ async function loadProgress() {
     pendingPanel.hidden = data.recorded_pending_count === 0 && data.suggested_questions.length === 0;
     document.getElementById('record-pending-count').textContent = data.recorded_pending_count === 0
       ? 'Nenhuma decisão pendente foi recuperada do registro.'
-      : `${data.recorded_pending_count} ${data.recorded_pending_count === 1 ? 'decisão pendente foi recuperada' : 'decisões pendentes foram recuperadas'} do registro. Peça ao agente para explicar antes de decidir.`;
+      : `${data.recorded_pending_count} ${data.recorded_pending_count === 1 ? 'decisão pendente foi recuperada' : 'decisões pendentes foram recuperadas'} do registro. O texto original da escolha não está disponível aqui. Peça ao agente para consultar a origem antes de decidir.`;
     showSuggestedQuestions(data.suggested_questions);
     result.hidden = false;
     status.textContent = `${labels[data.status]} Consultado às ${new Date().toLocaleTimeString('pt-BR')}.`;

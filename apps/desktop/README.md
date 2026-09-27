@@ -1,7 +1,8 @@
 # Forge desktop shell
 
 Independent Tauri application. Desktop `0.1.5` is the published alpha
-prerelease and is installed locally.
+prerelease; `0.1.6` is a tested local installer candidate and is installed
+locally, but is not yet available publicly.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -3977,3 +3978,124 @@ remain open. Model-specific usage and BRL cost remain UNKNOWN. No worker used.
 **Next:** continue the full nontechnical journey beyond this alpha, prioritizing
 authority-backed readable decision history and full visual/accessibility
 acceptance; keep changes integrated with actual Codex chat and native proof.
+
+## Desktop decision-history feasibility slice — 2026-09-27
+
+The full nontechnical Windows journey remains the active objective; this is
+local source work after published 0.1.5, not a new installer or release.
+For #92, the read-only core audit was inspected before adding UI state.
+`DecisionNeedRaisedEvent` stores a decision reference and question digest but
+not the question text; `DecisionResolvedEvent` stores the selected alternative
+reference but not its description. The continuity report projects those same
+references, digests and status. The current admitted policy contains readable
+rules, but using its current text for an older receipt would silently relabel
+history after a policy revision. A live `forge-core workflow report --root
+D:\Forge-method-core --json` returned zero decision-history entries in this
+project, so there is no real resolved-decision fixture here to validate prose
+against. Exact historical wording remains **NOT_RUN/unavailable**, not inferred
+from chat or today's policy.
+
+The desktop now states explicitly when a recovered pending decision lacks its
+original question in this screen and asks for source consultation before a
+choice. This is a UI honesty fix, **not** #92 completion. Changed files:
+`ui/progress.mjs`, `tests/browser.cjs`, this checkpoint. JavaScript syntax,
+the controlled browser suite and `git diff --check` passed. Native WebView,
+Rust, manual screen-reader/contrast and a real decision fixture were NOT_RUN;
+no commit, push, installer, release or worker was used. Model-token usage and
+BRL cost remain UNKNOWN.
+
+**Next:** establish a minimal immutable wording contract for *future* decision
+receipts at the core boundary, with legacy ref-only entries explicitly marked
+unavailable; validate that contract with a focused core test before projecting
+it into the Desktop. Do not add a second desktop decision store or reconstruct
+old words from current policy text. Then run headless native UI validation and
+package the next coherent alpha, rather than running GitHub CI for this small
+slice.
+
+## Desktop automatic preview refresh after a Codex change — 2026-09-27
+
+Reassessment of the preceding proposed core contract: production
+`DecisionResolved` receipts exist, but `DecisionNeedRaised` is constructed only
+in tests in the current source, and this project's live report has no decision
+history entries. Adding a wording snapshot immediately would not complete a
+useful #92 screen for the Solo Cooperative journey and could introduce a new
+core migration without a real fixture. #92 remains partial; do not infer old
+decision prose from current policy. The next product-visible slice instead
+addresses the real result-to-change journey.
+
+When Codex reports a completed turn, an already loaded local result now
+refreshes through the existing native `inspect_preview` path. The selected
+file remains inside the confirmed project and is not guessed from reply text.
+Interrupted/failed turns, absent/failed previews, active selection and an
+open enlarged-preview dialog do not trigger an automatic read. The manual
+refresh action remains available. Changed files: `ui/chat.mjs`,
+`ui/preview.mjs`, `tests/browser.cjs`, `tests/native.cjs`, plus the earlier
+`ui/progress.mjs` honesty copy and this checkpoint.
+
+**PASS:** JavaScript syntax, full controlled browser suite, offline locked
+desktop debug build, and a hidden native WebView journey. The native journey
+used the real Codex to create a local HTML page, opened its sandboxed preview,
+requested a title change in the same conversation, and observed the new title
+appear in the already open preview without clicking manual refresh. It also
+restored the real conversation after WebView reload without resending. The
+native folder/file picker choice in this run was simulated; earlier 0.1.5
+candidate evidence covered actual Windows dialogs. No visible app window
+opened. `git diff --check` and final diff review remain for this package.
+No Rust source changed, so focused Rust tests were NOT_RUN. Manual visual,
+screen-reader and complete contrast acceptance remain NOT_RUN. No commit,
+push, new installer, release or worker in this slice. Model-specific token
+usage and BRL cost remain UNKNOWN.
+
+**Next:** inspect the automatic-refresh diff and its boundary cases, run the
+remaining focused desktop checks, then choose the next coherent UI package
+before building a single 0.1.6 alpha candidate. Keep the full nontechnical
+journey goal active; do not force a core decision-history migration merely to
+fill a screen without authoritative data.
+
+## Desktop 0.1.6 installed candidate gate — 2026-09-27
+
+The 0.1.6 UI package refreshes a previously opened local result after a
+successful Codex turn without guessing a new file. If the enlarged preview is
+open, it remains open and refreshes on close. A pending decision whose original
+question is unavailable is labeled honestly. #92 remains partial.
+
+**PASS, source:** offline locked desktop-only `cargo check`, focused progress
+tests (10), all 44 desktop Rust tests, eight Node tests, `cargo fmt --check`,
+strict desktop Clippy, full controlled browser suite, JavaScript syntax and
+`git diff --check`. No Rust source or separate core workspace was changed.
+No GitHub CI was run. The 0.1.6 version is in the Desktop Cargo manifest,
+lockfile and Tauri config. `RELEASE_NOTES-0.1.6.md` documents content and
+limits. The installer was built **once**, not rebuilt after hashing:
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.6_x64-setup.exe`,
+4,623,315 bytes, SHA-256
+`CD50E95002A5D9E923E206AD86DB864732612DEE53424E711F91313A6AC0BD9D`.
+A matching `.sha256` sidecar exists beside it.
+
+**PASS, release executable:** hidden native smoke used real Codex to create a
+local HTML page, open its isolated preview, change its visible title in the
+same conversation and observe the new title without clicking manual refresh.
+It restored the conversation after WebView reload without sending again. A
+separate hidden native test checked deferred refresh while the enlarged
+preview is open. No visible app window opened.
+
+**PASS, installed upgrade:** installed 0.1.5 created a disposable real Codex
+user/reply pair. The candidate hash was rechecked; the silent NSIS install
+over 0.1.5 exited 0. Installed 0.1.6 reports product version 0.1.6 and
+executable SHA-256
+`3625F44B812D17529A23F369D52E0240BB57692A0F5ED39467EA5B7A4ED6ACFA`.
+The same pair was restored on installed 0.1.6 without a new Send. A separate
+hidden installed-binary smoke passed actual Windows folder/file dialogs,
+Forge onboarding/readback and local preview. The new real Codex artifact
+journey was NOT_RUN from the installed binary; it passed on the release
+executable of the same build. Manual screen-reader/complete contrast and a
+real in-flight process crash remain NOT_RUN. No worker used; model-specific
+tokens and BRL cost are UNKNOWN.
+
+The 0.1.6 candidate is **installed locally but not committed, tagged or
+public**. Public download and byte comparison are NOT_RUN.
+
+**Next:** review the integrated source and release notes, commit/push once,
+tag a desktop-only release, upload exactly this installer and sidecar, then
+download the public bytes fresh, verify their hash, and confirm installed
+conversation continuity again. Do not rebuild the candidate or manually run
+GitHub CI for this branch/tag package.

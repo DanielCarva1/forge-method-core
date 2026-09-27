@@ -1,7 +1,7 @@
 import { invalidateProgress } from './progress.mjs';
 import { readReference, saveReference, readUnconfirmedSend, markUnconfirmedSend, clearUnconfirmedSend } from './conversation-reference.mjs';
 import { renderAgentMessage } from './message-format.mjs';
-import { previewLinkedFile } from './preview.mjs';
+import { previewLinkedFile, refreshPreviewAfterTurn } from './preview.mjs';
 import { projectDisplayName } from './project-display.mjs';
 const byId = id => document.getElementById(id);
 const status = byId('agent-status');
@@ -311,6 +311,7 @@ function message(id, role, text, append = false, complete = false) {
 
 function receive(event) {
   if (['running', 'completed', 'interrupted', 'failed', 'disconnected'].includes(event.kind)) invalidateProgress();
+  if (event.kind === 'completed') void refreshPreviewAfterTurn();
   if (event.kind === 'delta' || event.kind === 'message') {
     message(event.id, 'Codex', event.text, event.kind === 'delta', event.kind === 'message');
     return;
