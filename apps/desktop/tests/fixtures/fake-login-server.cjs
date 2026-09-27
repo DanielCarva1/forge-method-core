@@ -20,6 +20,12 @@ createInterface({ input: process.stdin }).on('line', line => {
       }, 1500);
       break;
     case 'account/login/cancel': reply(request.id, { status: 'canceled' }); break;
+    case 'thread/start':
+      if (process.env.FORGE_FAKE_SKILL_MARKER)
+        writeFileSync(process.env.FORGE_FAKE_SKILL_MARKER, JSON.stringify(request.params));
+      reply(request.id, { thread: { id: 'fixture-thread', cwd: request.params.cwd, status: { type: 'idle' }, turns: [] } });
+      break;
+    case 'turn/start': reply(request.id, { turn: { id: 'fixture-turn' } }); break;
     default: process.stdout.write(`${JSON.stringify({ id: request.id, error: { code: -32601, message: 'Fixture method not supported' } })}\n`);
   }
 });

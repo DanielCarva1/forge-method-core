@@ -1,7 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.12` is the published alpha
+Independent Tauri application. Desktop `0.1.15` is the published alpha
 prerelease. Its exact installer was downloaded back, hash-checked and installed.
+Desktop `0.1.16` is a locally tested candidate, not yet public (see the latest
+checkpoint below).
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -43,7 +45,7 @@ server, CDN or runtime download. Packaging uses the exact Tauri CLI and Codex
 CLI versions in `apps/desktop/package-lock.json`. Codex CLI is a native Windows
 x64 runtime resource, not a frontend dependency, and increases installer size.
 `npm ci` fetches it during the build; installed app startup does not download it.
-For the 0.1.12 Windows installer, `npm run build:nsis` also stages the pinned
+For the current Windows installer, `npm run build:nsis` also stages the pinned
 released `forge-core` executable after checking both archive and binary hashes.
 The release build uses `src-tauri/tauri.bundle.conf.json` to include it without
 requiring that download for ordinary `cargo check` or debug builds.
@@ -5191,3 +5193,83 @@ then tackle clean-machine first use. Continue direct UI/visual review with
 the approved artwork; the one inspected native project screen is not a
 complete visual acceptance of all screens. Model-specific BRL cost remains
 UNKNOWN.
+
+### Desktop visual polish after 0.1.15 — 2026-09-27
+
+Current controlled-browser captures of Início, Explorar, empty Meus projetos,
+conversation and preview were reviewed against the approved art direction.
+The installed native project/chat screen was reviewed separately. One concrete
+issue in the conversation capture was fixed locally: decorative foliage no
+longer enters the footer. `ui/styles.css` moves the crop inside the workspace,
+and `tests/browser.cjs` now asserts that its lower edge clears the footer.
+The full browser suite and incremental debug build passed; hidden native
+WebView smoke passed without a Codex send, and a dark-theme full-page native
+capture shows the footer unobscured. See
+`design/ux-audit-2026-09-26.md` for capture paths and scope. No Rust source,
+release build, installer or manual GH CI was changed/run; installed/public
+0.1.15 remains unchanged. Keep this local UI fix for the next coherent package,
+not a one-line release. The read-only typed decision request through a real
+app agent and clean-machine setup remain **NOT_RUN**; model-specific BRL cost
+remains UNKNOWN.
+
+### Desktop 0.1.16 candidate: packaged Start Forge guidance — 2026-09-27
+
+**Objective/phase:** close the host-installed Start Forge skill dependency for
+the Windows desktop conversation, while retaining the small 0.1.15 visual
+polish in one coherent alpha package. The active larger goal remains the
+nontechnical folder-to-chat-to-result-to-restart journey; this is not its
+completion.
+
+**Changed:** `third-party/start-forge-0.13.2/SKILL.md` is an exact copy of the
+`v0.13.2` tag (SHA-256
+`10581E17D5DBB98BDA3E0F3BC0B6A152736499451E1424E093DBECFAFD8F0B06`).
+`tauri.bundle.conf.json` includes it, `prepare-core.ps1` verifies its hash,
+and `src/agent.rs` gives Codex its actual packaged path instead of asking for
+the host skill. Release builds fail connection with an actionable error if
+that resource is absent; debug builds retain the installed-skill fallback.
+The native auth fixture now captures and checks those instructions without
+using credentials. Desktop version is 0.1.16; release notes are in
+`RELEASE_NOTES-0.1.16.md`. The earlier local footer-decoration fix and UI
+audit are included. No other project store, engine or global skill changed.
+
+**PASS:** focused Desktop `cargo check`, focused skill-path test, all 49
+Desktop unit tests, strict Desktop Clippy, browser UI suite, pinned-core
+preparation, NSIS release build, installation over public 0.1.15, installed
+version/core/skill hashes, hidden native WebView smoke, and native simulated
+login/first-send instruction capture. A further hidden real Codex activation
+on the installed candidate returned a relevant Portuguese project reply,
+restored it after WebView reload without resending, and its Codex trace
+`01a0e428-7a32-7be2-82d7-55190410b04f` shows reads of the installed
+bundled skill (first read truncated; subsequent section reads). It did not
+write a product file or publish. The candidate installer at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.16_x64-setup.exe`
+is 123,136,684 bytes, SHA-256
+`EFA67725B375DC33AAB811381DA692288D65320D7C2175691253C39006F8BA10`.
+Installed executable SHA-256 is
+`4A53F71AF2CD938236DDC629A478BF6E2E9C5E908BBF6C721E84B80F88B993D9`.
+No manual GH CI was started.
+
+**Measurement:** the one real activation trace reports cumulative
+530,161 input tokens (476,800 cached subset), 3,959 output tokens (1,881
+reasoning subset) on observed `gpt-6-sol`. This is not an isolated before/after
+benchmark, and no API-equivalent BRL or attributable Pro spending is claimed:
+both remain UNKNOWN. Parent work and earlier tests are not included in that
+Codex-thread counter. The shared weekly allowance has no defensible per-test
+attribution here.
+
+**Limits/cleanup:** fresh-account browser completion, genuinely clean-machine
+first use, typed read-only Decision Request, manual accessibility and mobile
+remain NOT_RUN. The real activation used the current machine's authenticated
+account. A disposable probe under
+`C:/ForgeFast/forge-skill-probe-0116-20260927/` remains because the host policy
+rejected recursive cleanup after path verification; it contains only the
+temporary project and Forge sidecar, not user work. Do not claim cleanup.
+This candidate is installed locally but not committed, pushed or published.
+
+**Next exact step:** run the final relevant test set and inspect the integrated
+diff; then selectively commit/push this coherent 0.1.16 package. Under the
+maintainer's standing alpha-publication authorization, publish only the exact
+tested candidate and verify an unauthenticated download, byte hash, and
+installation. Do not rerun the costly real activation merely to check GitHub
+bytes; use a bounded native regression on the downloaded installer. After
+publication, resume the typed decision-request and remaining first-use gaps.

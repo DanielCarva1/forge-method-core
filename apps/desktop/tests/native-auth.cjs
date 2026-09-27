@@ -2,8 +2,9 @@
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const { spawn } = require('node:child_process');
 const { createServer } = require('node:net');
-const { mkdtemp, mkdir, rm, copyFile, access } = require('node:fs/promises');
+const { mkdtemp, mkdir, rm, copyFile, access, readFile } = require('node:fs/promises');
 const { tmpdir } = require('node:os');
+const { createHash } = require('node:crypto');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 
@@ -17,6 +18,7 @@ const assert = require('node:assert/strict');
   const project = path.join(profile, 'project');
   await mkdir(project);
   const fakeMarker = path.join(profile, 'fake-completed');
+  const skillMarker = path.join(profile, 'fake-skill-instructions.json');
   if (fakeCompletion) {
     const fixture = path.join(__dirname, 'fixtures', 'fake-login-server.cjs');
     await copyFile(fixture, path.join(profile, 'app-server'));
@@ -29,7 +31,7 @@ const assert = require('node:assert/strict');
   const child = spawn(process.env.FORGE_DESKTOP_EXE, [], { cwd: profile, windowsHide: true, stdio: 'ignore', env: {
     ...process.env,
     CODEX_HOME: codexHome,
-    ...(fakeCompletion ? { FORGE_CODEX_EXE: process.execPath, FORGE_FAKE_AUTH_MARKER: fakeMarker } : {}),
+    ...(fakeCompletion ? { FORGE_CODEX_EXE: process.execPath, FORGE_FAKE_AUTH_MARKER: fakeMarker, FORGE_FAKE_SKILL_MARKER: skillMarker } : {}),
     WEBVIEW2_USER_DATA_FOLDER: path.join(profile, 'webview'),
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1`,
   } });
@@ -69,7 +71,18 @@ const assert = require('node:assert/strict');
       assert.equal(await draft.inputValue(), 'Rascunho reservado durante o acesso');
       assert.equal(await page.locator('#messages article').count(), 0);
       assert.equal(await page.locator('#send-message').isEnabled(), true);
-      console.log('PASS: native IPC completion event auto-confirms fixture login, preserves draft and permits later send without sending it. Provider login NOT_RUN.');
+      await page.locator('#send-message').click();
+      for (let attempt = 0; attempt < 100; attempt++) {
+        try { await access(skillMarker); break; }
+        catch { await new Promise(resolve => setTimeout(resolve, 100)); }
+      }
+      const params = JSON.parse(await readFile(skillMarker, 'utf8'));
+      const skill = params.developerInstructions.match(/Start Forge guidance at `([^`]+)`/)?.[1];
+      assert.ok(skill?.endsWith(path.join('forge-core', 'start-forge', 'SKILL.md')));
+      const skillHash = createHash('sha256').update(await readFile(skill)).digest('hex');
+      assert.equal(skillHash, '10581e17d5dbb98bda3e0f3bc0b6a152736499451e1424e093dbecfafd8f0b06');
+      assert.ok(params.developerInstructions.includes('Do not use a separately installed Start Forge skill'));
+      console.log('PASS: native fixture login preserves the draft; first send supplies the installed bundled Start Forge path to the Codex thread. Provider login and agent skill execution NOT_RUN.');
     } else {
       await page.locator('#finish-login').click();
       await page.locator('#login-status').filter({ hasText: 'Aguardando a confirmação' }).waitFor();

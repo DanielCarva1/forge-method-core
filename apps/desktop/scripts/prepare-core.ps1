@@ -4,6 +4,7 @@ $ErrorActionPreference = 'Stop'
 # silently switch to the current source-tree version or a machine installation.
 $expectedArchive = '27976049225D8650758D2593B5CB06C0FC20870216383C16C7FBC70478AD23BB'
 $expectedBinary = 'CFD6F81B1710D0469A53D12B374258CC122676EA7865F26926B1CDB4C7541EDF'
+$expectedSkill = '10581E17D5DBB98BDA3E0F3BC0B6A152736499451E1424E093DBECFAFD8F0B06'
 function Get-Sha256([string]$path) {
   $stream = [System.IO.File]::OpenRead($path)
   $sha = [System.Security.Cryptography.SHA256]::Create()
@@ -11,6 +12,10 @@ function Get-Sha256([string]$path) {
   finally { $sha.Dispose(); $stream.Dispose() }
 }
 $desktop = Split-Path -Parent $PSScriptRoot
+$skill = Join-Path $desktop 'third-party\start-forge-0.13.2\SKILL.md'
+if (-not (Test-Path -LiteralPath $skill) -or (Get-Sha256 $skill) -ne $expectedSkill) {
+  throw 'The bundled Start Forge guidance does not match the pinned 0.13.2 release.'
+}
 $targetDir = Join-Path $desktop 'src-tauri\bundled-core'
 $target = Join-Path $targetDir 'forge-core.exe'
 if ((Test-Path -LiteralPath $target) -and

@@ -1149,6 +1149,12 @@ async function openConversation(page) {
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.deepEqual(await page.evaluate(() => window.linkPreviewReads.at(-1)), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\site\\index.html' });
     await page.evaluate(() => { window.resumeMessages = null; });
+    assert.ok(await page.evaluate(() => {
+      const workspace = document.querySelector('.workspace-screen');
+      const decoration = getComputedStyle(workspace, '::before');
+      const decorationEnd = workspace.getBoundingClientRect().bottom - Number.parseFloat(decoration.bottom);
+      return decoration.display === 'none' || decorationEnd <= document.querySelector('footer').getBoundingClientRect().top - 8;
+    }), 'Conversation foliage must finish above the footer text');
     if (process.env.FORGE_CONVERSATION_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_CONVERSATION_SCREENSHOT, fullPage: true });
     if (process.env.FORGE_CONVERSATION_LIGHT_SCREENSHOT) {
       const previousTheme = await page.evaluate(() => document.documentElement.dataset.theme);

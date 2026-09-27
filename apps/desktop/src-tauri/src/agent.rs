@@ -475,7 +475,13 @@ pub async fn connect_agent(
     *slot = Some(session.clone());
     drop(slot);
     drop(shutdown_guard);
-    let result = initialize(&session, &project.project_root, thread_id.as_deref()).await;
+    let result = initialize(
+        &session,
+        &project.project_root,
+        thread_id.as_deref(),
+        resource_dir.as_deref(),
+    )
+    .await;
     if result.is_err() {
         release(&state, &session).await;
     }
@@ -486,6 +492,7 @@ async fn initialize(
     session: &Session,
     project_root: &str,
     thread_id: Option<&str>,
+    resource_dir: Option<&Path>,
 ) -> Result<history::Conversation, &'static str> {
     let transport = &session.transport;
     transport
@@ -500,7 +507,7 @@ async fn initialize(
     if account["account"]["type"] != "chatgpt" {
         return Err("Entre na sua conta ChatGPT pelo Forge e tente conectar novamente.");
     }
-    let instructions = "You are the user's agent inside Forge desktop. Work only on the selected project unless the user explicitly requests otherwise. Use the installed start-forge skill once at the beginning of this conversation, and follow its structured handoff. Forge owns project continuity; use its public interfaces and do not create another state store. Explain progress in the user's language, clearly and simply. A completed response is not proof that the user's task is complete. Treat exploration as conversation, not acceptance. After interruption, reconcile actual effects before continuing. When you create or substantially change a reviewable local file, identify only files that actually exist and include a Markdown link with a path relative to the project root, such as [Ver página](site/index.html), so the user can inspect it in the app. Do not imply a local file is published or that an unsupported output has a visual preview. The interface currently cannot display interactive tool forms; ask the user in ordinary conversation when a decision is needed.";
+    let instructions = developer_instructions(resource_dir)?;
     let mut params = json!({"cwd":project_root,"approvalPolicy":"never","sandbox":"danger-full-access","developerInstructions":instructions});
     let (thread, messages) = if let Some(id) = thread_id {
         if id.is_empty() || id.len() > 200 {
@@ -522,6 +529,24 @@ async fn initialize(
         messages,
         resumed: thread_id.is_some(),
     })
+}
+
+fn developer_instructions(resource_dir: Option<&Path>) -> Result<String, &'static str> {
+    let skill = resource_dir
+        .map(|dir| dir.join("forge-core/start-forge/SKILL.md"))
+        .filter(|path| path.is_file());
+    let start = if let Some(path) = skill {
+        format!(
+            "Read and apply the complete Start Forge guidance at `{}` once at the beginning of this conversation. Follow its structured handoff. Do not use a separately installed Start Forge skill instead.",
+            path.display()
+        )
+    } else {
+        #[cfg(not(debug_assertions))]
+        return Err("A instalação do Forge está incompleta. Reinstale o aplicativo para conectar o agente.");
+        #[cfg(debug_assertions)]
+        "Use the installed start-forge skill once at the beginning of this conversation, and follow its structured handoff.".to_string()
+    };
+    Ok(format!("You are the user's agent inside Forge desktop. Work only on the selected project unless the user explicitly requests otherwise. {start} Forge owns project continuity; use its public interfaces and do not create another state store. Explain progress in the user's language, clearly and simply. A completed response is not proof that the user's task is complete. Treat exploration as conversation, not acceptance. After interruption, reconcile actual effects before continuing. When you create or substantially change a reviewable local file, identify only files that actually exist and include a Markdown link with a path relative to the project root, such as [Ver página](site/index.html), so the user can inspect it in the app. Do not imply a local file is published or that an unsupported output has a visual preview. The interface currently cannot display interactive tool forms; ask the user in ordinary conversation when a decision is needed."))
 }
 
 async fn resume_saved<P: Protocol>(
@@ -797,6 +822,20 @@ mod tests {
             preferred_executable(Some(old.clone()), Some(bundled), None, None),
             Some(old)
         );
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn agent_prefers_bundled_start_forge_guidance() {
+        let base =
+            std::env::temp_dir().join(format!("forge-start-guidance-{}", uuid::Uuid::new_v4()));
+        let skill = base.join("forge-core/start-forge/SKILL.md");
+        std::fs::create_dir_all(skill.parent().unwrap()).unwrap();
+        std::fs::write(&skill, b"# Start Forge").unwrap();
+        let instructions = developer_instructions(Some(&base)).unwrap();
+        assert!(instructions.contains(&skill.display().to_string()));
+        assert!(instructions.contains("Do not use a separately installed Start Forge skill"));
+        assert!(!instructions.contains("Use the installed start-forge skill"));
         std::fs::remove_dir_all(base).unwrap();
     }
 
