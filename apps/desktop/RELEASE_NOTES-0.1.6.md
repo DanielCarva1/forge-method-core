@@ -59,9 +59,11 @@ version 0.1.6 and executable SHA-256
 A disposable real Codex user/reply pair created with installed 0.1.5 was
 restored on installed 0.1.6 without a new Send. A separate installed-binary
 native smoke passed Forge onboarding and readback, local preview, and the
-actual Windows folder and file dialogs. A new real Codex artifact turn was
-not sent from the installed binary; it passed on the release executable from
-the same build.
+actual Windows folder and file dialogs. A subsequent post-publication hidden
+native run on the installed binary also passed a complete real Codex journey:
+create a local HTML page, open it in the isolated preview, request a change
+in the same conversation, see the preview refresh, and recover the same
+messages after WebView reload and full process restart without a new Send.
 
 Manual screen-reader/complete contrast acceptance and a real in-flight
 process crash remain NOT_RUN. Model-specific token usage and BRL cost remain

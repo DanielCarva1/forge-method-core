@@ -4133,3 +4133,38 @@ screen/integration gap with an objective native acceptance test. Avoid
 inventing state or adding core complexity solely to fill a screen. Keep the
 overall nontechnical journey goal active; mobile and self-contained
 distribution are later stages.
+
+## Desktop 0.1.6 installed end-to-end journey — 2026-09-27
+
+**PASS:** the installed, publicly downloaded `0.1.6` executable at
+`C:/Users/User/AppData/Local/Forge/forge-desktop.exe` passed the complete
+hidden native `apps/desktop/tests/native-hidden.ps1` run with
+`FORGE_TEST_FOLDER_DIALOG=select`, `FORGE_TEST_PREVIEW_DIALOG=select`,
+`FORGE_TEST_AGENT_SMOKE=1`, `FORGE_TEST_ARTIFACT_JOURNEY=1`, and
+`FORGE_TEST_PROCESS_RESTART=1`. Playwright drove the actual Tauri WebView on
+an isolated Windows desktop; the user's visible desktop was not activated.
+The test profile and projects were disposable and cleaned by the harness.
+
+The run exercised actual Windows folder/file picker selection; onboarding a
+folder with existing work without changing its file; onboarding a new empty
+project and reading its Forge record; first Send with real authenticated
+Codex; creation of `site/index.html`; opening its local sandboxed preview
+from the completed reply; asking for a visible title change in the same
+conversation; automatic preview refresh; recovery after WebView reload; and
+recovery after a full native process restart. The restored first/last
+messages and count matched, and the restart path observed zero new Send
+calls. The script exited 0. This closes the previous evidence gap for a
+**new real Codex artifact turn from the installed binary**. It does not prove
+that an arbitrary Codex response will always include a usable file action.
+
+Manual visual, contrast and screen-reader acceptance across all screens,
+an in-flight process crash/ambiguous Send, clean-machine installation of
+the separate Forge core and Codex CLI, and auto-update remain NOT_RUN or
+unfinished as previously recorded. The test does not establish publication
+of the created page or safe interaction with a JavaScript website. No source
+files, installer, tag or release assets changed in this slice. No worker was
+used; model-specific token usage and BRL cost remain UNKNOWN.
+
+**Next:** use the approved visual boards and the actual app screens to find
+and repair a concrete nontechnical UX gap. Keep native acceptance at the
+package boundary and avoid manually starting GitHub CI for each change.
