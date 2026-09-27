@@ -6370,3 +6370,54 @@ result in the same chat, then verify the changed file, Forge record and native
 restart without duplicate sends. Separately, test the positive browser-open
 action only in a safe isolated environment that cannot surface a window on the
 maintainer's active desktop. Keep the full nontechnical journey goal active.
+
+### Desktop same-chat change and readback — 2026-09-27
+
+The installed public 0.1.22 app sent **one** change request in the existing
+real Codex conversation of disposable project
+`D:/Temp/User/forge-desktop-webview-ENrGgT/new-project`: add a local idea
+search without changing the personal-use direction or erasing saved ideas.
+The turn ran from 22:40:04Z to 22:51:28Z, with no retry or
+subagents. The final answer linked `site/index.html`; the HTML and JavaScript
+bytes changed. Forge now reports a distinct completed Work Focus,
+`focus.jardim-ideias-busca-local`, digest
+`sha256:00b0924028633ae339b82fcd6f9d27f6023f6114204d45aa148a532b82d4d83d`,
+while the accepted objective record digest remained unchanged.
+
+**PASS:** a separate headless Edge/Chromium test opened the local page with
+JavaScript, saved three ideas, filtered case/accent-insensitively, confirmed
+no-results and clear-search behavior, verified storage bytes unchanged by
+search and preserved on reload, and saw no page errors or HTTP requests.
+A second hidden **installed** native restart opened the same real conversation,
+read the new Forge record, followed the final file link, found the search
+control in the protected preview, and observed zero sends and unchanged
+HTML/CSS/JS hashes. Its read-only browser-command check rejected a missing
+file without launching a browser. Screenshot:
+`C:/ForgeFast/forge-search-completed-native-20260927.png`.
+`node --check` for the three touched test files and `git diff --check` passed.
+No production code or installer was changed in this slice.
+
+**Usage evidence:** provider rollout
+`C:/Users/User/.codex/sessions/2026/09/27/rollout-2026-09-27T07-18-02-01a0e25f-27b4-7f73-b3e8-9298bccdde2f.jsonl`
+shows `gpt-6-sol` for this turn. Subtracting the previous completed turn's
+cumulative `token_count` from the final one yields 2,689,396 input tokens
+(2,540,672 reported cached, a subset of input), 11,892 output tokens
+(4,610 reported reasoning, a subset of output), 2,701,288 total. These are
+provider-reported, per-conversation deltas, **not** a Pro bill. The account's
+rounded shared weekly usage read 49% both before and after, so the subscription
+quota impact of this turn is not attributable from that display. No verified
+tariff for this Codex model, charged-token semantics or dated FX basis was
+established; API-equivalent BRL cost is **UNKNOWN**, not zero. This long-chat
+turn illustrates substantial repeated cached input; it does not establish a
+Sol-versus-Astra savings claim. Parent supervision included the independent
+browser/native checks and one failed patch-context attempt before the native
+test edit; no product repair or duplicated provider turn was needed.
+
+**NOT_RUN:** successful Windows default-browser launch, fresh-account and
+clean-machine setup, manual accessibility acceptance, mobile/self-contained
+distribution. The protected Forge preview intentionally does not execute page
+JavaScript; functional behavior was tested in an isolated browser. **Next exact
+step:** review the full nontechnical journey against current UI and open
+issues, then take the highest-impact remaining gap as one coherent product
+slice. Test positive browser launch only without surfacing a window on the
+maintainer's desktop. Do not resend this completed change request.

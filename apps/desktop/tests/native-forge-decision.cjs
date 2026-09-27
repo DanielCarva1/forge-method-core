@@ -17,6 +17,7 @@ const core = process.env.FORGE_BUNDLED_CORE_EXE;
 if (!profile || !project || !executable || !core) throw new Error('Set the existing artifact profile, project, installed desktop executable, and bundled core executable');
 const html = path.join(project, 'site', 'index.html');
 const css = path.join(project, 'site', 'assets', 'site.css');
+const script = path.join(project, 'site', 'assets', 'site.js');
 const prompt = 'Decidi que o Jardim de ideias é para uso pessoal: uma pessoa anota e organiza as próprias ideias, sem conta nem compartilhamento nesta primeira versão. Quero melhorar a página para esse público. Registre essa direção e o próximo trabalho no Forge deste projeto, usando o Forge que veio com o aplicativo. Por enquanto não altere os arquivos nem publique nada; explique em linguagem simples o que ficou combinado e o primeiro passo.';
 const continuation = 'Você já registrou minha decisão de uso pessoal no Forge. Continue de onde parou, sem repetir nem substituir essa direção: registre o próximo trabalho no Forge para planejar a primeira versão pessoal, com um objetivo e próximo passo simples. Ainda não altere arquivos nem publique nada. Se uma escolha de produto for indispensável, explique-a em português claro e faça apenas uma pergunta.';
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
@@ -79,6 +80,7 @@ async function openExisting(page) {
   }
   const htmlHash = hash(await readFile(html));
   const cssHash = hash(await readFile(css));
+  const scriptHash = process.env.FORGE_EXPECT_SEARCH_COMPLETE === '1' ? hash(await readFile(script)) : null;
   let app;
   try {
     app = await launch();
@@ -117,12 +119,17 @@ async function openExisting(page) {
       assert.equal(await page.evaluate(() => window.readOnlySendCount), 0, 'Restart and record readback must not send a turn');
       assert.equal(hash(await readFile(html)), htmlHash);
       assert.equal(hash(await readFile(css)), cssHash);
+      if (scriptHash) assert.equal(hash(await readFile(script)), scriptHash);
       if (process.env.FORGE_EXPECT_DIRECTION_COPY === '1') {
         assert.equal(await page.locator('#record-state').textContent(), 'Direção registrada; próximo trabalho pendente');
         assert.match(await page.locator('#record-empty-help').textContent(), /O objetivo está registrado.*próximo trabalho ainda não foi definido/);
       }
       if (process.env.FORGE_EXPECT_PERSONAL_COMPLETE === '1') {
         assert.equal(before.current_work.status, 'completed', 'Forge must report the exact accepted Work Focus as completed');
+        if (process.env.FORGE_EXPECT_SEARCH_COMPLETE === '1') {
+          assert.equal(before.current_work.focus.focus_id, 'focus.jardim-ideias-busca-local');
+          assert.equal(await page.locator('#record-title').textContent(), 'Adicionar busca local às ideias');
+        }
         assert.match(await page.locator('#record-state').textContent(), /conclu[ií]do/i);
         const finalFile = page.locator('#messages article[data-role="agent"]').last().locator('.message-file-link[data-preview-path="site/index.html"]');
         assert.equal(await finalFile.isVisible(), true, 'The final answer must render the local file as an actionable button');
@@ -130,6 +137,9 @@ async function openExisting(page) {
         await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 30000 });
         assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
         await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias renovado', exact: true }).waitFor({ timeout: 30000 });
+        if (process.env.FORGE_EXPECT_SEARCH_COMPLETE === '1') {
+          await page.frameLocator('#preview-site').getByRole('searchbox', { name: 'Buscar nas ideias' }).waitFor({ timeout: 30000 });
+        }
         if (process.env.FORGE_EXPECT_BROWSER_ACTION === '1') {
           assert.equal(await page.getByRole('button', { name: 'Usar no navegador' }).isVisible(), true, 'A functional HTML result must offer an explicit usable-browser action');
           await assert.rejects(page.evaluate(async ({ projectRoot, filePath }) => window.__TAURI__.core.invoke('open_site_in_browser', { projectRoot, filePath }), {
@@ -138,6 +148,7 @@ async function openExisting(page) {
           }), /Esta página não está mais disponível/, 'Native command must reject an unavailable file without opening the browser');
         }
         assert.equal(await page.evaluate(() => window.readOnlySendCount), 0, 'Opening the final result must not send another turn');
+        if (scriptHash) assert.equal(hash(await readFile(script)), scriptHash);
       }
       if (process.env.FORGE_EXPECT_PRIOR_RESULT === '1') {
         const resultAlreadyOpen = await page.locator('#preview-result').isVisible();
