@@ -4825,3 +4825,31 @@ specific tokens and BRL cost are UNKNOWN.
 release notes, publish the exact tested candidate under the standing alpha
 authorization, then unauthenticated download/hash check and installed-byte
 readback. Later obtain voluntary genuine fresh-account sign-in proof.
+
+### Desktop 0.1.13 public release readback — 2026-09-27
+
+**PASS:** commit `c14ea34bcb27a85891e207118a32d24f533fd840` was
+pushed and annotated tag `desktop-v0.1.13-alpha.1` resolves to it. Public
+prerelease:
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.13-alpha.1`.
+GitHub reports 123,011,405 bytes and SHA-256
+`76D758454DFFB2508029E4EF81AFC5AA6EBD82A31015AFD894EEB5E548FF0D33`.
+An unauthenticated public download and sidecar in
+`C:/ForgeFast/forge-alpha-0113-public-20260927` matched the locally tested
+candidate exactly. The downloaded installer silently reinstalled with exit 0.
+Installed product version is 0.1.13; app, core and Codex resource hashes
+match the previously tested installed candidate. A hidden native test of the
+installed downloaded bytes passed onboarding, real authenticated Codex
+send/reply, WebView reload and full process restart without resending, with
+both executable overrides unset. No manual GitHub CI was started.
+
+**Remaining:** a genuinely new ChatGPT login through the browser and fresh
+Windows account/VM are still NOT_RUN; the actual default-browser button is
+NOT_RUN. The device-code start/cancel and controlled completion fixture passed
+separately but cannot prove real provider authorization. Manual accessibility
+acceptance, automatic updates, signing and mobile remain open. The next
+product slice is a fresh-account sign-in/installer journey if a controlled
+account or VM is available, followed by concrete fixes; do not add proxy
+complexity solely to disguise this proof gap. Routing and BRL usage remain
+UNKNOWN because model-attributed counters are not available. No workers were
+used in this slice.
