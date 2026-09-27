@@ -5776,3 +5776,57 @@ step:** use the now-installed 0.1.19 app to examine a bounded first-use or
 decision-turn path without repeating the expensive full Start Forge activation
 solely for a fixture; if a safe real-agent proof is not cost-justified, work
 on the next concrete UX/integration gap found in native use.
+
+### Real same-chat change and restart on installed 0.1.19 — 2026-09-27
+
+The preserved disposable `D:/Temp/User/forge-desktop-webview-ENrGgT/new-project`
+fixture was used for one bounded real Codex turn in the publicly downloaded
+and installed 0.1.19 app. Its existing conversation already linked the genuine
+`site/index.html`. A new one-shot headless native test
+(`tests/native-real-change.cjs`) opened that file, used **Pedir mudança neste
+arquivo**, sent exactly one user request to change only the visible heading to
+“Jardim de ideias renovado”, and waited for the real reply. It did not retry
+after a timeout. The app's protected preview refreshed to the new heading,
+and a fresh app process resumed the expanded conversation and reopened the
+changed file without replaying the turn. The HTML SHA-256 changed from
+`E118B0C85EC32EDB763CBE9607919407DB15AA4577FBBFFD4759B7AC8420C907`
+to `B4B8D2C561376990E38D273972530AF31CA42C43022751AE302F3B0EED784931`;
+CSS SHA-256 remained
+`707213DE71BE4FF0797855EB3F15B78A3D779550B715DDA7BC376327C0099B4D`.
+The real agent's tool trace shows only read/patch/check of the intended HTML.
+
+The preserved Codex thread is `01a0e25f-27b4-7f73-b3e8-9298bccdde2f`,
+turn `01a0e47e-ab41-7cc1-85e8-a463f2b82426`, from 20:11:41 to
+20:12:45 UTC (64 seconds). Its final *per-turn* usage is 123,614 input
+tokens **including** 98,816 cached input (24,798 uncached), and 871 output
+tokens **including** 304 reasoning output; total 124,485. The observed model
+was `gpt-6-sol`, high effort. No subagents, reroutes or parent repair turns
+were used. The account's shared weekly used-percent snapshot was 47% before
+and 47% after, too coarse for per-turn Pro attribution. An API-equivalent BRL
+estimate is UNKNOWN without an established applicable tariff and dated FX;
+this is not a claim of zero monetary/subscription cost.
+
+A read-only installed-core `workflow resume` after the edit still returned
+`current_work.status=absent`. The app correctly does not invent a Forge Work
+Focus from the Codex chat or file. This real result therefore proves the
+folder/chat/result/change/restart path, **not** that the agent has activated
+or advanced Forge governance for this task. The turn did not invoke Forge core,
+so it also does not prove obedience to the new bundled-runtime path. The
+earlier history has an extra agent segment, so the one-shot test counts actual
+user/agent items rather than assuming alternating pairs; its first preflight
+failed without sending, then the corrected preflight passed.
+
+Visual inspection of the installed real-result screenshot found a small but
+concrete copy error: the resumed-chat banner told the person to inspect the
+last Forge record even though this project has no recorded steps. Source UI
+now says “Conversa retomada. Você pode continuar de onde parou.” Browser UI
+suite and a rebuilt debug app's headless native read-only real-result resume
+passed. Corrected-source screenshot:
+`C:/ForgeFast/forge-current-resume-copy-real-artifact.png`. No Rust source
+changed and no broad Rust suite or new installer was run for this copy/test
+slice. This UI copy is not in public 0.1.19. No active subagents.
+
+**Next exact step:** inspect and commit the focused test/UI-copy diff, leaving
+the goal active; then investigate a meaningful first-use Forge-governance
+path with a cost-bounded real turn only if needed, or a concrete native UX gap.
+Do not repeat this one-shot edit against the already-changed fixture.

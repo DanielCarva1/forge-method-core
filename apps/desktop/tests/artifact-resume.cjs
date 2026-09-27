@@ -9,6 +9,7 @@ const assert = require('node:assert/strict');
 const profile = process.env.FORGE_ARTIFACT_PROFILE;
 const project = process.env.FORGE_ARTIFACT_PROJECT;
 const executable = process.env.FORGE_DESKTOP_EXE;
+const heading = process.env.FORGE_ARTIFACT_HEADING || 'Jardim de ideias';
 if (!profile || !project || !executable) throw new Error('Set FORGE_ARTIFACT_PROFILE, FORGE_ARTIFACT_PROJECT and FORGE_DESKTOP_EXE');
 
 (async () => {
@@ -65,7 +66,7 @@ if (!profile || !project || !executable) throw new Error('Set FORGE_ARTIFACT_PRO
     await fileAction.click();
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
     assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
-    await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias' }).waitFor({ timeout: 20000 });
+    await page.frameLocator('#preview-site').getByRole('heading', { name: heading, exact: true }).waitFor({ timeout: 20000 });
     assert.match(await page.locator('.preview-origin').first().textContent(), /Publicação não verificada/);
     if (process.env.FORGE_EXPECT_EMPTY_RECORD_COPY === '1') {
       await page.locator('#progress-status').filter({ hasText: 'não tem etapas registradas neste projeto' }).waitFor({ timeout: 35000 });

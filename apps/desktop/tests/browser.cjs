@@ -1147,6 +1147,7 @@ async function openConversation(page) {
     await page.evaluate(() => { window.delayDisconnect = false; });
     await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.match(await page.locator('#agent-status').textContent(), /Você pode continuar de onde parou/);
     assert.equal(await page.evaluate(() => window.connectedThread), 'test-thread');
     assert.match(await page.locator('#messages').textContent(), /Saved decision/);
     assert.match(await page.locator('#messages').textContent(), /Partial reply/);
