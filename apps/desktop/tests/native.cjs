@@ -158,7 +158,17 @@ async function operatePreviewDialog(page, file) {
         window.restoreProgressInvoke = () => { window.__TAURI__.core = originalCore; };
       });
       await submit.click();
-      await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 15000 });
+      const setupStartedAt = Date.now();
+      try {
+        await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 90000 });
+      } catch (error) {
+        console.error('Project setup diagnostics:', {
+          status: await page.locator('#project-status').textContent().catch(() => 'unavailable'),
+          elapsedMs: Date.now() - setupStartedAt,
+          root: process.env.FORGE_TEST_PROJECT,
+        });
+        throw error;
+      }
       assert.equal(await page.locator('#project-setup').evaluate(node => node.open), false);
       assert.equal(await page.locator('#project-title').textContent(), 'Seu projeto');
       assert.equal(await page.locator('#confirmed-root').textContent(), process.env.FORGE_TEST_PROJECT);
@@ -348,7 +358,7 @@ async function operatePreviewDialog(page, file) {
       } else await field.fill(legacyProject);
       await assert.rejects(access(path.join(legacyProject, '.forge-method.yaml')), { code: 'ENOENT' });
       await submit.click();
-      try { await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 35000 }); }
+      try { await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 90000 }); }
       catch (error) {
         console.error('Existing-folder onboarding status:', await page.locator('#project-status').textContent());
         throw error;
@@ -372,7 +382,7 @@ async function operatePreviewDialog(page, file) {
       await mkdir(newProject);
       await field.fill(newProject);
       await submit.click();
-      await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 25000 });
+      await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 90000 });
       assert.equal(await page.locator('#project-setup').evaluate(node => node.open), false);
       assert.equal(await page.locator('#confirmed-root').textContent(), newProject);
       assert.equal(await page.locator('#workspace-title').textContent(), 'new-project');

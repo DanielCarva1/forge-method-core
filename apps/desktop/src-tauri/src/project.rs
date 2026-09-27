@@ -42,6 +42,13 @@ impl QueryTiming {
         total: Duration::from_secs(20),
         attempt: Duration::from_secs(15),
     };
+    // A first `start` may create a sidecar before workflow initialization.
+    // Keep read-only project queries fast, but do not kill this explicit setup
+    // after it has already begun writing the new project's authority.
+    const INITIALIZE: Self = Self {
+        total: Duration::from_secs(90),
+        attempt: Duration::from_secs(85),
+    };
     pub(crate) const RECORD: Self = Self {
         total: Duration::from_secs(90),
         attempt: Duration::from_secs(85),
@@ -303,7 +310,13 @@ pub async fn start_project(project_root: String) -> Result<ProjectSummary, &'sta
     let root = requested
         .canonicalize()
         .map_err(|_| "Não foi possível acessar essa pasta.")?;
-    let started: StartedProject = query(&root, &["start"], "start")
+    let started: StartedProject = query_with_timing(
+        &root,
+        &["start"],
+        "start",
+        65_536,
+        QueryTiming::INITIALIZE,
+    )
         .await
         .map_err(|_| "Não foi possível iniciar o projeto. Confira a pasta e o estado do Forge antes de tentar novamente.")?;
     let Some(project) = started.project else {
@@ -326,7 +339,13 @@ pub async fn start_project(project_root: String) -> Result<ProjectSummary, &'sta
     if let Some(next_step) = started.next_step {
         if workflow_init_requested(&next_step, &root)? {
             let initialized: InitializedWorkflow =
-                query(&root, &["workflow", "init"], "workflow.init")
+                query_with_timing(
+                    &root,
+                    &["workflow", "init"],
+                    "workflow.init",
+                    65_536,
+                    QueryTiming::INITIALIZE,
+                )
                     .await
                     .map_err(|_| "O projeto foi vinculado, mas o registro não pôde ser preparado. Tente continuar nesta pasta novamente.")?;
             if initialized.project_id != project.project_id {
@@ -340,6 +359,13 @@ pub async fn start_project(project_root: String) -> Result<ProjectSummary, &'sta
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn initialization_waits_longer_than_read_only_project_queries() {
+        assert!(QueryTiming::INITIALIZE.attempt > QueryTiming::STANDARD.attempt);
+        assert!(QueryTiming::INITIALIZE.total > QueryTiming::STANDARD.total);
+        assert!(QueryTiming::INITIALIZE.total >= QueryTiming::INITIALIZE.attempt);
+    }
 
     #[test]
     fn retries_only_matching_transient_read_conflicts() {

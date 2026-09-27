@@ -547,6 +547,7 @@ async function openConversation(page) {
     await pendingPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     assert.equal(await pendingPage.locator('#project-root').isDisabled(), true);
     assert.equal(await pendingPage.locator('#start-project').isDisabled(), true);
+    assert.match(await pendingPage.locator('#project-status').textContent(), /Na primeira vez, isso pode levar alguns instantes/);
     await pendingPage.evaluate(() => window.finishProjectLookup());
     await pendingPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
     await pendingPage.close();

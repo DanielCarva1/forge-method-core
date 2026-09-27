@@ -1,7 +1,7 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.2` is the published alpha
-prerelease. Newer UI work remains local and unpublished. It does not require Codex Desktop. A Codex CLI adapter supports
+Independent Tauri application. Desktop `0.1.3` is the published alpha
+prerelease. Subsequent work is local and unpublished. It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
 
@@ -3673,3 +3673,93 @@ nontechnical end-to-end desktop journey and visual/accessibility review in
 one coherent, focused package. Do not imply that this published alpha is
 the full Forge product or rebuild the verified 0.1.3 installer for a docs
 follow-up.
+
+## Desktop published journey and cold-start fix — 2026-09-27
+
+The downloaded and installed public 0.1.3 binary was exercised headlessly
+with real Codex in a disposable project. **PASS:** the same conversation
+created `site/index.html`, opened its local scriptless preview, accepted a
+follow-up change request, changed the file on disk and restored the chat
+after WebView reload without another Send. The screenshot is
+`C:/ForgeFast/forge-artifact-public-013.png`. This closes the earlier gap
+where the full artifact-to-change journey had only run on a debug build.
+It does not prove a real mid-send crash or arbitrary Codex-generated output.
+
+The first run against a new `C:/ForgeFast/forge-artifact-public-013-seed`
+timed out waiting 15 seconds for **Projeto pronto**; no Codex message was
+sent. An independent fresh CLI fixture measured `forge-core start` at 38.43
+seconds, `workflow init` at 4.32 seconds and `project resolve` at 0.02
+seconds. The desktop's ordinary project query timeout was 15 seconds per
+attempt / 20 seconds total, so it could abort an explicit first-time
+`start` after that command began creating authority. The unchanged
+installed app passed the journey on retry, once that seed had been
+initialized. This is a concrete cold-onboarding defect in published 0.1.3,
+not a reason to claim its first attempt passed.
+
+**Local fix, not yet published:** `src-tauri/src/project.rs` now uses a
+bounded 85-second attempt / 90-second total only for explicit `start` and
+`workflow init`; read-only project queries retain their 15/20-second
+limits. The UI says that first-time preparation can take a while, and the
+native smoke reports setup status on timeout. A new never-used folder
+`C:/ForgeFast/forge-cold-native-fixed-20260927` passed on its first action
+in a hidden native debug build, including Forge readback; no real Codex
+turn was requested in that regression run. Offline locked desktop `cargo
+check`, four focused project tests, all 44 desktop Rust tests, eight Node
+tests, `cargo fmt --check`, full controlled browser suite and `git diff
+--check` passed. The earlier public-binary artifact journey had one failed
+cold setup attempt, then passed on an unchanged retry. No GitHub CI or
+installer was built for this local fix. Current modified files are
+`src-tauri/src/project.rs`, `ui/main.mjs`, `tests/native.cjs`,
+`tests/browser.cjs` and this checkpoint; no worker was used. Per-model
+token counts and BRL cost remain
+UNKNOWN.
+
+**Next:** confirm the cold-onboarding path and visual experience in a
+coherent next alpha package, including the production build/upgrade gates
+before publication. Keep the 0.1.3 installed/public state distinct from
+this local fix. Continue #92 only with authoritative historical decision
+content; do not fabricate it in the UI.
+
+## Desktop 0.1.4 installed candidate gate — 2026-09-27
+
+The cold-onboarding fix was versioned to desktop 0.1.4 without changing
+the separate Forge core. The production package source passed offline
+locked desktop `cargo check`, four focused project tests, all 44 desktop
+Rust tests, eight Node tests, formatting, strict desktop Clippy, full
+controlled browser UI suite and `git diff --check`. One NSIS build
+produced `D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.4_x64-setup.exe`
+at 4,621,382 bytes, SHA-256
+`06EA9E99C22D56FE39069BC73C0FF0C45023A64FF79F064A3A361BB68B82BBDE`.
+The release executable reports 0.1.4. Its hidden native smoke passed a
+never-used project folder, real Windows folder and file dialogs, actual
+Forge record readback, a real Codex-created local page, preview, change
+request in the same chat and WebView reload without resending.
+
+**PASS, installed upgrade:** before installing, the installed 0.1.3
+restored the disposable real Codex pair created in 0.1.2. The exact
+candidate hash was rechecked, then the installer exited 0 over 0.1.3.
+Installed 0.1.4 reports SHA-256
+`A41160EE51F9F0E91841CDDABE8D05A8EDA79DC8FD878F4CEF4D99EDF8ED1E1C`.
+It restored the same pair with no new Send. A second hidden native smoke
+on installed 0.1.4 prepared another never-used folder on the first
+action, exercised the real Windows folder/file dialogs and read back the
+Forge record. Real Codex artifact creation was NOT_RUN on that installed
+binary, but passed on the release executable from the same build.
+
+The 0.1.4 candidate is installed locally but is **not** yet committed,
+tagged or public. Fresh public download and byte comparison are NOT_RUN.
+The first-attempt cold failure of public 0.1.3 and its measured 38.43
+second `forge-core start` are documented above; do not erase that
+history. #92 plain-language decision history, full visual/accessibility
+acceptance and real mid-send crash remain open. No GitHub CI was run, no
+worker used, and per-model usage/BRL cost are UNKNOWN. Modified paths:
+`src-tauri/src/project.rs`, desktop version/lock/config, `ui/main.mjs`,
+`tests/native.cjs`, `tests/browser.cjs`, this README and
+`RELEASE_NOTES-0.1.4.md`.
+
+**Next:** review staged diff and release notes; under the maintainer's
+standing explicit publication authorization, commit/push once, use a
+desktop-only tag, upload only the one tested candidate and SHA sidecar,
+then download fresh public bytes, verify the hash, reinstall that exact
+download and confirm installed continuity. Do not rebuild the candidate
+or run GitHub CI for a small desktop-only update.

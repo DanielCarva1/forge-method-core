@@ -144,7 +144,7 @@ form.addEventListener('submit', async event => {
   setPreviewProject(null);
   projectRoot.disabled = true;
   resultPanel.hidden = true;
-  projectStatus.textContent = readOnlyShortcut ? 'Conferindo o projeto…' : 'Preparando o projeto…';
+  projectStatus.textContent = readOnlyShortcut ? 'Conferindo o projeto…' : 'Preparando o projeto… Na primeira vez, isso pode levar alguns instantes.';
   try {
     const invoke = globalThis.__TAURI__?.core?.invoke;
     if (!invoke) throw 'Abra esta tela pelo aplicativo Forge para conferir seu projeto.';
