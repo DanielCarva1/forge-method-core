@@ -4296,7 +4296,25 @@ screen-reader/contrast acceptance, clean-machine core/Codex setup,
 auto-update and mobile remain unfinished. No worker was used; model-specific
 tokens and BRL cost are UNKNOWN.
 
-**Next:** review and commit the exact source package, publish the candidate
-and sidecar, freshly download and compare public bytes, reinstall the public
-download and confirm continuity. Keep the broader nontechnical UI journey
-goal active afterward.
+**Public readback:** source package committed/pushed as `57699188`; annotated
+tag `desktop-v0.1.8-alpha.1` points to that commit. Prerelease URL:
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.8-alpha.1`.
+GitHub reported installer size 4,624,036 bytes and SHA-256
+`733CA93C5D0389BAC67C7213BF5CB71B0AF8A3C384E5A59CFAE9578842F93CDC`.
+A fresh unauthenticated download to
+`C:/ForgeFast/forge-alpha-018-public-20260927` matched the size, hash and
+checksum sidecar. The downloaded installer silently reinstalled with exit 0;
+installed version remained 0.1.8 and executable SHA-256 remained
+`B3BFB9CC7C13AEF235143A88EC958C4F81949B0EDA6CB09CB35BF00A70FF1BF0`.
+The installed public bytes resumed the pre-upgrade real Codex user/reply pair
+with zero new Sends. Native record/preview and actual Windows file picker
+passed on the same executable hash before this identical reinstall; they
+were not repeated afterward. No rebuild or manual GitHub CI. The release
+notes contain the limits; no full-product readiness claim is made.
+
+**Next product slice:** continue auditing the installed nontechnical
+conversation → actual result → change request journey against the approved
+visual direction. Choose a substantive user-visible gap and verify it in
+the hidden native app; do not add Forge core complexity just to populate a
+screen. Keep the overall journey goal active. Model-specific tokens and BRL
+cost remain UNKNOWN.
