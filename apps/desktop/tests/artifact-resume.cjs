@@ -69,10 +69,10 @@ if (!profile || !project || !executable) throw new Error('Set FORGE_ARTIFACT_PRO
     await page.frameLocator('#preview-site').getByRole('heading', { name: heading, exact: true }).waitFor({ timeout: 20000 });
     assert.match(await page.locator('.preview-origin').first().textContent(), /Publicação não verificada/);
     if (process.env.FORGE_EXPECT_EMPTY_RECORD_COPY === '1') {
-      await page.locator('#progress-status').filter({ hasText: 'não tem etapas registradas neste projeto' }).waitFor({ timeout: 35000 });
-      assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem etapas no Forge');
+      await page.locator('#progress-status').filter({ hasText: 'Ainda não há andamento registrado no Forge' }).waitFor({ timeout: 35000 });
+      assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem andamento registrado');
       assert.equal(await page.locator('.record-stage').isVisible(), false);
-      assert.match(await page.locator('#record-empty-help').textContent(), /A conversa e os arquivos continuam aqui/);
+      assert.match(await page.locator('#record-empty-help').textContent(), /Você pode começar ou continuar pela conversa/);
     }
     if (process.env.FORGE_ARTIFACT_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_ARTIFACT_SCREENSHOT, fullPage: true });
     await page.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();

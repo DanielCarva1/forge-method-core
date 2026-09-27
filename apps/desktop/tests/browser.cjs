@@ -924,9 +924,9 @@ async function openConversation(page) {
     await page.evaluate(() => { window.progressNoDirection = true; window.progressState = 'absent'; });
     await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
-    assert.match(await page.locator('#progress-status').textContent(), /não tem etapas registradas neste projeto/);
-    assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem etapas no Forge');
-    assert.match(await page.locator('#record-empty-help').textContent(), /A conversa e os arquivos continuam aqui/);
+    assert.match(await page.locator('#progress-status').textContent(), /Ainda não há andamento registrado no Forge/);
+    assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem andamento registrado');
+    assert.match(await page.locator('#record-empty-help').textContent(), /Você pode começar ou continuar pela conversa/);
     await page.evaluate(() => { window.progressState = 'current'; window.progressDecisionCount = 0; });
     await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     assert.match(await page.locator('#record-decisions').textContent(), /não mostra decisões em aberto/);

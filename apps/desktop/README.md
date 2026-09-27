@@ -6445,3 +6445,33 @@ step:** make the real completion path testable without borrowing or changing
 the maintainer's login; then verify the signed-in first response and Forge
 activation in a disposable project, or move to a concrete UI defect if that
 test environment is unavailable. Keep the full nontechnical journey goal active.
+
+### First-use empty-record wording — 2026-09-27
+
+Visual inspection of the installed fresh-profile screenshot showed the empty
+Forge record claiming that "the conversation and files continue here" even for
+a new folder with neither. This is misleading for a first-time person. The
+source UI now says there is **no recorded progress**, explains that recorded
+work will appear there later, and directs the person to start **or** continue
+in the conversation. It does not fabricate a stage, conversation or file.
+The same wording is used for the header badge and the record's empty state.
+
+**PASS:** `node --check` of the touched frontend/test scripts,
+`git diff --check`, the browser UI suite, incremental Desktop debug build,
+and a hidden native first-use run with an isolated unsigned-in `CODEX_HOME`.
+The native run confirmed the new copy from real Forge readback before the
+Codex device-login challenge, then canceled sign-in without sending or losing
+the draft. Screenshot:
+`C:/ForgeFast/forge-empty-record-copy-debug-20260927.png`.
+No provider-model turn or Rust source change was made. The first browser run
+failed only because its old expected status text had not been updated; the
+test was corrected and the full suite passed. One initial source patch failed
+on an unmatched context line before the successful edit.
+
+**NOT_RUN:** installed/public behavior of this new copy. Installed 0.1.22
+still has the old text; a coherent later alpha package is required. Real
+new-account login completion and positive browser launch remain unverified.
+**Next exact step:** inspect the remaining first-use UI for a concrete
+contradiction or missing action, then package the accepted first-use changes
+together rather than publishing each copy adjustment separately. Keep the
+full journey goal active.
