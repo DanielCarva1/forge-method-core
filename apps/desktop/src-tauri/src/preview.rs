@@ -142,6 +142,64 @@ fn read_preview(root: &Path, requested: &Path) -> Result<Preview, &'static str> 
     })
 }
 
+fn local_html_path(root: &Path, requested: &Path) -> Result<PathBuf, &'static str> {
+    if !requested.is_absolute() {
+        return Err("Escolha uma página deste projeto.");
+    }
+    let root = root
+        .canonicalize()
+        .map_err(|_| "Não foi possível conferir a pasta do projeto.")?;
+    let file = requested
+        .canonicalize()
+        .map_err(|_| "Esta página não está mais disponível.")?;
+    file.strip_prefix(&root)
+        .map_err(|_| "Esta página não pertence ao projeto aberto.")?;
+    if !file.is_file()
+        || !file.extension().and_then(|value| value.to_str()).is_some_and(|value| {
+            value.eq_ignore_ascii_case("html") || value.eq_ignore_ascii_case("htm")
+        })
+    {
+        return Err("Escolha uma página HTML deste projeto.");
+    }
+    Ok(file)
+}
+
+#[tauri::command]
+pub async fn open_site_in_browser(
+    project_root: String,
+    file_path: String,
+) -> Result<(), &'static str> {
+    let project = crate::project::inspect_project(project_root).await?;
+    let file = local_html_path(Path::new(&project.project_root), Path::new(&file_path))?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        #[link(name = "shell32")]
+        unsafe extern "system" {
+            fn ShellExecuteW(
+                window: isize,
+                operation: *const u16,
+                file: *const u16,
+                parameters: *const u16,
+                directory: *const u16,
+                show: i32,
+            ) -> isize;
+        }
+        let operation: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+        let path: Vec<u16> = file.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let launched = unsafe {
+            ShellExecuteW(0, operation.as_ptr(), path.as_ptr(), std::ptr::null(), std::ptr::null(), 1)
+        };
+        if launched <= 32 { Err("Não foi possível solicitar a abertura desta página no navegador.") }
+        else { Ok(()) }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = file;
+        Err("Abra esta página HTML em um navegador para usá-la.")
+    }
+}
+
 #[tauri::command]
 pub async fn inspect_preview(
     project_root: String,
@@ -251,5 +309,23 @@ mod tests {
         fs::write(&text, "x".repeat(40 * 1024)).unwrap();
         assert!(read_preview(&root, &text).is_err());
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn browser_opening_accepts_only_html_inside_the_project() {
+        let base = std::env::temp_dir().join(format!("forge-open-site-{}", std::process::id()));
+        let root = base.join("project");
+        fs::create_dir_all(&root).unwrap();
+        let inside = root.join("index.html");
+        let script = root.join("site.js");
+        let outside = base.join("outside.html");
+        fs::write(&inside, "<h1>Local</h1>").unwrap();
+        fs::write(&script, "alert(1)").unwrap();
+        fs::write(&outside, "<h1>Outside</h1>").unwrap();
+        assert_eq!(local_html_path(&root, &inside).unwrap(), inside.canonicalize().unwrap());
+        assert!(local_html_path(&root, &script).is_err());
+        assert!(local_html_path(&root, &outside).is_err());
+        assert!(local_html_path(&root, Path::new("index.html")).is_err());
+        fs::remove_dir_all(base).unwrap();
     }
 }

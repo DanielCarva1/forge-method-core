@@ -130,6 +130,13 @@ async function openExisting(page) {
         await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 30000 });
         assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
         await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias renovado', exact: true }).waitFor({ timeout: 30000 });
+        if (process.env.FORGE_EXPECT_BROWSER_ACTION === '1') {
+          assert.equal(await page.getByRole('button', { name: 'Usar no navegador' }).isVisible(), true, 'A functional HTML result must offer an explicit usable-browser action');
+          await assert.rejects(page.evaluate(async ({ projectRoot, filePath }) => window.__TAURI__.core.invoke('open_site_in_browser', { projectRoot, filePath }), {
+            projectRoot: project,
+            filePath: path.join(project, 'site', 'missing.html'),
+          }), /Esta página não está mais disponível/, 'Native command must reject an unavailable file without opening the browser');
+        }
         assert.equal(await page.evaluate(() => window.readOnlySendCount), 0, 'Opening the final result must not send another turn');
       }
       if (process.env.FORGE_EXPECT_PRIOR_RESULT === '1') {

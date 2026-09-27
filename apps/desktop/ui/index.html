@@ -210,6 +210,10 @@
           <pre id="preview-text" hidden></pre>
           <details id="preview-site-note" class="preview-safety-note" hidden><summary>Prévia protegida: o site não é interativo</summary><p class="hint">Partes interativas, imagens da internet e arquivos chamados pela raiz do site (como /assets) podem não aparecer.</p></details>
           <p class="preview-origin">Arquivo local do projeto: <strong id="preview-path"></strong> · Publicação não verificada.</p>
+          <div id="preview-browser-action" class="preview-browser-action" hidden>
+            <button id="open-site-browser" type="button">Usar no navegador <span aria-hidden="true">↗</span></button>
+            <p class="hint">Fora da prévia protegida, a página pode executar código e acessar a internet. Abra apenas projetos de confiança.</p>
+          </div>
           <button id="request-preview-change" type="button">Pedir mudança neste arquivo</button>
         </div>
         <details id="preview-cited-files" class="preview-cited-files" hidden>
@@ -227,14 +231,14 @@
           <p id="record-state" class="record-state"></p>
           <button id="record-questions-shortcut" type="button" aria-controls="record-pending" hidden>Ver perguntas para conversar</button>
           <div class="record-stage">
-            <p id="record-phase-label" class="eyebrow">ETAPA DO PROJETO</p>
+            <p id="record-phase-label" class="eyebrow">ETAPA GERAL DO PROJETO</p>
             <h4 id="record-phase"></h4>
             <p id="record-phase-help"></p>
           </div>
           <p id="record-empty-help" class="hint" hidden>A conversa e os arquivos continuam aqui. Para seguir, conte ao agente o que quer fazer agora; ele pode organizar o trabalho no Forge.</p>
           <div id="record-work">
             <div class="record-timeline" role="group" aria-label="Atividade e próximo passo registrados">
-              <div class="record-timeline-item"><strong>Agora</strong><p id="record-activity"></p></div>
+              <div class="record-timeline-item"><strong id="record-activity-label">Agora</strong><p id="record-activity"></p></div>
               <div class="record-timeline-item"><strong>Próximo passo</strong><p id="record-next"></p></div>
             </div>
             <button id="explain-record" type="button">Entender isto na conversa</button>

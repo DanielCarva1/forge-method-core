@@ -6249,3 +6249,94 @@ exact step:** run one bounded, reversible change request in the existing native
 chat and verify the modified local file, Forge's new/current Work Focus,
 native result link and restart. Do not resend either interrupted implementation
 turn or the completed finalization turn. Keep the full desktop goal active.
+
+### Desktop completed-work wording polish — 2026-09-27
+
+A native screenshot of the completed real Work Focus exposed a concrete
+confusion: the page displayed "Trabalho registrado concluído" next to a
+"Descoberta" project stage and labeled the completed activity "Agora".
+The UI now labels that card "ETAPA GERAL DO PROJETO", explains that a
+specific completed work item does not automatically change the general
+stage, and changes "Agora" to "Resultado registrado" for completed work
+("Último registro" for abandoned work). It does not change Forge state.
+
+**PASS:** the controlled browser UI suite, `node --check`, `git diff --check`,
+incremental Desktop debug build, and hidden native read-only restart on the
+same real completed conversation. The native run showed the exact Forge
+record, actionable result button, protected preview and zero sends. The
+debug screenshot is `C:/ForgeFast/forge-completed-debug-20260927.png`.
+The first browser attempt could not find its expected Playwright browser;
+rerunning with the already installed Microsoft Edge executable passed.
+**NOT_RUN:** real change request after this result, new installer, or testing
+the new wording in the installed 0.1.21 release. These wording edits are
+source/debug-only and require a future coherent alpha package before users
+receive them. No new provider-model turn or Rust source change was made.
+**Next exact step:** use the same native chat for one bounded change request
+on this disposable result, or investigate a concrete blocker if one appears;
+then package the accepted UI changes with any related fixes. Do not spend a
+new provider turn merely to reconfirm the already completed result.
+
+### Desktop usable local HTML action — 2026-09-27
+
+The same real-result screenshot exposed a larger usability gap: the protected
+Forge preview shows an HTML page but intentionally cannot run its JavaScript.
+The source/debug app now offers **Usar no navegador** only for a validated
+local HTML result. This is an explicit action, never automatic. The UI warns
+that a normal browser can execute code and use the network. The native command
+rechecks the exact Forge project, canonicalizes the selected file, rejects
+outside-project paths and non-HTML files, then asks Windows to open it with
+the default HTML handler. Forge's protected preview remains unchanged.
+
+**PASS:** Desktop `cargo check -p forge-desktop`, five focused preview tests,
+all 50 Desktop crate tests, browser UI suite (including no automatic open,
+explicit action, error handling and enlarged text), `node --check`,
+`git diff --check`, incremental debug build, and a hidden native read-only
+restart of the real completed conversation. The native test saw the new
+action and invoked the registered command with a missing file; it rejected
+the file without launching anything. The resulting screenshot is
+`C:/ForgeFast/forge-browser-action-debug-20260927.png`.
+
+**NOT_RUN:** positive Windows default-browser launch. That side effect was
+deliberately not triggered because it could open a visible browser tab on the
+maintainer's active desktop despite a hidden test desktop. The source/debug
+change is not installed or published; installed public 0.1.21 has no action.
+No real Codex provider turn was spent on this slice. **Next exact step:**
+perform final package checks and prepare a coherent 0.1.22 alpha candidate
+for the completed-work wording and usable HTML action; verify the installer
+over 0.1.21 and disclose the untested positive browser launch before public
+release. Keep the broader nontechnical journey goal active.
+
+### Desktop 0.1.22 usable-result candidate — 2026-09-27
+
+The completed-work wording and explicit HTML browser action above are now a
+coherent 0.1.22 alpha package. The version was bumped in Desktop Cargo and
+Tauri config; release notes are in `RELEASE_NOTES-0.1.22.md`.
+
+**PASS:** 11 Node unit tests; browser UI suite (including no automatic open,
+error path, large text); Desktop `cargo check`, all 50 crate tests and strict
+Clippy; `git diff --check`; hidden native debug real-chat readback; one NSIS
+release build. The single candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.22_x64-setup.exe`,
+123,049,545 bytes, SHA-256
+`3C619DBCE8451760C091BF34B754FFE3B7D0E467786348789F3FA91C402669C1`.
+Silent installation over public 0.1.21 returned exit 0 and left the candidate
+hash unchanged. The installed app executable SHA-256 is
+`849B3E2ED14280C287321F169EA5937B157C37D7BAFB3FF2FE6DB729B2DD0CD7`;
+bundled core remains pinned to 0.13.2 with SHA-256
+`CFD6F81B1710D0469A53D12B374258CC122676EA7865F26926B1CDB4C7541EDF`.
+The installed 0.1.22 passed hidden native smoke and read-only restart of the
+same real Codex chat: completed Forge state, final local file, HTML-only
+browser action, invalid-file rejection, and zero sends. The first release
+command rejected unsupported CLI arguments before building; a corrected
+single build produced the candidate above.
+
+**NOT_RUN:** a positive default-browser launch (could surface on the active
+desktop), clean-machine/fresh-account setup, manual accessibility acceptance,
+mobile, and a new real change request after the final result. No new
+provider-model turn was spent on 0.1.22; per-task BRL cost remains UNKNOWN.
+At this checkpoint the source and tested candidate are **local only**, not
+committed/pushed or published. **Next exact step:** review/selectively commit
+and push 0.1.22, publish the exact candidate under the maintainer's standing
+alpha authorization, then download unauthenticated and compare bytes before
+calling it available. Do not rebuild merely to publish. The wider journey
+goal remains active.

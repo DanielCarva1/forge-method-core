@@ -217,7 +217,10 @@ async function loadProgress() {
       ? 'O objetivo está registrado. O próximo trabalho ainda não foi definido no Forge. Continue a conversa para combiná-lo com o agente.'
       : 'A conversa e os arquivos continuam aqui. Para seguir, conte ao agente o que quer fazer agora; ele pode organizar o trabalho no Forge.';
     document.getElementById('record-phase').textContent = phase[0];
-    document.getElementById('record-phase-help').textContent = phase[1];
+    document.getElementById('record-phase-help').textContent = data.status === 'completed'
+      ? `${phase[1]} Este trabalho foi concluído; a etapa geral pode continuar aqui.` : phase[1];
+    document.getElementById('record-activity-label').textContent = data.status === 'completed'
+      ? 'Resultado registrado' : data.status === 'abandoned' ? 'Último registro' : 'Agora';
     workspacePhase.textContent = data.status === 'absent'
       ? direction ? 'Direção registrada; próximo trabalho pendente' : 'Sem etapas no Forge'
       : data.status === 'stale' ? `Etapa no Forge (desatualizada): ${phase[0]}` : `Etapa no Forge: ${phase[0]}`;

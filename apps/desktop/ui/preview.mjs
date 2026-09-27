@@ -15,6 +15,8 @@ const siteNote = document.getElementById('preview-site-note');
 const text = document.getElementById('preview-text');
 const markdown = document.getElementById('preview-markdown');
 const openPreview = document.getElementById('open-preview');
+const browserAction = document.getElementById('preview-browser-action');
+const openSiteBrowser = document.getElementById('open-site-browser');
 const sourceToggle = document.getElementById('preview-source-toggle');
 const dialog = document.getElementById('preview-dialog');
 const closePreview = document.getElementById('close-preview');
@@ -34,6 +36,7 @@ let project = null;
 let filePath = null;
 let generation = 0;
 let pending = false;
+let browserOpening = false;
 let renderUrl = null;
 let formattedMarkdown = false;
 let sourceVisible = false;
@@ -59,6 +62,7 @@ function controls() {
   refresh.hidden = !filePath;
   refresh.disabled = !project || !filePath || pending;
   openPreview.disabled = !project || result.hidden || pending;
+  openSiteBrowser.disabled = !project || !filePath || result.hidden || pending || browserOpening;
 }
 
 function clearExpanded() {
@@ -88,6 +92,7 @@ function clearResult() {
   sourceVisible = false;
   result.hidden = true;
   openPreview.hidden = true;
+  browserAction.hidden = true;
   sourceToggle.hidden = true;
   image.hidden = true;
   image.removeAttribute('src');
@@ -175,6 +180,7 @@ async function loadPreview() {
     }
     result.hidden = false;
     openPreview.hidden = false;
+    browserAction.hidden = !renderUrl;
     workspace.classList.add('preview-loaded');
     status.textContent = 'Prévia local atualizada.';
   } catch (error) {
@@ -262,6 +268,19 @@ openPreview.addEventListener('click', () => {
   }
   dialogRequestChange.disabled = composer.disabled;
   dialog.showModal();
+});
+openSiteBrowser.addEventListener('click', async () => {
+  if (!project || !filePath || !renderUrl || result.hidden || pending || browserOpening) return;
+  const root = project.project_root;
+  const selected = filePath;
+  browserOpening = true;
+  controls();
+  try {
+    await globalThis.__TAURI__.core.invoke('open_site_in_browser', { projectRoot: root, filePath: selected });
+    if (project?.project_root === root && filePath === selected) status.textContent = 'Abertura solicitada ao navegador padrão. Esta página roda fora da prévia protegida do Forge.';
+  } catch {
+    if (project?.project_root === root && filePath === selected) status.textContent = 'Não foi possível abrir esta página no navegador. O arquivo não foi alterado.';
+  } finally { browserOpening = false; controls(); }
 });
 sourceToggle.addEventListener('click', () => showSource(!sourceVisible));
 dialogSourceToggle.addEventListener('click', () => showSource(!sourceVisible));

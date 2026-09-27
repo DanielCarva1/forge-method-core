@@ -123,6 +123,9 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 .workspace.preview-loaded .preview #preview-status { margin-block: 4px 8px; }
 .preview-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
 .preview-origin { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+.preview-browser-action { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 8px 0 12px; }
+.preview-browser-action[hidden] { display: none; }
+.preview-browser-action .hint { flex-basis: 100%; margin: 0; font-size: 1rem; }
 .preview-safety-note { margin: 4px 0 12px; color: var(--muted); font-size: .9rem; }
 .preview-safety-note summary { min-height: 44px; padding: 8px 0; cursor: pointer; }
 .preview-safety-note .hint { margin: 2px 0 8px; }

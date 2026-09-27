@@ -130,7 +130,7 @@ async function openConversation(page) {
     console.log('PASS: Explore filters eight approachable themes and carries the chosen idea into the conversation.');
     const projectsPage = await browser.newPage();
     await projectsPage.addInitScript(() => {
-      window.projectChecks = []; window.startCalls = []; window.previewReads = [];
+      window.projectChecks = []; window.startCalls = []; window.previewReads = []; window.browserOpens = [];
       window.__TAURI__ = { core: { invoke: async (command, args) => {
         if (command === 'app_info') return { name: 'Forge', version: '0.1.0' };
         if (command === 'choose_project_folder') {
@@ -149,6 +149,11 @@ async function openConversation(page) {
           return { project_id: root.endsWith('two') ? 'second-project' : root.endsWith('new') ? 'new-project' : 'first-project', project_root: root };
         }
         if (command === 'choose_preview_file') return window.previewChoice || null;
+        if (command === 'open_site_in_browser') {
+          window.browserOpens.push(args);
+          if (window.rejectBrowserOpen) throw 'Navegador indisponível';
+          return null;
+        }
         if (command === 'inspect_preview') {
           window.previewReads.push(args);
           if (args.filePath.includes('outside')) throw 'Este arquivo não pertence ao projeto aberto.';
@@ -295,6 +300,7 @@ async function openConversation(page) {
     await projectsPage.waitForFunction(() => document.querySelector('#preview-image').naturalWidth > 0);
     assert.equal(await projectsPage.locator('#preview-text').isVisible(), false);
     assert.equal(await projectsPage.locator('#preview-site-note').isVisible(), false);
+    assert.equal(await projectsPage.locator('#preview-browser-action').isVisible(), false);
     await projectsPage.getByRole('button', { name: 'Abrir prévia' }).click();
     await projectsPage.waitForFunction(() => document.querySelector('#preview-dialog-image').naturalWidth > 0);
     assert.equal(await projectsPage.locator('#preview-dialog-image').isVisible(), true);
@@ -312,6 +318,16 @@ async function openConversation(page) {
     await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
     await projectsPage.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await projectsPage.locator('#preview-site').isVisible(), true);
+    assert.equal(await projectsPage.locator('#preview-browser-action').isVisible(), true);
+    assert.match(await projectsPage.locator('#preview-browser-action .hint').textContent(), /pode executar código e acessar a internet/);
+    assert.deepEqual(await projectsPage.evaluate(() => window.browserOpens), [], 'A protected preview must never open the browser automatically');
+    await projectsPage.getByRole('button', { name: 'Usar no navegador' }).click();
+    await projectsPage.locator('#preview-status').filter({ hasText: 'Abertura solicitada ao navegador padrão' }).waitFor();
+    assert.deepEqual(await projectsPage.evaluate(() => window.browserOpens), [{ projectRoot: 'D:\\one', filePath: 'D:\\one\\site\\index.html' }]);
+    await projectsPage.evaluate(() => { window.rejectBrowserOpen = true; });
+    await projectsPage.getByRole('button', { name: 'Usar no navegador' }).click();
+    await projectsPage.locator('#preview-status').filter({ hasText: 'Não foi possível abrir esta página' }).waitFor();
+    await projectsPage.evaluate(() => { window.rejectBrowserOpen = false; });
     assert.equal(await projectsPage.locator('#preview-site-note').isVisible(), true);
     assert.equal(await projectsPage.locator('#preview-site-note').evaluate(node => node.open), false);
     await projectsPage.locator('#preview-site-note summary').click();
@@ -887,11 +903,13 @@ async function openConversation(page) {
         assert.equal(await page.locator('#workspace-phase').isVisible(), true);
         assert.equal(await page.locator('.record-stage').isVisible(), true);
         assert.equal(await page.locator('#record-empty-help').isVisible(), false);
-        assert.equal(await page.locator('#record-phase-label').textContent(), 'ETAPA DO PROJETO');
+        assert.equal(await page.locator('#record-phase-label').textContent(), 'ETAPA GERAL DO PROJETO');
         if (state === 'stale') assert.match(await page.locator('#workspace-phase').textContent(), /Etapa no Forge \(desatualizada\)/);
         assert.equal(await page.locator('#record-state').textContent(), stateNames[state]);
         assert.equal(await page.locator('#progress-result').getAttribute('data-state'), state);
         assert.equal(await page.locator('#record-phase').textContent(), 'Descoberta');
+        assert.equal(await page.locator('#record-activity-label').textContent(), state === 'completed' ? 'Resultado registrado' : state === 'abandoned' ? 'Último registro' : 'Agora');
+        if (state === 'completed') assert.match(await page.locator('#record-phase-help').textContent(), /Este trabalho foi concluído; a etapa geral pode continuar aqui/);
         assert.equal(await page.locator('#record-outcome').textContent(), 'Accepted outcome');
         assert.equal(await page.locator('#record-next').textContent(), 'Recorded next step');
         assert.match(await page.locator('#record-decisions').textContent(), /1 decisão em aberto/);
