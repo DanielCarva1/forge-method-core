@@ -260,13 +260,12 @@
             <div id="record-suggested" hidden><strong>Perguntas que o Forge sugere agora</strong><ul id="record-suggestions"></ul></div>
             <p class="hint">Perguntas sugeridas agora não são acordos. Converse com seu agente antes de tomar uma decisão.</p>
           </div>
-          <section id="record-direction-card" class="record-direction-card" aria-labelledby="record-direction-heading" hidden>
-            <p class="eyebrow">DIREÇÃO NO REGISTRO</p>
-            <h4 id="record-direction-heading">Existe uma direção registrada</h4>
-            <p class="hint">O agente registrou esta direção no Forge; isso não comprova sua aprovação. Você pode pedir uma explicação antes de conferir o texto original.</p>
-            <button id="explain-direction" type="button">Entender esta direção na conversa</button>
+          <details id="record-direction-card" class="record-direction-card" hidden>
+            <summary>Objetivo registrado</summary>
+            <p class="hint">O agente registrou este objetivo no Forge; isso não comprova sua aprovação. Você pode pedir uma explicação antes de conferir o texto original.</p>
+            <button id="explain-direction" type="button">Pedir uma explicação na conversa</button>
             <details id="record-direction" class="record-direction">
-              <summary>Ver direção original, combinados e origem</summary>
+              <summary>Ver texto registrado e detalhes</summary>
               <p id="record-revision" class="hint"></p>
               <p class="hint">Este texto veio do registro do Forge, feito por um agente. Ele não comprova aprovação humana independente. Se não representar sua intenção, peça uma correção na conversa.</p>
               <div class="record-detail"><strong>Direção registrada</strong><p id="record-direction-outcome"></p></div>
@@ -275,9 +274,9 @@
               <div id="record-uncertainties" class="record-detail" hidden><strong>O que ainda está em aberto</strong><ul id="record-uncertainties-list"></ul></div>
               <p class="hint">O conteúdo aparece no idioma em que foi registrado; seu agente pode explicá-lo na conversa.</p>
             </details>
-          </section>
+          </details>
           <details id="direction-history" class="record-direction">
-            <summary>Histórico de direções</summary>
+            <summary>Histórico do objetivo</summary>
             <p class="hint">Veja o que foi registrado como direção atual ou anterior. Sugestões e perguntas ainda não decididas não aparecem como acordos.</p>
             <button id="refresh-direction-history" type="button" disabled>Consultar histórico</button>
             <p id="direction-history-status" role="status" aria-live="polite">Abra esta seção para consultar o histórico.</p>

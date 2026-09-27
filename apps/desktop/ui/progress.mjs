@@ -223,10 +223,12 @@ async function loadProgress() {
       ? 'Resultado registrado' : data.status === 'abandoned' ? 'Último registro' : 'Agora';
     workspacePhase.textContent = data.status === 'absent'
       ? direction ? 'Direção registrada; próximo trabalho pendente' : 'Sem andamento registrado'
-      : data.status === 'stale' ? `Etapa no Forge (desatualizada): ${phase[0]}` : `Etapa no Forge: ${phase[0]}`;
+      : data.status === 'stale' ? `Etapa do projeto (desatualizada): ${phase[0]}` : `Etapa do projeto: ${phase[0]}`;
     workspacePhase.hidden = false;
     const directionPanel = document.getElementById('record-direction');
-    document.getElementById('record-direction-card').hidden = !direction;
+    const directionCard = document.getElementById('record-direction-card');
+    directionCard.hidden = !direction;
+    directionCard.open = false;
     directionPanel.open = false;
     if (direction) {
       document.getElementById('record-revision').textContent = direction.revision_kind === 'initial'

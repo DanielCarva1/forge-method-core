@@ -6568,3 +6568,39 @@ or a full project journey in 0.1.23. **Next exact step:** progress the full
 nontechnical journey by testing the highest-impact remaining real-user gap
 without surfacing windows on the maintainer's active desktop. Do not resend
 the already completed disposable change request. Keep the goal active.
+
+### Quieter real-project record — 2026-09-27
+
+Read-only hidden native inspection of the **installed public 0.1.23** reopened
+the existing real Codex conversation in the disposable personal-ideas project,
+opened its final HTML result, and prepared a same-chat change request without
+sending. The composer received focus and was visible in the viewport. The
+first run of an older test fixture failed because it expected the *previous*
+page heading; setting the already-known current heading made the readback
+pass. No product failure, duplicate send, or file change was inferred from
+that stale test expectation. Screenshots:
+`C:/ForgeFast/forge-0123-real-journey-readback-20260927.png` and
+`C:/ForgeFast/forge-0123-change-composer-20260927.png`.
+
+Visual comparison with `design/references/conversation-approved.png` showed
+that the record exposed an additional long explanation of the agent-recorded
+objective in the default view. The source UI now keeps that supporting
+material behind **Objetivo registrado**, with the agent-origin/no-human-
+approval caveat visible on expansion and the original text one further
+expansion away. The project stage and recorded activity/next step remain
+visible; the stage badge now says **Etapa do projeto** rather than exposing
+Forge terminology. The history disclosure says **Histórico do objetivo**.
+The browser tests check collapsed-by-default, expansion, refresh reset and
+the absence of fabricated agreement; the native read-only test checks the
+real Forge objective, preview, composer focus/visibility and zero sends.
+
+**PASS:** `node --check` on touched scripts, `git diff --check`, full browser
+UI suite, incremental offline Desktop debug build, and hidden native real-chat
+readback against the debug build. The installed/public 0.1.23 **does not**
+contain this record simplification. No Rust source change or provider-model
+turn was made. No subagents were used; per-task BRL and Pro-quota impact remain
+UNKNOWN. **Next exact step:** review and commit this UI/readback slice, then
+continue the full nontechnical journey. Bundle it with a coherent later alpha
+rather than claiming an installer update from a source commit. The real
+fresh-account login, clean-machine setup and safe positive browser launch
+remain unverified.

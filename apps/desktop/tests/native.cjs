@@ -291,7 +291,7 @@ async function operatePreviewDialog(page, file) {
         assert.equal(await page.locator('#record-work').isVisible(), false);
         assert.equal(await page.locator('#record-direction').isVisible(), false);
       } else {
-        assert.match(recordedPhase, /Etapa no Forge:/);
+        assert.match(recordedPhase, /Etapa do projeto:/);
         assert.ok((await page.locator('#record-outcome').textContent()).length > 0);
         assert.ok((await page.locator('#record-title').textContent()).length > 0);
         assert.ok((await page.locator('#record-next').textContent()).length > 0);
@@ -304,11 +304,12 @@ async function operatePreviewDialog(page, file) {
         assert.equal(await page.locator('#record-next').isVisible(), true, 'Recorded next step must be visible without opening details');
         assert.equal(await page.locator('#record-outcome').isVisible(), false, 'Supporting details begin collapsed');
         assert.match(await page.locator('#record-decisions').textContent(), /neste acompanhamento/);
-        assert.equal(await page.locator('#record-direction').isVisible(), true);
         assert.equal(await page.locator('#record-direction-card').isVisible(), true);
+        assert.equal(await page.locator('#record-direction-card').evaluate(node => node.open), false);
         assert.equal(await page.locator('#record-direction-outcome').isVisible(), false, 'Long native record wording must be optional reading');
-        assert.equal(await page.getByRole('button', { name: 'Entender esta direção na conversa' }).isVisible(), true);
         if (process.env.FORGE_RECORD_COLLAPSED_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_RECORD_COLLAPSED_SCREENSHOT });
+        await page.locator('#record-direction-card > summary').click();
+        assert.equal(await page.getByRole('button', { name: 'Pedir uma explicação na conversa' }).isVisible(), true);
         await page.locator('#record-direction summary').click();
         assert.ok((await page.locator('#record-direction-outcome').textContent()).length > 0);
         assert.ok((await page.locator('#record-revision').textContent()).length > 0);

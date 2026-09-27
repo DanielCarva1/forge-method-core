@@ -269,9 +269,8 @@ summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 6
 .record-question { margin-top: 20px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--canvas); }
 .record-direction-card { margin-top: 20px; padding: 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--preview-wash); }
 .record-direction-card[hidden] { display: none; }
-.record-direction-card .eyebrow { margin: 0; }
-.record-direction-card h4 { margin: 4px 0 8px; }
-.record-direction-card > p:not(.eyebrow) { margin: 8px 0; overflow-wrap: anywhere; }
+.record-direction-card > summary { color: var(--ink); padding-block: 0; }
+.record-direction-card > p { margin: 12px 0; overflow-wrap: anywhere; }
 .record-direction, .record-pending { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--line); }
 .record-direction-card .record-direction { margin-top: 12px; }
 .record-direction summary { color: var(--ink); }

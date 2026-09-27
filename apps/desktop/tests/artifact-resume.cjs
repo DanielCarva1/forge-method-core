@@ -9,7 +9,7 @@ const assert = require('node:assert/strict');
 const profile = process.env.FORGE_ARTIFACT_PROFILE;
 const project = process.env.FORGE_ARTIFACT_PROJECT;
 const executable = process.env.FORGE_DESKTOP_EXE;
-const heading = process.env.FORGE_ARTIFACT_HEADING || 'Jardim de ideias';
+const heading = process.env.FORGE_ARTIFACT_HEADING || 'Jardim de ideias renovado';
 if (!profile || !project || !executable) throw new Error('Set FORGE_ARTIFACT_PROFILE, FORGE_ARTIFACT_PROJECT and FORGE_DESKTOP_EXE');
 
 (async () => {
@@ -68,6 +68,16 @@ if (!profile || !project || !executable) throw new Error('Set FORGE_ARTIFACT_PRO
     assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
     await page.frameLocator('#preview-site').getByRole('heading', { name: heading, exact: true }).waitFor({ timeout: 20000 });
     assert.match(await page.locator('.preview-origin').first().textContent(), /Publicação não verificada/);
+    if (process.env.FORGE_EXPECT_RECORDED_OBJECTIVE === '1') {
+      const recordedObjective = page.locator('#record-direction-card');
+      assert.equal(await recordedObjective.isVisible(), true, 'The real Forge objective remains available');
+      assert.equal(await recordedObjective.evaluate(node => node.open), false, 'The first view should keep supporting record detail quiet');
+      assert.equal(await page.locator('#record-direction-outcome').isVisible(), false);
+      await recordedObjective.locator(':scope > summary').click();
+      assert.match(await recordedObjective.locator(':scope > .hint').textContent(), /não comprova sua aprovação/);
+      assert.equal(await page.getByRole('button', { name: 'Pedir uma explicação na conversa' }).isVisible(), true);
+      await recordedObjective.locator(':scope > summary').click();
+    }
     if (process.env.FORGE_EXPECT_EMPTY_RECORD_COPY === '1') {
       await page.locator('#progress-status').filter({ hasText: 'Ainda não há andamento registrado no Forge' }).waitFor({ timeout: 35000 });
       assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem andamento registrado');
@@ -78,6 +88,12 @@ if (!profile || !project || !executable) throw new Error('Set FORGE_ARTIFACT_PRO
     await page.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
     const composer = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
     assert.match(await composer.inputValue(), /site\\index\.html/);
+    assert.equal(await composer.evaluate(node => document.activeElement === node), true, 'Change request should put the person in the conversation composer');
+    assert.equal(await composer.evaluate(node => {
+      const box = node.getBoundingClientRect();
+      return box.top >= 0 && box.bottom <= innerHeight;
+    }), true, 'Change request should bring the composer into the visible viewport');
+    if (process.env.FORGE_CHANGE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_CHANGE_SCREENSHOT });
     assert.equal(await page.locator('#messages article').count(), messagesBefore + (followUpSent ? 2 : 0), 'Preparing a change must not send another turn');
     console.log(`PASS: resumed the real Codex conversation, opened its generated local HTML from ${followUpSent ? 'a bounded follow-up' : 'an existing linked'} reply, and prepared a change request without auto-sending it.`);
   } finally {

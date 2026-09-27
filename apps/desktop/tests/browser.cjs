@@ -848,7 +848,7 @@ async function openConversation(page) {
       return record.top >= 0 && record.top < innerHeight;
     }), true, 'The empty preview must leave the project record visible in the initial desktop viewport');
     assert.equal(await page.evaluate(() => window.progressCalls || 0), 1);
-    assert.equal(await page.locator('#workspace-phase').textContent(), 'Etapa no Forge: Descoberta');
+    assert.equal(await page.locator('#workspace-phase').textContent(), 'Etapa do projeto: Descoberta');
     assert.equal(await page.locator('#workspace-phase').isVisible(), true);
     assert.equal(await page.locator('#record-activity').textContent(), 'Recorded activity');
     assert.equal(await page.getByRole('group', { name: 'Atividade e próximo passo registrados' }).isVisible(), true);
@@ -897,11 +897,16 @@ async function openConversation(page) {
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Discussing an option must not choose it or send a turn');
     await questionDraft.fill('');
     assert.equal(await page.locator('#record-direction-card').isVisible(), true);
+    assert.equal(await page.locator('#record-direction-card').evaluate(node => node.open), false, 'The recorded objective should not dominate the first view');
     assert.equal(await page.locator('#record-direction-outcome').isVisible(), false, 'Technical source wording is optional reading');
     assert.equal(await page.locator('#record-direction-outcome').textContent(), 'Create a helpful app');
     assert.match(await page.locator('#record-direction-card > .hint').textContent(), /agente registrou/);
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'The quieter record must not overflow a narrow window');
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.locator('#record-direction-card > summary').click();
     await questionDraft.fill('Minha ideia original.');
-    await page.getByRole('button', { name: 'Entender esta direção na conversa' }).click();
+    await page.getByRole('button', { name: 'Pedir uma explicação na conversa' }).click();
     assert.match(await questionDraft.inputValue(), /^Minha ideia original\.\n\nExplique em português claro a direção atual/);
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Asking for a plain-language explanation prepares a draft but never sends it');
     await questionDraft.fill('');
@@ -915,6 +920,8 @@ async function openConversation(page) {
     await page.evaluate(() => { window.progressRevision = 2; window.progressRevisionKind = 'material_supersession'; window.progressConstraint = '<script>changed</script>'; window.progressRecordedPending = 1; });
     await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
+    assert.equal(await page.locator('#record-direction-card').evaluate(node => node.open), false, 'Refreshing returns long objective details to their quiet state');
+    await page.locator('#record-direction-card > summary').click();
     await page.locator('#record-direction summary').click();
     assert.match(await page.locator('#record-revision').textContent(), /Direção revista.*revisão 2/);
     assert.equal(await page.locator('#record-constraints-list li').textContent(), '<script>changed</script>');
@@ -936,7 +943,8 @@ async function openConversation(page) {
         assert.match(await page.locator('#record-empty-help').textContent(), /O objetivo está registrado.*próximo trabalho ainda não foi definido/);
         assert.equal(await page.locator('#record-empty-help').isVisible(), true);
         assert.equal(await page.locator('#record-work').isVisible(), false);
-        assert.equal(await page.locator('#record-direction').isVisible(), true);
+        assert.equal(await page.locator('#record-direction-card').isVisible(), true);
+        assert.equal(await page.locator('#record-direction').isVisible(), false);
         if (process.env.FORGE_ABSENT_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_ABSENT_SCREENSHOT, fullPage: true });
       }
       else {
@@ -944,7 +952,7 @@ async function openConversation(page) {
         assert.equal(await page.locator('.record-stage').isVisible(), true);
         assert.equal(await page.locator('#record-empty-help').isVisible(), false);
         assert.equal(await page.locator('#record-phase-label').textContent(), 'ETAPA GERAL DO PROJETO');
-        if (state === 'stale') assert.match(await page.locator('#workspace-phase').textContent(), /Etapa no Forge \(desatualizada\)/);
+        if (state === 'stale') assert.match(await page.locator('#workspace-phase').textContent(), /Etapa do projeto \(desatualizada\)/);
         assert.equal(await page.locator('#record-state').textContent(), stateNames[state]);
         assert.equal(await page.locator('#progress-result').getAttribute('data-state'), state);
         assert.equal(await page.locator('#record-phase').textContent(), 'Descoberta');
