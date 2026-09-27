@@ -1,4 +1,4 @@
-# Forge Desktop 0.1.4 alpha — candidate, not yet published
+# Forge Desktop 0.1.4 alpha — published
 
 This Windows x64 alpha update addresses first-time project setup. It is not
 a claim that every Forge core capability has a dedicated screen.
@@ -58,8 +58,20 @@ against installed 0.1.4 passed on a never-used folder and used actual
 Windows folder/file dialogs. That installed-binary smoke did not send a
 new Codex turn; the real artifact journey ran on the release executable.
 
-The installer is locally tested, not yet publicly available as 0.1.4.
-Public downloaded-asset verification is NOT_RUN. Model-specific usage and
-BRL cost remain UNKNOWN. The one-time 0.1.2 WebView startup timeout from
-the earlier upgrade fixture remains unexplained; it did not recur in this
-0.1.4 installed upgrade.
+The one-time 0.1.2 WebView startup timeout from the earlier upgrade
+fixture remains unexplained; it did not recur in this 0.1.4 installed
+upgrade. Model-specific usage and BRL cost remain UNKNOWN.
+
+## Publication readback
+
+Release: https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.4-alpha.1
+
+GitHub lists the one tested installer and its SHA-256 sidecar as uploaded
+assets. A fresh unauthenticated download returned 4,621,382 bytes with
+the exact candidate hash above. That downloaded file was silently
+installed over local 0.1.4 with exit code 0; installed version and
+executable hash still matched the values above. The disposable real
+Codex conversation from the earlier installed version was restored yet
+again with exactly one user/reply pair and no new Send. The public
+download was not used to repeat a new real artifact-to-change journey
+or a real in-flight crash.

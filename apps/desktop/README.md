@@ -3763,3 +3763,38 @@ desktop-only tag, upload only the one tested candidate and SHA sidecar,
 then download fresh public bytes, verify the hash, reinstall that exact
 download and confirm installed continuity. Do not rebuild the candidate
 or run GitHub CI for a small desktop-only update.
+
+## Desktop 0.1.4 public alpha readback — 2026-09-27
+
+The tested source was committed as
+`9c06f344e52f8065371c5fc8cfcf4ce64d77f036` on
+`codex/desktop-shell` and pushed. Annotated tag
+`desktop-v0.1.4-alpha.1` points to that source commit and was pushed.
+Release: https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.4-alpha.1.
+No GitHub CI was manually run.
+
+**PASS, public bytes and installation:** GitHub lists the one NSIS
+installer and matching SHA-256 sidecar as uploaded assets. A fresh
+unauthenticated download to `C:/ForgeFast/forge-alpha-014-public-20260927`
+returned 4,621,382 bytes with SHA-256
+`06EA9E99C22D56FE39069BC73C0FF0C45023A64FF79F064A3A361BB68B82BBDE`,
+identical to the locally tested candidate and downloaded sidecar. The
+downloaded file installed silently over local 0.1.4 with exit code 0;
+the installed product remains version 0.1.4, executable SHA-256
+`A41160EE51F9F0E91841CDDABE8D05A8EDA79DC8FD878F4CEF4D99EDF8ED1E1C`.
+The isolated real Codex pair carried through prior versions was restored
+again with no new Send. This is not a full real artifact journey on the
+publicly downloaded binary; that journey passed on the release executable
+from the same build. The published installer is unsigned and still
+requires separately installed Forge core and authenticated Codex CLI.
+
+**Open:** #92 historical decision wording lacks an authoritative core
+contract; full visual/accessibility acceptance, real mid-send crash,
+self-contained distribution and automatic update remain unfinished.
+Per-model token use and BRL cost remain UNKNOWN. No worker was used.
+
+**Next:** return to the complete nontechnical journey and its visible
+record, especially #92's authority-backed history and accessibility;
+avoid adding a duplicate decision store or treating the 0.1.4 bugfix as
+full-product completion. Package future improvements coherently, with
+focused Rust checks and native proof before publication.
