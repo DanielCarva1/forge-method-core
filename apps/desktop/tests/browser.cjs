@@ -168,6 +168,7 @@ async function openConversation(page) {
     await projectsPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     await projectsPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
     assert.equal(await projectsPage.locator('#new-conversation-choice').isHidden(), true, 'A project without a known conversation must not offer another one');
+    assert.equal(await projectsPage.locator('#resume-last-conversation').isHidden(), true, 'A project without a saved conversation must not offer a resume shortcut');
     assert.deepEqual(await projectsPage.evaluate(() => window.startCalls), ['D:\\one']);
     assert.equal(await projectsPage.locator('#project-setup').evaluate(node => node.open), false);
     assert.equal(await projectsPage.getByRole('heading', { name: 'Seu projeto' }).isVisible(), true);
@@ -318,6 +319,13 @@ async function openConversation(page) {
     assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['conversation', 'project-preview', 'project-record', 'project']);
     assert.equal(await projectsPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await projectsPage.setViewportSize({ width: 1280, height: 720 });
+    assert.equal(await projectsPage.evaluate(() => {
+      const chat = document.querySelector('.conversation').getBoundingClientRect();
+      const body = document.querySelector('.conversation-body').getBoundingClientRect();
+      const invitation = document.querySelector('.empty-conversation p').getBoundingClientRect();
+      const send = document.getElementById('send-message').getBoundingClientRect();
+      return invitation.bottom <= body.bottom - 2 && body.height >= 140 && send.bottom <= chat.bottom - 12;
+    }), true, 'A multiline draft must not clip the conversation invitation or Send at 1280x720');
     assert.equal(await projectsPage.evaluate(() => {
       const preview = document.querySelector('.preview').getBoundingClientRect();
       const record = document.querySelector('#project-record').getBoundingClientRect();
@@ -900,7 +908,7 @@ async function openConversation(page) {
         return Promise.resolve({ kind: 'text', content: 'Arquivo real do projeto', relative_path: 'result.txt', size_bytes: 23 });
       };
     });
-    const formattedReply = '# Plano\n- **Criar** uma tela\n- Mostrar `resultado`\n\n```rust\nfn main() { println!("<script>"); }\n```\n> Confirme o **resultado** antes de publicar.\n\n| Etapa | Situação | Observação |\n| --- | --- | --- |\n| Tela | `pronta` | Leia antes de publicar |\n| Arquivo | [abrir](result.txt) | Local |\n\n---\n<script>alert(1)</script>\n[arquivo](result.txt) [fora](D:/outside.md) [web](https://example.com) [abrir](javascript:alert(1))';
+    const formattedReply = '# Plano\n- **Criar** uma tela\n- Mostrar `resultado` em `site/index.html`; `https://example.com/outside.html` é apenas texto.\n\n```rust\n// site/index.html must remain code, not an action\nfn main() { println!("<script>"); }\n```\n> Confirme o **resultado** antes de publicar.\n\n| Etapa | Situação | Observação |\n| --- | --- | --- |\n| Tela | `pronta` | Leia antes de publicar |\n| Arquivo | [abrir](result.txt) | Local |\n\n---\n<script>alert(1)</script>\n[arquivo](result.txt) [fora](D:/outside.md) [web](https://example.com) [abrir](javascript:alert(1))';
     await page.evaluate(text => window.agentEvents.onmessage({ kind: 'delta', id: 'formatted-reply', text }), formattedReply.slice(0, 24));
     assert.equal(await page.locator('#messages article[data-role="agent"] h3').count(), 0);
     await page.evaluate(text => window.agentEvents.onmessage({ kind: 'message', id: 'formatted-reply', text }), formattedReply);
@@ -916,7 +924,9 @@ async function openConversation(page) {
     assert.equal(await formattedBubble.locator('hr').count(), 1);
     if (process.env.FORGE_FORMATTED_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_FORMATTED_SCREENSHOT, fullPage: true });
     assert.equal(await formattedBubble.locator('script, a[href^="javascript:"]').count(), 0);
-    assert.equal(await formattedBubble.locator('.message-file-link').count(), 3, 'Only project-file candidates become actions');
+    assert.equal(await formattedBubble.locator('.message-file-link').count(), 4, 'Only project-file candidates become actions');
+    assert.equal(await formattedBubble.getByRole('button', { name: 'Ver arquivo local: site/index.html' }).count(), 1, 'An inline-code file reference should offer the same safe preview action');
+    assert.equal(await formattedBubble.locator('code').filter({ hasText: 'https://example.com/outside.html' }).count(), 1, 'An inline-code URL must remain inert text');
     assert.match(await formattedBubble.textContent(), /\[web\]\(https:\/\/example.com\)/);
     assert.match(await formattedBubble.textContent(), /<script>alert\(1\)<\/script>/);
     await page.getByRole('button', { name: 'Ver texto original' }).click();
@@ -927,6 +937,9 @@ async function openConversation(page) {
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await page.locator('#preview-text').textContent(), 'Arquivo real do projeto');
     assert.deepEqual(await page.evaluate(() => window.linkPreviewReads[0]), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\result.txt' });
+    await formattedBubble.getByRole('button', { name: 'Ver arquivo local: site/index.html' }).click();
+    await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.linkPreviewReads[1]), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\site\\index.html' });
     await formattedBubble.getByRole('button', { name: 'Ver arquivo local: fora' }).click();
     await page.locator('#preview-status').filter({ hasText: 'não pertence ao projeto' }).waitFor();
     assert.equal(await page.locator('#preview-result').isVisible(), false);
@@ -953,6 +966,8 @@ async function openConversation(page) {
     await page.evaluate(() => window.agentEvents.onmessage({ kind: 'running' }));
     await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Histórico da conversa');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Ver arquivo local: site/index.html');
     await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Tabela da resposta');
     await page.keyboard.press('Tab');
@@ -1079,6 +1094,7 @@ async function openConversation(page) {
     await recoveryPage.goto(`${url}#projects`);
     await recoveryPage.getByRole('button', { name: 'Abrir another-project na pasta D:\\another-project' }).click();
     await recoveryPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await recoveryPage.getByRole('button', { name: 'Conferir envio anterior' }).isVisible(), true, 'An uncertain send should offer a visible read-only recovery action');
     assert.match(await recoveryPage.locator('#composer-help').textContent(), /último envio não foi confirmado/);
     await recoveryPage.getByRole('textbox', { name: 'Sua ideia começa aqui' }).fill('Do not resend without review');
     await recoveryPage.getByRole('button', { name: 'Enviar', exact: true }).click();
@@ -1087,10 +1103,18 @@ async function openConversation(page) {
     await openConversation(recoveryPage);
     await recoveryPage.locator('#agent-status').filter({ hasText: 'Retome a conversa anterior' }).waitFor();
     await recoveryPage.getByLabel('Começar outra conversa').uncheck();
-    await openConversation(recoveryPage);
+    await recoveryPage.getByRole('button', { name: 'Conferir envio anterior' }).click();
     await recoveryPage.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
     assert.equal(await recoveryPage.evaluate(key => localStorage.getItem(key), uncertainKey), null);
     assert.equal(await recoveryPage.evaluate(() => window.recoverySends), 0);
+    await recoveryPage.reload();
+    await recoveryPage.goto(`${url}#projects`);
+    await recoveryPage.getByRole('button', { name: 'Abrir another-project na pasta D:\\another-project' }).click();
+    await recoveryPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await recoveryPage.getByRole('button', { name: 'Continuar conversa anterior' }).isVisible(), true, 'A saved conversation should be visible without opening the history disclosure');
+    await recoveryPage.getByRole('button', { name: 'Continuar conversa anterior' }).click();
+    await recoveryPage.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.equal(await recoveryPage.evaluate(() => window.recoverySends), 0, 'Read-only resume must not send a new turn');
     await recoveryContext.close();
     const sendsBeforeReview = await page.evaluate(() => window.sendCalls);
     await page.getByRole('button', { name: 'Enviar', exact: true }).click();

@@ -109,6 +109,13 @@ without sending. Idle status is subdued, not removed, and the composer grows
 with longer drafts before scrolling. These are conversation-entry refinements,
 not a change to Codex history or project authority.
 
+At desktop viewport heights up to 760px, the confirmed-project conversation
+now follows normal page scrolling rather than forcing its growing draft into
+a fixed-height sticky card. This keeps the empty invitation and Send visible
+within the card; longer histories still have a bounded scroll region. Taller
+desktop windows retain the sticky conversation. The visible resume action uses
+the same minimum 48px target as the other buttons.
+
 The confirmed-project conversation now keeps that optional **Abrir conversa**
 action, the explicit new-conversation choice, and the Codex conversation picker
 inside one **Conversas e histórico** disclosure. The first visible action is
@@ -174,6 +181,21 @@ read-only page, not a growing list or nested scrolling pane. Long titles are
 visually limited to two lines but remain available to assistive technology and
 on hover. The real native capture is recorded in the desktop checkpoint; its
 conversation titles are private test data, not approved artwork.
+
+A returning project with a valid saved Codex conversation reference now offers
+**Continuar conversa anterior** in the conversation heading, without requiring
+the history disclosure. An unconfirmed previous Send changes that action to
+**Conferir envio anterior**. It reads the Codex conversation without sending
+or replaying work; the normal history disclosure still owns switching chats.
+This is a local UI shortcut, not another conversation store or an automatic
+connection. A project without a saved reference shows no shortcut.
+
+Completed agent messages also offer the existing safe local-preview action
+when a supported project file is written as inline code (for example,
+`site/index.html`), not only as a Markdown link. URLs and fenced code remain
+inert text. The native project-boundary and file-format checks still decide
+whether the file can actually be shown; this is not a claim that a referenced
+file exists or was published.
 
 ## Appearance preferences (#84, incremental)
 

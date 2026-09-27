@@ -513,6 +513,21 @@ async function operatePreviewDialog(page, file) {
           import('./message-format.mjs'), import('./preview.mjs'),
         ]);
         const fixture = document.createElement('div');
+        renderAgentMessage(fixture, 'Arquivo gerado: `result.txt`. URL: `https://example.com/outside.html`.', previewLinkedFile);
+        if (fixture.querySelectorAll('button').length !== 1) throw new Error('Only the project-file code span should become an action');
+        const action = fixture.querySelector('button');
+        if (action.getAttribute('aria-label') !== 'Ver arquivo local: result.txt') throw new Error('Missing inline-code file action');
+        document.body.append(fixture);
+        action.click();
+        fixture.remove();
+      });
+      await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
+      assert.equal(await page.locator('#preview-text').textContent(), 'updated fixture');
+      await page.evaluate(async () => {
+        const [{ renderAgentMessage }, { previewLinkedFile }] = await Promise.all([
+          import('./message-format.mjs'), import('./preview.mjs'),
+        ]);
+        const fixture = document.createElement('div');
         renderAgentMessage(fixture, '[fora](../outside-result.txt)', previewLinkedFile);
         document.body.append(fixture);
         fixture.querySelector('button').click();
@@ -556,8 +571,13 @@ async function operatePreviewDialog(page, file) {
           await page.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
           assert.match(await composer.inputValue(), /site\\index\.html/);
           assert.equal(await page.locator('#messages article[data-role="user"]').count(), 2, 'Preparing a change must not send another turn');
-          await composer.fill('');
-          console.log('PASS: real Codex-created local HTML opened from its reply in the isolated preview and returned an unsent change request to the same conversation.');
+          await composer.fill('Altere apenas site/index.html neste mesmo projeto: mude o título visível da página para "Jardim de ideias renovado". Não use JavaScript, rede nem publicação.');
+          await page.getByRole('button', { name: 'Enviar', exact: true }).click();
+          await page.locator('#messages article[data-role="agent"]').nth(2).waitFor({ timeout: 180000 });
+          await page.locator('#agent-status').filter({ hasText: 'Resposta recebida' }).waitFor({ timeout: 180000 });
+          assert.match(await readFile(generatedFile, 'utf8'), /Jardim de ideias renovado/);
+          assert.equal(await page.locator('#messages article[data-role="user"]').count(), 3);
+          console.log('PASS: real Codex-created local HTML opened in the isolated preview and changed after a follow-up in the same conversation.');
         }
         await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
         await page.locator('#agent-status').filter({ hasText: 'Desconectado' }).waitFor({ timeout: 10000 });

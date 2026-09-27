@@ -47,7 +47,11 @@ async function availablePort() {
     if (!browser) throw new Error('Native WebView did not become available');
     const context = browser.contexts()[0];
     const page = context.pages()[0] || await context.waitForEvent('page', { timeout: 5000 });
-    await page.locator('#home').waitFor({ state: 'visible' });
+    try { await page.locator('#home').waitFor({ state: 'visible', timeout: 30000 }); }
+    catch (error) {
+      console.error('Upgrade startup diagnostics:', { url: page.url(), pages: context.pages().map(item => item.url()), body: (await page.locator('body').textContent().catch(() => 'unavailable'))?.slice(0, 400) });
+      throw error;
+    }
     await page.locator('nav a[data-route="workspace"]').click();
     await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(project);
     await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();

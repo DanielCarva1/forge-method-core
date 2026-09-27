@@ -39,7 +39,7 @@ public static class ForgeHiddenNativeTest {
   [DllImport("kernel32.dll")] public static extern uint WaitForSingleObject(IntPtr handle, uint milliseconds);
   [DllImport("kernel32.dll")] public static extern bool GetExitCodeProcess(IntPtr handle, out uint code);
   [DllImport("kernel32.dll")] public static extern bool CloseHandle(IntPtr handle);
-  public static uint Run(string exe, string runner) {
+  public static uint Run(string exe, string runner, uint timeoutMs) {
     var name = "ForgeHidden-" + Guid.NewGuid().ToString("N");
     var desktop = CreateDesktop(name, null, IntPtr.Zero, 0, 0x10000000, IntPtr.Zero);
     if (desktop == IntPtr.Zero) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
@@ -52,7 +52,7 @@ public static class ForgeHiddenNativeTest {
         throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
       CloseHandle(process.hThread);
       try {
-        if (WaitForSingleObject(process.hProcess, 300000) != 0) throw new Exception("Hidden native test timed out");
+        if (WaitForSingleObject(process.hProcess, timeoutMs) != 0) throw new Exception("Hidden native test timed out");
         uint code; GetExitCodeProcess(process.hProcess, out code); return code;
       } finally { CloseHandle(process.hProcess); }
     } finally { CloseDesktop(desktop); }
@@ -62,7 +62,8 @@ public static class ForgeHiddenNativeTest {
 
 try {
   $powershell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-  $code = [ForgeHiddenNativeTest]::Run($powershell, $runner)
+  $timeoutMs = if ($env:FORGE_TEST_ARTIFACT_JOURNEY -eq '1') { [uint32]480000 } else { [uint32]300000 }
+  $code = [ForgeHiddenNativeTest]::Run($powershell, $runner, $timeoutMs)
   Get-Content -LiteralPath $log
   if ($code -ne 0) { throw "Native hidden smoke failed with exit code $code" }
 } finally {

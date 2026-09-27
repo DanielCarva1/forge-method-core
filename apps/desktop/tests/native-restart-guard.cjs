@@ -98,6 +98,7 @@ if (!process.env.FORGE_DESKTOP_EXE || !process.env.FORGE_TEST_PROJECT) {
     page = browser.contexts()[0].pages()[0] || await browser.contexts()[0].waitForEvent('page', { timeout: 5000 });
     await openProject(page);
     assert.equal(await page.evaluate(key => localStorage.getItem(key), markerKey), 'controlled-native-thread');
+    assert.equal(await page.getByRole('button', { name: 'Conferir envio anterior' }).isVisible(), true);
     await interceptCodex(page, false);
     const composer = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
     await composer.fill('Do not replay the pending send');
@@ -108,7 +109,7 @@ if (!process.env.FORGE_DESKTOP_EXE || !process.env.FORGE_TEST_PROJECT) {
     await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
     assert.match(await page.locator('#agent-status').textContent(), /Retome a conversa anterior/);
     await page.getByLabel('Começar outra conversa').uncheck();
-    await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
+    await page.getByRole('button', { name: 'Conferir envio anterior' }).click();
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
     assert.equal(await page.evaluate(key => localStorage.getItem(key), markerKey), null);
     assert.match(await page.locator('#messages').textContent(), /Controlled history for review/);

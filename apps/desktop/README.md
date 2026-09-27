@@ -1,7 +1,7 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.1` is a published alpha prerelease;
-newer `0.1.2` work remains local and unpublished. It does not require Codex Desktop. A Codex CLI adapter supports
+Independent Tauri application. Desktop `0.1.2` is the published alpha
+prerelease. Newer UI work remains local and unpublished. It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
 
@@ -3441,3 +3441,194 @@ and no automatic updater/signature. Codex CLI and `forge-core` are still
 separate dependencies. Per-model token count and BRL cost are UNKNOWN. Next
 development slice should target a coherent remaining UI journey, not rebuild
 or republish this verified `0.1.2` package for each small edit.
+
+## Desktop next-goal slice: visible conversation recovery — 2026-09-27
+
+The maintainer set a new ongoing objective: make the Windows desktop journey
+understandable end-to-end for a nontechnical person, from choosing a folder
+through conversation, real result preview, a change request in the same chat,
+and recovery after restart. Mobile and self-contained distribution follow as
+separate later steps. The first bounded slice addresses #93's recovery entry:
+the app already stored a project-scoped Codex conversation bookmark and could
+resume read-only, but hid that action inside a closed **Conversas e histórico**
+disclosure. A returning user instead saw an empty chat and could send before
+seeing past work.
+
+The current local source adds a visible **Continuar conversa anterior** button
+in the conversation heading only when a saved project-scoped reference exists.
+For an unconfirmed previous Send it reads **Conferir envio anterior**. Both
+reuse `connectCurrent` without sending, and the latter retains the native
+unconfirmed-send guard. No new history store, Forge record, auto-connect, or
+automatic replay was added. A project without a verified reference does not
+show the shortcut. The history disclosure remains for selecting another chat
+or starting a new one.
+
+**PASS:** the browser suite first failed on the missing visible action; after
+the source change, it passed recovery with and without an uncertain send,
+restart-like reload, no automatic Send, keyboard, long history, mobile and
+layout checks. `cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml
+-p forge-desktop --offline --locked -j2` passed with the pinned target cache.
+`native-restart-guard.cjs` then passed in the hidden native WebView with a full
+process restart: the visible shortcut resumed the same controlled thread and
+did not send. The controlled bridge does not prove a real Codex ambiguous
+delivery. No GitHub CI, installer build, commit, push or publication was done;
+the installed/public `0.1.2` is unchanged. Files touched: `ui/index.html`,
+`ui/chat.mjs`, `ui/styles.css`, `tests/browser.cjs`,
+`tests/native-restart-guard.cjs`, and this checkpoint. One primary executor,
+no subagents. Per-model usage and BRL cost for this slice are UNKNOWN.
+
+**Next smallest step:** inspect the real result-to-change journey (#91) from
+the user's perspective and close one concrete remaining gap, with a focused
+native proof. Do not infer full UI completion or issue closure from this
+recovery shortcut alone.
+
+## Desktop next-goal slice: find a real result from a Codex reply — 2026-09-27
+
+Issue #91's local preview already opened an agent-supplied Markdown file link
+and validated it natively against the confirmed project. A real Codex artifact
+attempt in the preceding alpha had required an extra no-tools follow-up just
+to obtain a Markdown link. Source inspection showed that completed replies
+formatted inline-code references such as `site/index.html` as inert code,
+despite using the same safe path parser for explicit links. This was a
+discoverability gap, not a missing preview engine.
+
+The current local source reuses `message-format.mjs`'s local-file action for
+supported inline-code paths in completed agent messages. URLs, ordinary
+non-path code, and fenced code remain inert. Clicking still goes through
+`previewLinkedFile` and the native project/file validation; it does not infer
+that the file exists or has been published. No new path parser, file store,
+network navigation or privileged preview access was added. `tests/browser.cjs`
+first failed because only the original three link actions existed, then passed
+with the inline-code action, safe URL handling, keyboard order and project
+path readback. A pinned offline desktop debug build and the full hidden native
+smoke passed; its controlled native inline-code action reopened a real local
+file, while the external URL produced no action. The native smoke did not
+send a new real Codex turn; an uninterrupted real artifact-to-change round
+trip with this local source is still **NOT_RUN**.
+
+Files additionally touched: `ui/message-format.mjs`, `tests/native.cjs`,
+`design/README.md`, and this checkpoint. One primary executor; no subagents.
+No installer, commit, push or publication. The installed/public `0.1.2` is
+unchanged. Per-model token usage and BRL cost remain UNKNOWN.
+
+**Next smallest step:** run a bounded hidden native end-to-end exercise with
+one real artifact turn, inspect the result and prepare/send a change request
+in the same Codex conversation. If that path is nondeterministic or hangs,
+record the limit and repair only an observed product defect; do not add a
+second chat or preview authority to paper over test instability.
+
+## Desktop real result-to-change journey — 2026-09-27
+
+The next bounded test ran headlessly in an isolated native WebView and a fresh
+disposable project. Real Codex created `site/index.html`; the app opened it
+from the completed reply in the isolated local preview. The preview's
+**Pedir mudança neste arquivo** action prepared a draft without sending it.
+The test then sent a specific edit request, received the next reply in the
+same visible conversation, and read back the changed title from the actual
+file. After disconnect and WebView reload, the same chat's messages were
+restored without another Send. **PASS** for this exercised path. The first
+test run stopped at the prepared draft; the second run added and passed the
+actual follow-up and file readback. Both used the hidden native runner and
+the local debug executable; no visible app window was brought forward.
+
+This does not establish that arbitrary Codex outputs will contain a suitable
+path, that all generated sites render correctly, or that a mid-send crash is
+exactly-once. The folder picker response in this smoke was simulated; its
+separate real-dialog evidence remains in the earlier checkpoint. The test now
+allows a longer timeout only when the real artifact journey is explicitly
+enabled. No GitHub CI, installer, commit, push, or publication was done. The
+installed/public `0.1.2` remains unchanged. Usage by model and BRL cost for
+this run are **UNKNOWN**; a PASS must not be used as a savings estimate.
+
+**Next:** review the remaining product-visible gap in #92's historical
+decision details and the end-to-end UX against the approved design, then
+prepare a coherent alpha package once the integrated state merits it.
+
+## Desktop short-window conversation review — 2026-09-27
+
+Reviewed current Home, Explore, confirmed conversation and recorded-history
+screens in headless browser captures against the approved conversation board.
+Home and Explore retain the approved botanical/palette direction. A concrete
+defect appeared at 1280×720 with a multiline draft: the fixed-height sticky
+chat card compressed the empty invitation so its last line was clipped by the
+composer border. A geometry assertion failed before the fix. The CSS now
+lets the confirmed chat card use normal page scrolling at desktop heights up
+to 760px and gives its history a 150px minimum; taller windows keep the
+existing sticky layout. The visible resume button also meets the documented
+48px target. The same browser suite then passed, and the after-capture shows
+the invitation and Send fully inside the card. A fresh pinned offline debug
+build and hidden native smoke passed; the latter covered native WebView,
+project onboarding, Forge readback and local previews, but did **not** send a
+new real Codex turn. No GitHub CI was run for this UI-only edit.
+
+Issue #92 remains **PARTIAL**: the app displays accepted objective revisions,
+current lifecycle phase, pending counts and suggested questions separately.
+The backend `workflow report` decision audit currently supplies policy and
+alternative references, status and ledger digests, not user-facing wording
+for every historical resolution. No resolved choice was relabeled into an
+invented plain-language agreement. That needs an authority-backed projection
+before the complete decisions view can be claimed. Browser captures are
+controlled-data layout evidence, not native data proof. Local changes remain
+uncommitted and unpublished; public `0.1.2` is unchanged. Model usage and BRL
+cost remain **UNKNOWN**.
+
+**Next:** identify a safe authority-backed way to show accepted and revised
+decision details for #92, or document the precise missing contract and move
+the integrated UI package toward the next alpha without pretending #92 is
+done. Keep package, installed-app and publication evidence separate.
+
+## Desktop 0.1.3 local installed-candidate gate — 2026-09-27
+
+The #92 audit confirmed the current core replacement decision history
+contains `policy_ref`, `decision_ref`, unresolved/resolved status, ledger
+digests, sequence and optional `selected_alternative_ref`, but not immutable
+user-facing question/choice wording. The live report on this repository had
+zero decision-history records. Current simulation questions cannot safely be
+reconstructed as historical agreements. Therefore #92 remains PARTIAL;
+desktop did not add a duplicate decision store or display invented wording.
+
+The coherent UI package was versioned to `0.1.3` in the desktop manifest,
+lockfile and Tauri config. `RELEASE_NOTES-0.1.3.md` describes the changes and
+limits. **PASS before packaging:** offline locked desktop `cargo check`, 10
+focused progress tests, all 43 desktop Rust tests, eight Node tests,
+`cargo fmt --check`, strict desktop Clippy, browser UI suite including the
+1280×720 clipping regression, and `git diff --check`. A single offline NSIS
+build produced
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.3_x64-setup.exe`
+at 4,623,640 bytes with SHA-256
+`6F5CDE59A85393BBAB77394739E8D5FA4271E4C88856593683069BDD25464EAB`.
+The release executable reports version 0.1.3 and passed hidden native smoke
+plus the controlled full-process uncertain-send restart guard. The latter
+does not prove a real mid-send crash.
+
+**PASS for local installed upgrade:** a first attempt to start the existing
+installed 0.1.2 WebView in a disposable upgrade profile timed out before
+Home appeared. No Codex turn was sent. An unchanged retry with diagnostics
+passed and created exactly one real Codex user/reply pair in
+`C:/ForgeFast/forge-upgrade-012-to-013-20260927-project`, using the retained
+isolated profile beside it. No Forge Desktop process was running when the
+installer hash was rechecked and the exact candidate installed silently
+over 0.1.2. Installer exit was 0; the installed executable at
+`%LOCALAPPDATA%/Forge/forge-desktop.exe` reports 0.1.3 and SHA-256
+`6F3193CF8B4F11BB29FE4A8355AB1BB1996E1DD14F1B08E96D05222C739A9E77`.
+That installed executable restored the old-version pair without sending
+another turn. Its hidden native smoke passed project onboarding, actual
+Windows folder and file dialogs, real Forge record readback, local previews,
+project switching and appearance. The transient WebView-start cause is
+unknown; do not erase it from release evidence.
+
+The public `0.1.2` release is unchanged; `0.1.3` is installed locally but
+has **not** been committed, pushed, tagged or published. A public download
+and byte-for-byte comparison are NOT_RUN. The earlier real artifact-to-
+change test ran on the same source in a local debug build, not on installed
+0.1.3. No per-model token counts or BRL cost can be attributed; UNKNOWN.
+One primary executor, no workers. Changed source lives in `ui/chat.mjs`,
+`ui/index.html`, `ui/message-format.mjs`, `ui/styles.css`; related browser,
+native/restart/upgrade tests, design/readme notes and version files changed.
+
+**Next:** review the integrated diff and release text, then decide whether
+the accepted publication authorization covers this exact 0.1.3 content.
+If publishing, commit/push once, tag with the desktop-only prefix (not the
+core `v*` trigger), upload only the already-tested installer and matching
+sidecar, then download fresh bytes and recheck hash and installed behavior.
+Do not run GitHub CI for each small desktop change.

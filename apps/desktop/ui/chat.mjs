@@ -29,6 +29,7 @@ const projectSetup = byId('project-setup');
 const projectResultHint = byId('project-result-hint');
 const conversationStep = byId('conversation-step');
 const emptyDescription = byId('empty-conversation-description');
+const resumeLastConversation = byId('resume-last-conversation');
 let project = null;
 let connected = false;
 let busy = false;
@@ -45,6 +46,7 @@ let listCursor = null;
 let pageNumber = 0;
 let pageCursors = [null];
 let hasPreviousConversation = false;
+let hasResumableConversation = false;
 const sessionReferences = new Map();
 const unconfirmedSends = new Map(); // Project key -> Codex thread ID; no message copy.
 const referenceKey = () => JSON.stringify([project.project_id, project.project_root]);
@@ -78,6 +80,13 @@ function updateComposerHelp() {
           : 'Pronto para conversar. Você continua no controle das mudanças.';
 }
 
+function updateResumeAction() {
+  resumeLastConversation.hidden = !project || connected || !hasResumableConversation || messages.childElementCount > 0;
+  resumeLastConversation.disabled = transitioning;
+  if (project) resumeLastConversation.textContent = unconfirmedSends.has(referenceKey())
+    ? 'Conferir envio anterior' : 'Continuar conversa anterior';
+}
+
 function controls() {
   const focused = document.activeElement;
   connect.disabled = transitioning || connected || !project;
@@ -101,7 +110,10 @@ function controls() {
   conversationStep.textContent = project ? 'SUA CONVERSA' : 'PASSO 2 · SUA CONVERSA';
   emptyDescription.textContent = connected
     ? 'Sua conversa está pronta. Conte o que você quer criar ou melhorar.'
+    : hasResumableConversation
+      ? 'Você pode ler a conversa anterior antes de continuar. Isso não envia mensagens.'
     : 'Conte o que você quer criar ou melhorar. Uma dúvida também é um bom começo.';
+  updateResumeAction();
   updateComposerHelp();
   accessNote.hidden = !project;
   byId('project-root').disabled = transitioning || connected;
@@ -122,15 +134,20 @@ export function setProject(value) {
   }
   conversationStep.textContent = project ? 'SUA CONVERSA' : 'PASSO 2 · SUA CONVERSA';
   hasPreviousConversation = false;
+  hasResumableConversation = false;
   newConversation.checked = false;
   if (project) {
-    try { hasPreviousConversation = !!(sessionReferences.get(referenceKey()) ?? readReference(localStorage, project)); }
+    try {
+      hasResumableConversation = !!(sessionReferences.get(referenceKey()) ?? readReference(localStorage, project));
+      hasPreviousConversation = hasResumableConversation;
+    }
     catch { hasPreviousConversation = true; } // Keep the explicit new-conversation escape hatch.
     try {
       const uncertainThread = readUnconfirmedSend(localStorage, project);
       if (uncertainThread) unconfirmedSends.set(referenceKey(), uncertainThread);
     } catch { if (!unconfirmedSends.has(referenceKey())) unconfirmedSends.set(referenceKey(), null); } // Unreadable marker fails closed.
     if (unconfirmedSends.has(referenceKey())) hasPreviousConversation = true;
+    if (unconfirmedSends.get(referenceKey())) hasResumableConversation = true;
   }
   listGeneration++;
   listPending = false;
@@ -151,6 +168,10 @@ export function setProject(value) {
   previousConversations.disabled = true;
   newConversationChoice.hidden = connected || !project || !hasPreviousConversation;
   updateComposerHelp();
+  emptyDescription.textContent = hasResumableConversation
+    ? 'Você pode ler a conversa anterior antes de continuar. Isso não envia mensagens.'
+    : 'Conte o que você quer criar ou melhorar. Uma dúvida também é um bom começo.';
+  updateResumeAction();
   accessNote.hidden = !project;
   if (!connected && !transitioning) showStatus(project
     ? 'Projeto pronto. Escreva sua ideia; a conversa abre quando você enviar.'
@@ -354,6 +375,7 @@ async function connectCurrent(explicitThreadId = null) {
     } finally { restoringHistory = false; }
     sessionReferences.set(referenceKey(), conversation.thread_id);
     hasPreviousConversation = true;
+    hasResumableConversation = true;
     let saved = true;
     try { saveReference(localStorage, project, conversation.thread_id); } catch { saved = false; }
     newConversation.checked = false;
@@ -378,6 +400,11 @@ async function connectCurrent(explicitThreadId = null) {
 }
 
 connect.addEventListener('click', () => connectCurrent());
+resumeLastConversation.addEventListener('click', () => {
+  if (!project || connected || transitioning || !hasResumableConversation) return;
+  newConversation.checked = false;
+  void connectCurrent();
+});
 
 byId('message-form').addEventListener('submit', async event => {
   event.preventDefault();

@@ -8,6 +8,20 @@ function localPreviewPath(value) {
   return path;
 }
 
+function fileAction(path, label, onLocalFile, inlineCode = false) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'message-file-link';
+  button.setAttribute('aria-label', `Ver arquivo local: ${label}`);
+  if (inlineCode) {
+    const code = document.createElement('code');
+    code.textContent = label;
+    button.append(code);
+  } else button.textContent = label;
+  button.addEventListener('click', () => onLocalFile(path));
+  return button;
+}
+
 function appendInline(parent, value, onLocalFile) {
   const tokens = /\*\*[^*\n]+\*\*|`[^`\n]+`|\[[^\]\n]{1,120}\]\([^)\n]{1,1024}\)/g;
   let offset = 0;
@@ -20,20 +34,19 @@ function appendInline(parent, value, onLocalFile) {
       const label = match[0].slice(1, separator);
       const path = localPreviewPath(match[0].slice(separator + 2, -1));
       if (path && onLocalFile) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'message-file-link';
-        button.textContent = label;
-        button.setAttribute('aria-label', `Ver arquivo local: ${label}`);
-        button.addEventListener('click', () => onLocalFile(path));
-        parent.append(button);
+        parent.append(fileAction(path, label, onLocalFile));
         formatted = true;
       } else parent.append(document.createTextNode(match[0]));
     } else {
       const code = match[0].startsWith('`');
-      const element = document.createElement(code ? 'code' : 'strong');
-      element.textContent = match[0].slice(code ? 1 : 2, code ? -1 : -2);
-      parent.append(element);
+      const label = match[0].slice(code ? 1 : 2, code ? -1 : -2);
+      const path = code && onLocalFile ? localPreviewPath(label) : null;
+      if (path) parent.append(fileAction(path, label, onLocalFile, true));
+      else {
+        const element = document.createElement(code ? 'code' : 'strong');
+        element.textContent = label;
+        parent.append(element);
+      }
       formatted = true;
     }
     offset = tokens.lastIndex;
