@@ -87,6 +87,8 @@ export function renderAgentMessage(target, raw, onLocalFile) {
   let paragraph = [];
   let list = null;
   let formatted = false;
+  let firstHeadingDepth = null;
+  let previousHeadingLevel = 2;
   function flushParagraph() {
     if (!paragraph.length) return;
     const node = document.createElement('p');
@@ -169,7 +171,12 @@ export function renderAgentMessage(target, raw, onLocalFile) {
     const heading = line.match(/^ {0,3}(#{1,3})[ \t]+(.+)$/);
     if (heading) {
       flushParagraph(); closeList(); formatted = true;
-      const node = document.createElement(`h${heading[1].length + 2}`);
+      const depth = heading[1].length;
+      firstHeadingDepth ??= depth;
+      const intendedLevel = Math.min(5, Math.max(3, 3 + depth - firstHeadingDepth));
+      const level = Math.min(intendedLevel, previousHeadingLevel + 1);
+      previousHeadingLevel = level;
+      const node = document.createElement(`h${level}`);
       appendInline(node, heading[2], onLocalFile);
       fragment.append(node);
       continue;

@@ -73,9 +73,12 @@ async function operatePreviewDialog(page, file) {
       const { renderAgentMessage } = await import('./message-format.mjs');
       const content = document.createElement('div');
       renderAgentMessage(content, '# Resultado\n- **Item** seguro\n```txt\n<script>não executar</script>\n```\n> Revise o **resultado**.\n| Arquivo | Estado |\n| --- | --- |\n| tela.html | pronta |');
-      return { heading: content.querySelector('h3')?.textContent, item: content.querySelector('li strong')?.textContent, code: content.querySelector('pre code')?.textContent, quote: content.querySelector('blockquote')?.textContent, rows: content.querySelectorAll('table tbody tr').length, scripts: content.querySelectorAll('script').length };
+      const result = { heading: content.querySelector('h3')?.textContent, item: content.querySelector('li strong')?.textContent, code: content.querySelector('pre code')?.textContent, quote: content.querySelector('blockquote')?.textContent, rows: content.querySelectorAll('table tbody tr').length, scripts: content.querySelectorAll('script').length };
+      renderAgentMessage(content, '## Primeiro título\n### Detalhe\n# Outro assunto\n### Sem nível intermediário');
+      result.levels = [...content.querySelectorAll('h3, h4, h5')].map(node => node.tagName);
+      return result;
     });
-    assert.deepEqual(formatted, { heading: 'Resultado', item: 'Item', code: '<script>não executar</script>', quote: 'Revise o resultado.', rows: 1, scripts: 0 });
+    assert.deepEqual(formatted, { heading: 'Resultado', item: 'Item', code: '<script>não executar</script>', quote: 'Revise o resultado.', rows: 1, scripts: 0, levels: ['H3', 'H4', 'H3', 'H4'] });
     console.log('PASS: native WebView formats completed-response structure without executing agent HTML (controlled fixture).');
     await page.locator('nav a[data-route="explore"]').click();
     await page.locator('#explore').waitFor({ state: 'visible' });
@@ -250,12 +253,13 @@ async function operatePreviewDialog(page, file) {
           console.log(`PASS: native picker resumed the exact selected real Codex thread with ${await page.locator('#messages article').count()} messages and no send.`);
         } else await page.locator('#conversation-picker summary').click();
       }
-      await page.locator('#progress-status').filter({ hasText: /Consultado às|Não foi possível consultar/ }).waitFor({ timeout: 35000 });
+      // The desktop record query has a 90-second bound for large projects.
+      await page.locator('#progress-status').filter({ hasText: /Consultado às|Não foi possível consultar/ }).waitFor({ timeout: 105000 });
       let progressStatus = await page.locator('#progress-status').textContent();
       if (/Não foi possível consultar/.test(progressStatus)) {
         console.log('PARTIAL: automatic Forge record lookup failed on first attempt; native error:', await page.evaluate(() => window.progressReadErrors));
         await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
-        await page.locator('#progress-status').filter({ hasText: /Consultado às|Não foi possível consultar/ }).waitFor({ timeout: 35000 });
+        await page.locator('#progress-status').filter({ hasText: /Consultado às|Não foi possível consultar/ }).waitFor({ timeout: 105000 });
         progressStatus = await page.locator('#progress-status').textContent();
       }
       assert.match(progressStatus, /Consultado às/, 'Native Forge record lookup must succeed, not merely finish');
@@ -278,6 +282,10 @@ async function operatePreviewDialog(page, file) {
         assert.equal(await page.locator('#record-outcome').isVisible(), false, 'Supporting details begin collapsed');
         assert.match(await page.locator('#record-decisions').textContent(), /neste registro/);
         assert.equal(await page.locator('#record-direction').isVisible(), true);
+        assert.equal(await page.locator('#record-direction-card').isVisible(), true);
+        assert.equal(await page.locator('#record-direction-outcome').isVisible(), false, 'Long native record wording must be optional reading');
+        assert.equal(await page.getByRole('button', { name: 'Entender esta direção na conversa' }).isVisible(), true);
+        if (process.env.FORGE_RECORD_COLLAPSED_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_RECORD_COLLAPSED_SCREENSHOT });
         await page.locator('#record-direction summary').click();
         assert.ok((await page.locator('#record-direction-outcome').textContent()).length > 0);
         assert.ok((await page.locator('#record-revision').textContent()).length > 0);

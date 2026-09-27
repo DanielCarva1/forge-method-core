@@ -208,7 +208,7 @@ async function loadProgress() {
     workspacePhase.hidden = false;
     const direction = data.accepted_direction;
     const directionPanel = document.getElementById('record-direction');
-    directionPanel.hidden = !direction;
+    document.getElementById('record-direction-card').hidden = !direction;
     directionPanel.open = false;
     if (direction) {
       document.getElementById('record-revision').textContent = direction.revision_kind === 'initial'
@@ -249,6 +249,18 @@ document.getElementById('explain-record').addEventListener('click', () => {
   composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n\n${request}` : request;
   composer.focus();
   status.textContent = 'Pedido preparado na conversa. Revise e envie quando quiser; nada foi enviado.';
+});
+document.getElementById('explain-direction').addEventListener('click', () => {
+  if (!project || result.hidden || document.getElementById('record-direction-card').hidden) return;
+  const composer = document.getElementById('message-text');
+  if (composer.disabled) {
+    status.textContent = 'Aguarde a conversa ficar pronta para pedir uma explicação.';
+    return;
+  }
+  const request = 'Explique em português claro a direção atual que consta no registro do Forge: o objetivo, o que foi combinado e o que devemos evitar. Compare com nossa conversa; se houver diferença, avise. Não trate perguntas sugeridas como decisões aprovadas e não altere o registro sem me consultar.';
+  composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n\n${request}` : request;
+  composer.focus();
+  status.textContent = 'Pedido preparado na conversa. Revise e envie quando quiser; nada foi enviado ou alterado no registro.';
 });
 
 function validHistory(data) {

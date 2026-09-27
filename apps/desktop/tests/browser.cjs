@@ -59,9 +59,11 @@ async function openConversation(page) {
     assert.equal(await page.locator('nav a[data-route="home"]').getAttribute('aria-current'), 'page');
     await page.getByRole('link', { name: 'Continuar um projeto' }).click();
     await page.locator('#projects').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#recent-projects').getAttribute('role'), 'group');
     assert.equal(await page.locator('#projects-empty').isVisible(), true);
     await page.getByRole('link', { name: 'Abrir outro projeto' }).click();
     await page.locator('#workspace').waitFor({ state: 'visible' });
+    assert.equal(await page.getByRole('region', { name: 'Histórico da conversa' }).isVisible(), true);
     assert.equal(await page.locator('#workspace').isVisible(), true);
     assert.equal(await page.locator('#project-record').isVisible(), false, 'Do not show a record for an unconfirmed folder');
     assert.equal(await page.locator('#home').isHidden(), true);
@@ -69,6 +71,7 @@ async function openConversation(page) {
     console.log('PASS: home and workspace are distinct, reachable screens with current navigation.');
     await page.getByRole('link', { name: 'Explorar', exact: true }).click();
     await page.locator('#explore').waitFor({ state: 'visible' });
+    assert.equal(await page.getByRole('group', { name: 'Temas para explorar' }).isVisible(), true);
     assert.equal(await page.locator('#home').isHidden(), true);
     assert.equal(await page.locator('#workspace').isHidden(), true);
     assert.equal(await page.locator('nav a[data-route="explore"]').getAttribute('aria-current'), 'page');
@@ -703,10 +706,16 @@ async function openConversation(page) {
     assert.equal(await page.locator('#project-setup').evaluate(node => node.open), false);
     assert.equal(await page.getByRole('heading', { name: 'Onde estamos' }).isVisible(), true);
     await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
+    assert.equal(await page.evaluate(() => {
+      window.scrollTo(0, 0);
+      const record = document.getElementById('project-record').getBoundingClientRect();
+      return record.top >= 0 && record.top < innerHeight;
+    }), true, 'The empty preview must leave the project record visible in the initial desktop viewport');
     assert.equal(await page.evaluate(() => window.progressCalls || 0), 1);
     assert.equal(await page.locator('#workspace-phase').textContent(), 'Etapa no registro: Descoberta');
     assert.equal(await page.locator('#workspace-phase').isVisible(), true);
     assert.equal(await page.locator('#record-activity').textContent(), 'Recorded activity');
+    assert.equal(await page.getByRole('group', { name: 'Atividade e próximo passo registrados' }).isVisible(), true);
     assert.equal(await page.locator('#record-activity').isVisible(), true, 'Current recorded activity is readable without opening details');
     assert.equal(await page.locator('#record-next').isVisible(), true, 'The recorded next step is readable without opening details');
     assert.equal(await page.locator('#record-outcome').isVisible(), false, 'Supporting objective stays in optional details');
@@ -743,6 +752,15 @@ async function openConversation(page) {
     await page.getByRole('button', { name: 'Conversar sobre a opção: Start simple' }).click();
     assert.match(await questionDraft.inputValue(), /Ainda não estou escolhendo esta opção/);
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Discussing an option must not choose it or send a turn');
+    await questionDraft.fill('');
+    assert.equal(await page.locator('#record-direction-card').isVisible(), true);
+    assert.equal(await page.locator('#record-direction-outcome').isVisible(), false, 'Technical source wording is optional reading');
+    assert.equal(await page.locator('#record-direction-outcome').textContent(), 'Create a helpful app');
+    assert.match(await page.locator('#record-direction-card > .hint').textContent(), /agente registrou/);
+    await questionDraft.fill('Minha ideia original.');
+    await page.getByRole('button', { name: 'Entender esta direção na conversa' }).click();
+    assert.match(await questionDraft.inputValue(), /^Minha ideia original\.\n\nExplique em português claro a direção atual/);
+    assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Asking for a plain-language explanation prepares a draft but never sends it');
     await questionDraft.fill('');
     assert.equal(await page.locator('#record-direction').evaluate(node => node.open), false);
     await page.locator('#record-direction summary').click();
@@ -815,6 +833,7 @@ async function openConversation(page) {
     await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
     await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
     assert.equal(await page.locator('#record-direction').isVisible(), false, 'A suggestion must not become an accepted direction');
+    assert.equal(await page.locator('#record-direction-card').isVisible(), false, 'No recorded direction means no visible agreement card');
     assert.equal(await page.locator('#record-pending').isVisible(), true);
     assert.match(await page.locator('#record-pending-count').textContent(), /1 decisão pendente foi recuperada/);
     assert.match(await page.locator('#record-suggestions').textContent(), /sugestão do Forge, não uma decisão sua/);
@@ -949,6 +968,10 @@ async function openConversation(page) {
     assert.ok(await formattedBubble.locator('.message-table-scroll').evaluate(node => node.scrollWidth > node.clientWidth), 'A wide response table should scroll within its message');
     assert.ok(await formattedBubble.locator('pre').evaluate(node => parseFloat(getComputedStyle(node).fontSize) >= 18));
     await page.setViewportSize({ width: 1280, height: 720 });
+    await page.evaluate(() => window.agentEvents.onmessage({ kind: 'message', id: 'subheading-first', text: '## Primeiro título\n### Detalhe\n# Outro assunto\n### Sem nível intermediário' }));
+    assert.deepEqual(await page.locator('#messages article[data-role="agent"]').last().locator('h3, h4, h5').evaluateAll(nodes => nodes.map(node => [node.tagName, node.textContent])), [
+      ['H3', 'Primeiro título'], ['H4', 'Detalhe'], ['H3', 'Outro assunto'], ['H4', 'Sem nível intermediário'],
+    ]);
     const composer = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
     await composer.fill('🎨'.repeat(17000));
     await page.getByRole('button', { name: 'Enviar', exact: true }).click();
@@ -1007,8 +1030,8 @@ async function openConversation(page) {
     assert.match(await page.locator('#messages').textContent(), /Saved decision/);
     assert.match(await page.locator('#messages').textContent(), /Partial reply/);
     assert.equal(await page.locator('#messages article[data-role="agent"] .message-avatar img').count(), 2);
-    assert.equal(await page.locator('#messages article[data-role="agent"] h4').textContent(), 'Partial reply');
-    assert.equal(await page.locator('#messages article[data-role="agent"]').last().locator('h4').count(), 0);
+    assert.equal(await page.locator('#messages article[data-role="agent"] h3').textContent(), 'Partial reply');
+    assert.equal(await page.locator('#messages article[data-role="agent"]').last().locator('h3').count(), 0);
     assert.equal(await page.locator('#messages article[data-role="user"] .message-avatar').getAttribute('aria-hidden'), 'true');
     if (process.env.FORGE_CONVERSATION_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_CONVERSATION_SCREENSHOT, fullPage: true });
     if (process.env.FORGE_CONVERSATION_LIGHT_SCREENSHOT) {

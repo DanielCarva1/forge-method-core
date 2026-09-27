@@ -69,7 +69,7 @@
         </form>
       </div>
       <p id="category-status" class="visually-hidden" role="status" aria-live="polite"></p>
-      <div class="category-grid" aria-label="Temas para explorar">
+      <div class="category-grid" role="group" aria-label="Temas para explorar">
         <a class="category-card" href="#workspace" data-project-mode="new" data-new-project data-category="Trabalho e produtividade" data-starter="Quero conversar sobre uma ideia para facilitar meu trabalho ou organizar melhor minha rotina.">
           <span class="category-art art-work" aria-hidden="true"></span><span class="category-name">Trabalho e produtividade <span aria-hidden="true">→</span></span>
         </a>
@@ -110,7 +110,7 @@
         <a class="action-link primary" href="#workspace" data-project-mode="existing" data-open-folder>Abrir outro projeto <span aria-hidden="true">→</span></a>
       </div>
       <p id="projects-status" role="status" aria-live="polite"></p>
-      <div id="recent-projects" class="recent-projects" aria-label="Projetos abertos neste aplicativo"></div>
+      <div id="recent-projects" class="recent-projects" role="group" aria-label="Projetos abertos neste aplicativo"></div>
       <div id="projects-empty" class="projects-empty panel">
         <img src="assets/forge.png" alt="" width="56" height="56">
         <div><h2>Seu espaço começa aqui.</h2><p>Quando você conferir um projeto, ele aparecerá nesta lista para facilitar a próxima visita.</p></div>
@@ -167,12 +167,12 @@
           <p class="hint">Encontre conversas deste projeto guardadas pelo Codex neste dispositivo. Abrir uma conversa não envia mensagens nem repete ações; começar outra não apaga o histórico anterior.</p>
           <button id="find-conversations" type="button">Buscar conversas</button>
           <p id="conversation-list-status" role="status" aria-live="polite" tabindex="-1">A busca começa quando você pedir.</p>
-          <div id="conversation-list" class="conversation-list" aria-label="Conversas encontradas"></div>
+          <div id="conversation-list" class="conversation-list" role="group" aria-label="Conversas encontradas"></div>
           <div class="conversation-pages"><button id="previous-conversations" type="button" hidden>← Página anterior</button><button id="more-conversations" type="button" hidden>Próxima página →</button></div>
         </details>
         <p id="agent-status" class="status" role="status" aria-live="polite" tabindex="-1">Escolha uma pasta para começar. A conversa será aberta quando você enviar sua ideia.</p>
         <div class="conversation-body" role="region" aria-label="Histórico da conversa" tabindex="0">
-          <div id="messages" aria-label="Conversa"></div>
+          <div id="messages"></div>
           <div class="empty-conversation"><img src="assets/forge.png" alt="" width="64" height="64"><h3>Não precisa ter tudo planejado.</h3><p id="empty-conversation-description">Conte o que você quer criar ou melhorar.<br>Uma dúvida também é um bom começo.</p></div>
         </div>
         <form id="message-form">
@@ -217,7 +217,7 @@
           </div>
           <p id="record-empty-help" class="hint" hidden>Ainda não há atividade registrada. Conte na conversa o que você quer criar; o agente cuida dos passos técnicos.</p>
           <div id="record-work">
-            <div class="record-timeline" aria-label="Atividade e próximo passo registrados">
+            <div class="record-timeline" role="group" aria-label="Atividade e próximo passo registrados">
               <div class="record-timeline-item"><strong>Agora, no registro</strong><p id="record-activity"></p></div>
               <div class="record-timeline-item"><strong>Depois, no registro</strong><p id="record-next"></p></div>
             </div>
@@ -228,16 +228,22 @@
               <div class="record-question"><strong>Precisa de você?</strong><p id="record-decisions"></p></div>
             </details>
           </div>
-          <details id="record-direction" class="record-direction" hidden>
-            <summary>Direção e combinados do projeto</summary>
-            <p id="record-revision" class="hint"></p>
-            <p class="hint">Este texto veio do registro do Forge, feito por um agente. Ele não comprova aprovação humana independente. Se não representar sua intenção, peça uma correção na conversa.</p>
-            <div class="record-detail"><strong>Direção atual</strong><p id="record-direction-outcome"></p></div>
-            <div id="record-constraints" class="record-detail" hidden><strong>O que foi registrado como combinado</strong><ul id="record-constraints-list"></ul></div>
-            <div id="record-unacceptable" class="record-detail" hidden><strong>O que devemos evitar</strong><ul id="record-unacceptable-list"></ul></div>
-            <div id="record-uncertainties" class="record-detail" hidden><strong>O que ainda está em aberto</strong><ul id="record-uncertainties-list"></ul></div>
-            <p class="hint">O conteúdo aparece no idioma em que foi registrado; seu agente pode explicá-lo na conversa.</p>
-          </details>
+          <section id="record-direction-card" class="record-direction-card" aria-labelledby="record-direction-heading" hidden>
+            <p class="eyebrow">DIREÇÃO NO REGISTRO</p>
+            <h4 id="record-direction-heading">Existe uma direção registrada</h4>
+            <p class="hint">O agente registrou esta direção no Forge; isso não comprova sua aprovação. Você pode pedir uma explicação antes de conferir o texto original.</p>
+            <button id="explain-direction" type="button">Entender esta direção na conversa</button>
+            <details id="record-direction" class="record-direction">
+              <summary>Ver direção original, combinados e origem</summary>
+              <p id="record-revision" class="hint"></p>
+              <p class="hint">Este texto veio do registro do Forge, feito por um agente. Ele não comprova aprovação humana independente. Se não representar sua intenção, peça uma correção na conversa.</p>
+              <div class="record-detail"><strong>Direção registrada</strong><p id="record-direction-outcome"></p></div>
+              <div id="record-constraints" class="record-detail" hidden><strong>O que foi registrado como combinado</strong><ul id="record-constraints-list"></ul></div>
+              <div id="record-unacceptable" class="record-detail" hidden><strong>O que devemos evitar</strong><ul id="record-unacceptable-list"></ul></div>
+              <div id="record-uncertainties" class="record-detail" hidden><strong>O que ainda está em aberto</strong><ul id="record-uncertainties-list"></ul></div>
+              <p class="hint">O conteúdo aparece no idioma em que foi registrado; seu agente pode explicá-lo na conversa.</p>
+            </details>
+          </section>
           <details id="direction-history" class="record-direction">
             <summary>Histórico de direções</summary>
             <p class="hint">Veja o que foi registrado como direção atual ou anterior. Sugestões e perguntas ainda não decididas não aparecem como acordos.</p>

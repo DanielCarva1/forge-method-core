@@ -1,7 +1,8 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.3` is the published alpha
-prerelease. Subsequent work is local and unpublished. It does not require Codex Desktop. A Codex CLI adapter supports
+Independent Tauri application. Desktop `0.1.4` is the published alpha
+prerelease; the `0.1.5` candidate is installed locally but not yet published.
+It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
 
@@ -3798,3 +3799,145 @@ record, especially #92's authority-backed history and accessibility;
 avoid adding a duplicate decision store or treating the 0.1.4 bugfix as
 full-product completion. Package future improvements coherently, with
 focused Rust checks and native proof before publication.
+
+## Desktop accessibility semantics slice — 2026-09-27
+
+The active objective remains the complete, approachable Windows journey:
+choose a folder, prepare the project, converse with Codex, preview a real
+result, request changes in the same chat, and resume after restart. The
+published/installed version is still 0.1.4; this slice is local source only.
+
+**PASS, controlled browser:** a headless axe-core 4.13.0 scan of Início,
+Explorar, Meus projetos and Minha conversa found two serious invalid ARIA
+labels on unnamed generic `div` elements (project shortcuts and messages).
+The UI now gives the shortcuts, theme cards, conversation picker and recorded
+work timeline explicit group semantics, while the messages container relies
+on its already named parent conversation-history region. A repeat scan found
+zero reported violations across the four initial/empty screens, mocked
+loaded-project-with-record and loaded-text-preview states, and a mocked
+active chat in light and dark themes. The active-chat scan exposed an
+additional moderate heading-order
+problem when a Codex reply began with `##`; its formatter now starts each
+reply at the conversation's `h3` level and prevents skipped levels while
+retaining the original Markdown text. The existing controlled browser
+suite passed, including semantic and heading-order regressions, and `git diff
+--check` passed. A fresh offline locked desktop debug build passed. The hidden
+native WebView verified the same heading normalization, then a full hidden
+native smoke against a small, already-linked disposable project passed Forge
+record readback, fresh-folder onboarding, local preview, and UI behavior.
+Actual Codex conversation was NOT_RUN in this native slice. No visible app
+window opened. No Rust source changed, so Rust tests were NOT_RUN.
+
+An earlier hidden native run against the much larger Forge repository timed
+out in the test harness after 35 seconds waiting for record readback. The
+app's record-query limit is 90 seconds, so this did not establish an app
+failure. The harness wait now permits 105 seconds. A subsequent direct
+`workflow resume` on that repository completed in 6.36 seconds, and a hidden
+native smoke read its real record successfully. This establishes a passing
+retry, not the cause of the earlier delay or a guarantee against recurrence.
+
+**Limits:** the latest automated scan left 15/25/14/35/59/63/45/45
+color-contrast nodes incomplete for the initial, loaded and active-chat states because
+gradient backgrounds prevent automatic determination. Direct WCAG-style
+palette-endpoint calculations found at least 5.31:1 for muted text on the
+sampled light gradient stops and 6.56:1 for muted text on the sampled dark
+surfaces; these are not a complete pixel-level or screen-reader audit.
+Manual contrast and full screen-reader acceptance remain NOT_RUN. The
+loaded project, text preview and chat were simulated, not a native WebView
+or actual Codex response. `#92` is still partial: core audit history carries decision digests
+and references, not authoritative historical question/choice wording. Do not
+invent these from chat text or add a parallel desktop decision store.
+
+The native visual review exposed a separate readability problem: the real
+Forge objective is long, technical and in English. A first attempt to show
+its raw text prominently was rejected after a native screenshot. The current
+UI instead shows a short Portuguese notice that a direction was recorded,
+with its provenance and non-approval caveat; the original wording remains
+available on demand. “Entender esta direção na conversa” only prepares an
+editable Portuguese question in the existing Codex composer. It does not
+send, approve or change the record. The controlled browser suite passed this
+behavior, including preserving an existing draft. The current source passed
+an offline locked desktop debug build, then hidden native smoke against the
+real Forge repository: record readback, original text initially collapsed,
+new explanation action visible, existing onboarding and local preview.
+Actual Codex conversation was NOT_RUN in this slice. The screenshots and
+automated axe results are not a full visual or screen-reader acceptance.
+
+The existing core decision audit exposes digests/references rather than
+authoritative historical question and choice wording. Therefore `#92` is
+still partial; this UI change does not invent a decision history or silently
+expand the core contract. No commit, push, release, or installer in this
+slice. No workers used. Per-model token usage and BRL cost remain UNKNOWN.
+Local changes: `ui/index.html`, `ui/message-format.mjs`, `ui/progress.mjs`,
+`ui/styles.css`, `tests/browser.cjs`, `tests/native.cjs`, and this checkpoint.
+**Next:** continue the nontechnical UI review, establish the smallest
+authoritative contract for historical decisions if `#92` needs exact wording,
+then package a coherent alpha with release gates and native proof.
+
+## Desktop 0.1.5 alpha preparation — 2026-09-27
+
+A hidden native viewport capture at 1165×820 showed that the empty preview
+placeholder occupied most of the right column, leaving the useful Forge
+record below the fold. The empty preview is now a compact horizontal note;
+the existing file-loaded preview is unchanged. A controlled 1280×720 browser
+assertion requires the record to begin inside the first viewport. The full
+controlled browser suite passed. After an offline locked desktop debug build,
+the hidden native smoke against the real Forge repository passed again, and a
+new 1165×820 native screenshot shows the record heading in the first view.
+The app did not open on the user's visible desktop. Actual Codex conversation
+remains NOT_RUN for this slice.
+
+Version 0.1.5 is staged in the desktop Cargo manifest/lock and Tauri config;
+`RELEASE_NOTES-0.1.5.md` is a candidate, not a published release. The existing
+local UI/accessibility changes remain uncommitted. No NSIS candidate has been
+built, no installation/upgrade has been attempted, and public availability
+is NOT_RUN. No worker was used; model-token and BRL costs remain UNKNOWN.
+
+**Next:** run the desktop-only package gate, build one NSIS candidate, test
+that exact candidate including a real Codex artifact-to-change journey and
+upgrade continuity, then commit/push/tag and publish under the maintainer's
+standing release authorization. Keep the history/decision and distribution
+limitations in the release notes; do not run GitHub CI for this branch slice.
+
+## Desktop 0.1.5 installed candidate gate — 2026-09-27
+
+The desktop-only package source passed offline locked `cargo check`, all 44
+desktop Rust tests, eight Node tests, `cargo fmt --check`, strict desktop
+Clippy, the controlled browser suite, the headless axe scan (no reported
+violations; gradient contrast incomplete), and `git diff --check`. One pinned
+NSIS build produced
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.5_x64-setup.exe`
+at 4,620,348 bytes, SHA-256
+`F4793ABBEA90B9A951A94E48572FDDEFC2B7EC6B980C1B380D8EC0C24B9922D9`.
+A matching `.sha256` sidecar was generated. No subsequent rebuild is intended
+for this candidate.
+
+**PASS, release executable:** hidden native smoke against the real Forge
+repository and test-owned new folders passed the actual Windows folder/file
+dialogs, Forge record readback and onboarding, and a real Codex-created HTML
+page opened in the local preview. A second real turn changed the page in the
+same chat. WebView reload restored the conversation without a new Send.
+Screenshot: `C:/ForgeFast/forge-ui-audit-20260927/release-015-real-artifact.png`.
+
+**PASS, installed upgrade:** the previously installed 0.1.4 restored the
+retained disposable real Codex user/reply pair without sending. No Forge app
+process was running; the candidate hash was rechecked immediately before
+installation. Silent NSIS installation exited 0 over 0.1.4. Installed 0.1.5
+reports product/file version 0.1.5 and executable SHA-256
+`37B0BCE7D3DFD88CDEEF506C905D7BB49DBE7824ADCA94ED2339186CE886D402`.
+The same pair was restored after upgrade with no new Send. A separate hidden
+native smoke on the installed executable passed real folder/file dialogs,
+Forge onboarding, record readback and preview. Real Codex artifact creation
+was NOT_RUN on that installed binary, but passed on the release executable
+from the same build. The installer hash stayed unchanged after installation.
+
+The 0.1.5 candidate is installed locally but **not** committed, tagged or
+public. Fresh public download/byte comparison are NOT_RUN. #92 exact historical
+decision wording, manual accessibility acceptance, real in-flight crash,
+self-contained distribution and auto-update remain open. No GitHub CI or
+worker was run. Per-model token use and BRL cost are UNKNOWN.
+
+**Next:** review the integrated diff and candidate notes, commit/push once,
+push a desktop-only tag that does not trigger the core `v*` release workflow,
+upload exactly this installer and sidecar, then download fresh public bytes,
+verify the hash and installed continuity. Do not rebuild the candidate.
