@@ -200,6 +200,12 @@
           <p class="preview-origin">Arquivo local do projeto: <strong id="preview-path"></strong> · Publicação não verificada.</p>
           <button id="request-preview-change" type="button">Pedir mudança neste arquivo</button>
         </div>
+        <details id="preview-cited-files" class="preview-cited-files" hidden>
+          <summary id="preview-cited-files-summary">Arquivos citados na resposta</summary>
+          <p class="hint">Confira o arquivo que quiser. A lista vem da resposta do agente; cada arquivo é validado no projeto antes de abrir.</p>
+          <div id="preview-cited-files-list"></div>
+          <p id="preview-cited-files-more" class="hint" hidden>Outros arquivos citados continuam disponíveis no texto da conversa.</p>
+        </details>
         <div class="preview-actions"><button id="choose-preview" type="button">Escolher arquivo</button><button id="refresh-preview" type="button" disabled hidden>Atualizar prévia</button><button id="preview-source-toggle" type="button" hidden>Ver código</button></div>
       </section>
       <section class="record panel" id="project-record" aria-labelledby="record-heading" hidden>
@@ -267,7 +273,8 @@
     <iframe id="preview-dialog-site" title="Prévia visual ampliada, sem interação" sandbox="" referrerpolicy="no-referrer" tabindex="-1" hidden></iframe>
     <div id="preview-dialog-markdown" class="preview-markdown message-content" hidden></div>
     <pre id="preview-dialog-text" hidden></pre>
-    <p class="hint">Esta é uma prévia local, não uma versão publicada. Use “Mostrar mais da página” para ver sites longos, até o limite da prévia. Scripts, links e acesso à internet continuam bloqueados.</p>
+    <p class="hint">Esta é uma prévia local, não uma versão publicada.</p>
+    <p id="preview-dialog-site-note" class="hint" hidden>Use “Mostrar mais da página” para ver sites longos, até o limite da prévia. Scripts, links e acesso à internet continuam bloqueados.</p>
     <p id="preview-dialog-status" role="status" aria-live="polite"></p>
     <button id="preview-dialog-source-toggle" type="button" hidden>Ver código</button>
     <button id="request-preview-change-large" type="button" class="primary">Pedir mudança na conversa</button>

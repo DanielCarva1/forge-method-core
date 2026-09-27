@@ -186,6 +186,7 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#project-location').evaluate(node => node.open), false);
     assert.equal(await projectsPage.locator('#confirmed-root').isVisible(), false);
     await projectsPage.locator('#project-location summary').click();
+    assert.ok(await projectsPage.locator('#project-location summary').evaluate(node => node.getBoundingClientRect().height >= 48), 'Confirmed-folder disclosure keeps a 48px target');
     assert.equal(await projectsPage.locator('#confirmed-root').textContent(), 'D:\\one');
     assert.equal(await projectsPage.locator('#confirmed-root').isVisible(), true);
     await projectsPage.locator('#project-location summary').click();
@@ -222,6 +223,7 @@ async function openConversation(page) {
     assert.match(await projectsPage.locator('#preview-result').textContent(), /Publicação não verificada/);
     await projectsPage.getByRole('button', { name: 'Abrir prévia' }).click();
     assert.equal(await projectsPage.locator('#preview-dialog').isVisible(), true);
+    assert.equal(await projectsPage.locator('#preview-dialog-site-note').isVisible(), false, 'A text file must not show site-only limitations');
     assert.equal(await projectsPage.locator('#preview-dialog-text').textContent(), '<script>primeiro</script>');
     assert.equal(await projectsPage.locator('#preview-dialog script').count(), 0);
     await projectsPage.keyboard.press('Escape');
@@ -282,6 +284,7 @@ async function openConversation(page) {
     await projectsPage.getByRole('button', { name: 'Abrir prévia' }).click();
     await projectsPage.waitForFunction(() => document.querySelector('#preview-dialog-image').naturalWidth > 0);
     assert.equal(await projectsPage.locator('#preview-dialog-image').isVisible(), true);
+    assert.equal(await projectsPage.locator('#preview-dialog-site-note').isVisible(), false, 'An image must not show site-only limitations');
     await projectsPage.getByRole('button', { name: 'Fechar prévia' }).click();
     assert.equal(await projectsPage.locator('#preview-dialog').isVisible(), false);
     let externalPreviewRequests = 0;
@@ -306,6 +309,7 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#preview-text').textContent(), '<h1>Site local</h1>');
     await projectsPage.getByRole('button', { name: 'Abrir prévia' }).click();
     assert.equal(await projectsPage.locator('#preview-dialog-text').isVisible(), true);
+    assert.equal(await projectsPage.locator('#preview-dialog-site-note').isVisible(), true, 'A site must explain its restricted local preview');
     await projectsPage.getByRole('button', { name: 'Ver prévia visual' }).last().click();
     assert.equal(await projectsPage.locator('#preview-dialog-site').isVisible(), true);
     assert.equal(await projectsPage.locator('#preview-dialog-more').isVisible(), true);
@@ -613,6 +617,7 @@ async function openConversation(page) {
     await keyboardPage.keyboard.press('Shift+Tab');
     assert.equal(await keyboardPage.locator('.back-link').evaluate(node => node === document.activeElement), true);
     assert.ok(await keyboardPage.locator('.back-link').evaluate(node => parseFloat(getComputedStyle(node).outlineWidth) >= 3));
+    assert.ok(await keyboardPage.locator('nav a').first().evaluate(node => node.getBoundingClientRect().height >= 48), 'Main navigation keeps a 48px target');
     for (const selector of ['#project-setup summary', '#project-root', '#browse-project', '#start-project', '#connection summary', '#retry', '.conversation-body']) {
       await keyboardPage.keyboard.press('Tab');
       assert.equal(await keyboardPage.locator(selector).evaluate(node => node === document.activeElement), true, `Workspace keyboard order: ${selector}`);
@@ -956,6 +961,9 @@ async function openConversation(page) {
     assert.equal(await formattedBubble.locator('script, a[href^="javascript:"]').count(), 0);
     assert.equal(await formattedBubble.locator('.message-file-link').count(), 4, 'Only project-file candidates become actions');
     assert.equal(await page.locator('#preview-last-result').getAttribute('hidden'), '', 'Several distinct files must not be guessed as one result');
+    assert.equal(await page.locator('#preview-cited-files').isVisible(), true, 'Several cited files should remain individually available beside the preview');
+    await page.locator('#preview-cited-files summary').click();
+    assert.equal(await page.locator('#preview-cited-files-list button').count(), 3, 'Repeated citations should not duplicate a choice');
     assert.equal(await formattedBubble.getByRole('button', { name: 'Ver arquivo local: site/index.html' }).count(), 1, 'An inline-code file reference should offer the same safe preview action');
     assert.equal(await formattedBubble.locator('code').filter({ hasText: 'https://example.com/outside.html' }).count(), 1, 'An inline-code URL must remain inert text');
     assert.match(await formattedBubble.textContent(), /\[web\]\(https:\/\/example.com\)/);
@@ -983,6 +991,9 @@ async function openConversation(page) {
     await page.getByRole('button', { name: 'Fechar prévia' }).click();
     await page.locator('#preview-text').filter({ hasText: 'Arquivo mudado durante leitura' }).waitFor();
     assert.equal(await page.evaluate(() => window.linkPreviewReads.length), readsBeforeDialogCompletion + 1, 'Closing the dialog refreshes once');
+    await page.getByRole('button', { name: 'Conferir arquivo citado: site/index.html' }).click();
+    await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.linkPreviewReads.at(-1)), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\site\\index.html' }, 'A cited-file choice uses the same project-bound native preview');
     await formattedBubble.getByRole('button', { name: 'Ver arquivo local: fora' }).click();
     await page.locator('#preview-status').filter({ hasText: 'não pertence ao projeto' }).waitFor();
     assert.equal(await page.locator('#preview-result').isVisible(), false);
@@ -1103,6 +1114,8 @@ async function openConversation(page) {
     await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Não foi possível salvar o acesso' }).waitFor();
     assert.equal(await page.evaluate(() => window.connectedThread), null);
+    assert.equal(await page.locator('#preview-last-result').isHidden(), true, 'A new empty conversation must clear the prior file shortcut');
+    assert.equal(await page.locator('#preview-cited-files').isHidden(), true, 'A new empty conversation must clear prior cited files');
     await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
     await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
@@ -1421,6 +1434,7 @@ async function openConversation(page) {
     assert.equal(await page.locator('#project-result').isHidden(), true);
     assert.equal(await page.locator('#project-setup').evaluate(node => node.open), true);
     assert.equal(await page.locator('#messages article').count(), 0, 'Previous-project messages must not remain in the new-project view');
+    assert.equal(await page.locator('#preview-cited-files').getAttribute('hidden'), '', 'Previous-project file citations must be cleared on project switch');
     assert.equal(await page.locator('#send-message').isDisabled(), true);
     assert.match(await page.locator('#message-text').inputValue(), /artístico/i);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);

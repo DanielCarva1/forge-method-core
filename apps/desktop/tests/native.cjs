@@ -182,6 +182,9 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('#recent-projects .recent-project h2').first().textContent(), path.basename(process.env.FORGE_TEST_PROJECT));
       assert.equal(await page.locator('#recent-projects .project-icon img').first().getAttribute('src'), 'assets/forge.png');
       assert.equal(await page.locator('#workspace-back').getAttribute('href'), '#projects');
+      for (const selector of ['nav a:first-child', '#workspace-back', '#project-location summary']) {
+        assert.ok(await page.locator(selector).evaluate(node => node.getBoundingClientRect().height >= 48), `${selector} should keep a 48px native hit target`);
+      }
       assert.equal(await page.getByRole('heading', { name: 'Onde estamos' }).isVisible(), true);
       assert.equal(await page.locator('#project-record').isVisible(), true);
       assert.equal(await page.locator('.preview-empty').isVisible(), true);
@@ -440,6 +443,7 @@ async function operatePreviewDialog(page, file) {
       await page.getByRole('button', { name: 'Abrir prévia' }).click();
       assert.equal(await page.locator('#preview-dialog-text').textContent(), '<script>fixture, not executable</script>');
       assert.equal(await page.locator('#preview-dialog script').count(), 0);
+      assert.equal(await page.locator('#preview-dialog-site-note').isVisible(), false, 'Text preview should not show site-only instructions');
       await page.getByRole('button', { name: 'Fechar prévia' }).click();
       assert.equal(await page.locator('#preview-dialog').isVisible(), false);
       assert.equal(await page.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), true);
@@ -514,6 +518,7 @@ async function operatePreviewDialog(page, file) {
       await page.getByRole('button', { name: 'Ver prévia visual' }).click();
       await page.getByRole('button', { name: 'Abrir prévia' }).click();
       await page.frameLocator('#preview-dialog-site').getByRole('heading', { name: 'Prévia visual local' }).waitFor({ timeout: 20000 });
+      assert.equal(await page.locator('#preview-dialog-site-note').isVisible(), true, 'Site preview should disclose its restrictions');
       const dialogFrame = page.frameLocator('#preview-dialog-site');
       assert.equal(await dialogFrame.locator('body').evaluate(() => document.documentElement.scrollHeight > innerHeight), true, 'Long local site should overflow the enlarged preview');
       assert.equal(await page.locator('#preview-dialog-site').evaluate(node => getComputedStyle(node).pointerEvents), 'none', 'Enlarged site must not accept link clicks');

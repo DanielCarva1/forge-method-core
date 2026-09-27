@@ -63,7 +63,7 @@ async function resumeFixture(page, citation) {
     window.__TAURI__ = { ...window.__TAURI__, core: { ...native, invoke: (command, args) => {
       if (command === 'connect_agent') return Promise.resolve({ thread_id: 'controlled-result-thread', resumed: true, messages: [
         { id: 'fixture-user', role: 'user', text: 'Crie uma página para mim.' },
-        { id: 'fixture-agent', role: 'agent', text: `Aqui está: [Ver arquivo](${file}).` },
+        { id: 'fixture-agent', role: 'agent', text: Array.isArray(file) ? `Aqui estão: [Primeiro](${file[0]}) e [Segundo](${file[1]}).` : `Aqui está: [Ver arquivo](${file}).` },
       ] });
       if (command === 'disconnect_agent') return Promise.resolve();
       return native.invoke(command, args);
@@ -75,7 +75,10 @@ async function resumeFixture(page, citation) {
   if (citation === 'result.txt' && process.env.FORGE_RESULT_SHORTCUT_SCREENSHOT) {
     await page.screenshot({ path: process.env.FORGE_RESULT_SHORTCUT_SCREENSHOT });
   }
-  await page.getByRole('button', { name: 'Conferir arquivo citado' }).click();
+  if (Array.isArray(citation)) {
+    await page.locator('#preview-cited-files summary').click();
+    await page.getByRole('button', { name: `Conferir arquivo citado: ${citation[1]}` }).click();
+  } else await page.getByRole('button', { name: 'Conferir arquivo citado' }).click();
 }
 
 (async () => {
@@ -90,6 +93,7 @@ async function resumeFixture(page, citation) {
     app = await launch(process.env.FORGE_DESKTOP_EXE, profile, port);
     await openProject(app.page, project);
     await writeFile(path.join(project, 'result.txt'), 'Real local file from this project.');
+    await writeFile(path.join(project, 'second.txt'), 'Second real local file from this project.');
     await writeFile(outside, 'This file is outside the project.');
     // First process establishes the project and a resumable bookmark only.
     await resumeFixture(app.page, 'result.txt');
@@ -117,6 +121,15 @@ async function resumeFixture(page, citation) {
     await app.page.locator('#preview-status').filter({ hasText: 'não pertence ao projeto' }).waitFor();
     assert.equal(await app.page.locator('#preview-result').isHidden(), true);
     console.log('PASS: the same shortcut refused an outside-project path through native validation.');
+
+    await app.page.reload();
+    await openProject(app.page, project);
+    await resumeFixture(app.page, ['result.txt', 'second.txt']);
+    await app.page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.equal(await app.page.locator('#preview-text').textContent(), 'Second real local file from this project.');
+    assert.equal(await app.page.locator('#preview-cited-files').isVisible(), true, 'The other cited file remains available after opening one');
+    if (process.env.FORGE_MULTI_CITATIONS_SCREENSHOT) await app.page.screenshot({ path: process.env.FORGE_MULTI_CITATIONS_SCREENSHOT, fullPage: true });
+    console.log('PASS: two restored citations remain distinct and the selected file passes native project-bound preview.');
   } finally {
     await stop(app);
     const resolved = path.resolve(profile);

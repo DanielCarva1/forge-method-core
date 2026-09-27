@@ -43,6 +43,10 @@ let channel;
 const items = new Map();
 let latestItem = null;
 let lastResultPath = null;
+const citedFiles = document.getElementById('preview-cited-files');
+const citedFilesList = document.getElementById('preview-cited-files-list');
+const citedFilesMore = document.getElementById('preview-cited-files-more');
+const citedFilesSummary = document.getElementById('preview-cited-files-summary');
 let rawMessageView = false;
 let restoringHistory = false;
 let listGeneration = 0;
@@ -138,6 +142,10 @@ export function setProject(value) {
   lastResultPath = null;
   previewLastResult.hidden = true;
   previewIntro.textContent = 'Quando houver um arquivo, confira o resultado aqui.';
+  citedFiles.hidden = true;
+  citedFiles.open = false;
+  citedFilesList.replaceChildren();
+  citedFilesMore.hidden = true;
   if (!project) {
     messages.replaceChildren(); items.clear(); latestItem = null;
     rawMessageView = false;
@@ -276,12 +284,26 @@ function paintMessage(item) {
 }
 
 function updateLastResultAction() {
-  lastResultPath = project && latestItem && !latestItem.isUser && latestItem.complete && latestItem.previewPaths?.length === 1
-    ? latestItem.previewPaths[0] : null;
+  const paths = project && latestItem && !latestItem.isUser && latestItem.complete
+    ? [...new Map((latestItem.previewPaths || []).map(path => [path.replace(/\\/g, '/').toLowerCase(), path])).values()]
+    : [];
+  lastResultPath = paths.length === 1 ? paths[0] : null;
   previewLastResult.hidden = !lastResultPath;
   previewIntro.textContent = lastResultPath
     ? 'A resposta cita um arquivo. Confira-o aqui antes de pedir mudanças.'
     : 'Quando houver um arquivo, confira o resultado aqui.';
+  citedFiles.hidden = paths.length < 2;
+  citedFilesSummary.textContent = `${paths.length} arquivos citados na resposta`;
+  citedFilesMore.hidden = paths.length <= 20;
+  citedFilesList.replaceChildren(...paths.slice(0, 20).map(path => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = path;
+    button.setAttribute('aria-label', `Conferir arquivo citado: ${path}`);
+    button.addEventListener('click', () => { void previewLinkedFile(path); });
+    return button;
+  }));
+  if (paths.length < 2) citedFiles.open = false;
 }
 
 previewLastResult.addEventListener('click', () => {
@@ -400,6 +422,7 @@ async function connectCurrent(explicitThreadId = null) {
     connected = true; busy = false;
     conversationPicker.open = false;
     messages.replaceChildren(); items.clear(); latestItem = null; rawMessageView = false;
+    updateLastResultAction();
     messageView.hidden = true; messageView.textContent = 'Ver texto original';
     restoringHistory = true;
     try {

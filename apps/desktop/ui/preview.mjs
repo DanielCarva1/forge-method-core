@@ -26,6 +26,7 @@ const dialogText = document.getElementById('preview-dialog-text');
 const dialogMarkdown = document.getElementById('preview-dialog-markdown');
 const dialogSourceToggle = document.getElementById('preview-dialog-source-toggle');
 const dialogStatus = document.getElementById('preview-dialog-status');
+const dialogSiteNote = document.getElementById('preview-dialog-site-note');
 const dialogRequestChange = document.getElementById('request-preview-change-large');
 const requestChange = document.getElementById('request-preview-change');
 const composer = document.getElementById('message-text');
@@ -77,6 +78,7 @@ function clearExpanded() {
   dialogSourceToggle.hidden = true;
   dialogPath.textContent = '';
   dialogStatus.textContent = '';
+  dialogSiteNote.hidden = true;
 }
 
 function clearResult() {
@@ -242,6 +244,7 @@ export async function previewLinkedFile(candidate) {
 openPreview.addEventListener('click', () => {
   if (!project || result.hidden || pending || dialog.open) return;
   dialogPath.textContent = `Arquivo: ${pathLabel.textContent}`;
+  dialogSiteNote.hidden = !renderUrl;
   if (!image.hidden) {
     dialogImage.src = image.src;
     dialogImage.alt = image.alt;

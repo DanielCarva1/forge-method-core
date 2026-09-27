@@ -4439,3 +4439,100 @@ Forge record truth, Codex history, and local file validation separate.
 Complete manual accessibility acceptance, clean-machine core/Codex setup,
 self-contained distribution, auto-update and mobile remain open. No worker
 used in this package; model-specific tokens and BRL cost remain UNKNOWN.
+
+## Desktop preview clarity and navigation targets — 2026-09-27
+
+After the public 0.1.9 readback, a source-only UI audit found that the enlarged
+preview displayed site-specific restrictions even for plain text, Markdown and
+images. It now always states the local/unpublished boundary, while the
+site-only instructions appear only for HTML previews. Three navigation hit
+targets (main navigation, confirmed-workspace back link and confirmed-folder
+disclosure) now meet the design's 48px minimum. This changes no native command,
+preview sandbox, conversation history or Forge state.
+
+**PASS:** the controlled browser suite checks copy by preview type and hit
+targets. An offline locked Desktop-only debug build passed. The hidden native
+WebView smoke also checked these exact states on the updated source, plus real
+project onboarding and bounded local HTML preview. **NOT_RUN:** a new real
+Codex reply, manual screen-reader/contrast acceptance and a packaged update.
+The installed/public 0.1.9 installer does not include this source-only slice.
+No Rust source changed, so Rust tests were not rerun. No commit, push, version
+bump or release was made for this slice; model-specific tokens and BRL cost
+remain UNKNOWN.
+
+**Next:** continue testing the actual nontechnical result/change journey for
+a substantive gap; group source changes into a coherent alpha before the next
+installer. Keep the overall journey goal active.
+
+## Desktop multiple cited files — 2026-09-27
+
+A completed Codex reply can cite several local files. Previously the preview
+offered a shortcut only for exactly one distinct citation; otherwise the
+person had to return to the transcript or navigate the Windows file picker.
+The preview now shows a collapsed **Arquivos citados na resposta** list when
+the latest completed reply cites two or more distinct supported paths. It
+never picks a "result" automatically. Each choice uses the existing native
+project-bound `inspect_preview`; a cited outside or unavailable path still
+fails safely. The list remains available after opening one file, survives a
+restored conversation, and clears when the person switches project or starts
+a different conversation. A long list renders at most 20 choices, explicitly
+pointing back to the transcript for the rest. The transcript remains owned by
+Codex; there is no new persisted UI history or Forge record.
+
+**PASS:** browser suite covers distinct/repeated citations, native call
+arguments, clearing on new conversation/project, and existing short/long
+history behavior. Eight Node tests, syntax checks and `git diff --check`
+passed. A Desktop-only offline locked debug build and focused hidden native
+full-process restart test passed: two controlled citations reopened a real
+file through native validation; an outside path was rejected. The native
+screenshot `C:/ForgeFast/forge-multi-citations-native.png` was visually checked.
+The fixture simulates Codex history; a new real model turn was **NOT_RUN** in
+this slice. No Rust source changed or Rust tests were rerun. This and the
+preceding preview-copy slice remain uncommitted source; public/installed
+0.1.9 is unchanged. No model-specific token or BRL counters were available.
+
+**Next:** validate a larger nontechnical result/change package using a real
+Codex turn on the updated source, then prepare one coherent alpha candidate
+and installed upgrade rather than publishing every small UI edit. Manual
+screen-reader/contrast acceptance and clean-machine/self-contained setup
+remain separate work.
+
+## Desktop 0.1.10 candidate and installed upgrade — 2026-09-27
+
+The source-only preview clarity and multiple-citation changes are packaged as
+0.1.10 alpha.1. Before the metadata bump, a hidden native journey used an
+authenticated, isolated Codex CLI 0.157.1 at
+`C:/ForgeFast/forge-codex-0157/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe`.
+It initialized a disposable project, sent to real Codex, created actual
+`site/index.html`, previewed it, asked for a visible change in the same chat,
+and restored the conversation after WebView reload without another Send.
+Capture: `C:/ForgeFast/forge-0110-real-artifact-native.png`. This test did not
+exercise several citations or full process restart with real Codex; the
+controlled hidden native test covered those using native file reads.
+
+**PASS:** browser suite, eight Node tests, Desktop-only check, 17 focused
+agent tests, all 44 Desktop Rust tests, format check, strict Desktop Clippy,
+release build and the focused release-executable hidden native test. The
+first locked check after changing Cargo version could not update Cargo.lock;
+one offline non-locked check updated the local lockfile, then locked tests
+passed. No separate core workspace or manually triggered GitHub CI run.
+
+**One candidate:**
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.10_x64-setup.exe`,
+4,621,292 bytes, SHA-256
+`4327DC375F0374E14A65531E0E36335CAA4CC8551962178B83BD3A44B474F8C6`.
+Its sidecar is beside it; do not rebuild after hashing. It silently upgraded
+the local 0.1.9 installation with exit 0. Installed version is 0.1.10,
+executable SHA-256
+`2B1A87BE769DAF86A2ABD255A6A8C2089B76C86B1B7E5E0FBBFBD8254E049533`.
+The installed candidate again passed the focused hidden native full-process
+restart, multiple-citation, prepared-change and outside-path rejection test.
+The installed version did not run a fresh real Codex turn.
+
+**Next:** review source and notes, selectively commit/push, tag and publish
+the exact candidate under the maintainer's standing alpha release permission;
+then verify an unauthenticated public download and the same downloaded bytes
+on installation. Until that readback passes, 0.1.10 is installed locally but
+not publicly available. Manual screen-reader/contrast acceptance, compatible
+Codex/core setup on a clean machine, self-contained installer, auto-update
+and mobile remain unfinished. Model-specific token and BRL costs are UNKNOWN.
