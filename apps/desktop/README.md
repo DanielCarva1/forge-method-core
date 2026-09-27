@@ -1,6 +1,6 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.22` is the published alpha
+Independent Tauri application. Desktop `0.1.23` is the published alpha
 prerelease. Its exact installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
@@ -6542,3 +6542,29 @@ package, publish only the tested candidate under the maintainer's standing
 alpha authorization, then download without authentication and verify exact
 bytes and installed identity before calling it available. Keep the full
 nontechnical journey goal active.
+
+### Desktop 0.1.23 public release readback — 2026-09-27
+
+The tested package commit `0e3e1d79` was pushed. Annotated tag
+`desktop-v0.1.23-alpha.1` points to it and was pushed. The public prerelease is
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.23-alpha.1`.
+GitHub lists one 123,073,611-byte installer and its checksum sidecar. An
+unauthenticated download to
+`C:/ForgeFast/forge-alpha-0123-public-20260927/Forge_0.1.23_x64-setup.exe`
+matched the exact tested candidate SHA-256
+`EA27A6081F8F3A4F4318487833C08F624FDE606F2A5A9E94DA08F11EA1C1818A`;
+the downloaded sidecar matched too. Silent installation of those downloaded
+bytes returned exit 0. Installed app version reads 0.1.23 and executable hash
+matches candidate readback:
+`F362B88D44F9DDDB0DD7D6B8CB4CCF0CF91D90AF98DCFBF880E260CF3EEB2076`.
+The installed app again passed hidden native shortcut search and exact Forge
+project revalidation without sending a message. No manual GitHub CI or real
+provider-model turn was run.
+
+This proves public installer availability and installed-byte continuity for
+the tested Windows machine, not clean-machine setup, real new-account login
+completion, positive default-browser launch, manual accessibility acceptance,
+or a full project journey in 0.1.23. **Next exact step:** progress the full
+nontechnical journey by testing the highest-impact remaining real-user gap
+without surfacing windows on the maintainer's active desktop. Do not resend
+the already completed disposable change request. Keep the goal active.

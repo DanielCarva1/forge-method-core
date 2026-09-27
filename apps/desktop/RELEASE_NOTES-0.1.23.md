@@ -20,4 +20,4 @@ For a new or returning project, the app now says that the person can start **or 
 
 ## Candidate
 
-The single tested candidate is `Forge_0.1.23_x64-setup.exe`, 123,073,611 bytes, SHA-256 `EA27A6081F8F3A4F4318487833C08F624FDE606F2A5A9E94DA08F11EA1C1818A`. The installed executable SHA-256 is `F362B88D44F9DDDB0DD7D6B8CB4CCF0CF91D90AF98DCFBF880E260CF3EEB2076`; the bundled Forge core remains pinned at 0.13.2, SHA-256 `CFD6F81B1710D0469A53D12B374258CC122676EA7865F26926B1CDB4C7541EDF`. This local candidate is not publicly available until a release and an exact-byte download check succeed.
+The single tested candidate is `Forge_0.1.23_x64-setup.exe`, 123,073,611 bytes, SHA-256 `EA27A6081F8F3A4F4318487833C08F624FDE606F2A5A9E94DA08F11EA1C1818A`. The installed executable SHA-256 is `F362B88D44F9DDDB0DD7D6B8CB4CCF0CF91D90AF98DCFBF880E260CF3EEB2076`; the bundled Forge core remains pinned at 0.13.2, SHA-256 `CFD6F81B1710D0469A53D12B374258CC122676EA7865F26926B1CDB4C7541EDF`. The public installer was downloaded without authentication; its bytes and checksum sidecar matched this candidate, and those downloaded bytes installed successfully.
