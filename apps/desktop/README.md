@@ -4536,3 +4536,29 @@ on installation. Until that readback passes, 0.1.10 is installed locally but
 not publicly available. Manual screen-reader/contrast acceptance, compatible
 Codex/core setup on a clean machine, self-contained installer, auto-update
 and mobile remain unfinished. Model-specific token and BRL costs are UNKNOWN.
+
+## Desktop 0.1.10 public release readback — 2026-09-27
+
+**PASS:** source commit `53c0baaf` was pushed; annotated tag
+`desktop-v0.1.10-alpha.1` resolves to it. Public prerelease:
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.10-alpha.1`.
+GitHub's asset digest is SHA-256
+`4327DC375F0374E14A65531E0E36335CAA4CC8551962178B83BD3A44B474F8C6`
+for 4,621,292 bytes. A fresh unauthenticated download into
+`C:/ForgeFast/forge-alpha-0110-public-20260927` matched this size, hash and
+sidecar. The downloaded installer, not a rebuilt file, silently reinstalled
+with exit 0. Installed version remained 0.1.10 and executable SHA-256 remained
+`2B1A87BE769DAF86A2ABD255A6A8C2089B76C86B1B7E5E0FBBFBD8254E049533`.
+Those installed downloaded bytes passed the focused hidden native full-process
+restart, multiple-citation selection, prepared change and outside-path
+rejection test. No GitHub CI was manually started. The prior real Codex
+create/change journey used the same UI source before version metadata changed;
+it was not repeated on the downloaded installer.
+
+**Next product work:** make the nontechnical journey usable without a
+developer-provided Codex CLI override. This alpha still needs a compatible
+separate CLI and Forge core; default machine discovery may select an older CLI.
+Do not call it clean-machine or self-contained. Investigate a safe, maintainable
+setup/update path before another UI-only release. Manual screen-reader/contrast
+acceptance, auto-update and mobile remain open. Model-specific token and BRL
+costs remain UNKNOWN.
