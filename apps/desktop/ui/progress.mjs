@@ -1,6 +1,7 @@
 const button = document.getElementById('refresh-progress');
 const status = document.getElementById('progress-status');
 const result = document.getElementById('progress-result');
+const questionsShortcut = document.getElementById('record-questions-shortcut');
 const recordPanel = document.getElementById('project-record');
 const workspacePhase = document.getElementById('workspace-phase');
 const historyPanel = document.getElementById('direction-history');
@@ -90,7 +91,7 @@ function showSuggestedQuestions(values) {
       discuss.className = 'question-action';
       discuss.textContent = 'Conversar sobre esta opção';
       discuss.setAttribute('aria-label', `Conversar sobre a opção: ${option.description}`);
-      discuss.addEventListener('click', () => prepareQuestion(`Quero entender a opção "${option.description}" para a pergunta "${question}". Explique as consequências antes de eu decidir. Ainda não estou escolhendo esta opção.`, current));
+      discuss.addEventListener('click', () => prepareQuestion(`Explique em português claro a opção "${option.description}" para a pergunta "${question}" e suas consequências antes de eu decidir. Ainda não estou escolhendo esta opção.`, current));
       row.append(discuss);
       return row;
     }));
@@ -99,7 +100,7 @@ function showSuggestedQuestions(values) {
     ask.className = 'question-action';
     ask.textContent = 'Conversar sobre isso';
     ask.setAttribute('aria-label', `Conversar sobre: ${question}`);
-    ask.addEventListener('click', () => prepareQuestion(`Quero conversar sobre esta pergunta do registro: ${question}`, current));
+    ask.addEventListener('click', () => prepareQuestion(`Explique em português claro esta pergunta do registro, inclusive se ela exige uma decisão minha: ${question}`, current));
     item.append(label, note, options, ask);
     return item;
   }));
@@ -146,6 +147,7 @@ export function setProgressProject(value) {
   document.querySelector('.record-more').open = false;
   recordPanel.hidden = !value;
   result.hidden = true;
+  questionsShortcut.hidden = true;
   status.textContent = value ? 'Atualizando o andamento pelo Forge…' : 'Escolha uma pasta para ver o andamento do projeto.';
   controls();
   if (value) void loadProgress();
@@ -160,6 +162,7 @@ export function invalidateProgress() {
     result.hidden = true;
     status.textContent = 'A conversa pode ter mudado o trabalho. Atualize o andamento para conferir.';
   }
+  questionsShortcut.hidden = true;
   pending = false;
   controls();
 }
@@ -175,6 +178,7 @@ async function loadProgress() {
   resetHistory();
   const hadFocus = document.activeElement === button;
   pending = true; controls(); result.hidden = true;
+  questionsShortcut.hidden = true;
   if (hadFocus) status.focus();
   status.textContent = 'Atualizando o andamento pelo Forge…';
   const notice = setTimeout(() => {
@@ -227,6 +231,7 @@ async function loadProgress() {
     }
     const pendingPanel = document.getElementById('record-pending');
     pendingPanel.hidden = data.recorded_pending_count === 0 && data.suggested_questions.length === 0;
+    questionsShortcut.hidden = pendingPanel.hidden;
     document.getElementById('record-pending-count').textContent = data.recorded_pending_count === 0
       ? 'Nenhuma decisão pendente foi recuperada do registro.'
       : `${data.recorded_pending_count} ${data.recorded_pending_count === 1 ? 'decisão pendente foi recuperada' : 'decisões pendentes foram recuperadas'} do registro. O texto original da escolha não está disponível aqui. Peça ao agente para consultar a origem antes de decidir.`;
@@ -242,6 +247,12 @@ async function loadProgress() {
   }
 }
 button.addEventListener('click', loadProgress);
+questionsShortcut.addEventListener('click', () => {
+  if (!project || result.hidden || questionsShortcut.hidden) return;
+  const heading = document.getElementById('record-pending-heading');
+  heading.focus({ preventScroll: true });
+  heading.scrollIntoView({ block: 'start', behavior: 'smooth' });
+});
 document.getElementById('explain-record').addEventListener('click', () => {
   if (!project || result.hidden || document.getElementById('record-work').hidden) return;
   const composer = document.getElementById('message-text');

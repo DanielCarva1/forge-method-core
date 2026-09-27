@@ -89,6 +89,7 @@ async function operatePreviewDialog(page, file) {
     await page.getByRole('searchbox', { name: 'O que te interessa?' }).fill('música');
     assert.equal(await page.locator('.category-card:visible').count(), 1);
     await page.getByRole('searchbox', { name: 'O que te interessa?' }).fill('');
+    if (process.env.FORGE_EXPLORE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_EXPLORE_SCREENSHOT, fullPage: true });
     console.log('PASS: native Explore displays approved categories, foreground search, and unobscured callout.');
     await page.locator('nav a[data-route="workspace"]').click();
     await page.locator('#workspace').waitFor({ state: 'visible' });
@@ -280,6 +281,10 @@ async function operatePreviewDialog(page, file) {
       assert.ok((await page.locator('#record-phase').textContent()).length > 0);
       const recordedPhase = await page.locator('#workspace-phase').textContent();
       assert.equal(await page.locator('#workspace-phase').isVisible(), true);
+      if (await page.locator('#record-pending').isVisible()) {
+        assert.equal(await page.locator('#record-pending').evaluate(node => !!(node.compareDocumentPosition(document.getElementById('record-direction-card')) & Node.DOCUMENT_POSITION_FOLLOWING)), true,
+          'Native unresolved questions should precede optional technical direction');
+      }
       if (recordedPhase === 'Sem trabalho registrado') {
         assert.equal(await page.locator('#record-empty-help').isVisible(), true);
         assert.equal(await page.locator('#record-work').isVisible(), false);
@@ -309,6 +314,20 @@ async function operatePreviewDialog(page, file) {
         assert.match(await page.locator('#record-direction').textContent(), /não comprova aprovação humana independente/);
         assert.equal(await page.locator('#record-direction script').count(), 0);
       }
+      if (await page.locator('#record-pending').isVisible()) {
+        assert.equal(await page.locator('#record-questions-shortcut').isVisible(), true);
+        await page.locator('#record-questions-shortcut').click();
+        assert.equal(await page.evaluate(() => document.activeElement?.id), 'record-pending-heading', 'Native questions shortcut should focus the actual Forge questions');
+        if (await page.locator('#record-suggested').isVisible()) {
+          const draft = page.locator('#message-text');
+          const originalDraft = await draft.inputValue();
+          await page.locator('#record-suggestions .question-action').first().click();
+          assert.match(await draft.inputValue(), /Explique em português claro/);
+          assert.match(await draft.inputValue(), /Ainda não estou escolhendo esta opção/);
+          assert.equal(await page.locator('#messages article').count(), 0, 'Discussing a real suggested question only prepares a draft');
+          await draft.fill(originalDraft);
+        }
+      } else assert.equal(await page.locator('#record-questions-shortcut').isVisible(), false);
       if (process.env.FORGE_RECORD_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_RECORD_SCREENSHOT, fullPage: true });
       console.log(`PASS: actual bounded Forge workflow readback displayed ${recordedPhase === 'Sem trabalho registrado' ? 'its honest empty state' : 'separately from agent activity'}.`);
       if (process.env.FORGE_TEST_DIRECTION_HISTORY === '1') {
@@ -535,6 +554,10 @@ async function operatePreviewDialog(page, file) {
         console.error('Site preview diagnosis:', previewResponses, await page.evaluate(() => ({ pageUrl: location.href, src: document.querySelector('#preview-site').src, text: document.querySelector('#preview-text').textContent, status: document.querySelector('#preview-status').textContent })), await Promise.all(page.frames().map(async frame => ({ url: frame.url(), body: (await frame.locator('body').textContent().catch(() => 'unavailable'))?.slice(0, 300) }))));
         throw error;
       }
+      assert.equal(await page.locator('#preview-site-note').isVisible(), true);
+      assert.equal(await page.locator('#preview-site-note').evaluate(node => node.open), false);
+      await page.locator('#preview-site-note summary').click();
+      assert.equal(await page.locator('#preview-site-note').evaluate(node => node.open), true);
       assert.equal(await page.frameLocator('#preview-site').locator('h1').evaluate(async node => {
         const deadline = Date.now() + 5000;
         while (Date.now() < deadline) {

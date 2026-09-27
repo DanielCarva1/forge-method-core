@@ -99,6 +99,7 @@ function clearResult() {
   site.removeAttribute('src');
   site.hidden = true;
   siteNote.hidden = true;
+  siteNote.open = false;
   pathLabel.textContent = '';
 }
 

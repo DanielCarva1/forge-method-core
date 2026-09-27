@@ -313,6 +313,10 @@ async function openConversation(page) {
     await projectsPage.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await projectsPage.locator('#preview-site').isVisible(), true);
     assert.equal(await projectsPage.locator('#preview-site-note').isVisible(), true);
+    assert.equal(await projectsPage.locator('#preview-site-note').evaluate(node => node.open), false);
+    await projectsPage.locator('#preview-site-note summary').click();
+    assert.equal(await projectsPage.locator('#preview-site-note').evaluate(node => node.open), true);
+    assert.match(await projectsPage.locator('#preview-site-note p').textContent(), /imagens da internet/);
     await projectsPage.frameLocator('#preview-site').getByRole('heading', { name: 'Site local' }).waitFor();
     if (process.env.FORGE_HTML_SCREENSHOT) await projectsPage.screenshot({ path: process.env.FORGE_HTML_SCREENSHOT, fullPage: true });
     assert.equal(await projectsPage.frameLocator('#preview-site').locator('h1').evaluate(node => getComputedStyle(node).color), 'rgb(11, 80, 34)');
@@ -803,6 +807,12 @@ async function openConversation(page) {
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Explaining the record must not send a turn');
     await page.locator('#message-text').fill('');
     assert.equal(await page.locator('#record-pending').isVisible(), true);
+    assert.equal(await page.locator('#record-questions-shortcut').isVisible(), true);
+    assert.equal(await page.locator('#record-pending').evaluate(node => !!(node.compareDocumentPosition(document.getElementById('record-direction-card')) & Node.DOCUMENT_POSITION_FOLLOWING)), true,
+      'Unresolved questions should precede the optional technical direction and history');
+    await page.locator('#record-questions-shortcut').click();
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'record-pending-heading');
+    assert.equal(await page.evaluate(() => window.sendCalls), 0, 'The questions shortcut must not choose or send anything');
     assert.match(await page.locator('#record-pending').textContent(), /não são acordos/);
     assert.match(await page.locator('#record-suggestions').textContent(), /Can test sooner/);
     assert.match(await page.locator('#record-suggestions').textContent(), /sugestão do Forge, não uma decisão sua/);
@@ -821,11 +831,12 @@ async function openConversation(page) {
     const questionDraft = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
     await questionDraft.fill('Minha ideia original.');
     await page.getByRole('button', { name: 'Conversar sobre: Which direction should we choose?' }).click();
-    assert.equal(await questionDraft.inputValue(), 'Minha ideia original.\n\nQuero conversar sobre esta pergunta do registro: Which direction should we choose?');
+    assert.equal(await questionDraft.inputValue(), 'Minha ideia original.\n\nExplique em português claro esta pergunta do registro, inclusive se ela exige uma decisão minha: Which direction should we choose?');
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Preparing a suggested question must not send a turn');
     assert.match(await page.locator('#progress-status').textContent(), /nenhuma decisão foi registrada/);
     await questionDraft.fill('');
     await page.getByRole('button', { name: 'Conversar sobre a opção: Start simple' }).click();
+    assert.match(await questionDraft.inputValue(), /Explique em português claro/);
     assert.match(await questionDraft.inputValue(), /Ainda não estou escolhendo esta opção/);
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Discussing an option must not choose it or send a turn');
     await questionDraft.fill('');
@@ -895,8 +906,11 @@ async function openConversation(page) {
     assert.match(await page.locator('#record-decisions').textContent(), /não mostra decisões em aberto/);
     await page.evaluate(() => { window.progressNoDirection = true; window.progressRecordedPending = 0; window.progressSuggestedQuestions = []; });
     await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
+    await page.waitForFunction(() => document.getElementById('progress-status').textContent.includes('Consultado às')
+      && document.getElementById('record-questions-shortcut').hidden);
     assert.equal(await page.locator('#record-direction').isVisible(), false);
     assert.equal(await page.locator('#record-pending').isVisible(), false);
+    assert.equal(await page.locator('#record-questions-shortcut').isVisible(), false);
     await page.evaluate(() => {
       window.progressRecordedPending = 1;
       window.progressSuggestedQuestions = [{
@@ -922,6 +936,7 @@ async function openConversation(page) {
     await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     await page.locator('#progress-status').filter({ hasText: 'Não foi possível atualizar' }).waitFor();
     assert.equal(await page.locator('#progress-result').isVisible(), false);
+    assert.equal(await page.locator('#record-questions-shortcut').isVisible(), false);
     await page.evaluate(() => { window.progressMissingFocus = false; window.progressDecisionCount = 1; });
     await page.evaluate(() => { window.progressFailure = true; });
     await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();

@@ -1,6 +1,6 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.16` is the published alpha
+Independent Tauri application. Desktop `0.1.17` is the published alpha
 prerelease. Its exact installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
@@ -5449,3 +5449,125 @@ remaining user-facing journey gaps with native evidence. Prioritize a bounded
 real typed Decision Request in the app agent, then fresh-account/clean-machine
 first use when a suitable isolated fixture exists. Do not let this narrow
 validation displace core UI completion or create a second authority store.
+
+### Pending-question navigation review — 2026-09-27
+
+**Goal/phase:** continue the full nontechnical desktop journey after public
+0.1.17, rather than treating release verification as product completion.
+Read-only inspection of the live Forge root's `workflow resume` returned a
+current work focus, an active objective, one candidate question and no
+recovered pending decision. The installed 0.1.17 native screen showed the
+question below optional direction/history material, so a person could miss
+it while reading the large technical record. This was an observed UI ordering
+problem, not a Forge data problem. The app did not alter the root record.
+
+**Changed, uncommitted, not installed:** `ui/index.html` puts the questions
+before the technical direction/history and adds a visible-on-demand shortcut
+near the record state. `ui/progress.mjs` shows the shortcut only when Forge
+actually returns pending/suggested questions; clicking it focuses the real
+question heading without sending or choosing anything. The prepared question
+and option drafts explicitly ask the agent for clear Portuguese explanation,
+while preserving the original Forge text and saying that no option was chosen.
+`ui/styles.css` explicitly hides the shortcut when the HTML `hidden` flag is
+set; the first browser run exposed that the general `button` display rule
+otherwise overrode the hidden state. `tests/browser.cjs` and `tests/native.cjs`
+cover order, focus, absent/error states and non-sending behavior.
+
+**PASS:** browser UI suite; Desktop debug build; hidden native WebView smoke
+against the actual Forge root with a real nonempty candidate question and
+accepted direction. Native readback rendered four genuine direction revisions
+on demand in a separate read-only run. The new shortcut focused the original
+question section; discussing a real option only prepared a Portuguese draft,
+did not send a turn, and the fixture restored its earlier draft. Native empty
+and file-preview paths also passed. These are source/debug and controlled
+event tests, **not** proof that the public 0.1.17 contains the changes or that
+a real agent answered the question. No new provider tokens were consumed;
+task-specific BRL and Pro costs remain UNKNOWN.
+
+**Next exact step:** continue a purposeful UI review of the real conversation
+and result states against the approved visuals, then group any concrete fixes
+with this navigation change into a coherent next alpha. Before packaging,
+verify the native real-agent decision-request path only if its likely value
+justifies another potentially expensive Start Forge activation; do not make
+that narrow test a substitute for user-facing UI completion. Keep this goal
+active and preserve the current five-file source/test diff plus this checkpoint.
+
+The native Explore capture from the debug build was also inspected against
+`design/references/explore-approved.png`. Its eight illustrated categories,
+search, header art and open-idea action retain the approved visual language;
+no concrete Explore change was justified in this slice. Local screenshot:
+`C:/ForgeFast/forge-visual-audit-0117/explore-current.png`. A further browser
+test caught and fixed a real hidden-state regression in the new shortcut:
+the general button CSS initially displayed it even with `hidden`. The final
+browser suite and a new hidden native run against the real nonempty question
+passed after `#record-questions-shortcut[hidden]` was made explicit. The native
+run also prepared a Portuguese explanation draft from a real English Forge
+candidate without sending or selecting anything. The source diff now includes
+six files plus this checkpoint. **Next exact step:** review a representative
+conversation-with-result composition against the approved conversation art,
+then decide whether this UI package needs another concrete fix before a
+version bump and installer candidate. Public/installed 0.1.17 remains unchanged.
+
+### Result-preview hierarchy follow-up — 2026-09-27
+
+The prior real-conversation/local-result capture and current installed 0.1.17
+site-preview capture were compared with the approved conversation art. A
+concrete density issue remained: the long site-safety paragraph sat between
+the result and its change action. The source UI now keeps a visible,
+keyboard-operable “Prévia protegida: o site não é interativo” disclosure, with
+the longer restrictions available on expansion. It resets closed when a new
+file/project is selected. The protection itself is unchanged: native preview
+still blocks scripts, external requests and interaction. This is not a claim
+that the browser fixture reproduces a real agent conversation.
+
+**PASS:** browser UI suite (including disclosure, enlarged-mobile-text and
+accessibility checks); Desktop debug build; hidden native WebView smoke against
+the real Forge root and disposable local HTML, including opening the disclosure
+and checking the isolated preview. A first browser run caught the new note's
+too-small mobile text; it was corrected before the passing rerun. Screenshot:
+`C:/ForgeFast/forge-visual-audit-0117/preview-safety-expanded.png`.
+`git diff --check` passed. No Rust source or backend behavior changed, so
+workspace-wide Rust tests/CI were not run. No new provider turn or measured
+token cost occurred; BRL/Pro task attribution is UNKNOWN.
+
+**State:** seven modified files remain uncommitted and unpublished on
+`codex/desktop-shell`; public/installed 0.1.17 does not contain these UI
+changes. No subagents are active. **Next exact step:** inspect the complete
+seven-file diff and test evidence, then decide if the pending-question and
+result-preview changes form the next alpha package; if yes, bump the desktop
+version, prepare/review notes, run package-boundary checks and test one
+installer candidate before publication. The broader end-to-end objective
+remains active; a real app-agent decision request, fresh-account login,
+clean-machine install and manual accessibility are still NOT_RUN.
+
+### Desktop 0.1.18 alpha candidate — 2026-09-27
+
+The pending-question navigation and protected-result-preview disclosure are
+grouped as a single user-facing alpha package. Desktop version/lock/config
+are now 0.1.18; `RELEASE_NOTES-0.1.18.md` describes scope and limits. The
+full nontechnical folder-to-chat-to-result-to-restart goal remains active.
+
+**PASS:** browser UI suite, eight frontend unit tests, Desktop `cargo check`,
+all 49 Desktop crate tests, strict Clippy and `git diff --check`. One NSIS
+release build produced the candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.18_x64-setup.exe`,
+123,069,091 bytes, SHA-256
+`5BF97B83BEF0D96D38F70D532D76E9AB8FFEA4F5ED7D69292AF0AFF2AFE5001C`.
+Its silent installation over public 0.1.17 returned exit 0. Installed app
+version is 0.1.18 with executable SHA-256
+`305CC60D29E0B393D01CAB3BA5D4513CB81DA3784AE0635E24A5F704D879B88C`.
+Installed core and skill retain pinned SHA-256
+`CFD6F81B1710D0469A53D12B374258CC122676EA7865F26926B1CDB4C7541EDF`
+and `10581E17D5DBB98BDA3E0F3BC0B6A152736499451E1424E093DBECFAFD8F0B06`.
+Installed hidden native WebView smoke passed with real Forge root readback and
+disposable preview, without an actual Codex send. The candidate hash remained
+unchanged after installation. No manual GitHub CI ran.
+
+**NOT_RUN:** real conversation continuity across 0.1.17 to 0.1.18, real typed
+decision turn, fresh-account login, clean-machine install and manual
+accessibility. Model/API-equivalent BRL and Pro quota attributable to this
+package remain UNKNOWN. No active subagents. **Next exact step:** review the
+complete scoped diff, selectively commit/push the 0.1.18 package, and under
+the maintainer's standing release authorization publish only this tested
+installer. Verify an unauthenticated download size/hash and reinstall those
+downloaded bytes. Never rebuild after hashing merely to publish.

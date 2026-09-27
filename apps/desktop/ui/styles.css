@@ -123,6 +123,9 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 .workspace.preview-loaded .preview #preview-status { margin-block: 4px 8px; }
 .preview-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
 .preview-origin { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+.preview-safety-note { margin: 4px 0 12px; color: var(--muted); font-size: .9rem; }
+.preview-safety-note summary { min-height: 44px; padding: 8px 0; cursor: pointer; }
+.preview-safety-note .hint { margin: 2px 0 8px; }
 .preview img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--canvas); }
 .preview pre { max-width: 100%; margin: 14px 0; padding: 16px; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--line); border-radius: 16px; background: var(--canvas); font: .85rem/1.45 ui-monospace, monospace; }
 .preview-markdown { max-width: 100%; margin: 14px 0; padding: 4px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--canvas); overflow-wrap: anywhere; }
@@ -242,6 +245,8 @@ summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 6
 #progress-status { font-size: .9rem; }
 .record h4 { font-size: 1.2rem; margin: 12px 0 20px; overflow-wrap: anywhere; }
 .record-state { display: inline-block; margin: 8px 0 0; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--soft); font-weight: 700; }
+#record-questions-shortcut { margin: 8px 0 0 10px; }
+#record-questions-shortcut[hidden] { display: none; }
 .record-stage { margin: 12px 0; padding: 14px 18px; border-radius: 18px; background: var(--soft); }
 .record-stage .eyebrow { margin-bottom: 4px; }
 .record-stage h4 { margin: 0; font-size: 1.35rem; }
@@ -378,6 +383,7 @@ footer { color: var(--muted); padding-block: 8px 32px; }
   .eyebrow { font-size: 1rem; letter-spacing: .04em; }
   .intro { font-size: 1rem; }
   #progress-status, .message-bubble > strong, #project-result #confirmed-root, .workspace.project-ready .project > #project-status, .preview #preview-status, .preview-origin, .preview-empty .hint, .workspace-phase, .chat-actions #connect-help, .status[data-state="idle"], .agent-access-note { font-size: 1rem; }
+  .preview-safety-note, .preview-safety-note .hint { font-size: 1rem; }
   .conversation-body { min-height: 180px; }
   #messages article { max-width: 100%; gap: 8px; }
   .message-avatar { flex-basis: 36px; width: 36px; height: 36px; }
