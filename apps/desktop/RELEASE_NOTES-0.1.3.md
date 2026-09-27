@@ -1,4 +1,4 @@
-# Forge Desktop 0.1.3 alpha — tested local candidate, not published
+# Forge Desktop 0.1.3 alpha — published
 
 This is an alpha building-block update to the Windows x64 desktop app. It is
 not a claim that every Forge core capability has a dedicated screen.
@@ -38,8 +38,8 @@ not a claim that every Forge core capability has a dedicated screen.
   replay but does not prove delivery.
 - The real artifact-to-change exercise used a local debug build and a
   disposable project; the installed-binary checks below did not repeat that
-  Codex turn. Public downloaded-asset verification, a full accessibility
-  audit and complete visual acceptance are not yet claimed for 0.1.3.
+  Codex turn. A full accessibility audit and complete visual acceptance are
+  not yet claimed for 0.1.3.
 
 ## Verification gate
 
@@ -65,5 +65,16 @@ disposable profile passed. No Codex turn was sent by the failed attempt.
 The cause of that transient startup remains unknown. The actual Codex
 artifact-to-change test passed earlier on the local debug build, not on
 the installed 0.1.3 binary. Model-specific usage and BRL cost remain UNKNOWN.
-No 0.1.3 commit, push, tag, public release or public-download check has
-yet been made.
+
+## Publication readback
+
+Release: https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.3-alpha.1
+
+The release contains the one tested installer and its matching SHA-256
+sidecar. A fresh public download returned 4,623,640 bytes and the exact
+candidate hash above. That downloaded file was installed silently over the
+local 0.1.3 installation with exit code 0. The installed version and
+executable hash still matched the values above, and the disposable real
+Codex conversation from installed 0.1.2 was again restored with exactly
+one user/reply pair and no new Send. The installed public download was not
+used to repeat the artifact-to-change journey or a real in-flight crash.

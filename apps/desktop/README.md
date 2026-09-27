@@ -3632,3 +3632,44 @@ If publishing, commit/push once, tag with the desktop-only prefix (not the
 core `v*` trigger), upload only the already-tested installer and matching
 sidecar, then download fresh bytes and recheck hash and installed behavior.
 Do not run GitHub CI for each small desktop change.
+
+## Desktop 0.1.3 public alpha readback — 2026-09-27
+
+The integrated source was committed as
+`698946204713848b6401ae334ab835032e61afba` on
+`codex/desktop-shell` and pushed. Annotated tag
+`desktop-v0.1.3-alpha.1` points to that commit and was pushed. The public
+release is
+https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.3-alpha.1.
+No GitHub CI was manually run for this package.
+
+**PASS, published bytes:** GitHub lists the installer and SHA-256 sidecar as
+uploaded assets. A fresh unauthenticated download to
+`C:/ForgeFast/forge-alpha-013-public-20260927` returned a 4,623,640-byte
+installer with SHA-256
+`6F5CDE59A85393BBAB77394739E8D5FA4271E4C88856593683069BDD25464EAB`,
+matching the one locally tested candidate and the downloaded sidecar. The
+downloaded executable was silently installed over local 0.1.3 (exit 0);
+the installed product still reports 0.1.3 and SHA-256
+`6F3193CF8B4F11BB29FE4A8355AB1BB1996E1DD14F1B08E96D05222C739A9E77`.
+The isolated real Codex pair originally created on installed 0.1.2 was
+restored once more from the downloaded 0.1.3 installation, with exactly
+one user/reply pair and no new Send. An initial attempt at this last
+readback could not load Playwright because `PLAYWRIGHT_MODULE` was unset; it was
+rerun with the documented cached Playwright module and passed. This is a
+harness environment correction, not an app failure.
+
+**Limits:** #92 plain-language decision history remains PARTIAL; the core
+does not provide immutable question/choice text for historical decisions.
+The artifact-to-change journey passed on a local debug build, not the
+installed public binary. A real mid-send crash, full accessibility audit
+and complete visual acceptance remain NOT_RUN. The earlier one-time 0.1.2
+WebView startup timeout has no diagnosed cause. Per-model usage and BRL
+cost remain UNKNOWN. No workers were used in this package.
+
+**Next:** review #92's authoritative decision-history contract with core
+ownership before exposing any richer historical wording; continue the
+nontechnical end-to-end desktop journey and visual/accessibility review in
+one coherent, focused package. Do not imply that this published alpha is
+the full Forge product or rebuild the verified 0.1.3 installer for a docs
+follow-up.
