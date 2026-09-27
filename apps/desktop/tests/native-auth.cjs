@@ -50,6 +50,7 @@ const assert = require('node:assert/strict');
     await page.locator('#project-root').fill(project);
     await page.locator('#start-project').click();
     await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 90000 });
+    assert.match(await page.locator('#project-status').textContent(), /começar ou continuar a conversa; nada foi enviado/);
     await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 35000 });
     assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem andamento registrado');
     assert.match(await page.locator('#record-empty-help').textContent(), /Você pode começar ou continuar pela conversa/);

@@ -105,18 +105,24 @@
         <div>
           <p class="eyebrow">UM LUGAR PARA VOLTAR</p>
           <h1 id="projects-title" tabindex="-1">Meus projetos</h1>
-          <p class="intro">Volte aos projetos que você já abriu neste aplicativo.</p>
+          <p class="intro">Encontre e retome projetos abertos recentemente neste aplicativo.</p>
         </div>
         <a class="action-link primary" href="#workspace" data-project-mode="existing" data-open-folder><span id="projects-open-folder-label">Abrir outro projeto</span> <span aria-hidden="true">→</span></a>
       </div>
       <p id="projects-status" role="status" aria-live="polite"></p>
+      <div id="projects-filter-box" class="projects-filter" hidden>
+        <label for="project-filter">Encontrar um projeto</label>
+        <input id="project-filter" type="search" placeholder="Busque pelo nome ou pela pasta" autocomplete="off">
+      </div>
+      <p id="projects-filter-status" class="hint" role="status" aria-live="polite" hidden></p>
       <div id="recent-projects" class="recent-projects" role="group" aria-label="Projetos abertos neste aplicativo"></div>
+      <p id="projects-no-results" class="hint" hidden>Nenhum projeto desta lista corresponde à busca. Tente outro termo ou escolha uma pasta.</p>
       <div id="projects-empty" class="projects-empty panel">
         <img src="assets/forge.png" alt="" width="56" height="56">
         <div><h2>Seu espaço começa aqui.</h2><p>Você ainda não abriu projetos neste aplicativo. Comece com uma ideia ou escolha uma pasta para continuar um trabalho. Ela pode estar vazia ou já conter arquivos.</p></div>
         <a class="action-link primary" href="#explore">Explorar ideias <span aria-hidden="true">→</span></a>
       </div>
-      <p class="hint">Esta lista contém apenas atalhos salvos neste dispositivo. Os arquivos e as conversas dos seus projetos não ficam aqui.</p>
+      <p class="hint">Esta lista mostra até 50 atalhos recentes salvos neste dispositivo. Os arquivos e as conversas dos seus projetos não ficam aqui.</p>
     </section>
     <section id="workspace" class="screen workspace-screen" data-screen="workspace" aria-labelledby="workspace-title" hidden>
       <div class="screen-heading">

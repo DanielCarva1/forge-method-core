@@ -2,8 +2,13 @@
 import { prepareProjectSwitch } from './chat.mjs';
 import { projectDisplayName } from './project-display.mjs';
 const storageKey = 'forge.projects.v1';
+const maxRecent = 50;
 const list = document.querySelector('#recent-projects');
 const empty = document.querySelector('#projects-empty');
+const filterBox = document.querySelector('#projects-filter-box');
+const filter = document.querySelector('#project-filter');
+const filterStatus = document.querySelector('#projects-filter-status');
+const noResults = document.querySelector('#projects-no-results');
 const openFolderLabel = document.querySelector('#projects-open-folder-label');
 const status = document.querySelector('#projects-status');
 const projectRoot = document.querySelector('#project-root');
@@ -19,10 +24,10 @@ function readProjects() {
   try {
     const raw = localStorage.getItem(storageKey);
     if (!raw) return [];
-    if (raw.length > 12000) throw new Error('Too large');
+    if (raw.length > 100000) throw new Error('Too large');
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) throw new Error('Invalid list');
-    return parsed.filter(validProject).slice(0, 8);
+    return parsed.filter(validProject).slice(0, maxRecent);
   } catch {
     status.textContent = 'Não foi possível ler os atalhos deste dispositivo. Você ainda pode abrir um projeto.';
     return [];
@@ -43,8 +48,15 @@ function saveProjects() {
 function renderProjects() {
   list.replaceChildren();
   empty.hidden = projects.length > 0;
+  filterBox.hidden = projects.length === 0;
+  const query = filter.value.trim().normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('pt-BR');
+  const shown = query ? projects.filter(project =>
+    `${projectDisplayName(project)} ${project.project_root}`.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('pt-BR').includes(query)) : projects;
+  filterStatus.hidden = !query;
+  filterStatus.textContent = query ? `${shown.length} ${shown.length === 1 ? 'projeto encontrado' : 'projetos encontrados'} nesta lista.` : '';
+  noResults.hidden = projects.length === 0 || shown.length > 0;
   openFolderLabel.textContent = projects.length ? 'Abrir outro projeto' : 'Escolher uma pasta';
-  for (const project of projects) {
+  for (const project of shown) {
     const name = projectDisplayName(project);
     const card = document.createElement('article');
     card.className = 'recent-project panel';
@@ -101,12 +113,14 @@ function renderProjects() {
 
 export function rememberProject(project) {
   if (!validProject(project)) return;
+  filter.value = '';
   projects = [
     { project_id: project.project_id, project_root: project.project_root },
     ...projects.filter(item => item.project_root !== project.project_root),
-  ].slice(0, 8);
+  ].slice(0, maxRecent);
   saveProjects();
   renderProjects();
 }
 
+filter.addEventListener('input', renderProjects);
 renderProjects();

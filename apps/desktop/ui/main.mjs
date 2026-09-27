@@ -177,7 +177,7 @@ form.addEventListener('submit', async event => {
     workspaceBack.href = '#projects';
     workspaceBackLabel.textContent = 'Voltar aos projetos';
     setup.open = false;
-    projectStatus.textContent = 'Projeto pronto. Escreva sua ideia e envie para começar a conversa.';
+    projectStatus.textContent = 'Projeto pronto. Escreva para começar ou continuar a conversa; nada foi enviado.';
     if (!document.querySelector('#workspace').hidden) document.querySelector('#message-text').focus();
   } catch (error) {
     projectStatus.textContent = typeof error === 'string' ? error : 'Não foi possível conferir o projeto. Tente novamente.';

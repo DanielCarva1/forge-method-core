@@ -6475,3 +6475,35 @@ new-account login completion and positive browser launch remain unverified.
 contradiction or missing action, then package the accepted first-use changes
 together rather than publishing each copy adjustment separately. Keep the
 full journey goal active.
+
+### Searchable recent projects — 2026-09-27
+
+The active nontechnical desktop-journey goal remains in force. `Meus projetos`
+now keeps up to 50 **local shortcuts** (formerly eight), provides an
+accent-insensitive search over displayed name and folder path, shows a live
+match count and a clear no-results action, and clears the search after opening
+a project. This is not a second project registry: opening still revalidates the
+exact folder with the native Forge inspection command. The ready message now
+says the person may start **or continue** the conversation.
+
+**PASS:** `node --check` for touched scripts; `git diff --check`; full
+`node apps/desktop/tests/browser.cjs` suite, including a 60-shortcut fixture
+capped at 50, accent-insensitive and same-name-path search, no-results,
+revalidation and narrow-window overflow; incremental offline
+`cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml -p forge-desktop`;
+and `native-project-search.cjs` via `native-hidden.ps1` against the debug
+executable and a real disposable Forge project. Native readback found and
+opened that exact project without sending a message or surfacing a window.
+Visual readback: `C:/ForgeFast/forge-project-search-debug-20260927.png`.
+No Rust source or real provider turn was involved.
+
+**NOT_RUN:** this change in the publicly installed app, real fresh-account
+sign-in completion, positive default-browser launch, clean-machine install,
+manual accessibility acceptance, mobile and self-contained distribution.
+Installed/public 0.1.22 remains unchanged. This slice was executed by the
+parent without subagents; no per-model API-equivalent BRL amount or Pro-quota
+impact is defensibly attributable from the available counters. **Next exact
+step:** review this diff and prepare a coherent next alpha package containing
+the first-use wording and project-finding improvements; run package-boundary
+checks, install/update the single candidate headlessly, verify its hash and
+download before calling the new version available.

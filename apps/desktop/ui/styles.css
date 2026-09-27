@@ -79,6 +79,9 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 .projects-heading::before { content: ""; position: absolute; z-index: -1; right: 0; top: -26px; width: 470px; height: 180px; background: url("assets/explore-artwork.png") -900px 0 / 1536px 1024px no-repeat; mask-image: radial-gradient(ellipse at top right, #000 45%, transparent 82%); pointer-events: none; }
 .projects-heading .intro { margin-bottom: 0; }
 .recent-projects { display: grid; gap: 16px; }
+.projects-filter { max-width: 480px; margin-bottom: 20px; }
+.projects-filter label { display: block; font-weight: 700; margin-bottom: 8px; }
+.projects-filter input { width: 100%; padding: 10px 16px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
 .recent-project { display: flex; align-items: center; gap: 20px; }
 .project-icon { display: grid; place-items: center; flex: 0 0 56px; width: 56px; height: 56px; border-radius: 16px; background: var(--soft); }
 .project-icon img { display: block; width: 42px; height: 42px; object-fit: contain; }

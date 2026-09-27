@@ -412,6 +412,7 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('.recent-project').count(), 1);
     await projectsPage.getByRole('button', { name: 'Abrir one na pasta D:\\one' }).click();
     await projectsPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.match(await projectsPage.locator('#project-status').textContent(), /começar ou continuar a conversa; nada foi enviado/);
     assert.deepEqual(await projectsPage.evaluate(() => window.projectChecks), ['D:\\one']);
     await openProjectSetup(projectsPage);
     await projectsPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\two');
@@ -504,6 +505,45 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#send-message').isDisabled(), true);
     await projectsPage.close();
     console.log('PASS: My Projects empty state, verified shortcuts, reload, revalidation, unavailable project, removal, storage failure and narrow layout.');
+    const manyProjectsPage = await browser.newPage();
+    await manyProjectsPage.addInitScript(() => {
+      const projects = Array.from({ length: 60 }, (_, index) => ({ project_id: `project-${index}`, project_root: `D:\\work\\Project-${index}` }));
+      projects[3] = { project_id: 'cafe', project_root: 'D:\\Ideias\\Café' };
+      projects[4] = { project_id: 'shared-a', project_root: 'D:\\first\\Shared' };
+      projects[5] = { project_id: 'shared-b', project_root: 'D:\\second\\Shared' };
+      localStorage.setItem('forge.projects.v1', JSON.stringify(projects));
+      window.__TAURI__ = { core: { invoke: async (command, args) => {
+        if (command === 'app_info') return { name: 'Forge', version: '0.1.22' };
+        if (command === 'inspect_project') return { project_id: 'revalidated', project_root: args.projectRoot };
+        if (command === 'inspect_progress') return { status: 'absent', phase: '1-discovery', focus: null, accepted_direction: null, recorded_pending_count: 0, suggested_questions: [] };
+      } } };
+    });
+    await manyProjectsPage.goto(`${url}#projects`);
+    assert.equal(await manyProjectsPage.locator('.recent-project').count(), 50, 'Keep more useful recent shortcuts without claiming an unlimited registry');
+    assert.equal(await manyProjectsPage.locator('#projects-filter-box').isVisible(), true);
+    await manyProjectsPage.getByRole('searchbox', { name: 'Encontrar um projeto' }).fill('CAFE');
+    assert.equal(await manyProjectsPage.locator('.recent-project').count(), 1);
+    assert.equal(await manyProjectsPage.locator('#projects-filter-status').textContent(), '1 projeto encontrado nesta lista.');
+    assert.match(await manyProjectsPage.locator('.recent-project').textContent(), /Café/);
+    await manyProjectsPage.getByRole('searchbox', { name: 'Encontrar um projeto' }).fill('shared');
+    assert.equal(await manyProjectsPage.locator('.recent-project').count(), 2);
+    assert.match(await manyProjectsPage.locator('#recent-projects').textContent(), /D:\\first\\Shared/);
+    assert.match(await manyProjectsPage.locator('#recent-projects').textContent(), /D:\\second\\Shared/);
+    await manyProjectsPage.getByRole('searchbox', { name: 'Encontrar um projeto' }).fill('not-found');
+    assert.equal(await manyProjectsPage.locator('.recent-project').count(), 0);
+    assert.equal(await manyProjectsPage.locator('#projects-filter-status').textContent(), '0 projetos encontrados nesta lista.');
+    assert.equal(await manyProjectsPage.locator('#projects-no-results').isVisible(), true);
+    await manyProjectsPage.getByRole('searchbox', { name: 'Encontrar um projeto' }).fill('CAFE');
+    await manyProjectsPage.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await manyProjectsPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'Project search must not overflow a narrow window');
+    assert.equal(await manyProjectsPage.getByRole('searchbox', { name: 'Encontrar um projeto' }).isVisible(), true);
+    await manyProjectsPage.getByRole('button', { name: 'Abrir Café na pasta D:\\Ideias\\Café' }).click();
+    await manyProjectsPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await manyProjectsPage.locator('#confirmed-root').textContent(), 'D:\\Ideias\\Café');
+    assert.equal(await manyProjectsPage.locator('#project-filter').inputValue(), '', 'Opening a project clears an old shortcut filter');
+    assert.equal(await manyProjectsPage.evaluate(() => JSON.parse(localStorage.getItem('forge.projects.v1')).length), 50);
+    await manyProjectsPage.close();
+    console.log('PASS: 50 recent shortcuts, accent-insensitive search, distinct same-name paths, empty search and revalidated opening.');
     const conversationListPage = await browser.newPage();
     await conversationListPage.addInitScript(() => {
       window.listCalls = []; window.connectCalls = []; window.sendCalls = 0; window.failSelection = true; window.failPage = false;
