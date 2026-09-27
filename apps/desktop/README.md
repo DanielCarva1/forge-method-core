@@ -1,8 +1,8 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.5` is the published alpha
-prerelease; `0.1.6` is a tested local installer candidate and is installed
-locally, but is not yet available publicly.
+Independent Tauri application. Desktop `0.1.6` is the published and locally
+installed alpha prerelease. Its installer was downloaded back from the public
+release and verified byte-for-byte by SHA-256.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -4099,3 +4099,37 @@ tag a desktop-only release, upload exactly this installer and sidecar, then
 download the public bytes fresh, verify their hash, and confirm installed
 conversation continuity again. Do not rebuild the candidate or manually run
 GitHub CI for this branch/tag package.
+
+## Desktop 0.1.6 public alpha readback — 2026-09-27
+
+The preceding installed-candidate checkpoint records the pre-publication
+state. It is superseded by this readback. The reviewed Desktop package was
+committed as `814f47f8b1fbc520c9daa10397cf420c94d3dd30`, pushed, and
+tagged `desktop-v0.1.6-alpha.1`. The [public alpha release](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.6-alpha.1)
+contains the **same one** NSIS installer and its `.sha256` sidecar. No
+rebuild was made after the candidate test.
+
+**PASS, public bytes:** an unauthenticated download of the installer and
+sidecar to `C:/ForgeFast/forge-alpha-016-public-20260927` matched the local
+candidate: 4,623,315 bytes and SHA-256
+`CD50E95002A5D9E923E206AD86DB864732612DEE53424E711F91313A6AC0BD9D`.
+The public asset digest reported by GitHub also matches. The downloaded
+installer silently reinstalled over 0.1.6 with exit 0. The installed
+executable still reports 0.1.6 and its hash remained
+`3625F44B812D17529A23F369D52E0240BB57692A0F5ED39467EA5B7A4ED6ACFA`.
+The disposable real Codex pair originally created in installed 0.1.5 was
+restored again without a new Send. No visible application window opened.
+
+**Limits:** manual visual/contrast/screen-reader acceptance, a real
+in-flight crash and separate clean-machine core/Codex installation remain
+NOT_RUN. Forge historical decision wording remains partial (#92). The alpha
+installer is unsigned, current-user only, and has no auto-updater. GitHub CI
+was not manually run. No worker participated in this package; model-specific
+tokens and BRL cost remain UNKNOWN.
+
+**Next product slice:** inspect the current Windows UI journey against the
+approved visual references and the development plan, then choose a coherent
+screen/integration gap with an objective native acceptance test. Avoid
+inventing state or adding core complexity solely to fill a screen. Keep the
+overall nontechnical journey goal active; mobile and self-contained
+distribution are later stages.

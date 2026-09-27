@@ -1,4 +1,4 @@
-# Forge Desktop 0.1.6 alpha — candidate
+# Forge Desktop 0.1.6 alpha — published
 
 This Windows x64 alpha improves the local result-to-change loop. It does not
 claim that every Forge backend capability has a screen.
@@ -63,6 +63,18 @@ actual Windows folder and file dialogs. A new real Codex artifact turn was
 not sent from the installed binary; it passed on the release executable from
 the same build.
 
-Publication and fresh public-download verification are pending. Manual
-screen-reader/complete contrast acceptance and a real in-flight process
-crash remain NOT_RUN. Model-specific token usage and BRL cost remain UNKNOWN.
+Manual screen-reader/complete contrast acceptance and a real in-flight
+process crash remain NOT_RUN. Model-specific token usage and BRL cost remain
+UNKNOWN.
+
+## Publication readback
+
+The [0.1.6 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.6-alpha.1)
+was published from commit `814f47f8b1fbc520c9daa10397cf420c94d3dd30`.
+Its public installer is 4,623,315 bytes and has SHA-256
+`CD50E95002A5D9E923E206AD86DB864732612DEE53424E711F91313A6AC0BD9D`.
+An unauthenticated fresh download matched that hash and its published sidecar.
+The downloaded file was installed over the local 0.1.6 installation; silent
+install exited 0, and the pre-upgrade real Codex conversation was restored
+without a new Send. The installer was not rebuilt for publication. GitHub CI
+was not manually triggered.
