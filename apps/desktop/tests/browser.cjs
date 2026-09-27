@@ -1154,7 +1154,7 @@ async function openConversation(page) {
     await page.evaluate(() => { window.delayDisconnect = false; });
     await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
-    assert.match(await page.locator('#agent-status').textContent(), /Você pode continuar de onde parou/);
+    assert.match(await page.locator('#agent-status').textContent(), /última resposta foi interrompida.*Confira a conversa e os arquivos.*Nada foi reenviado/);
     assert.equal(await page.evaluate(() => window.connectedThread), 'test-thread');
     assert.match(await page.locator('#messages').textContent(), /Saved decision/);
     assert.match(await page.locator('#messages').textContent(), /Partial reply/);
@@ -1171,6 +1171,7 @@ async function openConversation(page) {
     await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
     await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.match(await page.locator('#agent-status').textContent(), /Você pode continuar de onde parou/);
     assert.equal(await page.locator('#preview-last-result').isVisible(), true, 'A single file in the restored completed reply should be easy to reopen');
     assert.match(await page.locator('#preview-intro').textContent(), /resposta cita um arquivo/);
     await page.getByRole('button', { name: 'Ver texto original' }).click();
@@ -1192,6 +1193,25 @@ async function openConversation(page) {
     assert.match(await page.locator('#preview-intro').textContent(), /resultado anterior tem um arquivo/);
     assert.equal(await page.locator('#preview-result').isVisible(), true, 'An already open preview should stay visible during planning');
     assert.deepEqual(await page.evaluate(() => window.linkPreviewReads.at(-1)), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\site\\index.html' });
+    await page.evaluate(() => { window.resumeMessages = [
+      { id: 'result-user', role: 'user', text: 'Crie uma página simples.' },
+      { id: 'result-agent', role: 'agent', text: 'Pronto: [Ver página](site/index.html).' },
+      { id: 'planning-user', role: 'user', text: 'Vamos planejar o próximo passo.' },
+      { id: 'planning-agent', role: 'agent', text: 'O próximo passo é definir o público.' },
+      { id: 'interrupted-user', role: 'user', text: 'Agora implemente o próximo passo.' },
+      { id: 'interrupted-agent', role: 'agent', text: 'Vou preparar', incomplete: true },
+    ]; });
+    const sendsBeforeInterruptedResume = await page.evaluate(() => window.sendCalls);
+    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
+    await openConversation(page);
+    await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.match(await page.locator('#agent-status').textContent(), /última resposta foi interrompida.*Nada foi reenviado/);
+    assert.equal(await page.evaluate(() => window.sendCalls), sendsBeforeInterruptedResume, 'An interrupted readback must not resend the previous request');
+    assert.equal(await page.locator('#preview-last-result').getAttribute('hidden'), null, 'An interrupted reply must keep an earlier completed result available');
+    assert.equal(await page.locator('#preview-result').isVisible(), true, 'An already open result must remain visible after an interrupted reply');
+    assert.match(await page.locator('#preview-intro').textContent(), /resultado anterior tem um arquivo/);
+    assert.match(await page.locator('#messages article').last().textContent(), /Vou preparar/);
     await page.evaluate(() => {
       window.resumeMessages = [
         { id: 'long-result-user', role: 'user', text: 'Crie uma página simples.' },

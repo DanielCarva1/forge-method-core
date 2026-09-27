@@ -95,6 +95,9 @@ async function openExisting(page) {
     await openExisting(app.page);
     const page = app.page;
     if (readOnly) {
+      if (process.env.FORGE_EXPECT_INTERRUPTED === '1') {
+        assert.match(await page.locator('#agent-status').textContent(), /última resposta foi interrompida.*Confira a conversa e os arquivos.*Nada foi reenviado/);
+      }
       await page.getByRole('button', { name: 'Atualizar andamento' }).click();
       await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 90000 });
       console.log(`CORE_DIRECTION=${JSON.stringify(before.active_objective?.proposal || null)}`);
@@ -119,9 +122,12 @@ async function openExisting(page) {
         assert.match(await page.locator('#record-empty-help').textContent(), /O objetivo está registrado.*próximo trabalho ainda não foi definido/);
       }
       if (process.env.FORGE_EXPECT_PRIOR_RESULT === '1') {
-        assert.equal(await page.locator('#preview-last-result').isVisible(), true, 'Later planning must not hide the earlier file result');
-        assert.match(await page.locator('#preview-intro').textContent(), /resultado anterior tem um arquivo/);
-        await page.getByRole('button', { name: 'Conferir arquivo citado' }).click();
+        const resultAlreadyOpen = await page.locator('#preview-result').isVisible();
+        if (!resultAlreadyOpen) {
+          assert.equal(await page.locator('#preview-last-result').isVisible(), true, 'A closed earlier result must remain available after planning or interruption');
+          assert.match(await page.locator('#preview-intro').textContent(), /resultado anterior tem um arquivo/);
+          await page.getByRole('button', { name: 'Conferir arquivo citado' }).click();
+        }
         await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 30000 });
         assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
         await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias renovado', exact: true }).waitFor({ timeout: 30000 });

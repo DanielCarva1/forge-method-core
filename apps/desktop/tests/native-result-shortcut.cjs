@@ -57,18 +57,22 @@ async function openProject(page, root) {
   await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 90000 });
 }
 
-async function resumeFixture(page, citation) {
-  await page.evaluate(file => {
+async function resumeFixture(page, citation, interrupted = false) {
+  await page.evaluate(({ file, interrupted }) => {
     const native = window.__TAURI__.core;
     window.__TAURI__ = { ...window.__TAURI__, core: { ...native, invoke: (command, args) => {
       if (command === 'connect_agent') return Promise.resolve({ thread_id: 'controlled-result-thread', resumed: true, messages: [
         { id: 'fixture-user', role: 'user', text: 'Crie uma página para mim.' },
         { id: 'fixture-agent', role: 'agent', text: Array.isArray(file) ? `Aqui estão: [Primeiro](${file[0]}) e [Segundo](${file[1]}).` : `Aqui está: [Ver arquivo](${file}).` },
+        ...(interrupted ? [
+          { id: 'fixture-next-user', role: 'user', text: 'Agora melhore a página.' },
+          { id: 'fixture-next-agent', role: 'agent', text: 'Vou começar a melhoria.', incomplete: true },
+        ] : []),
       ] });
       if (command === 'disconnect_agent') return Promise.resolve();
       return native.invoke(command, args);
     } } };
-  }, citation);
+  }, { file: citation, interrupted });
   await page.locator('#conversation-picker summary').click();
   await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
   await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
@@ -105,15 +109,16 @@ async function resumeFixture(page, citation) {
     app = await launch(process.env.FORGE_DESKTOP_EXE, profile, port);
     await openProject(app.page, project);
     assert.equal(await app.page.locator('#preview-result').isHidden(), true);
-    await resumeFixture(app.page, 'result.txt');
+    await resumeFixture(app.page, 'result.txt', true);
     await app.page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await app.page.locator('#preview-text').textContent(), 'Real local file from this project.');
     assert.equal(await app.page.locator('#preview-path').textContent(), 'result.txt');
+    assert.match(await app.page.locator('#preview-intro').textContent(), /resultado anterior tem um arquivo/);
     const messageCount = await app.page.locator('#messages article').count();
     await app.page.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
     assert.match(await app.page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).inputValue(), /result\.txt/);
     assert.equal(await app.page.locator('#messages article').count(), messageCount, 'Preparing a change must not send a turn');
-    console.log('PASS: hidden native full-process restart reopened the real file and prepared a change in the same conversation without sending a turn.');
+    console.log('PASS: hidden native full-process restart retained the earlier file across an interrupted reply and prepared a change without sending a turn.');
 
     await app.page.reload();
     await openProject(app.page, project);

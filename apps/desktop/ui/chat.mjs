@@ -314,7 +314,7 @@ function paintMessage(item) {
 }
 
 function updateLastResultAction() {
-  const previousResult = project && latestItem && !latestItem.isUser && latestItem.complete
+  const previousResult = project && latestItem
     ? [...items.values()].reverse().find(item => !item.isUser && item.complete && item.previewPaths?.length)
     : null;
   const paths = previousResult
@@ -362,6 +362,7 @@ messageView.addEventListener('click', () => {
 function message(id, role, text, append = false, complete = false) {
   const followLatest = !restoringHistory && (role === 'Você' || !messages.childElementCount || nearLatestMessage());
   let item = items.get(id);
+  const created = !item;
   if (!item) {
     const article = document.createElement('article');
     const isUser = role === 'Você';
@@ -390,7 +391,7 @@ function message(id, role, text, append = false, complete = false) {
   item.raw = append ? item.raw + text : text;
   item.complete = complete;
   paintMessage(item);
-  if (!restoringHistory) updateLastResultAction();
+  if (!restoringHistory && (created || complete)) updateLastResultAction();
   if (complete && !item.isUser) messageView.hidden = false;
   if (followLatest) showLatestMessage();
   return item;
@@ -470,9 +471,10 @@ async function connectCurrent(explicitThreadId = null) {
     let saved = true;
     try { saveReference(localStorage, project, conversation.thread_id); } catch { saved = false; }
     newConversation.checked = false;
+    const latestReplyIncomplete = conversation.messages.at(-1)?.role === 'agent' && conversation.messages.at(-1).incomplete;
     showStatus(broken
       ? 'A conexão foi encerrada. Desconecte antes de tentar novamente.'
-      : `${reviewingSend ? 'Conversa retomada. O envio anterior ainda não foi confirmado. Confira as mensagens e o que foi feito; depois escolha “Já conferi o envio” para continuar. Nada foi reenviado.' : conversation.resumed ? 'Conversa retomada. Você pode continuar de onde parou.' : `Codex conectado ao projeto ${projectDisplayName(project)}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}`, broken ? 'disconnected' : 'connected');
+      : `${reviewingSend ? 'Conversa retomada. O envio anterior ainda não foi confirmado. Confira as mensagens e o que foi feito; depois escolha “Já conferi o envio” para continuar. Nada foi reenviado.' : latestReplyIncomplete ? 'Conversa retomada. A última resposta foi interrompida. Confira a conversa e os arquivos do projeto antes de pedir continuação; mudanças já feitas podem permanecer. Nada foi reenviado.' : conversation.resumed ? 'Conversa retomada. Você pode continuar de onde parou.' : `Codex conectado ao projeto ${projectDisplayName(project)}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}`, broken ? 'disconnected' : 'connected');
   } catch (error) {
     if (current !== generation) return;
     ++generation;

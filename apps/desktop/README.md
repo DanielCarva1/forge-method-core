@@ -6061,3 +6061,104 @@ project from the accepted Work Focus toward a visible implemented result,
 avoiding another broad activation or duplicate product decision. Find and
 fix only a concrete blocker exposed by that journey. The full desktop goal
 remains active. No active subagents.
+
+### Interrupted real implementation and earlier-result recovery — 2026-09-27
+
+The installed 0.1.20 app sent one controlled request in the existing disposable
+`D:/Temp/User/forge-desktop-webview-ENrGgT/new-project` conversation. It chose a
+personal, no-account/no-sharing ideas list stored only in that browser/device,
+authorized changes only in this disposable folder, and explicitly required an
+ordinary JavaScript-enabled browser check because Forge's protected preview
+does not run scripts. The agent accepted the new Forge Work Focus
+`focus.jardim-ideias-v1-funcional`, but after 600 seconds it had not edited the
+page or returned a final response; the one-shot test closed the native process.
+The prompt was not resent. A **different** continuation message, after a
+pre-send fixture correction, was sent once at 21:31:20 UTC. It instructed the
+agent to continue from the accepted Work Focus without repeating the decision.
+The agent changed `site/index.html`, `site/assets/site.css`, and added
+`site/assets/site.js`; after another 600 seconds without a final response, that
+turn was also interrupted. Do not resend either message blindly.
+
+**PASS, bounded evidence:** `node --check` of the generated JS; an independent
+isolated Chromium run added, listed, reloaded, removed and reloaded an idea from
+the local HTML with no page errors. The installed native app re-opened the real
+conversation and exact Forge Work Focus without sending or changing files. The
+rebuilt debug app rendered the new page in Forge's protected preview; the
+preview itself remains noninteractive by design. **NOT_RUN:** agent final reply, agent-recorded evidence
+or Work Focus completion, clean-machine setup, and a provider-native acceptance
+test beyond this controlled fixture. The authoritative Work Focus still says
+`current` with zero evidence; its next-step text is stale relative to files
+changed just before the interruption. Do not present this as a completed Forge
+cycle or a public user-facing project.
+
+This journey exposed a reproducible UI gap in **installed** 0.1.20: after a
+fresh restart with an incomplete latest agent reply and no preview already
+open, the earlier completed file-result shortcut is hidden. `ui/chat.mjs` now
+finds the last completed cited local file even when the latest reply is
+incomplete and avoids recomputing it on every streaming token. Controlled
+browser UI suite, debug native full-process interrupted-reply fixture, and
+debug native read-only real-conversation restart all passed. The installed
+0.1.20 real fixture failed the closed-preview shortcut assertion; the rebuilt
+debug app passed it, read the exact Forge direction/Work Focus, and showed the
+new HTML preview with zero sends. `git diff --check` passed. No Rust source was
+changed. This fix is local **only**, not in the installed/public release.
+Visual debug screenshot: `C:/ForgeFast/forge-personal-ideas-native-20260927.png`.
+
+The initial real turn observed `gpt-6-sol` high and 1,006,578 input tokens
+including 901,504 cached, plus 6,926 output including 4,329 reasoning
+(1,013,504 total). The continuation observed 1,197,332 input including
+1,160,704 cached, plus 10,814 output including 3,480 reasoning (1,208,146
+total). These are separate per-turn provider counters, not summed cumulative
+snapshots; combined observed total is 2,221,650 tokens for two interrupted
+turns and one partial file implementation. The shared Pro weekly counter was
+48% around this work, too coarse/shared to attribute a per-task allowance
+change. API-equivalent BRL and subscription cost per turn are **UNKNOWN**;
+there is no controlled Astra/Sol comparison. This is not evidence of an
+economical routing win. No subagents were used.
+
+**Next exact step:** do not start a third real Codex turn on this fixture
+without first reducing the long-thread/turn-cost and completion friction.
+Review the local shortcut diff, preserve the existing generated fixture, and
+decide a bounded app-side improvement that helps interrupted long conversations
+finish or resume without duplicate sends. Then verify native restart and
+package a coherent alpha update; do not claim the local fix is installed yet.
+
+### Desktop 0.1.21 interrupted-conversation recovery candidate — 2026-09-27
+
+The installed-app journey identified a second UI gap: after a restart, a real
+incomplete Codex reply was labeled merely “Conversa retomada”. The UI now uses
+the Codex-owned restored message's `incomplete` flag to say the last answer was
+interrupted, advise checking the conversation and project files before asking
+for continuation, and state that nothing was resent. A previously unconfirmed
+Send retains its stronger existing warning. The earlier-result shortcut fix
+above is included in the same alpha package. No new Forge state store or
+automatic resend was added.
+
+**PASS:** browser UI suite covers completed versus interrupted restoration and
+zero automatic resends; eight frontend unit tests; Desktop `cargo check`, all
+49 Desktop crate tests, strict Clippy, `git diff --check`; rebuilt debug app
+headless native real-conversation restart and controlled fresh-process
+interrupted-reply fixture. The release build generated one NSIS candidate:
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.21_x64-setup.exe`,
+123,045,449 bytes, SHA-256
+`D98EEAB8215BBA5C64EBDFC8345FC41B67D8293FBD18C42BED2945AC44A41F66`.
+Silent installation over 0.1.20 returned exit 0; installed app executable
+SHA-256 is `7BE48E9959C3B7DED377B5564B5A3EEE575652E8B723917AFB7DD205C4D4B4CC`,
+bundled core remains pinned at
+`CFD6F81B1710D0469A53D12B374258CC122676EA7865F26926B1CDB4C7541EDF`,
+and the candidate's hash was unchanged after installation. The **installed**
+0.1.21 app passed hidden native smoke and read-only restart of the exact real
+Codex conversation, interrupted warning, prior HTML result and authoritative
+Forge direction/Work Focus, with zero sends and unchanged project files.
+
+**NOT_RUN:** a fresh real agent turn under 0.1.21, clean-machine/fresh-account
+setup, manual accessibility acceptance, mobile, or a complete Forge Work Focus
+closeout. The long-thread token cost remains unsolved. Release notes are in
+`RELEASE_NOTES-0.1.21.md`. The installer is currently a **local tested
+candidate**, not yet committed, pushed, or publicly available. No manual GH CI
+was run and no new provider-model turn was spent on this package. No active
+subagents. **Next exact step:** review/selectively commit and push the package,
+publish only the tested candidate under the maintainer's standing alpha
+authorization, download it unauthenticated, verify exact bytes, and test that
+downloaded file after installation. Do not rebuild the candidate merely to
+publish it. Keep the full desktop journey goal active.
