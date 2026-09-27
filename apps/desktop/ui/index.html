@@ -155,7 +155,7 @@
           <summary>Sobre a conexão</summary>
           <p id="native-status" role="status" aria-live="polite">Verificando o aplicativo…</p>
           <button id="retry" type="button" disabled>Verificar novamente</button>
-          <p class="hint">O Codex usa seu login existente e guarda o histórico. Ao conectar, retomamos a última conversa aberta aqui para este projeto, quando disponível.</p>
+          <p class="hint">O Codex guarda o histórico. Se você ainda não entrou no ChatGPT neste dispositivo, o Forge ajuda a fazer isso sem instalar outra ferramenta.</p>
         </details>
       </aside>
       <section class="conversation panel" aria-labelledby="chat-title">
@@ -171,6 +171,18 @@
           <div class="conversation-pages"><button id="previous-conversations" type="button" hidden>← Página anterior</button><button id="more-conversations" type="button" hidden>Próxima página →</button></div>
         </details>
         <p id="agent-status" class="status" role="status" aria-live="polite" tabindex="-1">Escolha uma pasta para começar. A conversa será aberta quando você enviar sua ideia.</p>
+        <section id="login-panel" class="login-panel" aria-labelledby="login-title" hidden>
+          <h3 id="login-title">Entre no ChatGPT para continuar</h3>
+          <p>Seu texto continua aqui. Você só precisa conectar sua conta uma vez neste dispositivo.</p>
+          <button id="start-login" type="button" class="primary">Entrar com ChatGPT</button>
+          <div id="login-challenge" hidden>
+            <p>Abra a página de acesso e digite este código temporário:</p>
+            <p><strong id="login-code" class="login-code"></strong></p>
+            <p id="login-url" class="hint"></p>
+            <div class="chat-actions"><button id="open-login-page" type="button">Abrir página de acesso</button><button id="finish-login" type="button">Já entrei · verificar</button><button id="cancel-login" type="button">Cancelar</button></div>
+          </div>
+          <p id="login-status" role="status" aria-live="polite"></p>
+        </section>
         <div class="conversation-body" role="region" aria-label="Histórico da conversa" tabindex="0">
           <div id="messages"></div>
           <div class="empty-conversation"><img src="assets/forge.png" alt="" width="64" height="64"><h3>Não precisa ter tudo planejado.</h3><p id="empty-conversation-description">Conte o que você quer criar ou melhorar.<br>Uma dúvida também é um bom começo.</p></div>

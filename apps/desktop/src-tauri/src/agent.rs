@@ -163,7 +163,7 @@ pub async fn list_conversations(
             .request("account/read", json!({"refreshToken":false}))
             .await?;
         if account["account"]["type"] != "chatgpt" {
-            return Err("Entre na sua conta ChatGPT pelo Codex CLI e tente novamente.");
+            return Err("Entre na sua conta ChatGPT pelo Forge e tente novamente.");
         }
         let page = transport
             .request(
@@ -181,8 +181,148 @@ pub async fn list_conversations(
 #[derive(Default)]
 pub struct AgentState {
     session: tokio::sync::Mutex<Option<Arc<Session>>>,
+    login: tokio::sync::Mutex<Option<LoginSession>>,
     shutdown: tokio::sync::Mutex<()>,
     closing: AtomicBool,
+}
+
+struct LoginSession {
+    transport: Transport,
+    login_id: String,
+    verification_url: String,
+}
+
+#[derive(Serialize)]
+pub struct LoginChallenge {
+    user_code: String,
+    verification_url: String,
+}
+
+#[derive(Serialize)]
+pub struct LoginEvent {
+    success: bool,
+}
+
+const LOGIN_UNAVAILABLE: &str = "Não foi possível iniciar o acesso ao ChatGPT. Tente novamente mais tarde.";
+
+fn login_challenge(value: &Value) -> Result<(String, LoginChallenge), &'static str> {
+    let login_id = value["loginId"].as_str().filter(|s| !s.is_empty() && s.len() <= 200)
+        .ok_or(LOGIN_UNAVAILABLE)?;
+    let code = value["userCode"].as_str().filter(|s| !s.is_empty() && s.len() <= 40
+        && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+        .ok_or(LOGIN_UNAVAILABLE)?;
+    let url = value["verificationUrl"].as_str().filter(|s| *s == "https://auth.openai.com/codex/device")
+        .ok_or(LOGIN_UNAVAILABLE)?;
+    if value["type"] != "chatgptDeviceCode" { return Err(LOGIN_UNAVAILABLE); }
+    Ok((login_id.to_owned(), LoginChallenge { user_code: code.to_owned(), verification_url: url.to_owned() }))
+}
+
+#[cfg(test)]
+mod login_tests {
+    use super::*;
+
+    #[test]
+    fn accepts_only_codex_device_login_with_expected_origin() {
+        let valid = json!({"type":"chatgptDeviceCode","loginId":"opaque","userCode":"ABCD-1234","verificationUrl":"https://auth.openai.com/codex/device"});
+        let (id, challenge) = login_challenge(&valid).unwrap();
+        assert_eq!(id, "opaque");
+        assert_eq!(challenge.user_code, "ABCD-1234");
+        for bad in [
+            json!({"type":"chatgptDeviceCode","loginId":"opaque","userCode":"ABCD-1234","verificationUrl":"https://evil.example/codex/device"}),
+            json!({"type":"chatgpt","loginId":"opaque","userCode":"ABCD-1234","verificationUrl":"https://auth.openai.com/codex/device"}),
+            json!({"type":"chatgptDeviceCode","loginId":"opaque","userCode":"bad code","verificationUrl":"https://auth.openai.com/codex/device"}),
+        ] { assert!(login_challenge(&bad).is_err()); }
+    }
+}
+
+/// Starts Codex-managed device authorization. Forge never receives account credentials.
+#[tauri::command]
+pub async fn start_login(
+    events: Channel<LoginEvent>,
+    state: State<'_, AgentState>,
+    app: tauri::AppHandle,
+) -> Result<LoginChallenge, &'static str> {
+    let _guard = state.shutdown.lock().await;
+    if state.closing.load(Ordering::SeqCst) { return Err("O aplicativo está fechando."); }
+    if state.session.lock().await.is_some() { return Err("Desconecte a conversa antes de trocar a conta."); }
+    let mut slot = state.login.lock().await;
+    if slot.is_some() { return Err("O acesso já está em andamento."); }
+    let resource_dir = app.path().resource_dir().ok();
+    let root = std::env::current_dir().map_err(|_| LOGIN_UNAVAILABLE)?;
+    let transport = Transport::start(&executable(resource_dir.as_deref())?, &root, move |value| {
+        if value["method"] == "account/login/completed" {
+            if let Some(success) = value["params"]["success"].as_bool() {
+                let _ = events.send(LoginEvent { success });
+            }
+        }
+    })?;
+    let result = async {
+        transport.request("initialize", json!({"clientInfo":{"name":"forge_desktop","version":env!("CARGO_PKG_VERSION")}})).await?;
+        let response = transport.request("account/login/start", json!({"type":"chatgptDeviceCode"})).await?;
+        login_challenge(&response)
+    }.await;
+    match result {
+        Ok((login_id, challenge)) => {
+            *slot = Some(LoginSession { transport, login_id, verification_url: challenge.verification_url.clone() });
+            Ok(challenge)
+        }
+        Err(error) => { transport.shutdown().await; Err(error) }
+    }
+}
+
+#[tauri::command]
+pub async fn finish_login(state: State<'_, AgentState>) -> Result<bool, &'static str> {
+    let _guard = state.shutdown.lock().await;
+    let mut slot = state.login.lock().await;
+    let session = slot.as_ref().ok_or("Nenhum acesso está em andamento.")?;
+    let account = session.transport.request("account/read", json!({"refreshToken":false})).await?;
+    if account["account"]["type"] != "chatgpt" { return Ok(false); }
+    let session = slot.take().expect("checked above");
+    session.transport.shutdown().await;
+    Ok(true)
+}
+
+#[tauri::command]
+pub async fn cancel_login(state: State<'_, AgentState>) -> Result<(), &'static str> {
+    let _guard = state.shutdown.lock().await;
+    let session = state.login.lock().await.take();
+    if let Some(session) = session {
+        let _ = session.transport.request("account/login/cancel", json!({"loginId":session.login_id})).await;
+        session.transport.shutdown().await;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn open_login_page(state: State<'_, AgentState>) -> Result<(), &'static str> {
+    let slot = state.login.lock().await;
+    let session = slot.as_ref().ok_or("Inicie o acesso primeiro.")?;
+    if session.verification_url != "https://auth.openai.com/codex/device" { return Err(LOGIN_UNAVAILABLE); }
+    #[cfg(windows)]
+    {
+        // Let Windows use the user's default HTTPS handler, not Explorer's undocumented URL arguments.
+        #[link(name = "shell32")]
+        unsafe extern "system" {
+            fn ShellExecuteW(
+                window: isize,
+                operation: *const u16,
+                file: *const u16,
+                parameters: *const u16,
+                directory: *const u16,
+                show: i32,
+            ) -> isize;
+        }
+        let operation: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+        let url: Vec<u16> = session.verification_url.encode_utf16().chain(std::iter::once(0)).collect();
+        // ShellExecuteW reports an accepted launch request when its result is greater than 32.
+        let result = unsafe {
+            ShellExecuteW(0, operation.as_ptr(), url.as_ptr(), std::ptr::null(), std::ptr::null(), 1)
+        };
+        if result <= 32 { Err("Não foi possível abrir o navegador. Copie o endereço mostrado na tela.") }
+        else { Ok(()) }
+    }
+    #[cfg(not(windows))]
+    { Err("Abra o endereço mostrado na tela em seu navegador.") }
 }
 
 pub fn begin_close(state: &AgentState) -> bool {
@@ -356,7 +496,7 @@ async fn initialize(
         .request("account/read", json!({"refreshToken":false}))
         .await?;
     if account["account"]["type"] != "chatgpt" {
-        return Err("Entre na sua conta ChatGPT pelo Codex CLI e tente conectar novamente.");
+        return Err("Entre na sua conta ChatGPT pelo Forge e tente conectar novamente.");
     }
     let instructions = "You are the user's agent inside Forge desktop. Work only on the selected project unless the user explicitly requests otherwise. Use the installed start-forge skill once at the beginning of this conversation, and follow its structured handoff. Forge owns project continuity; use its public interfaces and do not create another state store. Explain progress in the user's language, clearly and simply. A completed response is not proof that the user's task is complete. Treat exploration as conversation, not acceptance. After interruption, reconcile actual effects before continuing. When you create or substantially change a reviewable local file, identify only files that actually exist and include a Markdown link with a path relative to the project root, such as [Ver página](site/index.html), so the user can inspect it in the app. Do not imply a local file is published or that an unsupported output has a visual preview. The interface currently cannot display interactive tool forms; ask the user in ordinary conversation when a decision is needed.";
     let mut params = json!({"cwd":project_root,"approvalPolicy":"never","sandbox":"danger-full-access","developerInstructions":instructions});
@@ -573,6 +713,10 @@ pub async fn disconnect_agent(state: State<'_, AgentState>) -> Result<(), &'stat
 
 pub async fn shutdown(state: &AgentState) {
     let _shutdown = state.shutdown.lock().await;
+    if let Some(login) = state.login.lock().await.take() {
+        let _ = login.transport.request("account/login/cancel", json!({"loginId":login.login_id})).await;
+        login.transport.shutdown().await;
+    }
     let session = { state.session.lock().await.take() };
     if let Some(session) = session {
         let turn = session

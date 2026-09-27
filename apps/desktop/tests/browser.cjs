@@ -603,6 +603,50 @@ async function openConversation(page) {
     assert.equal(await firstDraft.inputValue(), '');
     await sendFirstPage.close();
     console.log('PASS: first Send opens Codex once, preserves the draft on connection failure, then sends exactly once on retry.');
+    const loginPage = await browser.newPage();
+    await loginPage.addInitScript(() => {
+      window.authFinished = false; window.sentAfterLogin = 0;
+      window.__TAURI__ = { core: {
+        Channel: class { onmessage = null; },
+        invoke: async (command, args) => {
+          if (command === 'app_info') return { name: 'Forge', version: '0.1.13' };
+          if (command === 'start_project') return { project_id: 'login-project', project_root: args.projectRoot };
+          if (command === 'connect_agent') {
+            if (!window.authFinished) throw 'Entre na sua conta ChatGPT pelo Forge e tente conectar novamente.';
+            return { thread_id: 'login-thread', messages: [], resumed: false };
+          }
+          if (command === 'start_login') { window.loginEvents = args.events; return { user_code: 'ABCD-1234', verification_url: 'https://auth.openai.com/codex/device' }; }
+          if (command === 'finish_login') return window.authFinished;
+          if (command === 'cancel_login' || command === 'open_login_page') return;
+          if (command === 'send_message') window.sentAfterLogin++;
+        },
+      } };
+    });
+    await loginPage.goto(workspaceUrl);
+    await loginPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\login-project');
+    await loginPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await loginPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    const loginDraft = loginPage.getByRole('textbox', { name: 'Sua ideia começa aqui' });
+    await loginDraft.fill('Minha ideia permanece');
+    await loginPage.getByRole('button', { name: 'Enviar', exact: true }).click();
+    await loginPage.locator('#login-panel').waitFor({ state: 'visible' });
+    assert.equal(await loginDraft.inputValue(), 'Minha ideia permanece');
+    assert.equal(await loginPage.evaluate(() => window.sentAfterLogin), 0);
+    assert.equal(await loginPage.locator('#send-message').isDisabled(), true);
+    assert.equal(await loginPage.locator('#connect-agent').isDisabled(), true);
+    assert.equal(await loginPage.locator('#find-conversations').isDisabled(), true);
+    await loginPage.getByRole('button', { name: 'Entrar com ChatGPT' }).click();
+    await loginPage.locator('#login-code').filter({ hasText: 'ABCD-1234' }).waitFor();
+    assert.equal(await loginPage.locator('#login-url').textContent(), 'https://auth.openai.com/codex/device');
+    await loginPage.getByRole('button', { name: 'Já entrei · verificar' }).click();
+    await loginPage.locator('#login-status').filter({ hasText: 'Aguardando a confirmação' }).waitFor();
+    await loginPage.evaluate(() => { window.authFinished = true; window.loginEvents.onmessage({ success: true }); });
+    await loginPage.locator('#login-panel').waitFor({ state: 'hidden' });
+    assert.equal(await loginDraft.inputValue(), 'Minha ideia permanece');
+    await loginPage.getByRole('button', { name: 'Enviar', exact: true }).click();
+    await loginPage.waitForFunction(() => window.sentAfterLogin === 1);
+    await loginPage.close();
+    console.log('PASS: simulated first-use ChatGPT access preserves the draft, shows a device code, waits for confirmation, then sends once. Native login completion NOT_RUN.');
     const keyboardPage = await browser.newPage();
     await keyboardPage.goto(url);
     for (const selector of ['.skip', '.brand', 'nav a:first-child', 'nav a:nth-child(2)', 'nav a:nth-child(3)', 'nav a:nth-child(4)', 'nav a:last-child', '.appearance summary', '#appearance-theme', '#appearance-contrast', '.home-actions a:first-child', '.home-actions a:last-child', '.starter-card:nth-child(1) a', '.starter-card:nth-child(2) a', '.starter-card:nth-child(3) a', '#about summary']) {

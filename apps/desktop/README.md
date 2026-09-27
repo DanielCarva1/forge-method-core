@@ -4729,3 +4729,99 @@ and restart. Current tests reused this account's existing Codex login and
 WebView2, so clean-machine setup is NOT_RUN. Manual accessibility acceptance,
 auto-update, signing and mobile remain open. Source core 0.13.3 is not the
 bundled 0.13.2. Model-specific token and BRL costs remain UNKNOWN.
+
+## Desktop first-use ChatGPT access worktree checkpoint — 2026-09-27
+
+**Active goal:** finish the approachable Windows journey from folder choice
+through a real Codex conversation, local result, requested change and restart.
+The public installed release remains **0.1.12**; the following changes are
+source-only in the dirty `codex/desktop-shell` checkout, not committed or
+published. No subagents were used; model-specific tokens and BRL remain UNKNOWN.
+
+The app now offers a Codex-managed ChatGPT device-code sign-in when a signed-out
+person first tries to send or search history, rather than instructing them to
+install/open Codex CLI. The draft stays in place and is **not** automatically
+sent after authorization. Forge only displays the temporary code and official
+verification address; it does not receive the password or tokens. The native
+backend validates the exact `https://auth.openai.com/codex/device` URL before
+offering to open it, and supports check/cancel/close cleanup. The login panel
+has a layout exception so it cannot overflow the fixed-height chat card.
+Files: `src-tauri/src/agent.rs`, `src-tauri/src/main.rs`, `ui/chat.mjs`,
+`ui/index.html`, `ui/styles.css`, `tests/browser.cjs`,
+`tests/native-auth.cjs`, `tests/native-hidden.ps1`, and this checkpoint.
+
+**PASS:** bundled Codex CLI 0.157.1 app-server schema confirmed the device-code
+request/response and completion event; an isolated `CODEX_HOME` probe returned
+signed-out account, device challenge at the official URL and a successful
+cancel, without opening a browser. Desktop `cargo check`, focused login unit
+test, all 47 Desktop Rust tests, strict Desktop Clippy, JS syntax and browser
+suite passed. The browser suite simulates authorization completion and confirms
+exactly one send after it. A hidden native WebView test with a fresh isolated
+Codex home and **real** bundled Codex executable confirmed signed-out detection,
+challenge display, read-before-completion, cancel, zero sends and preserved
+draft. Native visual screenshot was inspected; the first fixed-height layout
+overflow was corrected and a second native run passed after the correction.
+No manual GitHub CI or core workspace build was run.
+
+**NOT_RUN:** actual completion of ChatGPT authorization through a browser on a
+fresh Windows account, authenticated send after that new login, default-browser
+launch from the button, installer/update proof for these uncommitted changes,
+and full clean-machine setup. Do not call in-app sign-in or 0.1.13 released yet.
+The headless test intentionally cancels the challenge and cannot prove those
+steps. Existing installed 0.1.12 remains the public alpha.
+
+**Next exact step:** run a voluntary end-to-end sign-in on a genuinely fresh
+Windows account or VM, then send a real message, restart and inspect the result.
+If it passes, bump Desktop to 0.1.13, run focused final checks and one NSIS
+candidate, upgrade the installed 0.1.12, review diff/release notes, publish
+under the standing alpha authorization and byte-check the public download.
+
+### Continuation: native login-completion wiring — 2026-09-27
+
+The browser-opening command now calls Windows `ShellExecuteW` with the `open`
+verb and the exact vetted HTTPS address; it no longer depends on undocumented
+`explorer.exe URL` behavior. Microsoft documents success as a return greater
+than 32, but an actual browser launch on a fresh account is still **NOT_RUN**.
+Added a no-network fake app-server fixture under `tests/fixtures/` and a second
+mode of the hidden native authentication test. That mode proved the native
+`account/login/completed` notification reaches the WebView, triggers account
+readback, hides the panel, preserves the draft and enables sending without
+silently sending it. The real bundled Codex signed-out/cancel test still passes
+separately. The fixture proves integration wiring, **not** provider login or
+fresh-machine readiness. This checkpoint remains uncommitted and public 0.1.12
+is unchanged. Next exact step remains a voluntary real browser authorization
+on an isolated/fresh Windows account, followed by package candidate validation.
+
+### Continuation: tested 0.1.13 installer candidate — 2026-09-27
+
+The Desktop source was bumped to **0.1.13** and one NSIS candidate was built:
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.13_x64-setup.exe`,
+123,011,405 bytes, SHA-256
+`76D758454DFFB2508029E4EF81AFC5AA6EBD82A31015AFD894EEB5E548FF0D33`.
+It installed silently over the public 0.1.12 with exit 0. The installed app
+reports file/product version 0.1.13 and the bundled core/Codex hashes remain
+identical to the verified 0.1.12 resources. This is an installed **local**
+candidate, not yet a public 0.1.13 download.
+
+**PASS on installed candidate, hidden native desktop, executable overrides
+unset:** isolated signed-out Codex home offered the genuine device challenge,
+preserved the draft and canceled without a Send. A separate no-network fixture
+proved the native completion notification and account readback/UI transition.
+The existing authenticated account also sent one real Codex turn from a fresh
+temporary Forge project and restored the ordered exchange after WebView reload
+and full process restart, without resending. The actual folder dialog result
+was simulated in this regression. Focused Desktop Rust checks, 47 tests,
+strict Clippy and browser tests had passed before the candidate build. No
+core workspace build or manual GitHub CI was triggered.
+
+**NOT_RUN:** actual completion of a new ChatGPT browser authorization, opening
+the browser from the button, and fresh Windows account/VM setup. Fixture
+completion is not provider proof. Manual accessibility acceptance,
+auto-update, signing and mobile remain open. The user approved publishing
+alpha building blocks with explicit limitations. No subagents were used; model
+specific tokens and BRL cost are UNKNOWN.
+
+**Next exact step:** review and selectively commit/push the 0.1.13 source and
+release notes, publish the exact tested candidate under the standing alpha
+authorization, then unauthenticated download/hash check and installed-byte
+readback. Later obtain voluntary genuine fresh-account sign-in proof.

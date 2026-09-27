@@ -5,6 +5,15 @@ import { previewLinkedFile, refreshPreviewAfterTurn } from './preview.mjs';
 import { projectDisplayName } from './project-display.mjs';
 const byId = id => document.getElementById(id);
 const status = byId('agent-status');
+const loginPanel = byId('login-panel');
+const loginChallenge = byId('login-challenge');
+const loginStatus = byId('login-status');
+const loginCode = byId('login-code');
+const loginUrl = byId('login-url');
+const startLoginButton = byId('start-login');
+const finishLoginButton = byId('finish-login');
+const cancelLoginButton = byId('cancel-login');
+const openLoginPageButton = byId('open-login-page');
 const connect = byId('connect-agent');
 const connectHelp = byId('connect-help');
 const disconnect = byId('disconnect-agent');
@@ -37,6 +46,9 @@ let project = null;
 let connected = false;
 let busy = false;
 let transitioning = false;
+let loginActive = false;
+let loginPending = false;
+let loginCompletedEarly = false;
 let broken = false;
 let generation = 0;
 let channel;
@@ -75,6 +87,12 @@ function showStatus(text, kind = 'idle') {
 }
 showStatus(status.textContent);
 
+function offerLogin(error) {
+  if (typeof error !== 'string' || !error.includes('Entre na sua conta ChatGPT pelo Forge')) return;
+  loginPanel.hidden = false;
+  loginStatus.textContent = 'Entre na conta para conversar ou buscar o histórico. Nenhuma mensagem foi enviada.';
+}
+
 function updateComposerHelp() {
   composerHelp.textContent = !project
     ? 'Para enviar, escolha uma pasta para o projeto.'
@@ -83,7 +101,7 @@ function updateComposerHelp() {
         ? 'O último envio não foi confirmado. Confira as mensagens e escolha “Já conferi o envio” antes de enviar outra.'
         : 'O último envio não foi confirmado. Abra a conversa e confira o histórico antes de tentar novamente.'
     : !connected
-      ? 'Escreva e envie sua ideia. A conversa será aberta antes do envio.'
+      ? loginPanel.hidden ? 'Escreva e envie sua ideia. A conversa será aberta antes do envio.' : 'Entre no ChatGPT para enviar. Seu texto está preservado.'
       : busy
         ? 'Seu agente está trabalhando. Você pode interromper se precisar.'
         : broken
@@ -93,29 +111,33 @@ function updateComposerHelp() {
 
 function updateResumeAction() {
   resumeLastConversation.hidden = !project || connected || !hasResumableConversation || messages.childElementCount > 0;
-  resumeLastConversation.disabled = transitioning;
+  resumeLastConversation.disabled = transitioning || !loginPanel.hidden;
   if (project) resumeLastConversation.textContent = unconfirmedSends.has(referenceKey())
     ? 'Conferir envio anterior' : 'Continuar conversa anterior';
 }
 
 function controls() {
   const focused = document.activeElement;
-  connect.disabled = transitioning || connected || !project;
+  connect.disabled = transitioning || connected || !project || !loginPanel.hidden;
   newConversation.disabled = transitioning || connected;
   disconnect.disabled = transitioning || !connected;
-  send.disabled = transitioning || !project || busy || broken || (connected && unconfirmedSends.has(referenceKey()));
+  send.disabled = transitioning || loginPending || !loginPanel.hidden || !project || busy || broken || (connected && unconfirmedSends.has(referenceKey()));
   input.disabled = transitioning || busy || broken;
   stop.disabled = transitioning || !connected || !busy || broken;
   stop.hidden = !connected || !busy;
+  startLoginButton.disabled = loginPending || loginActive || connected;
+  finishLoginButton.disabled = loginPending || !loginActive;
+  cancelLoginButton.disabled = loginPending || !loginActive;
+  openLoginPageButton.disabled = loginPending || !loginActive;
   connect.hidden = connected;
   connectHelp.hidden = !project || connected;
   disconnect.hidden = !connected;
   newConversationChoice.hidden = connected || !project || !hasPreviousConversation;
   conversationPicker.hidden = !project || connected;
   if (connected) conversationPicker.open = false;
-  findConversations.disabled = !project || connected || transitioning || listPending;
-  previousConversations.disabled = !project || connected || transitioning || listPending || pageNumber === 0;
-  moreConversations.disabled = !project || connected || transitioning || listPending || !listCursor;
+  findConversations.disabled = !project || connected || transitioning || listPending || !loginPanel.hidden;
+  previousConversations.disabled = !project || connected || transitioning || listPending || !loginPanel.hidden || pageNumber === 0;
+  moreConversations.disabled = !project || connected || transitioning || listPending || !loginPanel.hidden || !listCursor;
   projectStatus.hidden = connected;
   projectResultHint.textContent = 'Pasta confirmada pelo Forge.';
   conversationStep.textContent = project ? 'SUA CONVERSA' : 'PASSO 2 · SUA CONVERSA';
@@ -151,6 +173,7 @@ export function setProject(value) {
     rawMessageView = false;
     messageView.hidden = true;
     messageView.textContent = 'Ver texto original';
+    if (!loginActive) loginPanel.hidden = true;
   }
   conversationStep.textContent = project ? 'SUA CONVERSA' : 'PASSO 2 · SUA CONVERSA';
   hasPreviousConversation = false;
@@ -208,7 +231,7 @@ function validConversationPage(page) {
 }
 
 async function loadConversationChoices(targetPage = 0, cursor = null) {
-  if (!project || connected || transitioning || listPending || targetPage < 0 || (targetPage > 0 && !cursor)) return;
+  if (!project || connected || transitioning || listPending || !loginPanel.hidden || targetPage < 0 || (targetPage > 0 && !cursor)) return;
   const current = ++listGeneration;
   const root = project.project_root;
   listPending = true;
@@ -260,7 +283,10 @@ async function loadConversationChoices(targetPage = 0, cursor = null) {
       ? `Página ${pageNumber + 1}: ${listedIds.size} ${listedIds.size === 1 ? 'conversa' : 'conversas'} do índice deste dispositivo para este projeto.`
       : listCursor ? `Página ${pageNumber + 1}: nenhuma conversa nesta página. Você pode avançar.` : 'Nenhuma conversa encontrada no índice deste dispositivo.';
   } catch (error) {
-    if (current === listGeneration) conversationListStatus.textContent = typeof error === 'string' ? error : 'Não foi possível buscar as conversas. Tente novamente; a página anterior foi mantida.';
+    if (current === listGeneration) {
+      conversationListStatus.textContent = typeof error === 'string' ? error : 'Não foi possível buscar as conversas. Tente novamente; a página anterior foi mantida.';
+      offerLogin(error);
+    }
   } finally {
     if (current === listGeneration) { listPending = false; controls(); }
   }
@@ -390,7 +416,7 @@ function receive(event) {
 }
 
 async function connectCurrent(explicitThreadId = null) {
-  if (!project || connected || transitioning) return false;
+  if (!project || connected || transitioning || !loginPanel.hidden) return false;
   const reviewingSend = unconfirmedSends.has(referenceKey());
   if (reviewingSend && newConversation.checked) {
     showStatus('Retome a conversa anterior e confira o envio não confirmado antes de começar outra.', 'error');
@@ -420,6 +446,7 @@ async function connectCurrent(explicitThreadId = null) {
       throw 'O Codex não confirmou a retomada da conversa anterior. Confira o histórico antes de reenviar.';
     }
     connected = true; busy = false;
+    loginPanel.hidden = true;
     conversationPicker.open = false;
     messages.replaceChildren(); items.clear(); latestItem = null; rawMessageView = false;
     updateLastResultAction();
@@ -437,7 +464,12 @@ async function connectCurrent(explicitThreadId = null) {
     showStatus(broken
       ? 'A conexão foi encerrada. Desconecte antes de tentar novamente.'
       : `${reviewingSend ? 'Conversa retomada. O envio anterior ainda não foi confirmado. Confira as mensagens e o que foi feito; depois escolha “Já conferi o envio” para continuar. Nada foi reenviado.' : conversation.resumed ? 'Conversa retomada. Confira o último registro do Forge e o que já foi feito antes de continuar.' : `Codex conectado ao projeto ${projectDisplayName(project)}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}`, broken ? 'disconnected' : 'connected');
-  } catch (error) { if (current !== generation) return; ++generation; showStatus(typeof error === 'string' ? error : 'Não foi possível conectar ao Codex.', 'error'); }
+  } catch (error) {
+    if (current !== generation) return;
+    ++generation;
+    offerLogin(error);
+    showStatus(typeof error === 'string' ? error : 'Não foi possível conectar ao Codex.', 'error');
+  }
   transitioning = false;
   controls();
   if (connected && !broken) showLatestMessage();
@@ -450,6 +482,71 @@ async function connectCurrent(explicitThreadId = null) {
 }
 
 connect.addEventListener('click', () => connectCurrent());
+async function finishLogin() {
+  if (!loginActive || loginPending) return;
+  loginPending = true; controls();
+  loginStatus.textContent = 'Conferindo o acesso…';
+  try {
+    if (await invoke('finish_login')) {
+      loginActive = false;
+      loginChallenge.hidden = true;
+      loginPanel.hidden = true;
+      loginStatus.textContent = '';
+      showStatus('Conta conectada. Sua ideia está pronta para enviar.', 'completed');
+      input.focus();
+    } else loginStatus.textContent = 'Aguardando a confirmação no navegador. Depois, escolha “Já entrei · verificar”.';
+  } catch (error) {
+    loginStatus.textContent = typeof error === 'string' ? error : 'Não foi possível conferir o acesso. Tente novamente.';
+  } finally { loginPending = false; controls(); }
+}
+
+startLoginButton.addEventListener('click', async () => {
+  if (loginActive || loginPending || connected) return;
+  loginPending = true; loginCompletedEarly = false; controls();
+  loginStatus.textContent = 'Preparando o acesso seguro pelo Codex…';
+  try {
+    const loginEvents = new globalThis.__TAURI__.core.Channel();
+    loginEvents.onmessage = event => {
+      if (!event || typeof event.success !== 'boolean') return;
+      if (event.success) {
+        if (loginPending) loginCompletedEarly = true;
+        else void finishLogin();
+      } else loginStatus.textContent = 'O acesso não foi concluído. Cancele e tente novamente.';
+    };
+    const challenge = await invoke('start_login', { events: loginEvents });
+    if (typeof challenge.user_code !== 'string' || typeof challenge.verification_url !== 'string') throw new Error('Resposta de acesso incompatível.');
+    loginActive = true;
+    loginCode.textContent = challenge.user_code;
+    loginUrl.textContent = challenge.verification_url;
+    loginChallenge.hidden = false;
+    loginStatus.textContent = 'Abra a página, entre na sua conta ChatGPT e digite o código. O Forge nunca pede sua senha.';
+  } catch (error) {
+    loginStatus.textContent = typeof error === 'string' ? error : 'Não foi possível iniciar o acesso. Tente novamente.';
+  } finally {
+    loginPending = false; controls();
+    if (loginCompletedEarly && loginActive) void finishLogin();
+  }
+});
+
+finishLoginButton.addEventListener('click', () => void finishLogin());
+cancelLoginButton.addEventListener('click', async () => {
+  if (!loginActive || loginPending) return;
+  loginPending = true; controls();
+  try {
+    await invoke('cancel_login');
+    loginActive = false;
+    loginChallenge.hidden = true;
+    loginCode.textContent = '';
+    loginStatus.textContent = 'Acesso cancelado. Seu texto continua aqui.';
+  } catch (error) {
+    loginStatus.textContent = typeof error === 'string' ? error : 'Não foi possível cancelar. Tente novamente.';
+  } finally { loginPending = false; controls(); }
+});
+openLoginPageButton.addEventListener('click', async () => {
+  if (!loginActive || loginPending) return;
+  try { await invoke('open_login_page'); }
+  catch (error) { loginStatus.textContent = typeof error === 'string' ? error : 'Abra o endereço mostrado em seu navegador.'; }
+});
 resumeLastConversation.addEventListener('click', () => {
   if (!project || connected || transitioning || !hasResumableConversation) return;
   newConversation.checked = false;
@@ -556,6 +653,10 @@ async function disconnectCurrent() {
 
 export async function prepareProjectSwitch() {
   if (transitioning) return false;
+  if (loginActive || loginPending) {
+    showStatus('Cancele o acesso em andamento antes de trocar de projeto.', 'error');
+    return false;
+  }
   if (!connected) return !byId('project-root').disabled;
   if (busy && !globalThis.confirm('O Codex ainda está trabalhando. Trocar de projeto vai interromper a resposta; mudanças já feitas podem permanecer. Quer continuar?')) return false;
   return disconnectCurrent();
