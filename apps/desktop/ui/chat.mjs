@@ -30,6 +30,7 @@ const projectResultHint = byId('project-result-hint');
 const conversationStep = byId('conversation-step');
 const emptyDescription = byId('empty-conversation-description');
 const resumeLastConversation = byId('resume-last-conversation');
+const confirmReviewedSend = byId('confirm-reviewed-send');
 let project = null;
 let connected = false;
 let busy = false;
@@ -69,8 +70,10 @@ showStatus(status.textContent);
 function updateComposerHelp() {
   composerHelp.textContent = !project
     ? 'Para enviar, escolha uma pasta para o projeto.'
-    : !connected && unconfirmedSends.has(referenceKey())
-      ? 'O último envio não foi confirmado. Abra a conversa e confira o histórico antes de tentar novamente.'
+    : unconfirmedSends.has(referenceKey())
+      ? connected
+        ? 'O último envio não foi confirmado. Confira as mensagens e escolha “Já conferi o envio” antes de enviar outra.'
+        : 'O último envio não foi confirmado. Abra a conversa e confira o histórico antes de tentar novamente.'
     : !connected
       ? 'Escreva e envie sua ideia. A conversa será aberta antes do envio.'
       : busy
@@ -114,6 +117,8 @@ function controls() {
       ? 'Você pode ler a conversa anterior antes de continuar. Isso não envia mensagens.'
     : 'Conte o que você quer criar ou melhorar. Uma dúvida também é um bom começo.';
   updateResumeAction();
+  confirmReviewedSend.hidden = !project || !connected || !unconfirmedSends.has(referenceKey());
+  confirmReviewedSend.disabled = transitioning || busy || broken;
   updateComposerHelp();
   accessNote.hidden = !project;
   byId('project-root').disabled = transitioning || connected;
@@ -380,14 +385,9 @@ async function connectCurrent(explicitThreadId = null) {
     let saved = true;
     try { saveReference(localStorage, project, conversation.thread_id); } catch { saved = false; }
     newConversation.checked = false;
-    let reviewSaved = true;
-    if (reviewingSend && conversation.resumed) {
-      unconfirmedSends.delete(referenceKey());
-      try { clearUnconfirmedSend(localStorage, project); } catch { reviewSaved = false; }
-    }
     showStatus(broken
       ? 'A conexão foi encerrada. Desconecte antes de tentar novamente.'
-      : `${conversation.resumed ? 'Conversa retomada. Confira o último registro do Forge e o que já foi feito antes de continuar.' : `Codex conectado ao projeto ${projectDisplayName(project)}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}${reviewSaved ? '' : ' A revisão do envio não pôde ser salva; ao reabrir, confira o histórico novamente.'}`, broken ? 'disconnected' : 'connected');
+      : `${reviewingSend ? 'Conversa retomada. O envio anterior ainda não foi confirmado. Confira as mensagens e o que foi feito; depois escolha “Já conferi o envio” para continuar. Nada foi reenviado.' : conversation.resumed ? 'Conversa retomada. Confira o último registro do Forge e o que já foi feito antes de continuar.' : `Codex conectado ao projeto ${projectDisplayName(project)}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}`, broken ? 'disconnected' : 'connected');
   } catch (error) { if (current !== generation) return; ++generation; showStatus(typeof error === 'string' ? error : 'Não foi possível conectar ao Codex.', 'error'); }
   transitioning = false;
   controls();
@@ -405,6 +405,19 @@ resumeLastConversation.addEventListener('click', () => {
   if (!project || connected || transitioning || !hasResumableConversation) return;
   newConversation.checked = false;
   void connectCurrent();
+});
+
+confirmReviewedSend.addEventListener('click', () => {
+  if (!project || !connected || busy || transitioning || broken || !unconfirmedSends.has(referenceKey())) return;
+  try { clearUnconfirmedSend(localStorage, project); }
+  catch {
+    showStatus('Não foi possível salvar sua revisão neste dispositivo. O envio continua protegido; tente novamente.', 'error');
+    return;
+  }
+  unconfirmedSends.delete(referenceKey());
+  showStatus('Revisão concluída neste dispositivo. Nada foi reenviado. Você pode escrever a próxima mensagem.', 'connected');
+  status.focus(); // The review button is about to become hidden.
+  controls();
 });
 
 byId('message-form').addEventListener('submit', async event => {

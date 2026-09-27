@@ -5,7 +5,7 @@ $temp = [System.IO.Path]::GetTempPath()
 $id = [guid]::NewGuid().ToString('N')
 $runner = Join-Path $temp "forge-native-hidden-$id.ps1"
 $log = Join-Path $temp "forge-native-hidden-$id.log"
-$testScript = if ($env:FORGE_NATIVE_TEST_SCRIPT -in @('upgrade-continuity.cjs', 'native-restart-guard.cjs', 'artifact-resume.cjs')) { $env:FORGE_NATIVE_TEST_SCRIPT } else { 'native.cjs' }
+$testScript = if ($env:FORGE_NATIVE_TEST_SCRIPT -in @('upgrade-continuity.cjs', 'native-restart-guard.cjs', 'native-real-inflight.cjs', 'artifact-resume.cjs')) { $env:FORGE_NATIVE_TEST_SCRIPT } else { 'native.cjs' }
 $runnerBody = @'
 Set-Location '__REPO__'
 & node apps/desktop/tests/__SCRIPT__ *> '__LOG__'
@@ -62,7 +62,7 @@ public static class ForgeHiddenNativeTest {
 
 try {
   $powershell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-  $timeoutMs = if ($env:FORGE_TEST_ARTIFACT_JOURNEY -eq '1') { [uint32]480000 } else { [uint32]300000 }
+  $timeoutMs = if ($env:FORGE_TEST_ARTIFACT_JOURNEY -eq '1' -or $testScript -eq 'native-real-inflight.cjs') { [uint32]480000 } else { [uint32]300000 }
   $code = [ForgeHiddenNativeTest]::Run($powershell, $runner, $timeoutMs)
   Get-Content -LiteralPath $log
   if ($code -ne 0) { throw "Native hidden smoke failed with exit code $code" }

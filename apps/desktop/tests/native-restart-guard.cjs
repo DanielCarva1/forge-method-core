@@ -111,10 +111,15 @@ if (!process.env.FORGE_DESKTOP_EXE || !process.env.FORGE_TEST_PROJECT) {
     await page.getByLabel('Começar outra conversa').uncheck();
     await page.getByRole('button', { name: 'Conferir envio anterior' }).click();
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
-    assert.equal(await page.evaluate(key => localStorage.getItem(key), markerKey), null);
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), markerKey), 'controlled-native-thread');
     assert.match(await page.locator('#messages').textContent(), /Controlled history for review/);
     assert.equal(await page.evaluate(() => window.fakeCodexSends), 0);
-    console.log('PASS: hidden native WebView preserved uncertain-send marker across full process restart, blocked replay/new thread, and resumed same controlled thread without sending.');
+    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true);
+    if (process.env.FORGE_REVIEW_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_REVIEW_SCREENSHOT });
+    await page.getByRole('button', { name: 'Já conferi o envio' }).click();
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), markerKey), null);
+    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isEnabled(), true);
+    console.log('PASS: hidden native WebView preserved uncertain-send marker across full process restart, blocked replay/new thread, and required explicit review acknowledgement before another Send.');
     console.log('NOT_RUN: real Codex delivery, response and native ambiguous transport outcome (controlled bridge only).');
   } finally {
     await stop();

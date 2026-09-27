@@ -1,8 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.6` is the published and locally
-installed alpha prerelease. Its installer was downloaded back from the public
-release and verified byte-for-byte by SHA-256.
+Independent Tauri application. Desktop `0.1.6` is the published alpha
+prerelease. Desktop `0.1.7` is a tested installer candidate installed locally,
+but it is not yet publicly available. The public 0.1.6 installer was downloaded
+back and verified byte-for-byte by SHA-256 before this upgrade.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -4168,3 +4169,58 @@ used; model-specific token usage and BRL cost remain UNKNOWN.
 **Next:** use the approved visual boards and the actual app screens to find
 and repair a concrete nontechnical UX gap. Keep native acceptance at the
 package boundary and avoid manually starting GitHub CI for each change.
+
+## Desktop 0.1.7 uncertain-send recovery candidate — 2026-09-27
+
+The installed 0.1.6 end-to-end journey above remains valid for the normal
+path. This package fixes an exceptional but consequential UI recovery gap:
+resuming a Codex conversation previously cleared the local uncertain-Send
+marker even if its history did not show the unconfirmed message. It could
+make another Send available before the person had actually reviewed what
+happened. The UI now retains the project-scoped marker and disables Send
+until the person chooses **Já conferi o envio** after opening that same
+conversation. That action does not resend anything. If local storage cannot
+save the acknowledgement, the protection remains. Keyboard focus moves to
+the updated status when the review button disappears. No Forge state or
+Codex transcript is copied into a second store.
+
+**PASS, source:** `0.1.7` is set in the Desktop Cargo manifest, lockfile and
+Tauri config. Eight Node tests, the controlled browser suite, offline locked
+desktop-only `cargo check`, all 44 desktop Rust tests, formatting, strict
+desktop Clippy and `git diff --check` passed. No separate core workspace
+or GitHub CI run. `RELEASE_NOTES-0.1.7.md` describes content and limits.
+
+**PASS, hidden native:** a controlled Codex bridge demonstrated full process
+restart during a pending Send, no replay/new thread, persistence of the
+warning, and explicit review before another Send. A real authenticated Codex
+probe withheld only the UI acknowledgement after the native `turn/start`
+response, then killed the app. On restart, the same thread resumed without
+replay and Send stayed blocked; the accepted prompt was *not visible* in the
+restored history in that run. This proves why native acceptance cannot be
+treated as durable delivery. The installed recovery screen was captured at
+`C:/ForgeFast/forge-review-017-20260927.png`; its review action, explanation
+and disabled Send were visually inspected. The tests ran on a hidden Windows
+desktop without activating the user's visible desktop.
+
+**PASS, installed upgrade:** the single NSIS candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.7_x64-setup.exe`
+is 4,622,466 bytes, SHA-256
+`BE0F80E5D0175DA05C90C97FEDC38BE588E9F6E80F00A9064AB0F588F02421B5`.
+Its `.sha256` sidecar sits beside it. The hash was checked before silent
+installation over 0.1.6 (exit 0). Installed version is 0.1.7 and executable
+SHA-256 is
+`4958CE1F052EBD28703948782C3294CEDCB926FC24BBE83F26352D73786CF203`.
+The installed binary restored the existing disposable real Codex conversation
+across the upgrade with zero new Sends, then passed both hidden recovery
+tests. No installer rebuild after hashing.
+
+**Limits and next:** a real lost-acknowledgement test is not a proof of
+exactly-once delivery for every Codex version or crash timing. The person
+must review ambiguous work; no automatic resend is claimed. Complete manual
+screen-reader/contrast acceptance, separate clean-machine core/Codex
+installation, auto-update and mobile remain unfinished. Model-specific
+tokens and BRL cost remain UNKNOWN; no worker was used. The candidate is
+**installed but not yet committed, tagged or public**. Review this diff,
+commit/push, publish the exact candidate with its sidecar, freshly download
+and compare public bytes, reinstall that download and recheck history/review
+behavior. Do not rebuild it or manually trigger GitHub CI for this package.
