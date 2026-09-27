@@ -161,6 +161,11 @@ fn installed_runtime() -> Result<PathBuf, &'static str> {
     let path = std::env::var_os("FORGE_CORE_EXE")
         .map(PathBuf::from)
         .or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().and_then(bundled_runtime))
+        })
+        .or_else(|| {
             std::env::var_os("LOCALAPPDATA")
                 .map(|base| PathBuf::from(base).join("Programs/forge-core/bin/forge-core.exe"))
         })
@@ -169,6 +174,11 @@ fn installed_runtime() -> Result<PathBuf, &'static str> {
         return Err("O Forge não foi encontrado nesta máquina.");
     }
     Ok(path)
+}
+
+fn bundled_runtime(executable_dir: &Path) -> Option<PathBuf> {
+    let path = executable_dir.join("forge-core/forge-core.exe");
+    path.is_file().then_some(path)
 }
 
 pub async fn query<T: DeserializeOwned>(
@@ -365,6 +375,18 @@ mod tests {
         assert!(QueryTiming::INITIALIZE.attempt > QueryTiming::STANDARD.attempt);
         assert!(QueryTiming::INITIALIZE.total > QueryTiming::STANDARD.total);
         assert!(QueryTiming::INITIALIZE.total >= QueryTiming::INITIALIZE.attempt);
+    }
+
+    #[test]
+    fn bundled_core_requires_an_existing_file_beside_the_app() {
+        let base =
+            std::env::temp_dir().join(format!("forge-core-resource-{}", uuid::Uuid::new_v4()));
+        let core = base.join("forge-core/forge-core.exe");
+        assert_eq!(bundled_runtime(&base), None);
+        std::fs::create_dir_all(core.parent().unwrap()).unwrap();
+        std::fs::write(&core, b"fixture").unwrap();
+        assert_eq!(bundled_runtime(&base), Some(core));
+        std::fs::remove_dir_all(base).unwrap();
     }
 
     #[test]

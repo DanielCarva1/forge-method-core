@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "resources": {
+      "bundled-core/forge-core.exe": "forge-core/forge-core.exe",
+      "../../../LICENSE": "forge-core/LICENSE"
+    }
+  }
+}

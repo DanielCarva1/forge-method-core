@@ -2,7 +2,8 @@
   "name": "forge-desktop-build",
   "private": true,
   "scripts": {
-    "build:nsis": "tauri build --bundles nsis --ci",
+    "prebuild:nsis": "powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File scripts/prepare-core.ps1",
+    "build:nsis": "tauri build --bundles nsis --ci --config src-tauri/tauri.bundle.conf.json",
     "tauri": "tauri"
   },
   "devDependencies": {

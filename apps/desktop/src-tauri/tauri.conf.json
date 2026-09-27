@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Forge",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "identifier": "com.stablestudio.forge",
   "build": { "frontendDist": "../ui" },
   "app": {
@@ -26,7 +26,7 @@
     "publisher": "Stable Studio",
     "category": "DeveloperTool",
     "shortDescription": "Create and continue local projects with Forge",
-    "longDescription": "A Windows app for starting or continuing local Forge projects, chatting through a supported Codex CLI installation, and reviewing local results and the Forge record.",
+    "longDescription": "A Windows app for starting or continuing local Forge projects, chatting through bundled Codex CLI, and reviewing local results and the Forge record.",
     "homepage": "https://github.com/DanielCarva1/forge-method-core",
     "icon": ["icons/icon.ico", "icons/icon.png"],
     "windows": {

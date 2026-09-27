@@ -1,7 +1,7 @@
 # Forge desktop shell
 
 Independent Tauri application. Desktop `0.1.11` is the published alpha
-prerelease. Its exact installer was downloaded back, hash-checked and installed.
+prerelease. Source `0.1.12` is under development and is not yet public.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -43,6 +43,10 @@ server, CDN or runtime download. Packaging uses the exact Tauri CLI and Codex
 CLI versions in `apps/desktop/package-lock.json`. Codex CLI is a native Windows
 x64 runtime resource, not a frontend dependency, and increases installer size.
 `npm ci` fetches it during the build; installed app startup does not download it.
+For the 0.1.12 Windows installer, `npm run build:nsis` also stages the pinned
+released `forge-core` executable after checking both archive and binary hashes.
+The release build uses `src-tauri/tauri.bundle.conf.json` to include it without
+requiring that download for ordinary `cargo check` or debug builds.
 This is not a commitment against using a frontend framework when warranted.
 
 To repeat the Windows NSIS build from the repository with the same Tauri CLI:
@@ -81,10 +85,12 @@ built and the published candidate must be the exact artifact later verified.
   every Forge project on the machine. Removing a shortcut changes only this list.
   If local storage fails, opening a project still works, but the shortcut may
   not survive restart.
-- On Windows the adapter uses the installed executable under
-  `%LOCALAPPDATA%/Programs/forge-core/bin/forge-core.exe`. Host configuration can
-  override it with an absolute `FORGE_CORE_EXE`; the webview cannot choose commands
-  or executables. No PATH search occurs inside the selected project.
+- The 0.1.12 Windows bundle prefers its pinned `forge-core 0.13.2` executable.
+  An absolute `FORGE_CORE_EXE` host override takes precedence for development;
+  an older source build without the bundled file falls back to the executable
+  under `%LOCALAPPDATA%/Programs/forge-core/bin/forge-core.exe`. The app does
+  not replace global installations. The webview cannot choose commands or
+  executables. No PATH search occurs inside the selected project.
 - Each CLI invocation has a 15-second child timeout inside a 20-second bounded
   read/retry operation, hides the subprocess console, terminates unfinished
   children, and does not expose stderr. Ordinary read responses are limited to
@@ -121,8 +127,9 @@ Desktop or per-user npm executable only if the bundled file is absent.
 content cannot set it. The app does not modify global CLI installations. Sign
 in through the Codex CLI login flow; a ChatGPT account is required. API-key
 login, ZCode, in-app login and automatic Codex updates are not implemented.
-Bundling Codex does not bundle `forge-core`, WebView2 or account credentials;
-this is not yet a fully self-contained clean-machine installer.
+In published 0.1.11, `forge-core` remains separate; source 0.1.12 bundles a
+pinned released core for its installer. WebView2 and account credentials are
+not bundled. A genuinely clean-machine installation remains unproven.
 
 Earlier integration used standalone Codex CLI 0.154.0. The older machine CLI
 0.144.6 authenticated but the provider rejected its use of gpt-6-astra with
@@ -4637,3 +4644,61 @@ profile or machine. Do not call this alpha self-contained until that proof passe
 In-app ChatGPT sign-in, auto-update, signing, accessibility acceptance and
 mobile remain open. The pinned Codex CLI needs deliberate compatibility review
 for future alpha packages. Model-specific token and BRL costs remain UNKNOWN.
+
+## Desktop 0.1.12 bundled core candidate — 2026-09-27
+
+**Objective:** remove the separate `forge-core` install from the ordinary
+Windows Desktop journey without changing Forge's project authority or replacing
+the machine's existing installation. Source `0.1.12` pins the published core
+`v0.13.2` Windows archive and the extracted binary by SHA-256. The canonical
+`npm run build:nsis` stages it with `scripts/prepare-core.ps1`, then Tauri's
+additional `tauri.bundle.conf.json` includes it only in the installer. Runtime
+selection is explicit `FORGE_CORE_EXE`, then app-bundled core, then the prior
+per-user installation. `apps/desktop/third-party/forge-core-0.13.2/README.md`
+records provenance. The bundled core does not change Codex history or the
+Forge sidecar format. No subagents were used; model-specific tokens and BRL are
+UNKNOWN, not zero.
+
+**PASS:** the public v0.13.2 archive downloaded without authentication matched
+SHA-256 `27976049225D8650758D2593B5CB06C0FC20870216383C16C7FBC70478AD23BB`;
+its `forge-core.exe` is version 0.13.2 and SHA-256
+`CFD6F81B1710D0469A53D12B374258CC122676EA7865F26926B1CDB4C7541EDF`.
+Before bundling, the installed 0.1.11 app passed hidden native onboarding,
+record readback and real Codex send with that binary as a host override. The
+new staging script downloaded and verified a fresh archive, and a second fresh
+pass after moving aside its cache reproduced the same binary hash. The first
+`npm run build:nsis` attempt failed because `Get-FileHash` was unavailable in
+the npm child PowerShell; the script was changed to use .NET hashing, then the
+canonical npm build passed. Desktop-focused check/5 project tests, all 46
+Desktop Rust tests, strict Desktop Clippy, eight Node tests, browser suite and
+NSIS release build passed. No core workspace build or manual GitHub CI run.
+
+**One candidate:**
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.12_x64-setup.exe`,
+123,060,687 bytes, SHA-256
+`34003537959E05A97377C2C55FD2A788B89BB3707BCAE6A18843B74101B107AC`.
+Do not rebuild after hashing. The NSIS archive contains both CLI executables and
+license/notice resources. It silently upgraded installed 0.1.11 with exit 0;
+installed Desktop version is 0.1.12, app SHA-256
+`EA432B88E2FE58C26ED413757B90DF7098008E59E55C1CE93593ED93C19E3D21`.
+Bundled core and Codex hashes match the verified source binaries.
+
+**PASS native journey:** on the installed candidate, with both executable
+overrides unset and an empty alternate `LOCALAPPDATA`, a hidden Windows desktop
+initialized a fresh folder, read its Forge record, sent to authenticated real
+Codex, created real local HTML, previewed it, changed it in the same chat,
+reloaded WebView and then restored all real messages in order after a full app
+process restart without another Send. The earlier pass with no real agent also
+proved project onboarding when the fallback global core path was absent. The
+captured result `C:/ForgeFast/forge-0112-bundled-journey.png` was visually
+checked. The folder-dialog result in these runs was simulated; this account's
+existing Codex login and WebView2 were reused, so this is not clean-machine
+sign-in/install proof. Manual accessibility acceptance, auto-update, signing
+and mobile remain open. Source core is now 0.13.3 but this Desktop pins the
+last verified released 0.13.2.
+
+**Next exact step:** review the diff and release notes, selectively commit/push,
+tag/publish the exact candidate under standing alpha permission, download the
+public asset without authentication, compare size/hash and install those exact
+bytes. Then audit first-use/authentication and update UX on a genuinely fresh
+Windows account; do not claim it proved clean-machine setup yet.
