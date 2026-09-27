@@ -1,9 +1,7 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.15` is the published alpha
+Independent Tauri application. Desktop `0.1.16` is the published alpha
 prerelease. Its exact installer was downloaded back, hash-checked and installed.
-Desktop `0.1.16` is a locally tested candidate, not yet public (see the latest
-checkpoint below).
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -5273,3 +5271,31 @@ tested candidate and verify an unauthenticated download, byte hash, and
 installation. Do not rerun the costly real activation merely to check GitHub
 bytes; use a bounded native regression on the downloaded installer. After
 publication, resume the typed decision-request and remaining first-use gaps.
+
+### Desktop 0.1.16 public release readback — 2026-09-27
+
+**PASS:** commit `1afa856cee75c6687ba4f802072f8f71e874abf8` was pushed.
+Annotated tag `desktop-v0.1.16-alpha.1` resolves to that commit. The public
+prerelease is
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.16-alpha.1`.
+GitHub reports one installer asset, 123,136,684 bytes, digest SHA-256
+`EFA67725B375DC33AAB811381DA692288D65320D7C2175691253C39006F8BA10`.
+An unauthenticated direct download to
+`C:/ForgeFast/forge-alpha-0116-public-20260927/Forge_0.1.16_x64-setup.exe`
+matched the exact local candidate. Silent reinstall of those downloaded bytes
+returned exit 0; installed version 0.1.16, executable, bundled core and skill
+hashes matched the tested installation. A hidden native fixture-login and
+first-send regression on the downloaded installation again confirmed the
+installed skill path and file hash. It did not complete a provider login or
+execute the skill with a real agent; the earlier byte-identical candidate test
+did the real authenticated activation. No manual GH CI ran.
+
+The public installer is now available. The unsigned/no-auto-update and
+clean-machine/login/Decision Request/accessibility/mobile limits in the
+release notes still apply. The temporary probe directory mentioned above
+remains because recursive cleanup was rejected by host policy. The broader
+goal is still active. **Next exact step:** investigate the typed read-only
+Decision Request path through a bounded real app-agent command, without
+weakening safety, then verify fresh-account/clean-machine first use when a
+suitable fixture or human login is available. Avoid repeating the full Start
+Forge activation just to gather another token count.
