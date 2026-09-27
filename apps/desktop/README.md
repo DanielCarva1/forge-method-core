@@ -1,7 +1,7 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.11` is the published alpha
-prerelease. Source `0.1.12` is under development and is not yet public.
+Independent Tauri application. Desktop `0.1.12` is the published alpha
+prerelease. Its exact installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -4702,3 +4702,30 @@ tag/publish the exact candidate under standing alpha permission, download the
 public asset without authentication, compare size/hash and install those exact
 bytes. Then audit first-use/authentication and update UX on a genuinely fresh
 Windows account; do not claim it proved clean-machine setup yet.
+
+## Desktop 0.1.12 public release readback — 2026-09-27
+
+**PASS:** source commit `1ae391b0d9dfff4733bfff9608d28b984962f394`
+was pushed; annotated tag `desktop-v0.1.12-alpha.1` resolves to it. Public
+prerelease:
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.12-alpha.1`.
+GitHub reports 123,060,687 bytes and SHA-256
+`34003537959E05A97377C2C55FD2A788B89BB3707BCAE6A18843B74101B107AC`
+for the installer. Fresh unauthenticated download and sidecar in
+`C:/ForgeFast/forge-alpha-0112-public-20260927` matched the tested candidate.
+The downloaded installer silently reinstalled with exit 0. Installed version
+0.1.12 and app/core/Codex executable hashes exactly matched the earlier tested
+candidate. Those installed downloaded bytes passed hidden native folder
+onboarding and real Codex send/reply/reload/full-process restart with both
+executable overrides unset and an alternate empty `LOCALAPPDATA`. No manual
+GitHub CI was started. The full real create/preview/change journey had already
+passed on the same installed executable/resource hashes before the public
+download; it was not repeated after the identical public download.
+
+**Next product work:** inspect first-use ChatGPT authentication and update UX
+for people without any Codex setup, then run a genuinely fresh Windows account
+or VM test including installer, folder dialog, sign-in, artifact creation/change
+and restart. Current tests reused this account's existing Codex login and
+WebView2, so clean-machine setup is NOT_RUN. Manual accessibility acceptance,
+auto-update, signing and mobile remain open. Source core 0.13.3 is not the
+bundled 0.13.2. Model-specific token and BRL costs remain UNKNOWN.

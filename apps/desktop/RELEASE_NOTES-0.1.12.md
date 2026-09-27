@@ -49,5 +49,19 @@ bundled core SHA-256 is
 `CFD6F81B1710D0469A53D12B374258CC122676EA7865F26926B1CDB4C7541EDF`;
 bundled Codex SHA-256 is
 `8CB0E69E99FF2A158C54815DB82D0F2E524D8F301BC30184722CFD1AE5973574`.
-Do not rebuild or replace this tested candidate after hashing. It is not
-public until the exact tagged asset is published, downloaded and checked.
+Do not rebuild or replace this tested candidate after hashing. At candidate
+time it was not public; publication readback is recorded below.
+
+## Publication readback — 2026-09-27
+
+The prerelease is available at
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.12-alpha.1`.
+Annotated tag `desktop-v0.1.12-alpha.1` resolves to source commit
+`1ae391b0d9dfff4733bfff9608d28b984962f394`. A fresh unauthenticated
+download of the installer and sidecar matched the tested candidate's size and
+SHA-256. The downloaded file reinstalled with exit 0; installed version and
+app/core/Codex hashes matched the prior candidate installation. The installed
+downloaded bytes passed hidden native real Codex send/reply and full-process
+restart without an executable override. The full real artifact create/change
+journey had passed on the same installed hashes before the public download,
+but was not repeated afterward. GitHub CI was not manually started.
