@@ -3,8 +3,9 @@ import { prepareProjectSwitch, setProject } from './chat.mjs';
 import { setProgressProject } from './progress.mjs';
 import { setPreviewProject } from './preview.mjs';
 import { rememberProject } from './recent-projects.mjs';
+import { projectDisplayName } from './project-display.mjs';
 import './navigation.mjs';
-import './explore.mjs';
+import { chooseStarter } from './explore.mjs';
 
 const status = document.querySelector('#native-status');
 const retry = document.querySelector('#retry');
@@ -42,10 +43,6 @@ const projectStep = document.querySelector('#project-step');
 const resultLabel = document.querySelector('#project-result-label');
 let projectMode = 'new';
 
-function projectDisplayName(project) {
-  return project.project_root.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || project.project_id;
-}
-
 function resetWorkspaceHeading() {
   workspaceTitle.textContent = 'Vamos dar vida à sua ideia.';
   workspaceIntro.textContent = 'Escolha onde guardar o projeto. Depois conte sua ideia: a conversa começa quando você enviar.';
@@ -63,18 +60,35 @@ function chooseMode(mode, openFolder = false) {
     : 'Escolha qualquer pasta de projeto. Se ainda não usa Forge, vamos prepará-la sem apagar o que existe.';
 }
 
+function clearPreviousProjectForFolderChoice() {
+  projectRoot.value = '';
+  projectRoot.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 for (const link of document.querySelectorAll('[data-project-mode]')) {
   link.addEventListener('click', async event => {
+    if (link.hasAttribute('data-new-project') && !resultPanel.hidden) {
+      // A new Explore idea must not inherit the previous project's conversation.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!await prepareProjectSwitch()) return;
+      clearPreviousProjectForFolderChoice();
+      chooseMode('new', true);
+      if (link.dataset.starter) chooseStarter(link);
+      location.hash = '#workspace';
+      return;
+    }
     if (!link.hasAttribute('data-open-folder')) {
       chooseMode(link.dataset.projectMode);
       return;
     }
     event.preventDefault();
     if (await prepareProjectSwitch()) {
+      clearPreviousProjectForFolderChoice();
       chooseMode(link.dataset.projectMode, true);
       location.hash = '#workspace';
     }
-  });
+  }, { capture: true });
 }
 setup.querySelector('summary').addEventListener('click', async event => {
   if (!projectRoot.disabled) return;

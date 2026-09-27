@@ -31,6 +31,23 @@ enum QueryError {
     Other(&'static str),
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct QueryTiming {
+    total: Duration,
+    attempt: Duration,
+}
+
+impl QueryTiming {
+    const STANDARD: Self = Self {
+        total: Duration::from_secs(20),
+        attempt: Duration::from_secs(15),
+    };
+    pub(crate) const RECORD: Self = Self {
+        total: Duration::from_secs(90),
+        attempt: Duration::from_secs(85),
+    };
+}
+
 fn retryable_read_conflict(bytes: &[u8], expected: &str) -> bool {
     let Ok(response) = serde_json::from_slice::<FailureEnvelope>(bytes) else {
         return false;
@@ -163,9 +180,20 @@ pub async fn query_with_limit<T: DeserializeOwned>(
     expected: &str,
     max_bytes: usize,
 ) -> Result<T, &'static str> {
-    tokio::time::timeout(Duration::from_secs(20), async {
+    query_with_timing(root, args, expected, max_bytes, QueryTiming::STANDARD).await
+}
+
+/// Only record reads use the longer budget; project identity and start stay fast-failing.
+pub(crate) async fn query_with_timing<T: DeserializeOwned>(
+    root: &Path,
+    args: &[&str],
+    expected: &str,
+    max_bytes: usize,
+    timing: QueryTiming,
+) -> Result<T, &'static str> {
+    tokio::time::timeout(timing.total, async {
         for attempt in 0..4 {
-            match query_once(root, args, expected, max_bytes).await {
+            match query_once(root, args, expected, max_bytes, timing.attempt).await {
                 Ok(value) => return Ok(value),
                 Err(QueryError::RetryableReadConflict) if attempt < 3 => {
                     tokio::time::sleep(Duration::from_millis(300)).await;
@@ -187,6 +215,7 @@ async fn query_once<T: DeserializeOwned>(
     args: &[&str],
     expected: &str,
     max_bytes: usize,
+    timeout: Duration,
 ) -> Result<T, QueryError> {
     let runtime = installed_runtime().map_err(QueryError::Other)?;
     let mut command = tokio::process::Command::new(&runtime);
@@ -213,7 +242,7 @@ async fn query_once<T: DeserializeOwned>(
         .stdout
         .take()
         .ok_or(QueryError::Other("Não foi possível ler a consulta."))?;
-    let result = tokio::time::timeout(Duration::from_secs(15), async {
+    let result = tokio::time::timeout(timeout, async {
         let mut bytes = Vec::new();
         stdout.take(max_bytes as u64 + 1).read_to_end(&mut bytes).await.map_err(|_| QueryError::Other("Não foi possível ler a resposta do Forge."))?;
         if bytes.len() > max_bytes { return Err(QueryError::Other("A resposta do Forge excedeu o tamanho esperado.")); }

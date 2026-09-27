@@ -12,6 +12,8 @@ let generation = 0;
 let pending = false;
 let historyPending = false;
 let historyLoaded = false;
+let slowNotice;
+let historySlowNotice;
 const labels = { absent: 'Sem trabalho registrado.', current: 'Registro disponível. Ele pode não incluir a conversa mais recente.', stale: 'O Forge marcou este registro como desatualizado.', blocked: 'O trabalho registrado tem uma pendência.', completed: 'O trabalho registrado foi concluído. Isso não significa que o produto inteiro está pronto.', abandoned: 'O trabalho registrado foi encerrado sem conclusão.' };
 const stateLabels = { absent: 'Sem trabalho registrado', current: 'Em andamento no registro', stale: 'Registro desatualizado', blocked: 'Pendência registrada', completed: 'Concluído no registro', abandoned: 'Encerrado sem concluir' };
 const phases = {
@@ -27,7 +29,12 @@ function controls() {
   button.disabled = !project || pending;
   historyButton.disabled = !project || pending || historyPending;
 }
+function clearSlowNotices() {
+  clearTimeout(slowNotice);
+  clearTimeout(historySlowNotice);
+}
 function resetHistory() {
+  clearTimeout(historySlowNotice);
   historyLoaded = false;
   historyPending = false;
   historyPanel.open = false;
@@ -130,6 +137,7 @@ function recordFailure(error) {
 }
 export function setProgressProject(value) {
   project = value; generation++;
+  clearSlowNotices();
   pending = false;
   workspacePhase.hidden = true;
   workspacePhase.textContent = '';
@@ -143,6 +151,7 @@ export function setProgressProject(value) {
 }
 export function invalidateProgress() {
   generation++;
+  clearSlowNotices();
   workspacePhase.hidden = true;
   workspacePhase.textContent = '';
   resetHistory();
@@ -156,6 +165,7 @@ export function invalidateProgress() {
 async function loadProgress() {
   if (!project || pending) return;
   const current = ++generation;
+  clearTimeout(slowNotice);
   workspacePhase.hidden = true;
   workspacePhase.textContent = '';
   resetHistory();
@@ -163,6 +173,10 @@ async function loadProgress() {
   pending = true; controls(); result.hidden = true;
   if (hadFocus) status.focus();
   status.textContent = 'Consultando os registros do Forge…';
+  const notice = setTimeout(() => {
+    if (current === generation && pending) status.textContent = 'O registro está levando mais tempo para abrir. Você pode continuar conversando enquanto esperamos; nenhum progresso será presumido.';
+  }, 6000);
+  slowNotice = notice;
   try {
     const data = await globalThis.__TAURI__.core.invoke('inspect_progress', { projectRoot: project.project_root });
     if (current !== generation) return;
@@ -186,10 +200,12 @@ async function loadProgress() {
     const phase = phases[data.phase] || ['Etapa registrada', 'Converse com seu agente para entender esta etapa.'];
     document.getElementById('record-state').textContent = stateLabels[data.status];
     result.dataset.state = data.status;
+    document.getElementById('record-phase-label').textContent = data.status === 'absent' ? 'POR ONDE O FORGE COMEÇA' : 'ETAPA DO PROJETO';
+    document.getElementById('record-empty-help').hidden = data.status !== 'absent';
     document.getElementById('record-phase').textContent = phase[0];
     document.getElementById('record-phase-help').textContent = phase[1];
-    workspacePhase.textContent = data.status === 'stale' ? `Etapa no registro desatualizado: ${phase[0]}` : `Etapa no registro: ${phase[0]}`;
-    workspacePhase.hidden = data.status === 'absent';
+    workspacePhase.textContent = data.status === 'absent' ? 'Sem trabalho registrado' : data.status === 'stale' ? `Etapa no registro desatualizado: ${phase[0]}` : `Etapa no registro: ${phase[0]}`;
+    workspacePhase.hidden = false;
     const direction = data.accepted_direction;
     const directionPanel = document.getElementById('record-direction');
     directionPanel.hidden = !direction;
@@ -216,6 +232,8 @@ async function loadProgress() {
   } catch (error) {
     if (current === generation) status.textContent = recordFailure(error);
   } finally {
+    clearTimeout(notice);
+    if (slowNotice === notice) slowNotice = undefined;
     if (current === generation) { pending = false; controls(); }
   }
 }
@@ -294,6 +312,11 @@ async function loadHistory() {
   historyPending = true;
   controls();
   historyStatus.textContent = 'Consultando o histórico do Forge…';
+  clearTimeout(historySlowNotice);
+  const notice = setTimeout(() => {
+    if (current === generation && historyPending) historyStatus.textContent = 'O histórico está levando mais tempo para abrir. Você pode continuar conversando enquanto esperamos.';
+  }, 6000);
+  historySlowNotice = notice;
   try {
     const data = await globalThis.__TAURI__.core.invoke('inspect_direction_history', { projectRoot: root });
     if (current !== generation) return;
@@ -303,6 +326,8 @@ async function loadHistory() {
   } catch {
     if (current === generation) historyStatus.textContent = 'Não foi possível consultar o histórico. Nada foi alterado; tente novamente.';
   } finally {
+    clearTimeout(notice);
+    if (historySlowNotice === notice) historySlowNotice = undefined;
     if (current === generation) { historyPending = false; controls(); }
   }
 }

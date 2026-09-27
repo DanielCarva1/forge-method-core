@@ -32,17 +32,19 @@ search.addEventListener('input', filterCategories);
 addEventListener('hashchange', () => { if (location.hash === '#explore') filterCategories(); });
 document.querySelector('#category-search').addEventListener('submit', event => event.preventDefault());
 
+export function chooseStarter(link) {
+  if (composer.value.trim() && composer.value !== lastSuggestedDraft) {
+    ideaStatus.textContent = 'Sua ideia escrita foi mantida. Você pode editá-la antes de enviar.';
+    ideaStatus.hidden = false;
+    return;
+  }
+  composer.value = link.dataset.starter;
+  lastSuggestedDraft = composer.value;
+  clearIdeaStatus();
+}
+
 for (const link of document.querySelectorAll('[data-starter]')) {
-  link.addEventListener('click', () => {
-    if (composer.value.trim() && composer.value !== lastSuggestedDraft) {
-      ideaStatus.textContent = 'Sua ideia escrita foi mantida. Você pode editá-la antes de enviar.';
-      ideaStatus.hidden = false;
-      return;
-    }
-    composer.value = link.dataset.starter;
-    lastSuggestedDraft = composer.value;
-    clearIdeaStatus();
-  });
+  link.addEventListener('click', () => chooseStarter(link));
 }
 composer.addEventListener('input', clearIdeaStatus);
 addEventListener('hashchange', () => { if (location.hash !== '#workspace') clearIdeaStatus(); });

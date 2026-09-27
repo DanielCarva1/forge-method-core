@@ -1,5 +1,6 @@
 // Local shortcuts only. Forge remains the authority for project identity and state.
 import { prepareProjectSwitch } from './chat.mjs';
+import { projectDisplayName } from './project-display.mjs';
 const storageKey = 'forge.projects.v1';
 const list = document.querySelector('#recent-projects');
 const empty = document.querySelector('#projects-empty');
@@ -42,16 +43,20 @@ function renderProjects() {
   list.replaceChildren();
   empty.hidden = projects.length > 0;
   for (const project of projects) {
+    const name = projectDisplayName(project);
     const card = document.createElement('article');
     card.className = 'recent-project panel';
     const icon = document.createElement('span');
     icon.className = 'project-icon';
     icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = '✦';
+    const brand = document.createElement('img');
+    brand.src = 'assets/forge.png';
+    brand.alt = '';
+    icon.append(brand);
     const details = document.createElement('div');
     details.className = 'recent-project-details';
     const title = document.createElement('h2');
-    title.textContent = project.project_id;
+    title.textContent = name;
     const path = document.createElement('p');
     path.textContent = project.project_root;
     details.append(title, path);
@@ -61,7 +66,7 @@ function renderProjects() {
     open.type = 'button';
     open.className = 'primary';
     open.textContent = 'Abrir';
-    open.setAttribute('aria-label', `Abrir ${project.project_id}`);
+    open.setAttribute('aria-label', `Abrir ${name} na pasta ${project.project_root}`);
     open.addEventListener('click', async () => {
       if (projectRoot.disabled && projectRoot.value === project.project_root) {
         location.hash = '#workspace';
@@ -80,7 +85,7 @@ function renderProjects() {
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.textContent = 'Remover da lista';
-    remove.setAttribute('aria-label', `Remover ${project.project_id} da lista`);
+    remove.setAttribute('aria-label', `Remover ${name} da lista de projetos`);
     remove.addEventListener('click', () => {
       projects = projects.filter(item => item.project_root !== project.project_root);
       saveProjects();

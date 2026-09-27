@@ -1,7 +1,8 @@
-# Forge Desktop 0.1.1 alpha — approved local candidate
+# Forge Desktop 0.1.1 alpha — published package record
 
-**Status: maintainer approved this exact candidate for publication on
-2026-09-27; public upload and downloaded-byte verification are still pending.**
+**Status: published as the GitHub prerelease
+`desktop-v0.1.1-alpha.1` on 2026-09-27; its public download was hash-checked,
+installed, and passed a basic hidden-native UI smoke.**
 Earlier local `0.1.1` installers are archived as **superseded**. The current
 Windows x64 candidate is
 `D:\forge-method-core-build-cache\main-target\release\bundle\nsis\Forge_0.1.1_x64-setup.exe`
@@ -46,9 +47,9 @@ of whole-product readiness.
   reply in the default-model test. The app uses Codex's existing login and
   conversation history on this device.
 - Windows x64, unsigned NSIS current-user installer. No automatic in-app
-  updater: install a newer package over the previous alpha. No public download
-  exists until the maintainer approves publication and the uploaded file is
-  downloaded and hash-checked.
+  updater: install a newer package over the previous alpha. This published
+  package's public download was checked against the approved local candidate;
+  a future update will need its own approval and download check.
 - Codex can execute commands and change local files under the current access
   policy. Use trusted projects and review the agent's work. Interactive approval
   forms are not yet exposed in this UI; the agent asks in ordinary conversation.
@@ -78,7 +79,12 @@ The candidate identified above passed 43 desktop Rust tests, strict Clippy,
 formatting, seven Node unit tests, the browser UI suite, silent install,
 isolated native smoke, and a populated conversation upgrade from the previous
 local `0.1.1` candidate. Its installer hash was rechecked after those tests.
-The maintainer approved this exact file and its limits on 2026-09-27. Any
-subsequent application-source edit supersedes it and requires a new candidate.
-Publication is complete only after the uploaded file is downloaded, its hash
-matches this candidate, and that downloaded file is installed and checked.
+The maintainer approved this exact file and its limits on 2026-09-27. It was
+published at <https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.1-alpha.1>.
+The unauthenticated public download matched the candidate's size and SHA-256;
+installation exited 0 and the installed executable matched the previously
+tested hash. A basic hidden-native UI smoke passed on that installation. A
+full project/conversation smoke passed from the same installed binary after a
+transient cold read delay, but was not repeated from the public download path.
+Any subsequent application-source edit requires a new candidate for a future
+release, not mutation of this published asset.

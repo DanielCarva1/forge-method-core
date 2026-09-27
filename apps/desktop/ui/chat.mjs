@@ -1,7 +1,8 @@
 import { invalidateProgress } from './progress.mjs';
-import { readReference, saveReference } from './conversation-reference.mjs';
+import { readReference, saveReference, readUnconfirmedSend, markUnconfirmedSend, clearUnconfirmedSend } from './conversation-reference.mjs';
 import { renderAgentMessage } from './message-format.mjs';
 import { previewLinkedFile } from './preview.mjs';
+import { projectDisplayName } from './project-display.mjs';
 const byId = id => document.getElementById(id);
 const status = byId('agent-status');
 const connect = byId('connect-agent');
@@ -45,7 +46,7 @@ let pageNumber = 0;
 let pageCursors = [null];
 let hasPreviousConversation = false;
 const sessionReferences = new Map();
-const unconfirmedSends = new Set();
+const unconfirmedSends = new Map(); // Project key -> Codex thread ID; no message copy.
 const referenceKey = () => JSON.stringify([project.project_id, project.project_root]);
 const invoke = (command, args) => globalThis.__TAURI__.core.invoke(command, args);
 
@@ -82,7 +83,7 @@ function controls() {
   connect.disabled = transitioning || connected || !project;
   newConversation.disabled = transitioning || connected;
   disconnect.disabled = transitioning || !connected;
-  send.disabled = transitioning || !project || busy || broken;
+  send.disabled = transitioning || !project || busy || broken || (connected && unconfirmedSends.has(referenceKey()));
   input.disabled = transitioning || busy || broken;
   stop.disabled = transitioning || !connected || !busy || broken;
   stop.hidden = !connected || !busy;
@@ -113,12 +114,23 @@ function controls() {
 
 export function setProject(value) {
   project = value;
+  if (!project) {
+    messages.replaceChildren(); items.clear();
+    rawMessageView = false;
+    messageView.hidden = true;
+    messageView.textContent = 'Ver texto original';
+  }
   conversationStep.textContent = project ? 'SUA CONVERSA' : 'PASSO 2 · SUA CONVERSA';
   hasPreviousConversation = false;
   newConversation.checked = false;
   if (project) {
     try { hasPreviousConversation = !!(sessionReferences.get(referenceKey()) ?? readReference(localStorage, project)); }
     catch { hasPreviousConversation = true; } // Keep the explicit new-conversation escape hatch.
+    try {
+      const uncertainThread = readUnconfirmedSend(localStorage, project);
+      if (uncertainThread) unconfirmedSends.set(referenceKey(), uncertainThread);
+    } catch { if (!unconfirmedSends.has(referenceKey())) unconfirmedSends.set(referenceKey(), null); } // Unreadable marker fails closed.
+    if (unconfirmedSends.has(referenceKey())) hasPreviousConversation = true;
   }
   listGeneration++;
   listPending = false;
@@ -133,7 +145,7 @@ export function setProject(value) {
   previousConversations.hidden = true;
   connect.disabled = !project || connected;
   connectHelp.hidden = !project || connected;
-  send.disabled = !project || transitioning || busy || broken;
+  send.disabled = !project || transitioning || busy || broken || (connected && unconfirmedSends.has(referenceKey()));
   findConversations.disabled = !project || connected || transitioning;
   moreConversations.disabled = true;
   previousConversations.disabled = true;
@@ -317,13 +329,11 @@ async function connectCurrent(explicitThreadId = null) {
   try {
     let threadId = explicitThreadId;
     if (!threadId && !newConversation.checked) {
-      try { threadId = sessionReferences.get(referenceKey()) ?? readReference(localStorage, project); }
+      try { threadId = unconfirmedSends.get(referenceKey()) || sessionReferences.get(referenceKey()) || readReference(localStorage, project); }
       catch { throw 'Não foi possível consultar a conversa salva neste dispositivo. Para seguir sem retomá-la, marque “Começar outra conversa”.'; }
     }
     if (reviewingSend) {
-      let expected;
-      try { expected = sessionReferences.get(referenceKey()) ?? readReference(localStorage, project); }
-      catch { /* The in-memory reference is preferred; missing history fails closed below. */ }
+      const expected = unconfirmedSends.get(referenceKey());
       if (!expected || threadId !== expected) throw 'Retome a conversa do envio não confirmado antes de reenviar. Se ela não estiver disponível, confira o histórico pelo Codex.';
     }
     channel = new globalThis.__TAURI__.core.Channel();
@@ -342,19 +352,23 @@ async function connectCurrent(explicitThreadId = null) {
     try {
       for (const item of conversation.messages) message(item.id, item.role === 'user' ? 'Você' : item.incomplete ? 'Codex · resposta incompleta' : 'Codex', item.text, false, item.role === 'agent' && !item.incomplete);
     } finally { restoringHistory = false; }
-    showLatestMessage();
     sessionReferences.set(referenceKey(), conversation.thread_id);
     hasPreviousConversation = true;
     let saved = true;
     try { saveReference(localStorage, project, conversation.thread_id); } catch { saved = false; }
     newConversation.checked = false;
-    if (reviewingSend && conversation.resumed) unconfirmedSends.delete(referenceKey());
+    let reviewSaved = true;
+    if (reviewingSend && conversation.resumed) {
+      unconfirmedSends.delete(referenceKey());
+      try { clearUnconfirmedSend(localStorage, project); } catch { reviewSaved = false; }
+    }
     showStatus(broken
       ? 'A conexão foi encerrada. Desconecte antes de tentar novamente.'
-      : `${conversation.resumed ? 'Conversa retomada. Confira o último registro do Forge e o que já foi feito antes de continuar.' : `Codex conectado ao projeto ${project.project_id}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}`, broken ? 'disconnected' : 'connected');
+      : `${conversation.resumed ? 'Conversa retomada. Confira o último registro do Forge e o que já foi feito antes de continuar.' : `Codex conectado ao projeto ${projectDisplayName(project)}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}${reviewSaved ? '' : ' A revisão do envio não pôde ser salva; ao reabrir, confira o histórico novamente.'}`, broken ? 'disconnected' : 'connected');
   } catch (error) { if (current !== generation) return; ++generation; showStatus(typeof error === 'string' ? error : 'Não foi possível conectar ao Codex.', 'error'); }
   transitioning = false;
   controls();
+  if (connected && !broken) showLatestMessage();
   if (connected && !broken && !byId('workspace').hidden) {
     requestAnimationFrame(() => {
       if (current === generation && connected && !byId('workspace').hidden) send.scrollIntoView({ block: 'nearest' });
@@ -368,10 +382,9 @@ connect.addEventListener('click', () => connectCurrent());
 byId('message-form').addEventListener('submit', async event => {
   event.preventDefault();
   if (!project || busy || transitioning || broken || !input.value.trim()) return;
-  if (!connected && unconfirmedSends.has(referenceKey())) {
+  if (unconfirmedSends.has(referenceKey())) {
     showStatus('O envio anterior não foi confirmado. Abra a conversa sem enviar e confira o histórico antes de tentar novamente.', 'error');
-    conversationPicker.open = true;
-    connect.focus();
+    if (!connected) { conversationPicker.open = true; connect.focus(); }
     return;
   }
   const text = input.value;
@@ -381,6 +394,16 @@ byId('message-form').addEventListener('submit', async event => {
   }
   if (!connected && !await connectCurrent()) return;
   const current = generation;
+  const currentThread = sessionReferences.get(referenceKey());
+  if (!currentThread) {
+    showStatus('Não foi possível identificar a conversa atual. Abra o histórico antes de enviar.', 'error');
+    return;
+  }
+  try { markUnconfirmedSend(localStorage, project, currentThread); }
+  catch {
+    showStatus('Não foi possível guardar a proteção deste envio. Sua mensagem não foi enviada; verifique o armazenamento do aplicativo antes de tentar novamente.', 'error');
+    return;
+  }
   input.value = '';
   busy = true; controls(); stop.disabled = true;
   showStatus('Enviando sua mensagem…', 'working');
@@ -388,17 +411,21 @@ byId('message-form').addEventListener('submit', async event => {
   const local = message(id, 'Você', text);
   local.article.dataset.delivery = 'pending';
   local.title.textContent = 'Você · enviando';
+  unconfirmedSends.set(referenceKey(), currentThread);
   try {
     await invoke('send_message', { text });
     if (current !== generation) return;
     local.article.dataset.delivery = 'accepted';
     local.title.textContent = 'Você';
+    unconfirmedSends.delete(referenceKey());
+    try { clearUnconfirmedSend(localStorage, project); } catch {
+      showStatus('Envio confirmado, mas não foi possível atualizar o aviso local. Ao reabrir, talvez você precise conferir esta conversa novamente.', 'error');
+    }
     controls();
   } catch (error) {
     if (current !== generation) return;
     local.article.dataset.delivery = 'unconfirmed';
     local.title.textContent = 'Você · envio não confirmado';
-    unconfirmedSends.add(referenceKey());
     transitioning = true; controls();
     try { await invoke('disconnect_agent'); } catch { broken = true; }
     if (current !== generation) return;

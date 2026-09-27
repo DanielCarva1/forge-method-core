@@ -352,10 +352,12 @@ fn validate(value: Resume, project_id: &str) -> Result<Progress, &'static str> {
 pub async fn inspect_progress(project_root: String) -> Result<Progress, &'static str> {
     let project = project::inspect_project(project_root).await?;
     let _read = RESUME_READ.lock().await;
-    let resume = project::query(
+    let resume = project::query_with_timing(
         Path::new(&project.project_root),
         &["workflow", "resume"],
         "workflow.resume",
+        65_536,
+        project::QueryTiming::RECORD,
     )
     .await?;
     validate(resume, &project.project_id)
@@ -367,11 +369,12 @@ pub async fn inspect_direction_history(
 ) -> Result<DirectionHistory, &'static str> {
     let project = project::inspect_project(project_root).await?;
     let _read = RESUME_READ.lock().await;
-    let report: WorkflowReport = project::query_with_limit(
+    let report: WorkflowReport = project::query_with_timing(
         Path::new(&project.project_root),
         &["workflow", "report"],
         "workflow.report",
         4 * 1024 * 1024,
+        project::QueryTiming::RECORD,
     )
     .await?;
     project_direction_history(report, &project.project_id)

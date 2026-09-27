@@ -71,7 +71,28 @@ async function availablePort() {
       assert.match(await page.locator('#messages article[data-role="agent"]').innerText(), /Marcador alpha 2719/i);
       await page.waitForTimeout(1000);
       assert.equal(await page.locator('#messages article').count(), 2, 'Upgrade resume must not replay or create a turn');
-      console.log('PASS: new installed binary restored the pre-upgrade user/reply pair without sending a new turn.');
+      if (process.env.FORGE_TEST_ZOOM_EQUIVALENT === '1') {
+        const zoomSession = await context.newCDPSession(page);
+        try {
+          await zoomSession.send('Emulation.setDeviceMetricsOverride', { width: 590, height: 410, deviceScaleFactor: 1, mobile: false });
+          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true, 'Zoom-equivalent viewport should not scroll sideways');
+          const draft = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
+          const longDraft = 'Uma ideia longa que ainda não será enviada. '.repeat(30);
+          await draft.fill(longDraft);
+          assert.equal(await draft.inputValue(), longDraft);
+          await page.locator('#send-message').evaluate(node => node.scrollIntoView({ block: 'end' }));
+          assert.equal(await page.locator('#send-message').evaluate(node => {
+            const box = node.getBoundingClientRect();
+            return box.top >= 0 && box.bottom <= innerHeight + 2;
+          }), true, 'Send should remain reachable with a long draft in a zoom-equivalent viewport');
+          assert.equal(await page.locator('#messages article').count(), 2);
+        } finally {
+          await zoomSession.send('Emulation.clearDeviceMetricsOverride');
+          await zoomSession.detach();
+        }
+        console.log('PASS: local release WebView keeps long draft and Send reachable in a zoom-equivalent viewport without sideways overflow.');
+      }
+      console.log('PASS: new binary restored the pre-upgrade user/reply pair without sending a new turn.');
     }
   } finally {
     if (browser) await browser.close().catch(() => {});

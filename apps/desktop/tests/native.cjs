@@ -35,6 +35,7 @@ async function operatePreviewDialog(page, file) {
 
 (async () => {
   if (!process.env.FORGE_DESKTOP_EXE) throw new Error('Set FORGE_DESKTOP_EXE to the built development executable');
+  if (process.env.FORGE_TEST_NEW_IDEA_REAL_SEND === '1' && process.env.FORGE_TEST_NEW_IDEA_PROJECT !== '1') throw new Error('FORGE_TEST_NEW_IDEA_REAL_SEND requires FORGE_TEST_NEW_IDEA_PROJECT');
   const reservation = createServer();
   await new Promise(resolve => reservation.listen(0, '127.0.0.1', resolve));
   const port = reservation.address().port;
@@ -142,16 +143,19 @@ async function operatePreviewDialog(page, file) {
         assert.equal(await page.locator('#project-result').isVisible(), false);
       } else await field.fill(process.env.FORGE_TEST_PROJECT);
       await page.evaluate(() => {
-        const original = window.__TAURI__.core.invoke;
+        const originalCore = window.__TAURI__.core;
+        const original = originalCore.invoke;
         window.progressReadErrors = [];
-        window.__TAURI__.core.invoke = async (command, args) => {
-          try { return await original.call(window.__TAURI__.core, command, args); }
+        const facade = Object.create(originalCore);
+        Object.defineProperty(facade, 'invoke', { value: async (command, args) => {
+          try { return await original(command, args); }
           catch (error) {
             if (command === 'inspect_progress') window.progressReadErrors.push(String(error));
             throw error;
           }
-        };
-        window.restoreProgressInvoke = () => { window.__TAURI__.core.invoke = original; };
+        } });
+        window.__TAURI__.core = facade;
+        window.restoreProgressInvoke = () => { window.__TAURI__.core = originalCore; };
       });
       await submit.click();
       await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 15000 });
@@ -162,6 +166,8 @@ async function operatePreviewDialog(page, file) {
       assert.ok((await page.locator('#confirmed-project-id').textContent()).length > 0);
       assert.equal(await page.locator('#confirmed-project-id').isVisible(), false);
       assert.equal(await page.locator('#workspace-title').textContent(), path.basename(process.env.FORGE_TEST_PROJECT));
+      assert.equal(await page.locator('#recent-projects .recent-project h2').first().textContent(), path.basename(process.env.FORGE_TEST_PROJECT));
+      assert.equal(await page.locator('#recent-projects .project-icon img').first().getAttribute('src'), 'assets/forge.png');
       assert.equal(await page.locator('#workspace-back').getAttribute('href'), '#projects');
       assert.equal(await page.getByRole('heading', { name: 'Onde estamos' }).isVisible(), true);
       assert.equal(await page.locator('#project-record').isVisible(), true);
@@ -170,11 +176,25 @@ async function operatePreviewDialog(page, file) {
       if (await page.evaluate(() => innerWidth > 900)) {
         assert.equal(await page.evaluate(() => document.querySelector('#project-preview').getBoundingClientRect().top < document.querySelector('.project').getBoundingClientRect().top), true);
         assert.equal(await page.evaluate(() => document.querySelector('#project-preview').getBoundingClientRect().top < document.querySelector('#project-record').getBoundingClientRect().top), true);
+        const nativeViewport = await page.evaluate(() => {
+          window.scrollTo(0, 0);
+          const history = document.querySelector('.conversation-body').getBoundingClientRect();
+          const invitation = document.querySelector('.empty-conversation h3').getBoundingClientRect();
+          const form = document.getElementById('message-form').getBoundingClientRect();
+          const send = document.getElementById('send-message').getBoundingClientRect();
+          return { width: innerWidth, height: innerHeight, history: { top: history.top, bottom: history.bottom, height: history.height }, invitation: { top: invitation.top, bottom: invitation.bottom }, form: { top: form.top }, send: { top: send.top, bottom: send.bottom } };
+        });
+        if (process.env.FORGE_NATIVE_VIEWPORT_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_NATIVE_VIEWPORT_SCREENSHOT });
+        assert.equal(nativeViewport.history.height >= 150 && nativeViewport.invitation.top >= nativeViewport.history.top &&
+          nativeViewport.invitation.bottom <= nativeViewport.history.bottom && nativeViewport.history.bottom <= nativeViewport.form.top + 1 &&
+          nativeViewport.send.top >= 0 && nativeViewport.send.bottom <= nativeViewport.height + 2,
+        true, `Native project-ready invitation, history and Send should fit without overlap: ${JSON.stringify(nativeViewport)}`);
       }
       if (process.env.FORGE_TEST_CONVERSATION_LIST === '1') {
         await page.evaluate(() => {
           window.forgePickerCalls = { listed: [], connected: [], sent: 0 };
-          const invoke = window.__TAURI__.core.invoke;
+          const originalCore = window.__TAURI__.core;
+          const invoke = originalCore.invoke;
           const observedInvoke = async (command, args) => {
             if (command === 'connect_agent') window.forgePickerCalls.connected.push(args.threadId);
             if (command === 'send_message') window.forgePickerCalls.sent++;
@@ -182,7 +202,9 @@ async function operatePreviewDialog(page, file) {
             if (command === 'list_conversations') window.forgePickerCalls.listed.push(...result.conversations.map(choice => choice.id));
             return result;
           };
-          window.__TAURI__ = { ...window.__TAURI__, core: { ...window.__TAURI__.core, invoke: observedInvoke } };
+          const facade = Object.create(originalCore);
+          Object.defineProperty(facade, 'invoke', { value: observedInvoke });
+          window.__TAURI__.core = facade;
         });
         await page.locator('#conversation-picker summary').click();
         await page.getByRole('button', { name: 'Buscar conversas' }).click();
@@ -230,23 +252,30 @@ async function operatePreviewDialog(page, file) {
       await page.evaluate(() => window.restoreProgressInvoke());
       assert.ok((await page.locator('#record-state').textContent()).length > 0);
       assert.ok((await page.locator('#record-phase').textContent()).length > 0);
-      assert.match(await page.locator('#workspace-phase').textContent(), /Etapa no registro:/);
+      const recordedPhase = await page.locator('#workspace-phase').textContent();
       assert.equal(await page.locator('#workspace-phase').isVisible(), true);
-      assert.ok((await page.locator('#record-outcome').textContent()).length > 0);
-      assert.ok((await page.locator('#record-title').textContent()).length > 0);
-      assert.ok((await page.locator('#record-next').textContent()).length > 0);
-      assert.equal(await page.locator('#record-activity').isVisible(), true, 'Recorded current activity must be visible without opening details');
-      assert.equal(await page.locator('#record-next').isVisible(), true, 'Recorded next step must be visible without opening details');
-      assert.equal(await page.locator('#record-outcome').isVisible(), false, 'Supporting details begin collapsed');
-      assert.match(await page.locator('#record-decisions').textContent(), /neste registro/);
-      assert.equal(await page.locator('#record-direction').isVisible(), true);
-      await page.locator('#record-direction summary').click();
-      assert.ok((await page.locator('#record-direction-outcome').textContent()).length > 0);
-      assert.ok((await page.locator('#record-revision').textContent()).length > 0);
-      assert.match(await page.locator('#record-direction').textContent(), /não comprova aprovação humana independente/);
-      assert.equal(await page.locator('#record-direction script').count(), 0);
+      if (recordedPhase === 'Sem trabalho registrado') {
+        assert.equal(await page.locator('#record-empty-help').isVisible(), true);
+        assert.equal(await page.locator('#record-work').isVisible(), false);
+        assert.equal(await page.locator('#record-direction').isVisible(), false);
+      } else {
+        assert.match(recordedPhase, /Etapa no registro:/);
+        assert.ok((await page.locator('#record-outcome').textContent()).length > 0);
+        assert.ok((await page.locator('#record-title').textContent()).length > 0);
+        assert.ok((await page.locator('#record-next').textContent()).length > 0);
+        assert.equal(await page.locator('#record-activity').isVisible(), true, 'Recorded current activity must be visible without opening details');
+        assert.equal(await page.locator('#record-next').isVisible(), true, 'Recorded next step must be visible without opening details');
+        assert.equal(await page.locator('#record-outcome').isVisible(), false, 'Supporting details begin collapsed');
+        assert.match(await page.locator('#record-decisions').textContent(), /neste registro/);
+        assert.equal(await page.locator('#record-direction').isVisible(), true);
+        await page.locator('#record-direction summary').click();
+        assert.ok((await page.locator('#record-direction-outcome').textContent()).length > 0);
+        assert.ok((await page.locator('#record-revision').textContent()).length > 0);
+        assert.match(await page.locator('#record-direction').textContent(), /não comprova aprovação humana independente/);
+        assert.equal(await page.locator('#record-direction script').count(), 0);
+      }
       if (process.env.FORGE_RECORD_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_RECORD_SCREENSHOT, fullPage: true });
-      console.log('PASS: actual bounded Forge workflow readback displayed separately from agent activity.');
+      console.log(`PASS: actual bounded Forge workflow readback displayed ${recordedPhase === 'Sem trabalho registrado' ? 'its honest empty state' : 'separately from agent activity'}.`);
       if (process.env.FORGE_TEST_DIRECTION_HISTORY === '1') {
         await page.locator('#direction-history summary').click();
         await page.locator('#direction-history-status').filter({ hasText: /direç(ão|ões) registrada/ }).waitFor({ timeout: 35000 });
@@ -319,7 +348,11 @@ async function operatePreviewDialog(page, file) {
       } else await field.fill(legacyProject);
       await assert.rejects(access(path.join(legacyProject, '.forge-method.yaml')), { code: 'ENOENT' });
       await submit.click();
-      await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 25000 });
+      try { await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 35000 }); }
+      catch (error) {
+        console.error('Existing-folder onboarding status:', await page.locator('#project-status').textContent());
+        throw error;
+      }
       assert.equal(await page.locator('#confirmed-root').textContent(), legacyProject);
       assert.equal(await readFile(existingFile, 'utf8'), 'Keep this existing work unchanged.\n');
       await access(path.join(legacyProject, '.forge-method.yaml'));
@@ -344,6 +377,8 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('#confirmed-root').textContent(), newProject);
       assert.equal(await page.locator('#workspace-title').textContent(), 'new-project');
       await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 35000 });
+      assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem trabalho registrado');
+      assert.equal(await page.locator('#record-empty-help').isVisible(), true);
       console.log('PASS: one folder action initialized a new project and its Forge record without a second setup command.');
       assert.equal(await page.locator('#connect-agent').isEnabled(), true);
       assert.equal(await page.locator('#send-message').isEnabled(), true);
@@ -425,7 +460,15 @@ async function operatePreviewDialog(page, file) {
         console.error('Site preview diagnosis:', previewResponses, await page.evaluate(() => ({ pageUrl: location.href, src: document.querySelector('#preview-site').src, text: document.querySelector('#preview-text').textContent, status: document.querySelector('#preview-status').textContent })), await Promise.all(page.frames().map(async frame => ({ url: frame.url(), body: (await frame.locator('body').textContent().catch(() => 'unavailable'))?.slice(0, 300) }))));
         throw error;
       }
-      assert.equal(await page.frameLocator('#preview-site').locator('h1').evaluate(node => getComputedStyle(node).color), 'rgb(11, 80, 34)');
+      assert.equal(await page.frameLocator('#preview-site').locator('h1').evaluate(async node => {
+        const deadline = Date.now() + 5000;
+        while (Date.now() < deadline) {
+          const color = getComputedStyle(node).color;
+          if (color === 'rgb(11, 80, 34)') return color;
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        return getComputedStyle(node).color;
+      }), 'rgb(11, 80, 34)', 'Local CSS should finish loading before its color is asserted');
       assert.ok(await page.frameLocator('#preview-site').getByRole('img', { name: 'Arte local' }).evaluate(node => node.naturalWidth > 0));
       assert.equal(await page.evaluate(() => window.previewEscaped), false);
       await page.waitForTimeout(1400);
@@ -479,7 +522,7 @@ async function operatePreviewDialog(page, file) {
       console.log('PASS: native completed-message file action opens a project file and rejects an outside path.');
       console.log(`PASS: native read-only text/image preview, update and outside-path rejection; file picker ${process.env.FORGE_TEST_PREVIEW_DIALOG === 'select' ? 'used the actual Windows dialog' : 'response was simulated'}.`);
       await page.locator('nav a[data-route="projects"]').click();
-      assert.ok((await page.locator('#recent-projects').innerText()).includes('new-project'));
+      assert.equal(await page.locator('#recent-projects .recent-project h2').first().textContent(), 'new-project');
       await page.locator('nav a[data-route="workspace"]').click();
       assert.equal(await page.locator('#project-setup').evaluate(node => node.open), false);
       console.log('PASS: empty project folder received Forge onboarding and enables Codex connection.');
@@ -619,7 +662,7 @@ async function operatePreviewDialog(page, file) {
         await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
         await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
         console.log('PASS: history restored from Codex after transport shutdown and WebView reload, without resending a turn.');
-      } else if (process.env.FORGE_TEST_AGENT_SMOKE !== '1') { console.log('NOT_RUN: actual Codex conversation (FORGE_TEST_AGENT and FORGE_TEST_AGENT_SMOKE not set).'); }
+      } else if (process.env.FORGE_TEST_AGENT_SMOKE !== '1' && process.env.FORGE_TEST_NEW_IDEA_REAL_SEND !== '1') { console.log('NOT_RUN: actual Codex conversation (real-agent smoke flags not set).'); }
     } else {
       console.log('NOT_RUN: real project resolution (FORGE_TEST_PROJECT not set).');
     }
@@ -664,11 +707,14 @@ async function operatePreviewDialog(page, file) {
       await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 25000 });
       await page.evaluate(() => {
         window.restartSendCount = 0;
-        const invoke = window.__TAURI__.core.invoke;
-        window.__TAURI__.core.invoke = (command, args) => {
+        const originalCore = window.__TAURI__.core;
+        const invoke = originalCore.invoke;
+        const facade = Object.create(originalCore);
+        Object.defineProperty(facade, 'invoke', { value: (command, args) => {
           if (command === 'send_message') window.restartSendCount++;
           return invoke(command, args);
-        };
+        } });
+        window.__TAURI__.core = facade;
       });
       await openConversation(page);
       await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor({ timeout: 110000 });
@@ -677,6 +723,57 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('#messages article').last().textContent(), restartHistory.last);
       assert.equal(await page.evaluate(() => window.restartSendCount), 0);
       console.log('PASS: full native process restart restored the real Codex conversation in order without resending a turn.');
+    }
+    if (process.env.FORGE_TEST_NEW_IDEA_PROJECT === '1') {
+      assert.ok(process.env.FORGE_TEST_PROJECT, 'The new-idea check requires FORGE_TEST_PROJECT');
+      const projectForNewIdea = path.join(profile, 'new-project');
+      await access(path.join(projectForNewIdea, '.forge-method.yaml'));
+      await page.locator('nav a[data-route="workspace"]').click();
+      await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(projectForNewIdea);
+      await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+      await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 25000 });
+      await page.locator('nav a[data-route="explore"]').click();
+      await page.getByRole('link', { name: /Arte e criação/ }).click();
+      await page.locator('#workspace').waitFor({ state: 'visible' });
+      assert.equal(await page.locator('#project-root').inputValue(), '');
+      assert.equal(await page.locator('#project-result').isHidden(), true);
+      assert.equal(await page.locator('#project-setup').evaluate(node => node.open), true);
+      assert.equal(await page.locator('#send-message').isDisabled(), true);
+      assert.match(await page.locator('#message-text').inputValue(), /artístico/i);
+      console.log('PASS: native Explore starts a new idea with its draft but without silently reusing the previous project.');
+      if (process.env.FORGE_TEST_NEW_IDEA_REAL_SEND === '1') {
+        const freshIdeaProject = path.join(profile, 'fresh-idea-project');
+        await mkdir(freshIdeaProject);
+        await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(freshIdeaProject);
+        await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+        await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 35000 });
+        assert.equal(await page.locator('#confirmed-root').textContent(), freshIdeaProject);
+        const safePrompt = 'Sem usar ferramentas nem alterar arquivos, responda em português apenas: A nova ideia está no projeto certo.';
+        await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).fill(safePrompt);
+        await page.getByRole('button', { name: 'Enviar', exact: true }).click();
+        await page.locator('#agent-status').filter({ hasText: 'Resposta recebida' }).waitFor({ timeout: 130000 });
+        assert.equal(await page.locator('#messages article[data-role="user"]').count(), 1);
+        assert.equal(await page.locator('#messages article[data-role="agent"]').count(), 1);
+        assert.match(await page.locator('#messages article[data-role="agent"]').innerText(), /nova ideia|projeto certo/i);
+        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await page.locator('#agent-status').filter({ hasText: 'Desconectado' }).waitFor({ timeout: 10000 });
+        console.log('PASS: a fresh Explore idea selected a different real Forge project and delivered one Codex reply there.');
+      }
+    }
+    if (process.env.FORGE_TEST_OPEN_ANOTHER_PROJECT === '1') {
+      assert.ok(process.env.FORGE_TEST_PROJECT, 'The project-switch check requires FORGE_TEST_PROJECT');
+      await page.locator('nav a[data-route="workspace"]').click();
+      await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(process.env.FORGE_TEST_PROJECT);
+      await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+      await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 35000 });
+      await page.locator('nav a[data-route="projects"]').click();
+      await page.getByRole('link', { name: 'Abrir outro projeto' }).click();
+      await page.locator('#workspace').waitFor({ state: 'visible' });
+      assert.equal(await page.locator('#project-root').inputValue(), '');
+      assert.equal(await page.locator('#project-result').isHidden(), true);
+      assert.equal(await page.locator('#messages article').count(), 0);
+      assert.equal(await page.locator('#send-message').isDisabled(), true);
+      console.log('PASS: native Open Another Project clears the previous folder and conversation before a new folder is confirmed.');
     }
     if (process.env.FORGE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_SCREENSHOT, fullPage: true });
     console.log('PASS: real native window, frontend-to-Rust identity and retry.');
@@ -688,7 +785,7 @@ async function operatePreviewDialog(page, file) {
           if (page) await page.evaluate(() => Promise.race([
             window.__TAURI__?.core?.invoke('disconnect_agent').catch(() => {}),
             new Promise(resolve => setTimeout(resolve, 5000)),
-          ]));
+          ])).catch(() => {}); // A closing or navigated WebView must not mask the test result.
         } finally { await browser.close(); }
       }
     } finally {

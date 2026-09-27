@@ -1,7 +1,7 @@
 # Forge desktop shell
 
-Independent Tauri application, currently a development shell, not a published
-user release. It does not require Codex Desktop. A Codex CLI adapter supports
+Independent Tauri application. Desktop `0.1.1` is a published alpha prerelease;
+newer `0.1.2` work remains local and unpublished. It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
 
@@ -2605,3 +2605,806 @@ source commit, create/push the desktop-specific tag, publish the approved
 candidate as a GitHub prerelease, then download, hash-check and smoke-test
 that exact public asset. Keep the goal active afterward: broader UI coverage
 and polish are still pending. Model-specific tokens and BRL cost are UNKNOWN.
+
+## Desktop 0.1.1 alpha published and public-download verification — 2026-09-27
+
+The approved desktop source package was committed as
+`c2e6d94b82ec2c3021d308bfa7c2c16d9111863d` on `codex/desktop-shell`,
+pushed to `origin`, and tagged with the separate annotated
+`desktop-v0.1.1-alpha.1` tag. The tag resolves to that commit and does not
+match the core release workflow's `v*` trigger. The GitHub prerelease is
+<https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.1-alpha.1>.
+It contains only `Forge_0.1.1_x64-setup.exe` and its `.sha256` file. The
+release target commit is the source commit above; its body notes that this
+was a local prebuilt package, not a reproducible CI build.
+
+**PASS:** draft-upload readback returned 4,619,155 bytes and SHA-256
+`F8E04F44E314DB7D530AD251731ACA69C76C6E239FF0FF0E3D461D2E55E70568`.
+After publication, an unauthenticated direct public download of both assets
+to `C:\ForgeFast\forge-alpha-public-download` returned the same bytes/hash
+and matching `.sha256` content. That downloaded installer exited 0 when
+installed silently over the existing local alpha. Installed product version
+was `0.1.1`, and installed executable SHA-256 was
+`6E8EF73A3A8EB0927B3556A13838A5924CBE31A00E4A9752698B1F2F4002AABD`.
+Basic hidden-native UI smoke after public-file installation passed (Home,
+Explore, first-use draft, appearance reload and WebView IPC); no visible app
+window was launched. A prior draft-downloaded install of the same exact
+file passed a full hidden-native smoke with real Windows dialogs, existing
+and new project onboarding, local previews, a real Codex reply and resume.
+The test-only disposable project, sidecar and draft-download directory were
+removed after path verification; the public-download directory was retained.
+No Forge desktop process remains.
+
+**Diagnostic failures and limits:** the first attempt to run the downloaded
+binary's native smoke had no Playwright module environment configured; this
+was a test setup failure. With Playwright configured, a newly initialized
+empty project failed a test assertion that requires a visible stage; its
+record was actually readable, but the UI intentionally hides the stage when
+record status is `absent`. A subsequent test against this repository timed
+out waiting for a record read. Direct `forge-core 0.12.1 workflow resume`
+on this large project then took 64.2 seconds on a cold run and 11.72 seconds
+on retry; the app's read timeout is 20 seconds. After retrying the full
+hidden-native smoke on the same installed binary, all project, preview,
+dialog, real-Codex and resume checks passed. The release body discloses
+the cold-read limit; it is **not fixed** in this version. The exact
+`0.1.0`→`0.1.1` upgrade, nonempty real decision-suggestion native rendering
+and a full accessibility audit remain NOT_RUN. An unsigned installer and
+separate `forge-core`/Codex CLI requirements remain known alpha limits.
+
+The working tree was clean immediately after the source commit/push; this
+postpublication checkpoint and release-note status update are local doc-only
+edits and are not part of the release tag. No further commit/push was made.
+No worker was dispatched; per-model tokens and BRL cost remain UNKNOWN.
+
+**Next:** resume UI work as a separate coherent package, starting with the
+record-loading UX for slow/cold large projects and verifying that a fresh
+project's `absent` stage is explained without exposing a misleading empty
+field. Keep publication, new installer and source commit separate until the
+next package is verified and approved.
+
+## Next desktop source package: record-loading clarity — 2026-09-27
+
+The source tree has moved to desktop `0.1.2` in `src-tauri/Cargo.toml`, its
+lockfile entry, and `tauri.conf.json`. This is a **development version**, not
+an installer or published update; the installed/public version remains
+`0.1.1`. Existing postpublication documentation edits were preserved.
+
+The cold-read failure observed in the published alpha was traced to the
+desktop's uniform 20-second outer/15-second per-attempt CLI budget. A direct
+read of this large repository took 64.2 seconds on one cold run and 11.72
+seconds on retry. The UI did not cause that core latency. The desktop now
+keeps fast-failing 20/15-second budgets for project identity/start, but uses
+a bounded 90/85-second budget for the read-only workflow resume/report.
+This is a targeted wait allowance, not a change to the core or a claim that
+all slow reads will succeed. While a read remains pending beyond six seconds,
+the UI says the record is taking longer and that conversation can continue;
+it does not invent progress. Timers are cleared on completion, project
+change or invalidation. History consultation gets the same honest delayed
+message. A fresh project's `absent` state now shows **Sem trabalho
+registrado**, labels Discovery as where Forge starts rather than recorded
+work, and invites the user to describe their idea in chat. It does not show
+an empty current-work timeline or treat a suggestion as a decision.
+
+**PASS:** targeted desktop `cargo check`; `project::tests` (3/3) and
+`progress::tests` (10/10) filters, then full desktop Rust tests (43/43)
+before the metadata version bump; version-bumped targeted check/tests and
+`cargo fmt --check`; strict desktop Clippy before the metadata-only bump;
+seven Node unit tests; browser UI suite including delayed read, stale
+response and absent state; and a fresh `0.1.2` debug build with hidden native
+smoke against an actual Forge project and real Windows folder/file dialogs.
+The native smoke verified a new project's initialized record and the new
+absent-state guidance. Real Codex turn was NOT_RUN in this package; the
+conversation transport was unchanged. `git diff --check` passed with only
+line-ending notices. No full core workspace run or release build was made.
+
+Browser-controlled visual captures:
+`C:\ForgeFast\forge-record-empty-20260927.png` and
+`C:\ForgeFast\forge-record-slow-20260927.png`. These show readable status and
+help in the dark theme, but are not native screenshots or proof of final
+visual fidelity. The approved conversation reference is
+`design/references/conversation-approved.png`; the current conversation
+screen still lacks much of that board's botanical/light visual treatment.
+
+**Remaining risk:** a read over 85 seconds can still time out, and an old
+read-only request may continue after the user switches projects until its
+bounded process exits. There is no controlled 64-second native reproduction
+for the new budget; the prior measured cold read, code path, browser wait
+test and normal native readback are the current evidence. No source commit,
+push, installer or publication for `0.1.2` occurred. No worker was
+dispatched; model-specific tokens and BRL cost remain UNKNOWN.
+
+**Next:** make the conversation/result/record surface more faithful to the
+approved artwork without turning illustrative mock data into product facts.
+Capture current light-theme native or controlled-browser visuals, compare
+with the approved board, choose one coherent visual package, implement and
+verify it, then decide whether the `0.1.2` package is ready for final build
+and a new separately approved release candidate.
+
+## Desktop 0.1.2 conversation visual pass — 2026-09-27
+
+The conversation workspace now borrows text-free foliage crops from the
+already-approved Explore art. This frames the real conversation, local preview,
+and Forge record more closely to the approved light board without copying its
+fictional project, site preview, or progress. The crops are non-interactive,
+hidden on narrow/forced-color layouts, and subdued in dark mode. The initial
+crop accidentally included part of the source board's caption; that was
+removed before the final captures. No conversation, record, preview, or core
+behavior changed in this visual pass.
+
+**PASS:** browser suite after the final CSS, including desktop/mobile overflow,
+enlarged text, forced colors, dark theme, navigation, conversation and preview;
+fresh desktop `0.1.2` debug build; and hidden native smoke of real Windows
+folder/file dialogs, project onboarding, Forge readback, local preview and
+appearance. The native runner did not open a visible window. Actual Codex send
+was NOT_RUN in this pass because the transport was unchanged. The captures
+`C:\ForgeFast\forge-conversation-light-visual-final-20260927.png` and
+`C:\ForgeFast\forge-conversation-dark-visual-final-20260927.png` are controlled
+browser fixtures, not native screenshots or real project content. They were
+inspected against `design/references/conversation-approved.png`; they improve
+the framing but do not establish finished visual fidelity or accessibility.
+
+The `0.1.2` source package remains uncommitted and unpublished. The public
+installer is still `0.1.1`. No worker was dispatched; per-model token and BRL
+cost attribution remain UNKNOWN.
+
+**Next:** inspect the integrated `0.1.2` diff and the remaining UI coverage
+against the approved direction; fix concrete gaps before choosing a single
+release candidate. Keep commit/push, installer generation, and publication
+separate, with fresh approval for a future release.
+
+## Desktop 0.1.2 project-recognition pass — 2026-09-27
+
+An integrated UI review found that My Projects still displayed the Forge
+internal `project_id` as the card title, while the workspace already used the
+folder name. A shared display helper now makes the folder name consistent in
+the project list, workspace, and Codex connection status. The full path stays
+visible in each list card and its accessible Open label, so equal folder names
+can be distinguished. Forge IDs still back identity, bookmarks and native
+shortcut revalidation. The list's generic star became the approved Forge icon,
+and the heading gained a text-free approved-art crop on wide, non-forced-color
+screens. No project registry or backend behavior changed.
+
+**PASS:** browser suite after the patch covers display name, visible path,
+accessible project actions, reload, shortcut revalidation, failures, mobile
+overflow and connection copy; fresh `0.1.2` debug build and hidden native
+smoke cover a real linked project, new-project onboarding, the real Windows
+folder/file dialogs, Forge record and local preview. Native readback checks
+the saved card title and icon. The browser visual capture
+`C:\ForgeFast\forge-projects-friendly-20260927.png` was inspected; it uses a
+controlled project fixture, not a real native project. `git diff --check`
+passed with line-ending notices. Rust source was not changed in this pass;
+therefore the crate suite was not repeated. A real Codex send was NOT_RUN.
+
+The GitHub UI acceptance criteria in #91, #92 and #93 were reread. The
+existing UI remains partial for dynamic visual previews, complete accepted
+decision snapshots and all restart/failure paths; this package does not mark
+those issues complete. The `0.1.2` tree remains local and uncommitted. No
+worker was dispatched, and per-model tokens and BRL cost remain UNKNOWN.
+
+**Next:** choose the highest-impact remaining journey gap from #91/#92/#93,
+implement and verify it in a coherent package; then review all `0.1.2` changes
+as a whole before any installer candidate. Commit, push and publication still
+require their separate approval boundaries.
+
+## Desktop 0.1.2 uncertain-send recovery — 2026-09-27
+
+Review against issue #93 found a concrete restart gap: the rejected-send guard
+existed only in WebView memory. A crash or app close after native Send began
+could erase the warning and allow a manual retry without history review. The UI
+now writes a project-scoped **thread ID only** to local storage before calling
+`send_message`; it removes that marker after native acknowledgement. If Send is
+rejected or the app closes while delivery is uncertain, a reopened app blocks
+re-sending and starting another conversation until the same Codex thread is
+explicitly resumed for review. A marker that cannot be read fails closed. The
+marker is not message content, a Forge project record, or proof of delivery;
+Codex remains the history authority. If local storage cannot write it, the
+message remains a draft and is **not sent**; the UI explains that the app
+could not protect this delivery across a restart. If review succeeds but clearing the
+marker fails, the app warns that another review may be needed next time.
+
+**PASS:** eight focused Node tests including marker scoping/validation;
+browser suite including marker-before-native-Send, removal on acknowledgement,
+rejected Send and a separate browser context restored from the same storage
+(blocked retry/new thread, explicit same-thread resume, no automatic Send);
+fresh `0.1.2` debug build and hidden native smoke of existing project,
+onboarding, record, preview and real Windows dialogs. The browser protocol
+responses are controlled doubles, not evidence of a real ambiguous Codex
+delivery. A real process crash during Send, unavailable local storage across
+restart, and an actual Codex reply were NOT_RUN in this pass. No Rust source or
+core workflow changed; no Rust suite was repeated for this frontend change.
+
+The whole `0.1.2` tree is still local, uncommitted, and unpublished. Issue #93
+is improved but not closed: native crash/restart and all failure branches still
+need stronger evidence. No worker was dispatched; per-model token and BRL
+attribution remain UNKNOWN.
+
+Integrated review found and closed a fail-open branch: a storage-write failure
+previously allowed native Send to proceed with only an in-memory guard. The
+write now precedes both the local pending bubble and native Send; failure
+keeps the draft and does not invoke Send. Browser regression covers this
+branch. Native crash during Send remains NOT_RUN, so #93 is still partial.
+
+The same review found that a stale record request could clear the six-second
+notice timer of a newer project request. Each request now clears only its own
+timer. A browser regression switches projects with both reads pending,
+resolves the stale read first, and confirms the new read still shows its
+honest delayed notice. The complete browser suite and eight Node tests passed
+after both fixes; this frontend-only review did not repeat native smoke or
+Rust compilation. `git diff --check` remains the final local patch check.
+
+**Next:** run a bounded native ambiguous-send/restart fixture if it can be
+driven without a real Codex turn or disruptive visible window; otherwise
+retain that gap explicitly. Then perform final package gates and decide
+whether `0.1.2` is ready for a candidate. Do not publish a new installer
+without the maintainer's approval.
+
+## Desktop 0.1.2 native restart guard — 2026-09-27
+
+The bounded fixture is now `tests/native-restart-guard.cjs`, run through the
+hidden desktop runner. It opens a real linked Forge folder in a real Tauri
+WebView, intercepts **only** the Codex connect/send commands with a controlled
+bridge, leaves Send pending, then kills and restarts the entire app process
+with the same isolated WebView profile. On reopen, the thread-only marker
+survived; the UI blocked manual replay and a new thread; explicit same-thread
+history review cleared it without calling Send. The fixture never forwarded
+a Codex command to the real CLI. It removes only its own temporary profile.
+
+**PASS:** fresh `0.1.2` debug build; hidden native process restart guard;
+hidden full native smoke with real Windows folder/file dialogs, real Forge
+readback and onboarding; a second hidden smoke listed six real Codex project
+conversations without sending; prior browser suite and eight Node tests.
+The Tauri `core.invoke` function is frozen, so test instrumentation must use
+a replaceable `core` facade. Two ineffective direct assignments and a spread
+that dropped non-enumerable `Channel` were fixed in the native harness. This
+is a test-evidence correction, not an app-runtime change.
+
+**NOT_RUN:** an actual ambiguous Codex delivery or real Codex reply after a
+process crash. The controlled native fixture proves WebView/process storage
+and UI guards, not transport exactly-once semantics. Issue #93 remains
+partial. No commit, push, installer or publication occurred for `0.1.2`.
+No worker was dispatched; model-specific tokens and BRL cost remain UNKNOWN.
+
+**Next:** inspect the final integrated source/test diff and run proportionate
+package gates for `0.1.2`; decide what is release-ready and list remaining
+UI limitations before preparing a candidate. Keep source commit, installer
+candidate and publication as separate approval steps.
+
+## Desktop 0.1.2 local NSIS candidate — 2026-09-27
+
+The scoped desktop package gates passed: `cargo fmt --check`, all 43 desktop
+Rust tests, strict desktop Clippy, eight Node tests and the complete browser
+UI suite. The pinned `npm run build:nsis` produced one local Windows x64
+unsigned NSIS file:
+`D:\forge-method-core-build-cache\main-target\release\bundle\nsis\Forge_0.1.2_x64-setup.exe`
+(4,621,545 bytes; SHA-256
+`D86273A6ABC5F6F7D383A48C626DE5FD173C68344EE9B6C2DC700894A88B5FBC`).
+The release executable reports product/file version `0.1.2`. Hidden native
+smoke on that release executable passed project onboarding, real Windows
+folder/file dialogs, Forge record, preview and appearance. The release
+executable also passed the controlled full-process uncertain-send restart
+fixture. These are payload checks, **not installation-over checks**.
+
+The draft `RELEASE_NOTES-0.1.2.md` separates delivered improvements from
+remaining alpha limits. It also corrects an outdated prepublication sentence
+in the published `0.1.1` package record. The `0.1.2` installer is not
+approved or published. Its exact install over public `0.1.1`, installed
+binary smoke, real Codex reply/continuity across that upgrade and downloaded
+asset verification remain **NOT_RUN**. Dynamic site preview, complete
+accepted-decision details and whole-product visual/accessibility acceptance
+remain outside this building block. No core workspace suite was run for this
+desktop-only package; no source commit or push occurred. No worker was
+dispatched; model-specific tokens and BRL attribution remain UNKNOWN.
+
+**Next:** review the final source/test/doc diff, recheck the candidate hash,
+then decide with the maintainer whether to install this local candidate over
+the existing alpha for an upgrade test and whether the draft notes are
+approved for publication. Do not claim the installer is available to users
+before an approved upload and downloaded-file check.
+
+## Desktop record provenance check — 2026-09-27
+
+The maintainer's delayed approval for `0.1.1` was checked against GitHub:
+`desktop-v0.1.1-alpha.1` is already a published prerelease with its installer
+and checksum asset. This approval is **not** approval to replace the locally
+installed `0.1.1` with the distinct `0.1.2` candidate or to publish `0.1.2`.
+The `0.1.2` candidate hash was rechecked and remains
+`D86273A6ABC5F6F7D383A48C626DE5FD173C68344EE9B6C2DC700894A88B5FBC`.
+
+A controlled browser regression now covers a valid record with **no accepted
+direction** but one recovered pending decision and a current suggestion: the
+accepted-direction panel stays hidden, the pending/suggested panel stays
+visible with provenance language, and reading it sends nothing. The complete
+browser suite passed after this test-only edit. No application source or
+installer payload changed, and no installation was attempted. The backend's
+historical decision projection exposes references/status, not the original
+human-readable question and option text; joining a later suggestion to an
+earlier decision would fabricate provenance. Full decision-history UI remains
+open rather than being simulated from current suggestions.
+
+**Next:** wait for explicit approval to install `0.1.2` over the currently
+installed `0.1.1`, then run a hidden installed-binary upgrade smoke. If not
+approved, continue other UI work without altering the user's installation.
+Source commit/push and `0.1.2` publication remain separate decisions. No
+worker was dispatched; per-model token and BRL attribution remain UNKNOWN.
+
+## Desktop 0.1.2 real Codex reply from local release payload — 2026-09-27
+
+The unchanged `0.1.2` release executable was exercised in the hidden native
+desktop with a disposable Forge folder and isolated WebView profile. Its
+first Send opened a **real Codex** conversation, received a reply, restored
+the user/reply pair after WebView reload, and restored their order again after
+full app-process restart without another Send. The hidden run also passed
+new-folder onboarding, read-only Forge record, local preview boundaries and
+native UI checks. It did **not** test an installed upgrade or an ambiguous
+transport result. The test prompt explicitly forbade tools and file edits.
+
+The first run stopped before Send because the native test harness wrongly
+required an active workflow direction in a newly linked empty folder. The
+app correctly rendered `Sem trabalho registrado`; the harness now asserts
+that honest empty state separately from a populated record. The rerun passed.
+Only the test harness and release-note text changed; no application source or
+candidate installer was rebuilt. The disposable root was checked to be a
+direct child of `C:\ForgeFast`, then removed with its temporary marker. No
+Forge desktop process remained after the run. The candidate installer hash
+remains the one recorded above; installed `0.1.1` was untouched.
+
+**Next:** obtain explicit approval before the exact `0.1.2` installer is
+installed over `0.1.1`; run hidden installed-binary and cross-version
+continuity checks. If that is declined, continue UI work without changing the
+user's installed app. Source commit/push and public release remain separate
+approval boundaries. No worker was dispatched; per-model token and BRL
+attribution remain UNKNOWN.
+
+## Desktop integrated review and viewport finding — 2026-09-27
+
+Reviewed the pending chat send guard, conversation bookmark, project-name
+display, record timeout and empty-state changes against the existing tests
+and local release payload. No additional correctness defect was confirmed.
+The controlled visual review did identify a concrete experience gap: with a
+confirmed project at 1280 x 844, the conversation begins around document
+y=261 but **Enviar** begins around y=1217. A quick CSS sticky probe brought
+the button into the first viewport only by covering the message history, so
+it was discarded. Exact evidence and the next cohesive layout acceptance
+scope are in `design/README.md`. No application source changed in this review;
+temporary measurement code was removed from the browser test. The `0.1.2`
+candidate remains byte-identical, and the installed `0.1.1` remains intact.
+
+**Next:** with maintainer approval, test this exact `0.1.2` installer over
+installed `0.1.1` before any source changes. Then tackle the chat viewport
+layout as a cohesive follow-on UI package rather than an overlay workaround.
+No worker was dispatched; per-model token and BRL attribution remain UNKNOWN.
+
+## Desktop confirmed-project viewport package — 2026-09-27
+
+The earlier local `0.1.2` NSIS file is **superseded**, not a candidate for
+installation or publication: the application source changed after it was
+built. Do not interpret the maintainer's delayed approval of the already
+published `0.1.1` as approval for a different `0.1.2` artifact. The installed
+`0.1.1` was not changed in this package.
+
+In a confirmed project, the heading and chat card now reserve visible space
+for the invitation or bounded message history, composer, access warning and
+**Enviar** at the default 1180 x 820 desktop size. The optional conversation
+history explanation moved into its existing disclosure; it no longer consumes
+the message scroll area. A selected-idea draft stays in the composer while its
+redundant confirmation notice remains accessible but visually hidden. The
+scrollable message area does not overlap the composer. No backend, Codex
+transport or Forge-record authority changed.
+
+**PASS:** complete controlled browser UI suite, including 1180 x 820 and
+1280 x 844 geometry, mobile/enlarged-text, keyboard and controlled 160-message
+history; fresh `forge-desktop` debug build; hidden native WebView smoke at
+1180 x 820, including preserved draft, visible Send/invitation, real Forge
+project and record readback, onboarding, preview and appearance. Controlled
+browser capture: `C:\ForgeFast\forge-composer-viewport-20260927-v2.png`.
+Hidden native capture: `C:\ForgeFast\forge-native-viewport-20260927-v2.png`.
+The first hidden native run caught the preserved-draft banner pushing Send
+below the viewport; this was corrected and the complete hidden smoke passed
+on the rebuilt debug executable. A real Codex turn was NOT_RUN in this latest
+layout run; earlier real-turn evidence belongs to the superseded release
+payload. The browser suite, eight Node tests and `git diff --check` passed
+again after the final UI and documentation edits.
+
+**Next:** review the integrated pending `0.1.2` source/tests/docs, run final
+package checks only at that boundary, build and hash a new installer candidate,
+then seek separate approval before installing over `0.1.1` or publishing.
+No source commit, push or `0.1.2` release occurred. No worker was dispatched;
+per-model token and BRL attribution remain UNKNOWN.
+
+## Desktop 0.1.2 rebuilt local candidate — 2026-09-27
+
+The current `0.1.2` source passed `cargo fmt --check`, all 43 desktop-crate
+Rust tests, strict desktop Clippy, eight Node tests, and the full controlled
+browser suite. The pinned NSIS build completed after the viewport changes.
+Current local unsigned candidate:
+`D:\forge-method-core-build-cache\main-target\release\bundle\nsis\Forge_0.1.2_x64-setup.exe`
+(4,620,623 bytes; SHA-256
+`75F9DCBFB1CAF09D97DDD5ADCFCC79C45CF313788952CF10420292313662180C`).
+The release executable reports product/file version `0.1.2`. The earlier
+`D86273A6...B5FBC` candidate is superseded and must not be used for this
+source.
+
+**PASS:** hidden native smoke on the new release executable, including visible
+Send/invitation at the default window size, real Forge project/record readback,
+onboarding, safe preview and appearance. A hidden full-process restart with a
+controlled Codex bridge preserved the uncertain-send marker and blocked replay.
+The first guard invocation omitted `FORGE_TEST_PROJECT`; that harness setup
+error was corrected and the guarded run passed. This build did not send a
+real Codex turn. Installer-over-`0.1.1`, installed-binary smoke, cross-version
+conversation continuity, public upload and downloaded-file verification are
+**NOT_RUN**. The public/installed `0.1.1` remains unchanged.
+
+**Next:** review the exact candidate and release notes with the maintainer;
+obtain explicit approval before installing over `0.1.1` for the hidden upgrade
+test. Publication is a separate step after the installed candidate passes.
+The pending source is still uncommitted/unpushed; do not call this local file
+an available update. No worker was dispatched; model-specific tokens and BRL
+attribution remain UNKNOWN.
+
+## Desktop pre-upgrade read-only audit — 2026-09-27
+
+Before touching the user's installation, rechecked the installed executable at
+`%LOCALAPPDATA%\Forge\forge-desktop.exe`: product/file version `0.1.1`, SHA-256
+`6E8EF73A3A8EB0927B3556A13838A5924CBE31A00E4A9752698B1F2F4002AABD`.
+No Forge desktop process was running. The new local `0.1.2` candidate still
+hashes to `75F9DCBFB1CAF09D97DDD5ADCFCC79C45CF313788952CF10420292313662180C`.
+Read-only review of the pending UI/native diff and #97/#95/#91 acceptance
+boundaries found no additional confirmed defect; this does not complete those
+stories. The installed app and candidate bytes were not changed. Explicit
+approval for installing this exact candidate is pending. If approved, create
+a disposable real-Codex turn with installed `0.1.1` using the existing
+`upgrade-continuity.cjs` fixture, install the exact candidate invisibly, then
+resume the same turn and run installed-binary smoke. Keep publication separate.
+
+## Desktop 0.1.1 pre-upgrade conversation fixture — 2026-09-27
+
+Prepared the **pre-upgrade half only** of the existing `upgrade-continuity.cjs`
+test on an isolated hidden desktop. The actually installed `0.1.1` binary
+opened a disposable Forge project, sent one no-tools/no-file-edits prompt to
+real Codex and displayed exactly one user turn and one reply containing the
+expected test marker. The test process exited and no Forge desktop process
+remains. The installed executable still hashes to
+`6E8EF73A3A8EB0927B3556A13838A5924CBE31A00E4A9752698B1F2F4002AABD`;
+the local `0.1.2` installer still hashes to
+`75F9DCBFB1CAF09D97DDD5ADCFCC79C45CF313788952CF10420292313662180C`.
+
+Retain the disposable project at
+`C:\ForgeFast\forge-upgrade-011-to-012-20260927-project` and isolated WebView
+profile at `C:\ForgeFast\forge-upgrade-011-to-012-20260927-profile` until the
+post-upgrade resume check or a decision to abandon it. Only these test-owned
+paths and any directly associated Forge sidecar should be cleaned after
+verification, with resolved paths checked first. This is not cross-version
+continuity proof yet: `0.1.2` has not been installed. Explicit permission to
+install the exact candidate is still pending. No source, installer bytes,
+public release, or user's normal WebView profile changed.
+
+## Desktop 0.1.1-to-0.1.2 pre-install continuity — 2026-09-27
+
+The **local release executable** built with the current `0.1.2` candidate
+(not an installed binary) opened the same disposable Forge project and isolated
+WebView profile used by installed `0.1.1`. It resumed the real Codex
+conversation and found exactly the original user/reply pair with its test
+marker; after a bounded wait, no extra turn appeared. No Send was invoked.
+The hidden process exited, and the installed `0.1.1` and NSIS candidate hashes
+remain unchanged. This is PASS for cross-version conversation-format readback,
+but **NOT_RUN** for installer-over-update and installed `0.1.2` readback.
+
+The existing test harness had printed "new installed binary" even when pointed
+at a local executable; that test-only log text now says "new binary". The
+fixture remains available for a later installed-binary resume check. Explicit
+approval to install the exact `0.1.2` candidate is still pending. No app source
+or installer bytes changed, and nothing was published.
+
+## Desktop focused zoom-equivalent and native rerun — 2026-09-27
+
+The local `0.1.2` release executable resumed the same disposable real-Codex
+conversation under an emulated 590 x 410 CSS viewport. A long unsent draft
+remained intact, Send was reachable without sideways page overflow, and the
+original two messages stayed unchanged. This **PASS** is a zoom-equivalent
+WebView check, not an actual OS/browser zoom, virtual-keyboard, or complete
+accessibility audit. The isolated fixture was retained for the eventual
+installed-upgrade check. No message was sent in this rerun.
+
+The broad hidden native smoke was rerun against the same release executable
+without the experimental viewport override and **PASSED**: project onboarding,
+record readback, conversation/UI states, local preview and appearance. During
+diagnostic iterations with the override in that broad harness, a CSS-load
+timing assertion and a project-ready wait failed intermittently; the CSS test
+now waits for the actual computed style, and the onboarding wait reports its
+status if it fails. The override was kept only in the focused continuity test.
+Those transient harness failures are not claimed as proven product defects or
+silently counted as passes. The broad smoke's actual Codex-turn branch was
+**NOT_RUN** in this rerun; the separate continuity fixture covers its prior
+real turn. Test code and this checkpoint changed, but application source and
+candidate bytes did not. The candidate SHA-256 remains
+`75F9DCBFB1CAF09D97DDD5ADCFCC79C45CF313788952CF10420292313662180C`.
+
+The delayed human approval was explicitly for publishing `0.1.1`, which is
+already public; it does **not** authorize installing or publishing `0.1.2`.
+The installed app remains `0.1.1`. **Next:** await explicit approval for
+installing this exact `0.1.2` candidate, then perform a hidden over-install,
+resume the retained real conversation, and run installed-binary smoke. Review
+release content and seek separate `0.1.2` publication approval afterward.
+No worker was dispatched; model-specific token/BRL attribution remains UNKNOWN.
+
+## Desktop 0.1.2 real Windows dialogs — 2026-09-27
+
+The unchanged local `0.1.2` release executable passed the complete hidden
+native smoke with `FORGE_TEST_FOLDER_DIALOG=select` and
+`FORGE_TEST_PREVIEW_DIALOG=select`. The actual Windows folder dialog was opened,
+cancelled, then used to select the linked Forge project and an existing
+unlinked folder. Selection alone did not create or inspect a project; the
+single **Continuar nesta pasta** action did so, and the pre-existing file was
+preserved. The actual Windows file dialog selected a local project file for
+read-only preview; outside-path rejection and the other smoke assertions also
+passed. No foreground window was shown. The Codex message branch was
+**NOT_RUN** in this smoke; separate real-turn continuity evidence above still
+applies. No installed upgrade, commit, push or publication occurred.
+
+The NSIS candidate still has SHA-256
+`75F9DCBFB1CAF09D97DDD5ADCFCC79C45CF313788952CF10420292313662180C`.
+The installed application remains `0.1.1`. **Next:** with explicit approval
+for installing this exact `0.1.2` candidate, test its hidden over-install and
+resume the retained real conversation in the installed binary. This approval
+has not arrived; the earlier `0.1.1` publication approval cannot substitute.
+
+## Desktop new-idea project boundary and rebuilt 0.1.2 candidate — 2026-09-27
+
+Found a concrete UI boundary error: with a confirmed project open, choosing a
+fresh Explore theme populated the draft but left the old project active. A
+browser regression first failed on that observable state. The Home
+**Conversar sobre uma ideia** action had the same ambiguity. The UI now treats
+those explicit fresh-idea actions as a return to folder choice. It keeps the
+draft, clears the old project and displayed transcript, and disables Send until
+a folder is confirmed. The normal **Minha conversa** navigation still returns
+to the current project. If Codex is connected, it disconnects before the
+switch; when a turn is running, declining the existing interruption prompt
+leaves the old project and draft unchanged. No native Forge-core contract or
+conversation-history authority changed.
+
+**PASS:** red-before-green controlled browser checks for the old-project
+leakage, Home/Explore fresh-idea paths, connected disconnect, declined busy
+switch, cleared transcript and no implicit project creation. Complete browser
+suite, eight Node tests, JS syntax, `git diff --check`, fresh debug build and
+hidden native WebView smoke passed. After the final frontend change, the pinned
+release NSIS build also passed. The release executable passed a full hidden
+native smoke with the actual Windows folder and file dialogs, real Forge
+project/record readback and the new-idea boundary. Native screenshot reviewed:
+`C:/ForgeFast/forge-new-idea-native-20260927.png` (a disposable project and
+draft; not a published asset). The new release executable also resumed the
+retained real Codex user/reply pair created by installed `0.1.1` without a new
+send. The current candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.2_x64-setup.exe`
+(4,621,851 bytes; SHA-256
+`C88219654ED0525C49DB6A6D6CDADB1386607B59587774D1B6390C176AD42B5A`).
+The prior `75F9DCBF...662180C` candidate is superseded. At this checkpoint,
+a fresh real Codex turn after the new UI change was **NOT_RUN**; the separate
+resumed conversation was not sent again.
+
+**Pending:** this exact new installer has not been installed over `0.1.1`,
+and installed-binary upgrade continuity has not been checked. Source is still
+uncommitted/unpushed; no release was published. The earlier request for
+permission to install the old exact hash is stale and must not authorize this
+new file. **Next:** obtain explicit approval for installing this exact
+`C8821965...42B5A` candidate, test hidden over-install and resume the saved
+conversation using the installed binary; then review and seek separate
+publication approval. No worker was dispatched; per-model token and BRL
+attribution remain UNKNOWN.
+
+## Desktop 0.1.2 real reply on the rebuilt release executable — 2026-09-27
+
+The current local release executable (the binary built with NSIS candidate
+SHA-256 `C88219654ED0525C49DB6A6D6CDADB1386607B59587774D1B6390C176AD42B5A`)
+passed a hidden native real-Codex smoke in a disposable project. The first
+Send opened a conversation, delivered one no-tools/no-file-edits prompt,
+displayed its reply, disconnected, reloaded the WebView and restored exactly
+the user/reply pair without a second send. This is **PASS** for the ordinary
+project-to-chat path on the current release executable. It is not a real send
+*through* the separate new-idea project-switch path; that path passed native
+UI/project-boundary checks. It is also not an installed-upgrade or full-process
+restart check. No user project, installed `0.1.1`, candidate bytes, source,
+commit, push or public release changed in this probe. Per-model token/BRL
+cost remains UNKNOWN; no usage number is invented.
+
+**Next:** with explicit approval for the exact current candidate, run a hidden
+over-install onto `0.1.1` and verify the retained pre-upgrade real conversation
+from the installed `0.1.2`. The old-hash approval request remains stale.
+
+## Desktop fresh idea to real reply — 2026-09-27
+
+The same current `0.1.2` local release executable passed a second hidden
+native end-to-end check of the newly corrected route. With an existing project
+open, **Explorar → Arte e criação** preserved its suggested draft, cleared the
+old project, required a newly selected disposable folder, initialized it via
+the real Forge core, and sent one separate no-tools/no-file-edits prompt to
+real Codex in that new project. Exactly one user message and one agent reply
+were displayed, and the connection was closed. This **PASS** verifies the
+fresh-idea → different real project → conversation path, not just browser
+navigation or a mocked IPC response. The controlled prompt replaced the
+suggested artistic draft before Send; the suggested draft itself was not sent.
+
+This did not change the installed `0.1.1`, public release, NSIS candidate bytes
+or application source. The candidate remains SHA-256
+`C88219654ED0525C49DB6A6D6CDADB1386607B59587774D1B6390C176AD42B5A`.
+The test harness gained an opt-in real-send branch and a clearer NOT_RUN log.
+Installed-upgrade continuity remains **NOT_RUN** until explicit approval for
+this exact candidate. No commit/push/publication occurred; per-model token
+and BRL cost remain UNKNOWN.
+
+## Desktop open-another-project boundary — 2026-09-27
+
+Found a second project-switch UI error: **Meus projetos → Abrir outro projeto**
+opened folder choice but retained the previous path, confirmed-project panel,
+and conversation until someone edited the input. A controlled browser
+regression first failed on the retained path. The navigation now reuses the
+same reset as a fresh Explore idea **after** any running-turn interruption is
+accepted and the connection is closed. It clears the prior path and displayed
+transcript and disables Send until another folder is confirmed. Refusing the
+running-turn interruption still leaves the prior project/draft unchanged.
+No native Forge core or Codex protocol behavior changed.
+
+**PASS:** complete controlled browser suite after the red test; fresh desktop
+debug build; full hidden native smoke of that debug executable with the new
+project-switch assertion; pinned release NSIS build; full hidden native smoke
+of the new release executable with the same assertion; and `git diff --check`.
+Those two native runs used real Forge project/record readback but did **not**
+send a new real Codex message. The earlier real-turn checks belonged to the
+superseded release executable; they must not be presented as a fresh real-turn
+check of these new installer bytes. The new local candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.2_x64-setup.exe`
+(4,623,866 bytes; SHA-256
+`F8C57185E3CDD96C5329A8D70C5DC426EAD793BB5DFEF894E02EB93A3B251EA1`).
+The previous `C8821965...42B5A` candidate and any request to install its
+exact bytes are obsolete. The installed app remains `0.1.1`; **no** `0.1.2`
+install, commit, push, or publication occurred. The retained disposable
+`0.1.1` real-Codex conversation fixture is still available for an eventual
+installed-binary upgrade check. No worker was dispatched; per-model token/BRL
+attribution remains UNKNOWN.
+
+**Next:** ask for explicit approval of a hidden over-install of this exact new
+`F8C57185...B251EA1` candidate, then resume the retained conversation in the
+actually installed `0.1.2` binary and run installed-binary smoke. Review code
+and release contents and seek separate publication approval afterward.
+
+## Desktop saved-project shortcut audit — 2026-09-27
+
+A read-heavy check questioned whether a saved-project shortcut might switch
+folders while Codex remained connected. The owning controls actually disable
+the path field while connected, which routes the shortcut through the existing
+`prepareProjectSwitch` disconnect guard. A controlled browser test now proves
+that lock, one disconnect, and read-only revalidation of the selected saved
+project; the complete browser suite passes. The suspected cross-project-send
+bug was **not reproduced**, so no application-source change was made. This
+test-only change does not affect the pinned NSIS bytes: SHA-256 remains
+`F8C57185E3CDD96C5329A8D70C5DC426EAD793BB5DFEF894E02EB93A3B251EA1`.
+Explicit approval to silently install that exact candidate for upgrade testing
+has been requested and is still pending. No install, commit, push, publication,
+or new real Codex send occurred in this audit.
+
+## Desktop current-candidate pre-install conversation readback — 2026-09-27
+
+The **current** `0.1.2` local release executable, built with NSIS candidate
+SHA-256 `F8C57185E3CDD96C5329A8D70C5DC426EAD793BB5DFEF894E02EB93A3B251EA1`,
+passed the hidden `upgrade-continuity.cjs` **resume** stage against the retained
+disposable project and isolated WebView profile. Installed `0.1.1` had created
+the real Codex user/reply pair there. The new local executable displayed
+exactly that pair and, after a bounded wait, no extra turn; it invoked no Send.
+This is **PASS** for current-candidate cross-version conversation readback,
+but **NOT_RUN** for installing `0.1.2` over `0.1.1` and reading the conversation
+from the actually installed binary. The fixture remains intact for that gate.
+The installed app and public `0.1.1` remain unchanged. No new model call,
+commit, push, or publication occurred. Explicit approval for the exact hidden
+over-install is still pending; the earlier `0.1.1` release approval does not
+authorize it. Next after approval: silently install this exact candidate,
+verify installed hash/version and repeat the resume check from the installed
+path, then run installed-binary native smoke.
+
+## Desktop current-candidate real Codex turn — 2026-09-27
+
+The same current `0.1.2` local release executable (NSIS SHA-256
+`F8C57185E3CDD96C5329A8D70C5DC426EAD793BB5DFEF894E02EB93A3B251EA1`)
+passed a hidden native smoke with a fresh disposable Forge project and one
+no-tools/no-file-edits real Codex prompt. The first Send opened a conversation,
+displayed one reply, then a WebView reload restored the user/reply pair without
+resending. Other native smoke assertions for project onboarding, record,
+preview, appearance and frontend-to-Rust identity passed in the same run.
+This is **PASS** for a fresh local-binary conversation, not for an installed
+`0.1.2` update, cross-process restart, or a real send through every UI entry
+route. The test submitted one real Codex turn; the number of internal model
+requests, per-model token count and BRL cost remain UNKNOWN. The isolated test
+profile was removed by the harness; the
+retained pre-upgrade fixture was not changed. No installation, commit, push or
+publication occurred. The exact hidden over-install still awaits approval.
+
+## Desktop next UI gap: historical decisions — 2026-09-27
+
+Read-only source inspection for issue #92 confirmed why the current desktop
+must not label opaque decision IDs as past agreements. The core's
+`WorkflowReplacementDecisionAudit` exposes policy/decision refs, status,
+record digests and selected-alternative ref, but **not** the human-readable
+question or alternative. The underlying `DecisionNeedRaisedEvent` also carries
+a `question_digest`; policy `decision_rules` contain the semantic text, and the
+core's resolution path checks a rule against the selected alternative. The
+desktop `workflow report` projection consumed today does not bind historical
+audit entries to that text. A current simulation suggestion is not a safe
+substitute for a past accepted choice, especially if policy material changed.
+
+For full #92 coverage, the next coherent implementation slice needs a bounded
+**read-only authoritative projection/resolver** that proves each historical
+question/choice belongs to its ledger entry and preserves origin, status and
+revisions; only then should the UI render accepted, pending and revised
+decisions in plain language. Do not add a second decision store or write to
+governance state. This is an engineering direction from source inspection,
+**not** an implemented feature or native proof. Keep the `0.1.2` candidate
+frozen for the pending installation gate; no source or installer bytes changed
+in this investigation. The current #92 direction-history view remains partial.
+
+A further read-only command-path check found `decision-resolve` in the CLI,
+but no ordinary `decision-need` command or production construction of a
+`DecisionNeedRaisedEvent`; the constructors found in this checkout are tests
+and a retained fixture. This is **not** proof that historical ledgers cannot
+contain such events (the kernel can read them), but it means a desktop-only
+rendering change would not create a usable normal journey for them. Before
+implementing the full #92 decision view, establish the supported production
+authoring path and a ledger-to-text binding; do not infer accepted human
+decisions from current candidate questions. No application or installer bytes
+were changed by this read-only investigation.
+
+## Desktop current-candidate real artifact continuation — 2026-09-27
+
+An opt-in hidden native smoke of the current `0.1.2` release executable
+reached the real Codex artifact turn in a disposable project, and Codex wrote
+`site/index.html` plus local CSS. The broad test runner was then interrupted
+before a final PASS/FAIL could be recorded; its log stops after the earlier
+native preview checks. On reopening that same profile, the artifact turn's
+last agent message was **incomplete** and had no file link. Do not count the
+interrupted broad run as a completed end-to-end artifact test.
+
+A new focused hidden-native continuation (`tests/artifact-resume.cjs`) resumed
+that exact conversation without replaying file creation. It sent one bounded
+no-tools follow-up asking only for a relative link to the already-created
+file, received the reply, opened the local HTML from the reply's file action,
+confirmed the preview's `site\\index.html` origin and unpublished label, and
+returned **Pedir mudança neste arquivo** to the same unsent composer. Message
+count did not increase when the change request was prepared. **PASS** for
+resumed real Codex reply -> native local preview -> unsent change request;
+**NOT_RUN** for an uninterrupted original artifact turn through its own final
+reply in this candidate. The test profile is disposable, not a user project.
+No application source, installer bytes, installation or public release changed.
+The candidate remains SHA-256
+`F8C57185E3CDD96C5329A8D70C5DC426EAD793BB5DFEF894E02EB93A3B251EA1`.
+The hidden installed-upgrade gate still awaits explicit approval. Per-model
+tokens and BRL cost for this smoke (initial greeting, artifact request and
+follow-up) are UNKNOWN.
+
+## Desktop 0.1.2 installed upgrade gate — 2026-09-27
+
+The maintainer authorized a silent local install of the exact `0.1.2` NSIS
+candidate and then approved publication without repeated per-step approval.
+The pinned installer SHA-256 was checked immediately before installation:
+`F8C57185E3CDD96C5329A8D70C5DC426EAD793BB5DFEF894E02EB93A3B251EA1`.
+Installed `0.1.1` executable hash was
+`6E8EF73A3A8EB0927B3556A13838A5924CBE31A00E4A9752698B1F2F4002AABD`;
+no Forge process was running. Silent NSIS over-install exited 0 without a
+visible window. The installed executable at `%LOCALAPPDATA%\Forge\forge-desktop.exe`
+now reports product/file version `0.1.2` and SHA-256
+`E21FFB1CFF1710A49197F651D66D449EC1D7FE2DB579F885A78ED20B36C40774`.
+The installer hash remained unchanged.
+
+**PASS:** `upgrade-continuity.cjs` ran headlessly with the **installed** binary,
+retained disposable pre-upgrade project and isolated WebView profile. It
+restored exactly the real Codex user/reply pair created under installed `0.1.1`
+without a new Send or extra turn. A separate complete `native.cjs` hidden
+smoke against the installed binary passed actual Forge record readback,
+project onboarding, actual Windows folder/file dialogs, preview, appearance,
+project switching and frontend-to-Rust identity. That second run did not send
+a real Codex message. Focused Node syntax and conversation-reference tests and
+`git diff --check` passed. The public downloaded-file check is **NOT_RUN**
+until after upload. No source commit, push, tag or publication had occurred at
+this checkpoint. Per-model token/BRL cost remains UNKNOWN.
+
+**Next:** commit the reviewed desktop package once, push once, tag and publish
+the exact pinned prebuilt installer as a prerelease (not a CI rebuild), then
+download that public asset to a fresh path, compare size/hash and install/test
+the downloaded bytes headlessly. Keep the unsigned/no-auto-update and
+separately-required `forge-core`/Codex limits in the release text.

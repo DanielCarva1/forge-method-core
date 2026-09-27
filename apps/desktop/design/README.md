@@ -122,6 +122,20 @@ has unconfirmed delivery, the next attempted Send opens the history disclosure
 and focuses **Abrir conversa** so recovery instructions lead to a visible
 action. A ready project says **SUA CONVERSA** even before connecting.
 
+The conversation workspace now reuses only text-free foliage regions from the
+approved Explore artwork as decorative framing. Light and dark screenshots were
+visually compared with the approved conversation board; the dark crop is
+subdued, and narrow or forced-color layouts omit the decoration. The artwork
+does not supply project status, messages, preview content or navigation.
+
+My Projects now presents the folder name instead of the Forge-internal ID,
+keeps the full path visible to distinguish same-named folders, and uses the
+approved Forge icon instead of a generic symbol. The same folder-name rule is
+used by the active workspace and connection status. A restrained approved-art
+crop frames the project-list heading on wide screens; it disappears on narrow
+and forced-color layouts. Stored shortcuts and their native revalidation are
+unchanged.
+
 Because the current app-server session uses `approvalPolicy: never` and
 `danger-full-access`, a plain-language notice remains visible by the composer
 after a project is selected. It states that the agent can run commands and
@@ -173,3 +187,24 @@ No animation is introduced. Status icons supplement readable text without
 claiming workflow completion. Focused tests cover initial keyboard traversal,
 connected controls, long-conversation focus visibility and reduced motion.
 This does not establish screen-reader certification or a published user release.
+
+## Conversation viewport correction (measured 2026-09-27)
+
+The original controlled project-ready state at 1280 x 844 placed **Enviar**
+near document y=1217. A sticky-composer probe covered messages and was rejected.
+The current source instead condenses the confirmed-project heading, gives the
+conversation a bounded height, and scrolls only message history. The history
+explanation is consolidated into the optional **Conversas e histórico**
+disclosure. In a fresh project the invitation is compact; a preserved draft
+remains in the composer, so its prior selection notice becomes visually hidden
+but stays available to assistive technology. The access warning stays visible.
+
+The controlled browser screenshot at
+`C:\ForgeFast\forge-composer-viewport-20260927-v2.png` and hidden native WebView
+screenshot at `C:\ForgeFast\forge-native-viewport-20260927-v2.png` both show
+the invitation, composer, warning and **Enviar** within 1180 x 820. Browser
+checks cover 1280 x 844, 390px mobile, enlarged text, forced colors, keyboard
+focus and bounded long-history scrolling. The native smoke confirms the same
+viewport after preserving an existing draft, plus real Forge project/record
+readback. These are targeted layout checks, not complete visual or accessibility
+acceptance. The prior `0.1.2` NSIS file predates this source and is superseded.
