@@ -15,8 +15,8 @@ let historyPending = false;
 let historyLoaded = false;
 let slowNotice;
 let historySlowNotice;
-const labels = { absent: 'O Forge ainda não encontrou trabalho registrado.', current: 'Acompanhamento do Forge disponível. Pode não incluir a conversa mais recente.', stale: 'O acompanhamento do Forge está desatualizado.', blocked: 'O trabalho acompanhado pelo Forge tem uma pendência.', completed: 'O trabalho acompanhado pelo Forge foi concluído. Isso não significa que o produto inteiro está pronto.', abandoned: 'O trabalho acompanhado pelo Forge foi encerrado sem conclusão.' };
-const stateLabels = { absent: 'Sem trabalho registrado', current: 'Em andamento', stale: 'Acompanhamento desatualizado', blocked: 'Há uma pendência', completed: 'Trabalho registrado concluído', abandoned: 'Encerrado sem concluir' };
+const labels = { absent: 'O Forge não tem etapas registradas neste projeto.', current: 'Acompanhamento do Forge disponível. Pode não incluir a conversa mais recente.', stale: 'O acompanhamento do Forge está desatualizado.', blocked: 'O trabalho acompanhado pelo Forge tem uma pendência.', completed: 'O trabalho acompanhado pelo Forge foi concluído. Isso não significa que o produto inteiro está pronto.', abandoned: 'O trabalho acompanhado pelo Forge foi encerrado sem conclusão.' };
+const stateLabels = { absent: 'Sem etapas no Forge', current: 'Em andamento', stale: 'Acompanhamento desatualizado', blocked: 'Há uma pendência', completed: 'Trabalho registrado concluído', abandoned: 'Encerrado sem concluir' };
 const phases = {
   '0-route': ['Preparação', 'Entendendo como começar.'],
   '1-discovery': ['Descoberta', 'Entendendo o problema, as pessoas e os caminhos possíveis.'],
@@ -208,11 +208,11 @@ async function loadProgress() {
     const phase = phases[data.phase] || ['Etapa registrada', 'Converse com seu agente para entender esta etapa.'];
     document.getElementById('record-state').textContent = stateLabels[data.status];
     result.dataset.state = data.status;
-    document.getElementById('record-phase-label').textContent = data.status === 'absent' ? 'POR ONDE O FORGE COMEÇA' : 'ETAPA DO PROJETO';
+    document.querySelector('.record-stage').hidden = data.status === 'absent';
     document.getElementById('record-empty-help').hidden = data.status !== 'absent';
     document.getElementById('record-phase').textContent = phase[0];
     document.getElementById('record-phase-help').textContent = phase[1];
-    workspacePhase.textContent = data.status === 'absent' ? 'Sem trabalho registrado' : data.status === 'stale' ? `Etapa no Forge (desatualizada): ${phase[0]}` : `Etapa no Forge: ${phase[0]}`;
+    workspacePhase.textContent = data.status === 'absent' ? 'Sem etapas no Forge' : data.status === 'stale' ? `Etapa no Forge (desatualizada): ${phase[0]}` : `Etapa no Forge: ${phase[0]}`;
     workspacePhase.hidden = false;
     const direction = data.accepted_direction;
     const directionPanel = document.getElementById('record-direction');

@@ -2,7 +2,7 @@
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const { spawn } = require('node:child_process');
 const { createServer } = require('node:net');
-const { mkdtemp, mkdir, rm, copyFile, access, readFile } = require('node:fs/promises');
+const { mkdtemp, mkdir, rm, copyFile, access, readFile, realpath } = require('node:fs/promises');
 const { tmpdir } = require('node:os');
 const { createHash } = require('node:crypto');
 const path = require('node:path');
@@ -83,7 +83,13 @@ const assert = require('node:assert/strict');
       assert.equal(skillHash, '10581e17d5dbb98bda3e0f3bc0b6a152736499451e1424e093dbecfafd8f0b06');
       assert.ok(params.developerInstructions.includes('Do not use a separately installed Start Forge skill'));
       assert.ok(params.developerInstructions.includes('write the file, invoke Forge, and clean up in separate tool calls'));
-      console.log('PASS: native fixture login preserves the draft; first send supplies the installed bundled Start Forge path to the Codex thread. Provider login and agent skill execution NOT_RUN.');
+      if (process.env.FORGE_EXPECT_BUNDLED_CORE_INSTRUCTIONS === '1') {
+        const runtime = params.developerInstructions.match(/exact Forge executable for this project: `([^`]+)`/)?.[1];
+        assert.equal(await realpath(runtime), await realpath(path.join(path.dirname(path.dirname(skill)), 'forge-core.exe')));
+        await access(runtime);
+        assert.ok(params.developerInstructions.includes('Do not select another copy from PATH'));
+      }
+      console.log('PASS: native fixture login preserves the draft; first send supplies the bundled Start Forge path to the Codex thread. Provider login and agent skill execution NOT_RUN.');
     } else {
       await page.locator('#finish-login').click();
       await page.locator('#login-status').filter({ hasText: 'Aguardando a confirmação' }).waitFor();

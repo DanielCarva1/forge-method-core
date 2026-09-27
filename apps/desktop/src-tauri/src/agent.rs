@@ -480,6 +480,7 @@ pub async fn connect_agent(
         &project.project_root,
         thread_id.as_deref(),
         resource_dir.as_deref(),
+        &runtime,
     )
     .await;
     if result.is_err() {
@@ -493,6 +494,7 @@ async fn initialize(
     project_root: &str,
     thread_id: Option<&str>,
     resource_dir: Option<&Path>,
+    runtime: &Path,
 ) -> Result<history::Conversation, &'static str> {
     let transport = &session.transport;
     transport
@@ -507,7 +509,7 @@ async fn initialize(
     if account["account"]["type"] != "chatgpt" {
         return Err("Entre na sua conta ChatGPT pelo Forge e tente conectar novamente.");
     }
-    let instructions = developer_instructions(resource_dir)?;
+    let instructions = developer_instructions(resource_dir, runtime)?;
     let mut params = json!({"cwd":project_root,"approvalPolicy":"never","sandbox":"danger-full-access","developerInstructions":instructions});
     let (thread, messages) = if let Some(id) = thread_id {
         if id.is_empty() || id.len() > 200 {
@@ -531,7 +533,10 @@ async fn initialize(
     })
 }
 
-fn developer_instructions(resource_dir: Option<&Path>) -> Result<String, &'static str> {
+fn developer_instructions(
+    resource_dir: Option<&Path>,
+    runtime: &Path,
+) -> Result<String, &'static str> {
     let skill = resource_dir
         .map(|dir| dir.join("forge-core/start-forge/SKILL.md"))
         .filter(|path| path.is_file());
@@ -546,7 +551,7 @@ fn developer_instructions(resource_dir: Option<&Path>) -> Result<String, &'stati
         #[cfg(debug_assertions)]
         "Use the installed start-forge skill once at the beginning of this conversation, and follow its structured handoff.".to_string()
     };
-    Ok(format!("You are the user's agent inside Forge desktop. Work only on the selected project unless the user explicitly requests otherwise. {start} Forge owns project continuity; use its public interfaces and do not create another state store. For a Forge command requiring a temporary JSON input, write the file, invoke Forge, and clean up in separate tool calls; never compose all three operations into one shell command. If the host blocks an operation, do not bypass its policy. Explain progress in the user's language, clearly and simply. A completed response is not proof that the user's task is complete. Treat exploration as conversation, not acceptance. After interruption, reconcile actual effects before continuing. When you create or substantially change a reviewable local file, identify only files that actually exist and include a Markdown link with a path relative to the project root, such as [Ver página](site/index.html), so the user can inspect it in the app. Do not imply a local file is published or that an unsupported output has a visual preview. The interface currently cannot display interactive tool forms; ask the user in ordinary conversation when a decision is needed."))
+    Ok(format!("You are the user's agent inside Forge desktop. Work only on the selected project unless the user explicitly requests otherwise. {start} The app already resolved the exact Forge executable for this project: `{}`. Use that absolute executable for every Forge command in this conversation. Do not select another copy from PATH, Cargo bin, a global installer, or WSL. Check its --version before activation; if the host cannot access it, explain the problem instead of silently switching copies. Forge owns project continuity; use its public interfaces and do not create another state store. For a Forge command requiring a temporary JSON input, write the file, invoke Forge, and clean up in separate tool calls; never compose all three operations into one shell command. If the host blocks an operation, do not bypass its policy. Explain progress in the user's language, clearly and simply. A completed response is not proof that the user's task is complete. Treat exploration as conversation, not acceptance. After interruption, reconcile actual effects before continuing. When you create or substantially change a reviewable local file, identify only files that actually exist and include a Markdown link with a path relative to the project root, such as [Ver página](site/index.html), so the user can inspect it in the app. Do not imply a local file is published or that an unsupported output has a visual preview. The interface currently cannot display interactive tool forms; ask the user in ordinary conversation when a decision is needed.", runtime.display()))
 }
 
 async fn resume_saved<P: Protocol>(
@@ -832,10 +837,14 @@ mod tests {
         let skill = base.join("forge-core/start-forge/SKILL.md");
         std::fs::create_dir_all(skill.parent().unwrap()).unwrap();
         std::fs::write(&skill, b"# Start Forge").unwrap();
-        let instructions = developer_instructions(Some(&base)).unwrap();
+        let runtime = base.join("forge-core/forge-core.exe");
+        let instructions = developer_instructions(Some(&base), &runtime).unwrap();
         assert!(instructions.contains(&skill.display().to_string()));
+        assert!(instructions.contains(&runtime.display().to_string()));
+        assert!(instructions.contains("Do not select another copy from PATH"));
         assert!(instructions.contains("Do not use a separately installed Start Forge skill"));
-        assert!(instructions.contains("write the file, invoke Forge, and clean up in separate tool calls"));
+        assert!(instructions
+            .contains("write the file, invoke Forge, and clean up in separate tool calls"));
         assert!(!instructions.contains("Use the installed start-forge skill"));
         std::fs::remove_dir_all(base).unwrap();
     }

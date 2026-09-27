@@ -67,6 +67,13 @@ if (!profile || !project || !executable) throw new Error('Set FORGE_ARTIFACT_PRO
     assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
     await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias' }).waitFor({ timeout: 20000 });
     assert.match(await page.locator('.preview-origin').first().textContent(), /Publicação não verificada/);
+    if (process.env.FORGE_EXPECT_EMPTY_RECORD_COPY === '1') {
+      await page.locator('#progress-status').filter({ hasText: 'não tem etapas registradas neste projeto' }).waitFor({ timeout: 35000 });
+      assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem etapas no Forge');
+      assert.equal(await page.locator('.record-stage').isVisible(), false);
+      assert.match(await page.locator('#record-empty-help').textContent(), /A conversa e os arquivos continuam aqui/);
+    }
+    if (process.env.FORGE_ARTIFACT_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_ARTIFACT_SCREENSHOT, fullPage: true });
     await page.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
     const composer = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
     assert.match(await composer.inputValue(), /site\\index\.html/);

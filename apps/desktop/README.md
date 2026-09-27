@@ -5646,3 +5646,107 @@ were consumed by these read-only runs; monetary task cost remains UNKNOWN.
 with a bounded fixture and cost justification; otherwise prioritize another
 concrete UX gap found in native use. Keep packaging separate from tiny test
 changes, and do not rerun the expensive Start Forge activation without cause.
+
+### Real-result empty-record clarity and bundled-core handoff — 2026-09-27
+
+The publicly installed 0.1.18 app was resumed headlessly on the preserved
+real Codex conversation and generated `site/index.html`. Its screenshot showed
+a genuine local result and chat alongside an absent Forge record, but the UI
+suggested no work existed and displayed a discovery-stage panel. This is a
+presentation error, not evidence that the result or conversation was lost.
+The source UI now says precisely that the Forge *steps* are absent, preserves
+the visible conversation/files, and hides the unrecorded stage. No new state
+store or fabricated project data was added. A read-only native screenshot of
+the corrected source build is
+`C:/ForgeFast/forge-empty-record-with-artifact-no-fake-stage.png`.
+
+A separate read-only inspection of a prior real first-use Codex thread found
+that the agent used a globally installed `forge-core.exe` rather than the
+app-bundled runtime. The app already resolved and exposed its runtime to the
+Codex process, but this observation shows that environment preparation alone
+did not guarantee the agent's chosen executable. The source now puts the exact
+resolved executable path in the agent's developer instructions and forbids
+silently switching to PATH/Cargo/global/WSL copies. This is a guidance fix,
+not proof that a fresh real Codex turn will obey it or that a clean machine is
+yet self-sufficient.
+
+**PASS:** browser UI suite; corrected-source hidden native read-only real
+artifact/Forge-record composition; corrected-source hidden generic native
+smoke; scoped Desktop debug build; Desktop `cargo check -p forge-desktop`;
+focused `agent_prefers_bundled_start_forge_guidance` (1 test executed); all
+49 Desktop crate tests; `node --check` for the new opt-in native auth assertion;
+`git diff --check`. The current source edits are
+uncommitted/unpublished, and public/installed 0.1.18 does not include them.
+The repo's pre-existing Rust formatting differences mean `cargo fmt --check`
+is not clean; only the changed Rust lines were formatted locally, without
+reformatting unrelated modules. No new provider turn was sent for this slice;
+its task-specific model token cost is zero for the read-only probes, while
+API-equivalent BRL and Pro allowance attribution remain UNKNOWN. No active
+subagents.
+
+**NOT_RUN:** real Codex first-use with the new explicit bundled-core path,
+fresh account/clean-machine install, actual app-agent decision turn, manual
+accessibility, and a new installer candidate. **Next exact step:** inspect the
+complete diff and verify the native protocol's `developerInstructions` carry
+the same bundled runtime path; use a bounded fixture before deciding whether
+a new real Codex turn is worth its cost. Then group the verified UI and
+first-use fixes into the next alpha package instead of publishing each tiny
+edit. The wider nontechnical end-to-end goal remains active.
+
+### Bundled-core instruction readback in a native protocol fixture — 2026-09-27
+
+The current Desktop debug executable was rebuilt. For a **headless native
+fixture only**, the already-installed, hash-pinned Forge core and Start Forge
+skill were staged beside that executable in the build cache, with no
+`FORGE_CORE_EXE` override. The fake Codex device-login/server fixture captured
+the real `thread/start` request from the native app. Its developer
+instructions named an existing executable resolving to the very same bundled
+core next to the pinned skill, rather than a global Forge installation.
+The assertion initially compared two equivalent Windows paths literally and
+failed because Tauri supplied the skill with a `\\?\` prefix; the test was
+corrected to compare canonical paths, then passed. This was a test-path
+normalization issue, not an app runtime failure.
+
+**PASS:** rebuilt Desktop debug binary; staged core/skill hashes
+`CFD6F81B...7541EDF` and `10581E17...8F0B06`; headless native login/send
+protocol fixture with the new bundled-path assertion. The test sent no
+provider request: Codex login and server responses were simulated. Source is
+still uncommitted/unpublished; the installed public app is unchanged.
+**NOT_RUN:** actual model execution of the instruction, fresh-account or
+clean-machine use. **Next exact step:** review and close this coherent source
+slice, then prepare the next alpha package with release-boundary checks and
+one candidate installer. No new provider tokens were consumed by the fixture;
+monetary/Pro attribution remains UNKNOWN.
+
+### Desktop 0.1.19 alpha candidate — 2026-09-27
+
+The concrete real-result empty-record UI correction and explicit bundled-core
+agent handoff are grouped as the next alpha package. Desktop manifest, lock
+and Tauri config are 0.1.19; `RELEASE_NOTES-0.1.19.md` describes the scope and
+limits. The broader nontechnical journey remains active.
+
+**PASS:** eight frontend unit tests; browser UI suite; Desktop `cargo check`,
+all 49 Desktop crate tests and strict Clippy; exact pinned core and skill
+staging; one NSIS release build. The single candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.19_x64-setup.exe`
+is 123,086,775 bytes, SHA-256
+`E96CC0BCE5664DD56140F48CE8FDB0831A65EDE9F8D17ACAD36FEAAD0FEC44A9`.
+Silent installation over public 0.1.18 returned exit 0. Installed app version
+is 0.1.19, executable SHA-256
+`52C36C1CBDEC97CB03C297088D1CCAF4EAA83DE45C2464B4008BB291B8BBFEE1`.
+Installed bundled core/skill hashes are the pinned 0.13.2 values. The
+candidate hash was unchanged after installation. Installed hidden native
+smoke passed real Forge project onboarding, preview and record readback;
+installed hidden fake-login protocol captured the exact bundled executable
+in the agent instructions; installed hidden read-only actual Codex conversation
+resumed its linked HTML result and prepared a change request without sending.
+No manual GitHub CI was run. Current source is not yet committed or published.
+
+**NOT_RUN:** a new real Codex turn obeying the bundled-path instruction,
+fresh-account login, clean-machine install, manual accessibility, and a real
+agent decision turn. No new provider turn was run for this package; task BRL
+and Pro allowance attribution are UNKNOWN. No active subagents. **Next exact
+step:** inspect the complete scoped diff, selectively commit/push the 0.1.19
+package, publish only this tested candidate under the standing maintainer
+authorization, then verify its unauthenticated downloaded bytes and install
+that exact download. Do not rebuild the candidate merely to publish it.

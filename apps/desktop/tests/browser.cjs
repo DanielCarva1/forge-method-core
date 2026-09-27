@@ -872,11 +872,11 @@ async function openConversation(page) {
       await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
       assert.equal(await page.locator('#progress-result').isVisible(), true);
       if (state === 'absent') {
-        assert.match(await page.locator('#progress-status').textContent(), /ainda não encontrou trabalho registrado/);
-        assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem trabalho registrado');
+        assert.match(await page.locator('#progress-status').textContent(), /não tem etapas registradas neste projeto/);
+        assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem etapas no Forge');
         assert.equal(await page.locator('#workspace-phase').isVisible(), true);
-        assert.equal(await page.locator('#record-phase-label').textContent(), 'POR ONDE O FORGE COMEÇA');
-        assert.match(await page.locator('#record-empty-help').textContent(), /Conte na conversa o que você quer criar/);
+        assert.equal(await page.locator('.record-stage').isVisible(), false, 'An absent record must not look like an active discovery stage');
+        assert.match(await page.locator('#record-empty-help').textContent(), /A conversa e os arquivos continuam aqui/);
         assert.equal(await page.locator('#record-empty-help').isVisible(), true);
         assert.equal(await page.locator('#record-work').isVisible(), false);
         assert.equal(await page.locator('#record-direction').isVisible(), true);
@@ -884,6 +884,7 @@ async function openConversation(page) {
       }
       else {
         assert.equal(await page.locator('#workspace-phase').isVisible(), true);
+        assert.equal(await page.locator('.record-stage').isVisible(), true);
         assert.equal(await page.locator('#record-empty-help').isVisible(), false);
         assert.equal(await page.locator('#record-phase-label').textContent(), 'ETAPA DO PROJETO');
         if (state === 'stale') assert.match(await page.locator('#workspace-phase').textContent(), /Etapa no Forge \(desatualizada\)/);

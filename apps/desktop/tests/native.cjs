@@ -285,8 +285,9 @@ async function operatePreviewDialog(page, file) {
         assert.equal(await page.locator('#record-pending').evaluate(node => !!(node.compareDocumentPosition(document.getElementById('record-direction-card')) & Node.DOCUMENT_POSITION_FOLLOWING)), true,
           'Native unresolved questions should precede optional technical direction');
       }
-      if (recordedPhase === 'Sem trabalho registrado') {
+      if (recordedPhase === 'Sem etapas no Forge') {
         assert.equal(await page.locator('#record-empty-help').isVisible(), true);
+        assert.equal(await page.locator('.record-stage').isVisible(), false);
         assert.equal(await page.locator('#record-work').isVisible(), false);
         assert.equal(await page.locator('#record-direction').isVisible(), false);
       } else {
@@ -329,7 +330,7 @@ async function operatePreviewDialog(page, file) {
         }
       } else assert.equal(await page.locator('#record-questions-shortcut').isVisible(), false);
       if (process.env.FORGE_RECORD_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_RECORD_SCREENSHOT, fullPage: true });
-      console.log(`PASS: actual bounded Forge workflow readback displayed ${recordedPhase === 'Sem trabalho registrado' ? 'its honest empty state' : 'separately from agent activity'}.`);
+      console.log(`PASS: actual bounded Forge workflow readback displayed ${recordedPhase === 'Sem etapas no Forge' ? 'its honest empty state' : 'separately from agent activity'}.`);
       if (process.env.FORGE_TEST_DIRECTION_HISTORY === '1') {
         await page.locator('#direction-history summary').click();
         await page.locator('#direction-history-status').filter({ hasText: /direç(ão|ões) registrada/ }).waitFor({ timeout: 35000 });
@@ -431,7 +432,7 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('#confirmed-root').textContent(), newProject);
       assert.equal(await page.locator('#workspace-title').textContent(), 'new-project');
       await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 35000 });
-      assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem trabalho registrado');
+      assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem etapas no Forge');
       assert.equal(await page.locator('#record-empty-help').isVisible(), true);
       console.log('PASS: one folder action initialized a new project and its Forge record without a second setup command.');
       assert.equal(await page.locator('#connect-agent').isEnabled(), true);
@@ -463,7 +464,7 @@ async function operatePreviewDialog(page, file) {
         await page.waitForFunction(before => window.terminalRecordReads > before, readsBefore);
         await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 35000 });
         assert.equal(await page.locator('#progress-result').isVisible(), true);
-        assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem trabalho registrado');
+        assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem etapas no Forge');
         await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
         await page.evaluate(() => window.restoreTerminalRecordInvoke());
         console.log('PASS: native WebView terminal event automatically re-reads the unchanged, authoritative Forge project record (controlled agent event; no real Codex turn).');
