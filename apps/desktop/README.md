@@ -1,6 +1,6 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.17` is the published alpha
+Independent Tauri application. Desktop `0.1.18` is the published alpha
 prerelease. Its exact installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
@@ -5571,3 +5571,32 @@ complete scoped diff, selectively commit/push the 0.1.18 package, and under
 the maintainer's standing release authorization publish only this tested
 installer. Verify an unauthenticated download size/hash and reinstall those
 downloaded bytes. Never rebuild after hashing merely to publish.
+
+### Desktop 0.1.18 public release readback — 2026-09-27
+
+**PASS:** source commit `a8933d178433c1e241a6c48fe9c1500969a9a901`
+was pushed. Annotated tag `desktop-v0.1.18-alpha.1` resolves to that commit
+and was pushed. The public prerelease is
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.18-alpha.1`.
+GitHub reports one installer, 123,069,091 bytes, digest SHA-256
+`5BF97B83BEF0D96D38F70D532D76E9AB8FFEA4F5ED7D69292AF0AFF2AFE5001C`,
+plus its checksum sidecar. An unauthenticated direct download to
+`C:/ForgeFast/forge-alpha-0118-public-20260927/Forge_0.1.18_x64-setup.exe`
+matched the exact tested candidate size/hash. Silent reinstall of those
+downloaded bytes returned exit 0; installed app version 0.1.18, executable
+SHA-256 `305CC60D29E0B393D01CAB3BA5D4513CB81DA3784AE0635E24A5F704D879B88C`,
+and bundled core SHA-256 matched the tested installation. A hidden native
+smoke on the downloaded installation again passed the disposable-project,
+real Forge-record readback and local preview checks. No manual GitHub CI ran.
+
+The release is publicly available, but a real Codex conversation persisted
+*across this specific upgrade* was NOT_RUN. The typed app-agent decision turn,
+fresh-account/clean-machine and manual accessibility limits in the release
+notes still apply. No new provider-model turn was run for this package;
+task-specific token/BRL and Pro allowance attribution remain UNKNOWN.
+The broader nontechnical end-to-end goal remains active. **Next exact step:**
+use an existing disposable Codex-owned conversation/profile, if one is still
+intact, to verify real installed 0.1.18 resume and project-result continuity
+without creating a new expensive agent turn. If no safe fixture exists, record
+that limit rather than fabricating one, then continue the remaining UI
+coverage and first-use path.
