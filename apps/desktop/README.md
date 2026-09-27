@@ -4413,3 +4413,29 @@ tokens and BRL cost remain UNKNOWN. Review the package diff, commit and push
 selected source/docs, tag and publish the exact candidate under the
 maintainer's standing release permission, then verify fresh public downloads
 and installed readback. Do not trigger GitHub CI manually.
+
+## Desktop 0.1.9 public release readback — 2026-09-27
+
+**PASS:** source package committed and pushed as `899d0542`; the annotated
+tag `desktop-v0.1.9-alpha.1` points to that commit. Public prerelease:
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.9-alpha.1`.
+GitHub reports installer size 4,621,160 bytes and SHA-256
+`E16351D7DAE468968FDF43D0F3811C835DEBB428C407A2D8ED2D5185ADE1DDA9`.
+A fresh unauthenticated download to
+`C:/ForgeFast/forge-alpha-019-public-20260927` matched that exact size,
+hash and `.sha256` sidecar. The downloaded file silently reinstalled with
+exit 0; installed version remained 0.1.9 and executable SHA-256 remained
+`6EA8B9B72E46A3806F93AA316FABC367BFE04095B0A1DCE6E81C7AE960A25DBD`.
+These installed downloaded bytes passed the focused hidden native full
+process restart, file preview, prepared change without Send and outside-path
+rejection test. The older disposable real Codex user/reply pair had already
+resumed on the same installed executable hash before identical downloaded
+reinstallation. No installer rebuild or manually triggered GitHub CI.
+
+**Next product slice:** continue toward a complete nontechnical journey by
+auditing the installed app against the approved visual references and the
+development plan, prioritizing a concrete gap over cosmetic churn. Keep
+Forge record truth, Codex history, and local file validation separate.
+Complete manual accessibility acceptance, clean-machine core/Codex setup,
+self-contained distribution, auto-update and mobile remain open. No worker
+used in this package; model-specific tokens and BRL cost remain UNKNOWN.

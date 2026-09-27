@@ -51,5 +51,21 @@ SHA-256 is
 `6EA8B9B72E46A3806F93AA316FABC367BFE04095B0A1DCE6E81C7AE960A25DBD`.
 The installed binary passed the focused hidden native shortcut/restart test
 and restored an older disposable real Codex user/reply pair without sending
-a new turn. The candidate was not rebuilt after hashing. Public upload and
-download readback are not yet claimed.
+a new turn. The candidate was not rebuilt after hashing.
+
+## Publication readback — 2026-09-27
+
+The prerelease is available at
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.9-alpha.1`
+from annotated tag `desktop-v0.1.9-alpha.1`, which resolves to source commit
+`899d054281ecc247cba2740caf00cff7c0bba68c`. GitHub reported the
+installer asset as 4,621,160 bytes with the expected SHA-256. A fresh,
+unauthenticated public download to
+`C:/ForgeFast/forge-alpha-019-public-20260927` matched the candidate's size,
+hash and checksum sidecar. That downloaded installer, not a rebuilt file,
+silently reinstalled with exit 0; installed version and executable hash
+matched the tested installation. The installed downloaded bytes passed the
+hidden native full-process resume, local-file preview, prepared change and
+outside-path rejection check. The earlier real Codex journey was run on the
+same UI source before the version metadata bump; it was not repeated on the
+downloaded installer. No GitHub CI was manually triggered.
