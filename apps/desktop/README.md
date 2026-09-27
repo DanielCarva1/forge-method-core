@@ -1,8 +1,7 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.10` is the published alpha
-prerelease. Source `0.1.11` is under development; no `0.1.11` installer is
-publicly available until its exact candidate is tested and downloaded back.
+Independent Tauri application. Desktop `0.1.11` is the published alpha
+prerelease. Its exact installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -4615,3 +4614,26 @@ under the maintainer's standing alpha permission, then fresh-download it
 without authentication, compare size/SHA-256 and install those downloaded
 bytes before calling 0.1.11 publicly available. After that, continue the
 journey with Forge core installation and genuinely clean-machine setup.
+
+## Desktop 0.1.11 public release readback — 2026-09-27
+
+**PASS:** source commit `7c5b83d5d5e317d9d9b812cf17bb4915e7decb8e`
+was pushed and annotated tag `desktop-v0.1.11-alpha.1` resolves to it.
+Public prerelease:
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.11-alpha.1`.
+GitHub reports the installer asset at 111,295,705 bytes with SHA-256
+`00E4E5F1C749C395A5844A50A926B88F6D62833934911F998B19D96CF6F1E6E4`.
+A fresh unauthenticated public download into
+`C:/ForgeFast/forge-alpha-0111-public-20260927` matched the tested candidate's
+size, hash and sidecar. The downloaded installer silently reinstalled with
+exit 0. Installed product version is 0.1.11; installed app and Codex executable
+hashes matched the earlier tested candidate. Installed downloaded bytes then
+passed hidden native project onboarding and real authenticated Codex send/
+response/reload with `FORGE_CODEX_EXE` unset. No manually triggered GitHub CI.
+
+**Next product work:** bundle or provide a safe guided installation/update path
+for `forge-core`, then test the nontechnical journey on a genuinely clean Windows
+profile or machine. Do not call this alpha self-contained until that proof passes.
+In-app ChatGPT sign-in, auto-update, signing, accessibility acceptance and
+mobile remain open. The pinned Codex CLI needs deliberate compatibility review
+for future alpha packages. Model-specific token and BRL costs remain UNKNOWN.

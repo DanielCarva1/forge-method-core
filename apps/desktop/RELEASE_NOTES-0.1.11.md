@@ -39,5 +39,17 @@ The exact candidate was installed with exit 0. Installed executable SHA-256 is
 `FCF8AFB036789F070891541BBA3A66CC7CC194D9DC685CAE19C0BF1C14BD3A04`;
 installed Codex executable SHA-256 is
 `8CB0E69E99FF2A158C54815DB82D0F2E524D8F301BC30184722CFD1AE5973574`.
-Do not rebuild or replace this candidate after hashing. It is not public until
-the tagged asset is published and the public download is checked byte-for-byte.
+Do not rebuild or replace this candidate after hashing. At candidate time it
+was not public; publication readback is recorded below.
+
+## Publication readback — 2026-09-27
+
+The prerelease is available at
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.11-alpha.1`.
+Annotated tag `desktop-v0.1.11-alpha.1` resolves to source commit
+`7c5b83d5d5e317d9d9b812cf17bb4915e7decb8e`. A fresh unauthenticated
+download of the installer and sidecar matched the candidate's size and SHA-256.
+The downloaded file reinstalled with exit 0; installed version and app/Codex
+hashes matched the earlier candidate installation. The installed downloaded
+bytes again passed a hidden native real Codex send/response/reload without an
+override. GitHub CI was not manually started.
