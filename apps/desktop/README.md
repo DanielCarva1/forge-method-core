@@ -4983,3 +4983,36 @@ model-specific tokens and BRL cost are UNKNOWN. Current source is dirty, with
 exact tested candidate under the maintainer's standing alpha authorization,
 then unauthenticated download/hash check, install the downloaded bytes and
 native smoke. Later test a genuine new-account authorization voluntarily.
+
+### Desktop 0.1.14 public release readback — 2026-09-27
+
+**PASS:** source commit `ac5bf4dc0cb9826c7f4d23cefd11d0f3b13bec32`
+was pushed; annotated tag `desktop-v0.1.14-alpha.1` resolves to it.
+Public prerelease:
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.14-alpha.1`.
+GitHub reports 123,057,736 bytes and SHA-256
+`BA7E26638A91224AC9DB939EF4BA2C844B74DB9C1F7BECE3D2D93FAF0BF2970C`.
+An unauthenticated public download and sidecar in
+`C:/ForgeFast/forge-alpha-0114-public-20260927` matched the exact tested
+candidate. The downloaded installer silently reinstalled with exit 0. The
+installed version is 0.1.14 and executable SHA-256
+`3FA6E29DBF05DD502FCA82332974A68066048A134974D1748A1290C1E52A1E02`,
+identical to the locally tested installation. Those downloaded installed bytes
+passed a hidden native Windows folder/file-dialog and real authenticated
+Codex send/reply/reload/full-process-restart regression with executable
+overrides unset. The complete real artifact-create/preview/change journey had
+already passed on the identical locally tested installed executable/resources
+before the public download; it was not repeated after the byte-identical
+public reinstall. No manual GitHub CI was started.
+
+**Remaining:** genuine browser completion of a new ChatGPT login,
+default-browser launch, and clean Windows account/VM setup are NOT_RUN. The
+installed app's sign-in challenge/cancel is proven, but fixture completion is
+not provider authorization. Manual accessibility acceptance, auto-update,
+signing and mobile remain open. Core source 0.13.3 remains separate from the
+pinned bundled core 0.13.2. Model-specific token/BRL economics are UNKNOWN.
+No workers were used. Next product step: audit current UI coverage against
+approved user journeys and original art, identify the highest-impact missing
+screen/state and implement it without adding another authority store; test
+fresh-account authorization when a controlled interactive account/VM is
+available. No source changes are pending after this checkpoint commit.
