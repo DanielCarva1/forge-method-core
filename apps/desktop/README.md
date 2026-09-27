@@ -5874,3 +5874,162 @@ step:** use this evidence to choose the next concrete gap: exercise an
 agent-mediated product decision through the app and verify Forge record
 readback, rather than adding a second state store or repeating a generic
 activation probe. Keep the full desktop goal active.
+
+### Real product direction, interrupted Work Focus, and clearer record — 2026-09-27
+
+The existing disposable project `D:/Temp/User/forge-desktop-webview-ENrGgT/new-project`
+and its real Codex conversation `01a0e25f-27b4-7f73-b3e8-9298bccdde2f`
+received **one** product-decision message through the installed public 0.1.19
+app, on a hidden Windows desktop. The test user explicitly chose personal use,
+no account/sharing in the first version, and asked for the direction and next
+work to be recorded without editing or publishing. `tests/native-forge-decision.cjs`
+is one-shot: it checks the absent starting Work Focus and accepted direction
+before Send, and it never retries an uncertain or timed-out send.
+
+The agent invoked the installed bundled `forge-core 0.13.2`, successfully
+accepted an initial **product direction** in Forge, and did not change the HTML
+or CSS. Authoritative `workflow resume` readback shows the accepted objective
+outcome “Evoluir o Jardim de ideias para uma primeira versão de uso pessoal,
+na qual uma pessoa possa anotar e organizar as próprias ideias”, plus the
+agreed constraints and open uncertainties. Its `current_work.status` remains
+`absent`: the agent had **not** recorded the next Work Focus. The native test's
+360-second reply wait expired, closing the app and aborting that agent turn.
+There is no final reply and no proof of a fully completed decision-to-work
+journey. Do not repeat the same request blindly. The temp input file
+`D:/Temp/User/forge-objective-input.json` was left after the agent's cleanup
+command was blocked by host policy; it contains this synthetic test proposal,
+not a project file. The pre-existing project files were unchanged.
+
+**PASS:** separate read-only headless native checks against the installed
+binary and a rebuilt debug binary showed the accepted direction from Forge in
+the app, with no invented Work Focus and no send. The real state exposed a
+concrete UX ambiguity: the old UI said “Sem etapas no Forge” while also showing
+an accepted direction. The source UI now distinguishes “Direção registrada;
+próximo trabalho pendente”, explains what is missing, and retains “Sem etapas
+no Forge” when *no* direction exists. The browser UI suite passed; incremental
+offline desktop debug build passed; the rebuilt debug app's native read-only
+check passed. No Rust source changed, so no workspace Rust suite or package
+build was run. This wording is **not** in the installed/public 0.1.19.
+
+The interrupted turn was `01a0e48c-1690-70e1-b18f-f11846e72119`
+(20:26:24–20:32:21 UTC), observed `gpt-6-sol` high, no subagents or retry.
+Its final *per-turn* usage was 575,849 input tokens **including** 540,672
+cached input (35,177 uncached), and 5,570 output **including** 2,701 reasoning;
+581,419 total. It made 12 tool calls; two attempts around preparing/cleaning
+the temporary proposal were rejected by host policy, and `--help` was not
+supported by the core subcommand. The shared Pro weekly used-percent was 47%
+before and after (rounded and shared), so per-task subscription consumption
+and an API-equivalent BRL amount remain UNKNOWN, not zero. This costly,
+interrupted path is a performance/operability gap, not evidence that the UI
+sent twice or that Forge lost the accepted direction.
+
+**Next exact step:** inspect the incomplete turn and the existing accepted
+objective before any continuation; then complete *one* bounded Work Focus
+through the same app/conversation without resending the accepted decision, and
+verify Forge and UI readback after restart. If the host path repeatedly stalls,
+address the specific friction rather than adding a second state store. Keep
+the desktop goal active. No active subagents.
+
+### Accepted Work Focus and easy return to an earlier result — 2026-09-27
+
+The interrupted test conversation was continued **once**, in the installed
+public 0.1.19 app, with a new message saying the personal-use direction was
+already recorded. The preflight read Forge's accepted objective and absent
+Work Focus; it did not resend or supersede the accepted direction. The real
+agent accepted `focus.jardim-ideias-v1-pessoal-planejamento` through the
+installed bundled `forge-core 0.13.2`, then replied in ordinary Portuguese.
+Authoritative `workflow resume` returned `current_work.status=current`, title
+“Planejar a primeira versão pessoal do Jardim de ideias”, intended outcome for
+one person without account/sharing, and a next step to review the existing page
+and propose a minimum way to record, organize and retain ideas between visits.
+The HTML and CSS remained unchanged; nothing was published. The temporary
+proposal file from the interrupted turn was removed by the agent after a
+successful exact-file cleanup, not by deleting project content.
+
+**PASS:** installed native UI showed exactly that Forge title, outcome and next
+step. A fresh native process then reopened the same Codex conversation and
+read the same accepted direction and Work Focus, with an instrumented zero
+`send_message` calls and unchanged project-file hashes. The agent's continuation
+ran 20:39:41–20:43:50 UTC (249 seconds), observed `gpt-6-sol` high, 13 tool
+calls, no retry/subagents. Its final *per-turn* usage was 1,030,485 input
+tokens **including** 1,012,096 cached (18,389 uncached), and 6,273 output
+**including** 3,508 reasoning; 1,036,758 total. Combined with the preceding
+interrupted attempt, the two-turn decision-to-Work-Focus path cost 1,618,177
+observed tokens, but that is **not** a controlled comparison with Astra or
+another workflow. Shared Pro weekly used-percent stayed 47% before and after
+this turn, too coarse/shared for per-task subscription attribution. BRL
+API-equivalent remains UNKNOWN without a dated applicable tariff and FX.
+
+Visual native review after restart found another concrete friction: the latest
+planning-only reply hid the earlier file-result shortcut, leaving an empty
+preview despite a real page in the same conversation. `ui/chat.mjs` now derives
+the **last cited local result** from completed agent messages in the current
+Codex transcript, even if a later reply contains no file; it does not create
+another persisted state store or open a file automatically. The native
+project-bound `inspect_preview` still validates any clicked path. Browser UI
+tests passed for a restored file result followed by a planning reply; rebuilt
+debug app passed headless native restart, zero-send, Forge-record, previous-file
+shortcut and actual HTML preview checks. Visual screenshot:
+`C:/ForgeFast/forge-real-work-focus-and-result.png`. This UI change, like the
+clearer absent-record wording above, is **not** in installed/public 0.1.19.
+No Rust source changed; no workspace-wide suite or installer was built.
+
+The preserved conversation began under an older desktop instruction that said
+to use the installed Start Forge skill. In this continuation the agent read the
+global skill, despite current 0.1.19 source instructing new conversations to
+use the packaged skill; it still used the exact bundled core binary. The fresh
+0.1.19 first-use thread above did use the packaged guidance. Thus this test
+proves state and UI continuity across versions, not that legacy conversations
+inherit new skill-path instructions.
+
+**Next exact step:** review the focused local diff and remaining native UX
+states, then prepare one coherent desktop alpha package with these visual
+continuity fixes. Before publication, run the appropriate final package gates
+and verify the candidate installed over the previous version; do not treat this
+debug build or screenshot as a released installer. Keep the full desktop goal
+active. No active subagents, no commit/push or release in this slice.
+
+### Desktop 0.1.20 alpha candidate and installed upgrade — 2026-09-27
+
+The scoped continuity fixes above are packaged as Desktop 0.1.20, without
+changing the separate Forge core. During review, restoration of a long chat
+was improved: the last-file shortcut is recomputed once after the transcript
+is loaded, not for every restored message. A controlled browser case restored
+202 messages in order and retained the earlier file shortcut. This is a
+performance precaution, not a measured latency claim. The release scope and
+limits are in `RELEASE_NOTES-0.1.20.md`.
+
+**PASS:** browser UI suite; eight frontend unit tests; Desktop `cargo check`,
+all 49 Desktop crate tests, strict Clippy, `git diff --check`, pinned core
+staging, and one NSIS release build. The candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.20_x64-setup.exe`
+is 123,075,607 bytes, SHA-256
+`282125B2A99E339233A3678602829FC5D6311E2D4A1F62F636C2FCD8FAF9AFE7`.
+Silent installation over public 0.1.19 returned exit 0. The installed app
+reports version 0.1.20, executable SHA-256
+`11651B7F81A6BF96FE2948FAF689B5CD918CC37B8439408C659B511DE2E3350B`.
+The installed bundled core retains pinned SHA-256
+`CFD6F81B1710D0469A53D12B374258CC122676EA7865F26926B1CDB4C7541EDF`.
+The candidate hash was unchanged after installation.
+
+Headless native read-only verification of the **installed** 0.1.20 app
+reopened the pre-upgrade real Codex conversation, read the exact accepted
+Forge direction and current Work Focus, and opened its earlier local HTML
+result despite a later planning reply. Instrumented `send_message` count was
+zero; project HTML/CSS hashes were unchanged. Installed hidden native WebView
+smoke also passed navigation, formatting, controlled long-history scrolling,
+appearance reload and frontend-to-Rust identity. Its first-use path was a
+controlled fixture and did not resolve a real project; the separate real
+conversation readback did use a real linked project. No manual GH CI or new
+provider-model turn was run.
+
+**NOT_RUN:** clean-machine install, fresh ChatGPT account/login, manual
+accessibility acceptance, mobile, or an additional real agent turn under the
+new version. No controlled Astra/Sol cost comparison was performed. Task BRL
+and Pro per-turn consumption are UNKNOWN; this package consumed no new
+provider-model turn. No active subagents. Source changes, candidate, and
+release notes are still local at this checkpoint, not committed/pushed or
+publicly available. **Next exact step:** review/selectively commit and push
+the 0.1.20 package, publish only the tested candidate under maintainer
+authorization, then download unauthenticated and verify the exact bytes and
+installed build. Keep the full nontechnical journey goal active.

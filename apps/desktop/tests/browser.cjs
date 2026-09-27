@@ -872,11 +872,12 @@ async function openConversation(page) {
       await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
       assert.equal(await page.locator('#progress-result').isVisible(), true);
       if (state === 'absent') {
-        assert.match(await page.locator('#progress-status').textContent(), /não tem etapas registradas neste projeto/);
-        assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem etapas no Forge');
+        assert.match(await page.locator('#progress-status').textContent(), /direção foi registrada no Forge, mas o próximo trabalho ainda não/);
+        assert.equal(await page.locator('#workspace-phase').textContent(), 'Direção registrada; próximo trabalho pendente');
+        assert.equal(await page.locator('#record-state').textContent(), 'Direção registrada; próximo trabalho pendente');
         assert.equal(await page.locator('#workspace-phase').isVisible(), true);
         assert.equal(await page.locator('.record-stage').isVisible(), false, 'An absent record must not look like an active discovery stage');
-        assert.match(await page.locator('#record-empty-help').textContent(), /A conversa e os arquivos continuam aqui/);
+        assert.match(await page.locator('#record-empty-help').textContent(), /O objetivo está registrado.*próximo trabalho ainda não foi definido/);
         assert.equal(await page.locator('#record-empty-help').isVisible(), true);
         assert.equal(await page.locator('#record-work').isVisible(), false);
         assert.equal(await page.locator('#record-direction').isVisible(), true);
@@ -902,6 +903,12 @@ async function openConversation(page) {
         }
       }
     }
+    await page.evaluate(() => { window.progressNoDirection = true; window.progressState = 'absent'; });
+    await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
+    await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
+    assert.match(await page.locator('#progress-status').textContent(), /não tem etapas registradas neste projeto/);
+    assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem etapas no Forge');
+    assert.match(await page.locator('#record-empty-help').textContent(), /A conversa e os arquivos continuam aqui/);
     await page.evaluate(() => { window.progressState = 'current'; window.progressDecisionCount = 0; });
     await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     assert.match(await page.locator('#record-decisions').textContent(), /não mostra decisões em aberto/);
@@ -1171,6 +1178,38 @@ async function openConversation(page) {
     await page.getByRole('button', { name: 'Conferir arquivo citado' }).click();
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.deepEqual(await page.evaluate(() => window.linkPreviewReads.at(-1)), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\site\\index.html' });
+    await page.evaluate(() => { window.resumeMessages = [
+      { id: 'result-user', role: 'user', text: 'Crie uma página simples.' },
+      { id: 'result-agent', role: 'agent', text: 'Pronto: [Ver página](site/index.html).' },
+      { id: 'planning-user', role: 'user', text: 'Vamos planejar o próximo passo.' },
+      { id: 'planning-agent', role: 'agent', text: 'O próximo passo é definir o público. Nenhum arquivo mudou.' },
+    ]; });
+    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
+    await openConversation(page);
+    await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.equal(await page.locator('#preview-last-result').getAttribute('hidden'), null, 'A later planning reply must retain the earlier file shortcut');
+    assert.match(await page.locator('#preview-intro').textContent(), /resultado anterior tem um arquivo/);
+    assert.equal(await page.locator('#preview-result').isVisible(), true, 'An already open preview should stay visible during planning');
+    assert.deepEqual(await page.evaluate(() => window.linkPreviewReads.at(-1)), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\site\\index.html' });
+    await page.evaluate(() => {
+      window.resumeMessages = [
+        { id: 'long-result-user', role: 'user', text: 'Crie uma página simples.' },
+        { id: 'long-result-agent', role: 'agent', text: 'Pronto: [Ver página](site/index.html).' },
+        ...Array.from({ length: 100 }, (_, index) => [
+          { id: `long-user-${index}`, role: 'user', text: `Pergunta ${index}` },
+          { id: `long-agent-${index}`, role: 'agent', text: `Resposta ${index} sem novo arquivo.` },
+        ]).flat(),
+      ];
+    });
+    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
+    await openConversation(page);
+    await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.equal(await page.locator('#messages article').count(), 202, 'A long restored history keeps every message in order');
+    assert.match(await page.locator('#messages article').last().textContent(), /Resposta 99 sem novo arquivo/);
+    assert.equal(await page.locator('#preview-last-result').getAttribute('hidden'), null, 'A long planning history keeps the earlier result shortcut available');
+    assert.match(await page.locator('#preview-intro').textContent(), /resultado anterior tem um arquivo/);
     await page.evaluate(() => { window.resumeMessages = null; });
     assert.ok(await page.evaluate(() => {
       const workspace = document.querySelector('.workspace-screen');

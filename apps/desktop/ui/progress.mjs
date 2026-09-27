@@ -193,6 +193,7 @@ async function loadProgress() {
       const direction = data.accepted_direction;
       if (direction.origin !== 'forge_cooperative_record' || typeof direction.outcome !== 'string' || !direction.outcome.trim() || !Number.isSafeInteger(direction.revision) || direction.revision < 1 || !['initial', 'material_supersession', 'non_material_clarification'].includes(direction.revision_kind) || !validTextList(direction.constraints) || !validTextList(direction.unacceptable_outcomes) || !validTextList(direction.open_uncertainties)) throw new Error('Invalid direction');
     }
+    const direction = data.accepted_direction;
     const hasWork = !!data.focus && data.status !== 'absent';
     if (hasWork) {
       if (typeof data.focus.title !== 'string' || typeof data.focus.intended_outcome !== 'string' || typeof data.focus.current_activity !== 'string' || typeof data.focus.next_step !== 'string' || !Number.isSafeInteger(data.focus.open_decision_count) || data.focus.open_decision_count < 0) throw new Error('Invalid record');
@@ -206,15 +207,21 @@ async function loadProgress() {
     }
     document.getElementById('record-work').hidden = !hasWork;
     const phase = phases[data.phase] || ['Etapa registrada', 'Converse com seu agente para entender esta etapa.'];
-    document.getElementById('record-state').textContent = stateLabels[data.status];
+    document.getElementById('record-state').textContent = data.status === 'absent' && direction
+      ? 'Direção registrada; próximo trabalho pendente' : stateLabels[data.status];
     result.dataset.state = data.status;
     document.querySelector('.record-stage').hidden = data.status === 'absent';
-    document.getElementById('record-empty-help').hidden = data.status !== 'absent';
+    const emptyHelp = document.getElementById('record-empty-help');
+    emptyHelp.hidden = data.status !== 'absent';
+    emptyHelp.textContent = direction
+      ? 'O objetivo está registrado. O próximo trabalho ainda não foi definido no Forge. Continue a conversa para combiná-lo com o agente.'
+      : 'A conversa e os arquivos continuam aqui. Para seguir, conte ao agente o que quer fazer agora; ele pode organizar o trabalho no Forge.';
     document.getElementById('record-phase').textContent = phase[0];
     document.getElementById('record-phase-help').textContent = phase[1];
-    workspacePhase.textContent = data.status === 'absent' ? 'Sem etapas no Forge' : data.status === 'stale' ? `Etapa no Forge (desatualizada): ${phase[0]}` : `Etapa no Forge: ${phase[0]}`;
+    workspacePhase.textContent = data.status === 'absent'
+      ? direction ? 'Direção registrada; próximo trabalho pendente' : 'Sem etapas no Forge'
+      : data.status === 'stale' ? `Etapa no Forge (desatualizada): ${phase[0]}` : `Etapa no Forge: ${phase[0]}`;
     workspacePhase.hidden = false;
-    const direction = data.accepted_direction;
     const directionPanel = document.getElementById('record-direction');
     document.getElementById('record-direction-card').hidden = !direction;
     directionPanel.open = false;
@@ -237,7 +244,7 @@ async function loadProgress() {
       : `${data.recorded_pending_count} ${data.recorded_pending_count === 1 ? 'decisão pendente foi recuperada' : 'decisões pendentes foram recuperadas'} do registro. O texto original da escolha não está disponível aqui. Peça ao agente para consultar a origem antes de decidir.`;
     showSuggestedQuestions(data.suggested_questions);
     result.hidden = false;
-    status.textContent = `${labels[data.status]} Consultado às ${new Date().toLocaleTimeString('pt-BR')}.`;
+    status.textContent = `${data.status === 'absent' && direction ? 'A direção foi registrada no Forge, mas o próximo trabalho ainda não.' : labels[data.status]} Consultado às ${new Date().toLocaleTimeString('pt-BR')}.`;
   } catch (error) {
     if (current === generation) status.textContent = recordFailure(error);
   } finally {

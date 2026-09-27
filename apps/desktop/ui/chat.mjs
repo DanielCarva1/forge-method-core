@@ -314,13 +314,17 @@ function paintMessage(item) {
 }
 
 function updateLastResultAction() {
-  const paths = project && latestItem && !latestItem.isUser && latestItem.complete
-    ? [...new Map((latestItem.previewPaths || []).map(path => [path.replace(/\\/g, '/').toLowerCase(), path])).values()]
+  const previousResult = project && latestItem && !latestItem.isUser && latestItem.complete
+    ? [...items.values()].reverse().find(item => !item.isUser && item.complete && item.previewPaths?.length)
+    : null;
+  const paths = previousResult
+    ? [...new Map(previousResult.previewPaths.map(path => [path.replace(/\\/g, '/').toLowerCase(), path])).values()]
     : [];
+  const citedEarlier = !!previousResult && previousResult !== latestItem;
   lastResultPath = paths.length === 1 ? paths[0] : null;
   previewLastResult.hidden = !lastResultPath;
   previewIntro.textContent = lastResultPath
-    ? 'A resposta cita um arquivo. Confira-o aqui antes de pedir mudanças.'
+    ? citedEarlier ? 'Um resultado anterior tem um arquivo. Confira-o aqui antes de pedir mudanças.' : 'A resposta cita um arquivo. Confira-o aqui antes de pedir mudanças.'
     : 'Quando houver um arquivo, confira o resultado aqui.';
   citedFiles.hidden = paths.length < 2;
   citedFilesSummary.textContent = `${paths.length} arquivos citados na resposta`;
@@ -386,7 +390,7 @@ function message(id, role, text, append = false, complete = false) {
   item.raw = append ? item.raw + text : text;
   item.complete = complete;
   paintMessage(item);
-  updateLastResultAction();
+  if (!restoringHistory) updateLastResultAction();
   if (complete && !item.isUser) messageView.hidden = false;
   if (followLatest) showLatestMessage();
   return item;
@@ -459,7 +463,7 @@ async function connectCurrent(explicitThreadId = null) {
     restoringHistory = true;
     try {
       for (const item of conversation.messages) message(item.id, item.role === 'user' ? 'Você' : item.incomplete ? 'Codex · resposta incompleta' : 'Codex', item.text, false, item.role === 'agent' && !item.incomplete);
-    } finally { restoringHistory = false; }
+    } finally { restoringHistory = false; updateLastResultAction(); }
     sessionReferences.set(referenceKey(), conversation.thread_id);
     hasPreviousConversation = true;
     hasResumableConversation = true;
