@@ -5830,3 +5830,47 @@ slice. This UI copy is not in public 0.1.19. No active subagents.
 the goal active; then investigate a meaningful first-use Forge-governance
 path with a cost-bounded real turn only if needed, or a concrete native UX gap.
 Do not repeat this one-shot edit against the already-changed fixture.
+
+### Installed 0.1.19 real first-use Forge activation — 2026-09-27
+
+A second bounded real-agent probe used the **installed public 0.1.19** binary,
+headless Windows desktop and a newly selected disposable project. The person
+asked for a small recipe site but had not chosen its audience, and explicitly
+asked the agent to define the first step before writing files. The app opened
+one Codex conversation, delivered one answer, then restored the same user/reply
+after WebView reload without resending. The agent oriented the project in
+plain Portuguese and asked whether the first version is for personal use,
+family/friends or the public; it recommended personal use. It did not write,
+publish or install anything. The test profile/project were removed afterward.
+
+The preserved Codex thread is `01a0e485-cd5c-7873-9082-bb0c93da6bfb`.
+Its tool trace **confirms the actual bundled executable path**
+`C:/Users/User/AppData/Local/Forge/forge-core/forge-core.exe`, not PATH/Cargo,
+global installer or WSL. That binary returned `forge-core 0.13.2`. The agent
+read the packaged Start Forge guidance, invoked that exact executable for
+`start`, followed the published `workflow resume` handoff, and used it for
+`guide status` in Discovery. The authoritative resume reported
+`current_work.status=absent` and `current_phase=1-discovery`; the agent asked
+for the missing product choice rather than inventing a Work Focus. This is
+real bundled-runtime compliance **for this one turn**, not a guarantee for
+every future agent or a clean-account/clean-machine proof.
+
+**PASS:** installed native UI/Forge onboarding, real Codex first reply,
+bundle-path/version tool trace, truthful Discovery orientation and WebView
+reload continuity. The turn ran 20:19:30–20:20:54 UTC (84 seconds), observed
+`gpt-6-sol` with high effort, no subagents or retries. Final per-turn usage:
+386,159 input tokens **including** 341,760 cached (44,399 uncached); 2,817
+output tokens **including** 1,051 reasoning; total 388,976. The packaged
+Start Forge skill is ~51.7 KB/833 lines and required multiple bounded reads;
+this is a measurable first-use context cost, not yet proof that a shortcut or
+skill split would save Pro allowance without quality loss. Shared weekly Pro
+used-percent was 47% before and after (rounded and shared). API-equivalent
+BRL remains UNKNOWN without established applicable tariff/FX, and Pro
+per-turn consumption cannot be inferred from those snapshots. No manual GH CI.
+
+**NOT_RUN:** a real accepted Work Focus/decision turn, fresh ChatGPT device
+login, clean-machine install or manual accessibility acceptance. **Next exact
+step:** use this evidence to choose the next concrete gap: exercise an
+agent-mediated product decision through the app and verify Forge record
+readback, rather than adding a second state store or repeating a generic
+activation probe. Keep the full desktop goal active.
