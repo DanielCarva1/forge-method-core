@@ -50,6 +50,7 @@ if (!profile || !project || !executable) throw new Error('Set FORGE_ARTIFACT_PRO
     let fileAction = reply.getByRole('button', { name: /Ver arquivo local:/ }).first();
     let followUpSent = false;
     if (await fileAction.count() === 0) {
+      if (process.env.FORGE_ARTIFACT_READ_ONLY === '1') throw new Error('Existing real conversation has no linked file; read-only probe will not send a repair turn');
       // The parent test was interrupted while Codex was still answering. Ask
       // only for a link to the already-created file; do not repeat creation.
       const composer = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });

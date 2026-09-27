@@ -5600,3 +5600,49 @@ intact, to verify real installed 0.1.18 resume and project-result continuity
 without creating a new expensive agent turn. If no safe fixture exists, record
 that limit rather than fabricating one, then continue the remaining UI
 coverage and first-use path.
+
+### Installed 0.1.18 existing conversation readback — 2026-09-27
+
+**PASS:** a pre-existing disposable Codex-owned thread from the earlier
+0.1.15-to-0.1.16 upgrade fixture was still intact in
+`C:/ForgeFast/forge-upgrade-015-to-016-20260927-project` and its preserved
+WebView profile. The installed, publicly downloaded 0.1.18 app opened that
+same project on a hidden Windows desktop, resumed the actual user/reply pair,
+confirmed both messages and their marker, waited for stability, and verified
+that no additional turn was created. The probe sent nothing and consumed no
+new provider-model tokens. This proves read-only continuity from that older
+fixture into 0.1.18; it does **not** prove a turn persisted specifically
+through the 0.1.17-to-0.1.18 installer transition or a fresh first-use login.
+No project files were intentionally edited.
+
+**Next exact step:** inspect a preserved real project-result fixture for a
+read-only installed 0.1.18 resume/preview check if it still exists. If not,
+move to the remaining first-use/decision-flow UI rather than sending an
+expensive new agent turn solely to recreate a fixture. The goal stays active.
+
+### Installed 0.1.18 real result after reopen — 2026-09-27
+
+A preserved disposable project/profile from an earlier real Codex artifact
+journey was found at
+`D:/Temp/User/forge-desktop-webview-ENrGgT/new-project` (profile is its parent).
+Its Codex-owned thread already contained a completed relative link to the
+locally generated `site/index.html`. The test-only `artifact-resume.cjs` now
+accepts `FORGE_ARTIFACT_READ_ONLY=1`: if that link is absent it fails instead
+of asking the model to repair the conversation.
+
+**PASS:** on the installed, publicly downloaded 0.1.18 app, hidden native
+Windows runs twice in separate processes resumed the same real conversation,
+opened its linked HTML through the project-bound isolated preview, showed the
+honest unpublished origin and prepared **Pedir mudança neste arquivo** in the
+same unsent composer. No new turn was sent; the message count did not change.
+The HTML SHA-256 before/after the first run remained
+`E118B0C85EC32EDB763CBE9607919407DB15AA4577FBBFFD4759B7AC8420C907`.
+This is genuine persisted-chat/result continuity on 0.1.18, not a controlled
+agent fixture. It still does not prove a fresh 0.1.17-to-0.1.18 real-turn
+upgrade, fresh login, or that a person accepts the full UI. No model tokens
+were consumed by these read-only runs; monetary task cost remains UNKNOWN.
+
+**Next exact step:** complete the remaining real first-use/decision path only
+with a bounded fixture and cost justification; otherwise prioritize another
+concrete UX gap found in native use. Keep packaging separate from tiny test
+changes, and do not rerun the expensive Start Forge activation without cause.
