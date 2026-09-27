@@ -6162,3 +6162,31 @@ publish only the tested candidate under the maintainer's standing alpha
 authorization, download it unauthenticated, verify exact bytes, and test that
 downloaded file after installation. Do not rebuild the candidate merely to
 publish it. Keep the full desktop journey goal active.
+
+### Desktop 0.1.21 public release readback — 2026-09-27
+
+Source commit `ef6ef5f4f9ad442ed528ae3a49438be570af298c` was pushed to
+`codex/desktop-shell`. Annotated tag `desktop-v0.1.21-alpha.1` points to that
+commit and was pushed. The public prerelease is
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.21-alpha.1`.
+GitHub reports the installer and checksum sidecar; the installer asset is
+123,045,449 bytes. An unauthenticated direct download to
+`C:/ForgeFast/forge-alpha-0121-public-20260927/Forge_0.1.21_x64-setup.exe`
+matched the exact locally tested candidate SHA-256
+`D98EEAB8215BBA5C64EBDFC8345FC41B67D8293FBD18C42BED2945AC44A41F66`.
+The downloaded sidecar matched too. Silent installation of **those downloaded
+bytes** returned exit 0; installed executable and bundled core hashes matched
+the candidate readback above. A hidden native read-only restart of the exact
+real Codex conversation again passed interruption warning, earlier HTML
+result, Forge direction/Work Focus, zero sends and unchanged project files.
+No manual GitHub CI or additional provider-model turn was run.
+
+This confirms public availability and installed-byte continuity of the
+interruption recovery, not completion of the agent's interrupted Work Focus or
+economic improvement. The two real Sol turns are still costly and lacked a
+final response. **Next exact step:** investigate why the long Codex thread
+spent so much cached context per tool call and why the host did not finish the
+already-tested work before interruption; choose a bounded product-side
+mitigation rather than launching another costly provider turn or adding a
+second persistence system. Then continue the nontechnical end-to-end journey
+on the same app/conversation. The full desktop goal remains active.
