@@ -1,7 +1,7 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.4` is the published alpha
-prerelease; the `0.1.5` candidate is installed locally but not yet published.
+Independent Tauri application. Desktop `0.1.5` is the published alpha
+prerelease and is installed locally.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -3941,3 +3941,39 @@ worker was run. Per-model token use and BRL cost are UNKNOWN.
 push a desktop-only tag that does not trigger the core `v*` release workflow,
 upload exactly this installer and sidecar, then download fresh public bytes,
 verify the hash and installed continuity. Do not rebuild the candidate.
+
+## Desktop 0.1.5 public alpha readback — 2026-09-27
+
+The tested source was committed as
+`3676e45c59a67ebffcee85815f4f5f8d38a559be` on `codex/desktop-shell`
+and pushed. Annotated tag `desktop-v0.1.5-alpha.1` points to that commit and
+was pushed. Release:
+https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.5-alpha.1.
+The branch and desktop-only tag do not match the repository's main/master CI
+or core `v*` release triggers; no GitHub CI was manually run.
+
+**PASS, public bytes and installation:** GitHub lists the one NSIS installer
+and matching SHA-256 sidecar. A fresh unauthenticated download to
+`C:/ForgeFast/forge-alpha-015-public-20260927` returned 4,620,348 bytes with
+SHA-256 `F4793ABBEA90B9A951A94E48572FDDEFC2B7EC6B980C1B380D8EC0C24B9922D9`,
+identical to the installed candidate and downloaded sidecar. The downloaded
+installer exited 0 when silently installed over local 0.1.5; the installed
+product remains version 0.1.5, executable SHA-256
+`37B0BCE7D3DFD88CDEEF506C905D7BB49DBE7824ADCA94ED2339186CE886D402`.
+The retained disposable real Codex user/reply pair was restored again with
+no new Send. The complete real artifact-to-change journey passed on the
+release executable from the same build, not anew on the public download.
+
+One attempted `--version` probe accidentally launched the release executable
+outside the isolated desktop; that process was identified and stopped. All
+subsequent app checks used the hidden desktop harness. This did not change
+the candidate installer bytes or the installed/public version.
+
+The installer is unsigned, needs separate Forge core and authenticated Codex
+CLI, and does not auto-update. #92 exact historical decision wording, manual
+accessibility acceptance, real in-flight crash and self-contained distribution
+remain open. Model-specific usage and BRL cost remain UNKNOWN. No worker used.
+
+**Next:** continue the full nontechnical journey beyond this alpha, prioritizing
+authority-backed readable decision history and full visual/accessibility
+acceptance; keep changes integrated with actual Codex chat and native proof.

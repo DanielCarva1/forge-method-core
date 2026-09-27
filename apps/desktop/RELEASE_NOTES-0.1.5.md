@@ -1,4 +1,4 @@
-# Forge Desktop 0.1.5 alpha — candidate notes
+# Forge Desktop 0.1.5 alpha — published
 
 This Windows x64 alpha makes the existing project-and-conversation journey
 clearer. It does not add another project registry or claim that the whole Forge
@@ -61,6 +61,19 @@ binary passed project onboarding, real folder/file dialogs, record readback
 and local preview. A new real Codex turn was not sent on the installed binary;
 the real artifact journey ran on the release executable from the same build.
 
-Commit, tag, public upload, fresh download and verification of downloaded
-bytes are NOT_RUN at this candidate stage. Model-specific token use and BRL
-cost remain UNKNOWN.
+The tested source was committed as `3676e45c59a67ebffcee85815f4f5f8d38a559be`
+and tagged `desktop-v0.1.5-alpha.1`. No GitHub CI was manually run.
+Model-specific token use and BRL cost remain UNKNOWN.
+
+## Publication readback
+
+Release: https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.5-alpha.1
+
+The release lists the one NSIS installer and its SHA-256 sidecar. A fresh
+unauthenticated download to `C:\ForgeFast\forge-alpha-015-public-20260927`
+returned 4,620,348 bytes with the exact tested candidate hash above. The
+downloaded sidecar matched. That downloaded file installed silently over
+local 0.1.5 with exit code 0; installed version and executable hash stayed
+the same. The retained disposable real Codex user/reply pair was restored
+again with no new Send. This download was not used to repeat a new real
+artifact-to-change journey or a real in-flight crash.
