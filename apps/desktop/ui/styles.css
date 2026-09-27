@@ -292,7 +292,7 @@ summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 6
 .status-icon { display: inline-grid; place-items: center; flex: 0 0 1.6em; border: 1px solid currentColor; border-radius: 50%; font-weight: 700; }
 .status > span:last-child { min-width: 0; }
 .login-panel { margin: 14px 0; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--soft); }
-.login-panel[hidden], #login-challenge[hidden] { display: none; }
+.login-panel[hidden], #login-challenge[hidden], #start-login[hidden] { display: none; }
 .login-panel h3 { margin: 0 0 8px; }
 .login-panel p { margin: 8px 0; }
 .login-code { display: inline-block; padding: 8px 14px; border-radius: 10px; background: var(--surface); font: 700 1.4rem ui-monospace, monospace; letter-spacing: .1em; user-select: all; }

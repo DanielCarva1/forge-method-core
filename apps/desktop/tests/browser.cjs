@@ -609,7 +609,7 @@ async function openConversation(page) {
       window.__TAURI__ = { core: {
         Channel: class { onmessage = null; },
         invoke: async (command, args) => {
-          if (command === 'app_info') return { name: 'Forge', version: '0.1.13' };
+          if (command === 'app_info') return { name: 'Forge', version: '0.1.14' };
           if (command === 'start_project') return { project_id: 'login-project', project_root: args.projectRoot };
           if (command === 'connect_agent') {
             if (!window.authFinished) throw 'Entre na sua conta ChatGPT pelo Forge e tente conectar novamente.';
@@ -630,6 +630,7 @@ async function openConversation(page) {
     await loginDraft.fill('Minha ideia permanece');
     await loginPage.getByRole('button', { name: 'Enviar', exact: true }).click();
     await loginPage.locator('#login-panel').waitFor({ state: 'visible' });
+    assert.match(await loginPage.locator('#agent-status').textContent(), /Sua mensagem não foi enviada/);
     assert.equal(await loginDraft.inputValue(), 'Minha ideia permanece');
     assert.equal(await loginPage.evaluate(() => window.sentAfterLogin), 0);
     assert.equal(await loginPage.locator('#send-message').isDisabled(), true);
@@ -637,6 +638,7 @@ async function openConversation(page) {
     assert.equal(await loginPage.locator('#find-conversations').isDisabled(), true);
     await loginPage.getByRole('button', { name: 'Entrar com ChatGPT' }).click();
     await loginPage.locator('#login-code').filter({ hasText: 'ABCD-1234' }).waitFor();
+    assert.equal(await loginPage.locator('#start-login').isHidden(), true);
     assert.equal(await loginPage.locator('#login-url').textContent(), 'https://auth.openai.com/codex/device');
     await loginPage.getByRole('button', { name: 'Já entrei · verificar' }).click();
     await loginPage.locator('#login-status').filter({ hasText: 'Aguardando a confirmação' }).waitFor();
@@ -770,7 +772,7 @@ async function openConversation(page) {
       return record.top >= 0 && record.top < innerHeight;
     }), true, 'The empty preview must leave the project record visible in the initial desktop viewport');
     assert.equal(await page.evaluate(() => window.progressCalls || 0), 1);
-    assert.equal(await page.locator('#workspace-phase').textContent(), 'Etapa no registro: Descoberta');
+    assert.equal(await page.locator('#workspace-phase').textContent(), 'Etapa no Forge: Descoberta');
     assert.equal(await page.locator('#workspace-phase').isVisible(), true);
     assert.equal(await page.locator('#record-activity').textContent(), 'Recorded activity');
     assert.equal(await page.getByRole('group', { name: 'Atividade e próximo passo registrados' }).isVisible(), true);
@@ -828,7 +830,7 @@ async function openConversation(page) {
     assert.match(await page.locator('#record-direction').textContent(), /não comprova aprovação humana independente/);
     if (process.env.FORGE_DIRECTION_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_DIRECTION_SCREENSHOT, fullPage: true });
     await page.evaluate(() => { window.progressRevision = 2; window.progressRevisionKind = 'material_supersession'; window.progressConstraint = '<script>changed</script>'; window.progressRecordedPending = 1; });
-    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+    await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
     await page.locator('#record-direction summary').click();
     assert.match(await page.locator('#record-revision').textContent(), /Direção revista.*revisão 2/);
@@ -836,14 +838,14 @@ async function openConversation(page) {
     assert.equal(await page.locator('#record-direction script').count(), 0);
     assert.match(await page.locator('#record-pending-count').textContent(), /1 decisão pendente foi recuperada/);
     assert.match(await page.locator('#record-pending-count').textContent(), /texto original da escolha não está disponível aqui/);
-    const stateNames = { current: 'Em andamento no registro', stale: 'Registro desatualizado', blocked: 'Pendência registrada', completed: 'Concluído no registro', abandoned: 'Encerrado sem concluir' };
+    const stateNames = { current: 'Em andamento', stale: 'Acompanhamento desatualizado', blocked: 'Há uma pendência', completed: 'Trabalho registrado concluído', abandoned: 'Encerrado sem concluir' };
     for (const state of ['current', 'stale', 'blocked', 'completed', 'abandoned', 'absent']) {
       await page.evaluate(state => { window.progressState = state; }, state);
-      await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+      await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
       await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
       assert.equal(await page.locator('#progress-result').isVisible(), true);
       if (state === 'absent') {
-        assert.match(await page.locator('#progress-status').textContent(), /Sem trabalho registrado/);
+        assert.match(await page.locator('#progress-status').textContent(), /ainda não encontrou trabalho registrado/);
         assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem trabalho registrado');
         assert.equal(await page.locator('#workspace-phase').isVisible(), true);
         assert.equal(await page.locator('#record-phase-label').textContent(), 'POR ONDE O FORGE COMEÇA');
@@ -857,13 +859,13 @@ async function openConversation(page) {
         assert.equal(await page.locator('#workspace-phase').isVisible(), true);
         assert.equal(await page.locator('#record-empty-help').isVisible(), false);
         assert.equal(await page.locator('#record-phase-label').textContent(), 'ETAPA DO PROJETO');
-        if (state === 'stale') assert.match(await page.locator('#workspace-phase').textContent(), /registro desatualizado/);
+        if (state === 'stale') assert.match(await page.locator('#workspace-phase').textContent(), /Etapa no Forge \(desatualizada\)/);
         assert.equal(await page.locator('#record-state').textContent(), stateNames[state]);
         assert.equal(await page.locator('#progress-result').getAttribute('data-state'), state);
         assert.equal(await page.locator('#record-phase').textContent(), 'Descoberta');
         assert.equal(await page.locator('#record-outcome').textContent(), 'Accepted outcome');
         assert.equal(await page.locator('#record-next').textContent(), 'Recorded next step');
-        assert.match(await page.locator('#record-decisions').textContent(), /1 decisão aberta/);
+        assert.match(await page.locator('#record-decisions').textContent(), /1 decisão em aberto/);
         if (state === 'current' && process.env.FORGE_PROGRESS_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_PROGRESS_SCREENSHOT, fullPage: true });
         if (state === 'current') {
           assert.equal(await page.locator('.record-more').evaluate(node => node.open), false);
@@ -873,10 +875,10 @@ async function openConversation(page) {
       }
     }
     await page.evaluate(() => { window.progressState = 'current'; window.progressDecisionCount = 0; });
-    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
-    assert.match(await page.locator('#record-decisions').textContent(), /Nenhuma decisão aberta/);
+    await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
+    assert.match(await page.locator('#record-decisions').textContent(), /não mostra decisões em aberto/);
     await page.evaluate(() => { window.progressNoDirection = true; window.progressRecordedPending = 0; window.progressSuggestedQuestions = []; });
-    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+    await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     assert.equal(await page.locator('#record-direction').isVisible(), false);
     assert.equal(await page.locator('#record-pending').isVisible(), false);
     await page.evaluate(() => {
@@ -889,7 +891,7 @@ async function openConversation(page) {
         ],
       }];
     });
-    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+    await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
     assert.equal(await page.locator('#record-direction').isVisible(), false, 'A suggestion must not become an accepted direction');
     assert.equal(await page.locator('#record-direction-card').isVisible(), false, 'No recorded direction means no visible agreement card');
@@ -901,29 +903,29 @@ async function openConversation(page) {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.evaluate(() => { window.progressMissingFocus = true; });
-    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
-    await page.locator('#progress-status').filter({ hasText: 'Não foi possível consultar' }).waitFor();
+    await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
+    await page.locator('#progress-status').filter({ hasText: 'Não foi possível atualizar' }).waitFor();
     assert.equal(await page.locator('#progress-result').isVisible(), false);
     await page.evaluate(() => { window.progressMissingFocus = false; window.progressDecisionCount = 1; });
     await page.evaluate(() => { window.progressFailure = true; });
-    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
-    await page.locator('#progress-status').filter({ hasText: 'Não foi possível consultar' }).waitFor();
+    await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
+    await page.locator('#progress-status').filter({ hasText: 'Não foi possível atualizar' }).waitFor();
     assert.equal(await page.locator('#progress-result').isVisible(), false);
     await page.evaluate(() => { window.progressFailure = 'O Forge está ocupado. Tente consultar o registro novamente.'; });
-    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+    await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     await page.locator('#progress-status').filter({ hasText: 'Forge está ocupado' }).waitFor();
     assert.match(await page.locator('#progress-status').textContent(), /conversa não foi interrompida/);
     await page.evaluate(() => { window.progressFailure = 'O estado deste projeto não está disponível. Nada foi recriado ou alterado.'; });
-    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+    await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     await page.locator('#progress-status').filter({ hasText: 'Nada foi recriado' }).waitFor();
     assert.equal(await page.locator('#progress-result').isVisible(), false);
     await page.evaluate(() => { window.progressFailure = false; window.progressState = 'current'; });
     await page.evaluate(() => { window.delayProgress = true; });
-    await page.getByRole('button', { name: 'Consultar registro', exact: true }).focus();
+    await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).focus();
     await page.keyboard.press('Enter');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'progress-status');
-    await page.locator('#progress-status').filter({ hasText: 'levando mais tempo' }).waitFor({ timeout: 8000 });
-    assert.equal(await page.getByRole('button', { name: 'Consultar registro', exact: true }).isDisabled(), true);
+    await page.locator('#progress-status').filter({ hasText: 'demorando para atualizar' }).waitFor({ timeout: 8000 });
+    assert.equal(await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).isDisabled(), true);
     if (process.env.FORGE_SLOW_RECORD_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_SLOW_RECORD_SCREENSHOT, fullPage: true });
     await openProjectSetup(page);
     await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\another-project');
@@ -932,7 +934,7 @@ async function openConversation(page) {
     await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     await page.waitForFunction(() => window.resolveProgress !== window.obsoleteProgressResolve);
     await page.evaluate(() => { window.obsoleteProgressResolve({ status: 'current', focus: { title: 'Obsolete response' } }); });
-    await page.locator('#progress-status').filter({ hasText: 'levando mais tempo' }).waitFor({ timeout: 8000 });
+    await page.locator('#progress-status').filter({ hasText: 'demorando para atualizar' }).waitFor({ timeout: 8000 });
     await page.evaluate(() => {
       window.resolveProgress({ status: 'current', phase: '1-discovery', focus: { title: 'Recorded task', intended_outcome: 'Accepted outcome', current_activity: 'Recorded activity', next_step: 'Recorded next step', open_decision_count: 0 }, accepted_direction: null, recorded_pending_count: 0, suggested_questions: [] });
       window.delayProgress = false;
@@ -966,10 +968,10 @@ async function openConversation(page) {
     await page.keyboard.press('Shift+Tab');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'disconnect-agent');
     await page.evaluate(() => { window.delayProgress = true; });
-    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+    await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     await page.evaluate(() => { window.agentEvents.onmessage({ kind: 'running' }); window.resolveProgress({ status: 'current', focus: { title: 'Obsolete response' } }); window.delayProgress = false; });
     assert.equal(await page.locator('#progress-result').isVisible(), false);
-    assert.equal(await page.getByRole('button', { name: 'Consultar registro', exact: true }).isEnabled(), true);
+    assert.equal(await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).isEnabled(), true);
     for (const [kind, state] of [['running', 'working'], ['completed', 'completed'], ['interrupted', 'interrupted'], ['failed', 'error']]) {
       await page.evaluate(kind => window.agentEvents.onmessage({ kind }), kind);
       assert.equal(await page.locator('#progress-result').isVisible(), false);

@@ -88,9 +88,10 @@ function showStatus(text, kind = 'idle') {
 showStatus(status.textContent);
 
 function offerLogin(error) {
-  if (typeof error !== 'string' || !error.includes('Entre na sua conta ChatGPT pelo Forge')) return;
+  if (typeof error !== 'string' || !error.includes('Entre na sua conta ChatGPT pelo Forge')) return false;
   loginPanel.hidden = false;
-  loginStatus.textContent = 'Entre na conta para conversar ou buscar o histórico. Nenhuma mensagem foi enviada.';
+  loginStatus.textContent = '';
+  return true;
 }
 
 function updateComposerHelp() {
@@ -126,6 +127,7 @@ function controls() {
   stop.disabled = transitioning || !connected || !busy || broken;
   stop.hidden = !connected || !busy;
   startLoginButton.disabled = loginPending || loginActive || connected;
+  startLoginButton.hidden = loginActive;
   finishLoginButton.disabled = loginPending || !loginActive;
   cancelLoginButton.disabled = loginPending || !loginActive;
   openLoginPageButton.disabled = loginPending || !loginActive;
@@ -284,8 +286,10 @@ async function loadConversationChoices(targetPage = 0, cursor = null) {
       : listCursor ? `Página ${pageNumber + 1}: nenhuma conversa nesta página. Você pode avançar.` : 'Nenhuma conversa encontrada no índice deste dispositivo.';
   } catch (error) {
     if (current === listGeneration) {
-      conversationListStatus.textContent = typeof error === 'string' ? error : 'Não foi possível buscar as conversas. Tente novamente; a página anterior foi mantida.';
-      offerLogin(error);
+      const needsLogin = offerLogin(error);
+      conversationListStatus.textContent = needsLogin
+        ? 'Entre no ChatGPT para ver suas conversas. A lista anterior foi mantida.'
+        : typeof error === 'string' ? error : 'Não foi possível buscar as conversas. Tente novamente; a página anterior foi mantida.';
     }
   } finally {
     if (current === listGeneration) { listPending = false; controls(); }
@@ -467,8 +471,9 @@ async function connectCurrent(explicitThreadId = null) {
   } catch (error) {
     if (current !== generation) return;
     ++generation;
-    offerLogin(error);
-    showStatus(typeof error === 'string' ? error : 'Não foi possível conectar ao Codex.', 'error');
+    const needsLogin = offerLogin(error);
+    showStatus(needsLogin ? 'Entre no ChatGPT para continuar. Sua mensagem não foi enviada.'
+      : typeof error === 'string' ? error : 'Não foi possível conectar ao Codex.', 'error');
   }
   transitioning = false;
   controls();
@@ -519,7 +524,7 @@ startLoginButton.addEventListener('click', async () => {
     loginCode.textContent = challenge.user_code;
     loginUrl.textContent = challenge.verification_url;
     loginChallenge.hidden = false;
-    loginStatus.textContent = 'Abra a página, entre na sua conta ChatGPT e digite o código. O Forge nunca pede sua senha.';
+    loginStatus.textContent = 'O Forge nunca pede sua senha. Quando terminar no navegador, volte aqui para continuar.';
   } catch (error) {
     loginStatus.textContent = typeof error === 'string' ? error : 'Não foi possível iniciar o acesso. Tente novamente.';
   } finally {

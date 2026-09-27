@@ -60,6 +60,7 @@ const assert = require('node:assert/strict');
     assert.equal(await page.locator('#messages article').count(), 0);
     await page.locator('#start-login').click();
     await page.locator('#login-code').filter({ hasText: /[A-Z0-9-]+/ }).waitFor({ timeout: 60000 });
+    assert.equal(await page.locator('#start-login').isHidden(), true);
     assert.equal(await page.locator('#login-url').textContent(), 'https://auth.openai.com/codex/device');
     if (process.env.FORGE_AUTH_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_AUTH_SCREENSHOT });
     if (fakeCompletion) {
@@ -74,6 +75,7 @@ const assert = require('node:assert/strict');
       await page.locator('#login-status').filter({ hasText: 'Aguardando a confirmação' }).waitFor();
       await page.locator('#cancel-login').click();
       await page.locator('#login-status').filter({ hasText: 'Acesso cancelado' }).waitFor();
+      assert.equal(await page.locator('#start-login').isVisible(), true);
       assert.equal(await page.locator('#login-code').textContent(), '');
       assert.equal(await draft.inputValue(), 'Rascunho reservado durante o acesso');
       assert.equal(await page.locator('#send-message').isDisabled(), true);

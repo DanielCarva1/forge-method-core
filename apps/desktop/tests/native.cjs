@@ -144,6 +144,7 @@ async function operatePreviewDialog(page, file) {
         await page.locator('#project-status').filter({ hasText: 'Pasta escolhida' }).waitFor();
         assert.equal(await field.inputValue(), process.env.FORGE_TEST_PROJECT);
         assert.equal(await page.locator('#project-result').isVisible(), false);
+        console.log('PASS: native Windows folder dialog canceled safely, then selected the real project folder without accepting it prematurely.');
       } else await field.fill(process.env.FORGE_TEST_PROJECT);
       await page.evaluate(() => {
         const originalCore = window.__TAURI__.core;
@@ -256,12 +257,12 @@ async function operatePreviewDialog(page, file) {
         } else await page.locator('#conversation-picker summary').click();
       }
       // The desktop record query has a 90-second bound for large projects.
-      await page.locator('#progress-status').filter({ hasText: /Consultado às|Não foi possível consultar/ }).waitFor({ timeout: 105000 });
+      await page.locator('#progress-status').filter({ hasText: /Consultado às|Não foi possível atualizar/ }).waitFor({ timeout: 105000 });
       let progressStatus = await page.locator('#progress-status').textContent();
-      if (/Não foi possível consultar/.test(progressStatus)) {
+      if (/Não foi possível atualizar/.test(progressStatus)) {
         console.log('PARTIAL: automatic Forge record lookup failed on first attempt; native error:', await page.evaluate(() => window.progressReadErrors));
-        await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
-        await page.locator('#progress-status').filter({ hasText: /Consultado às|Não foi possível consultar/ }).waitFor({ timeout: 105000 });
+        await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
+        await page.locator('#progress-status').filter({ hasText: /Consultado às|Não foi possível atualizar/ }).waitFor({ timeout: 105000 });
         progressStatus = await page.locator('#progress-status').textContent();
       }
       assert.match(progressStatus, /Consultado às/, 'Native Forge record lookup must succeed, not merely finish');
@@ -279,7 +280,7 @@ async function operatePreviewDialog(page, file) {
         assert.equal(await page.locator('#record-work').isVisible(), false);
         assert.equal(await page.locator('#record-direction').isVisible(), false);
       } else {
-        assert.match(recordedPhase, /Etapa no registro:/);
+        assert.match(recordedPhase, /Etapa no Forge:/);
         assert.ok((await page.locator('#record-outcome').textContent()).length > 0);
         assert.ok((await page.locator('#record-title').textContent()).length > 0);
         assert.ok((await page.locator('#record-next').textContent()).length > 0);
@@ -291,7 +292,7 @@ async function operatePreviewDialog(page, file) {
         }), true, 'Native real recorded activity should begin in the initial workspace viewport');
         assert.equal(await page.locator('#record-next').isVisible(), true, 'Recorded next step must be visible without opening details');
         assert.equal(await page.locator('#record-outcome').isVisible(), false, 'Supporting details begin collapsed');
-        assert.match(await page.locator('#record-decisions').textContent(), /neste registro/);
+        assert.match(await page.locator('#record-decisions').textContent(), /neste acompanhamento/);
         assert.equal(await page.locator('#record-direction').isVisible(), true);
         assert.equal(await page.locator('#record-direction-card').isVisible(), true);
         assert.equal(await page.locator('#record-direction-outcome').isVisible(), false, 'Long native record wording must be optional reading');

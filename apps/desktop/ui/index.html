@@ -173,7 +173,7 @@
         <p id="agent-status" class="status" role="status" aria-live="polite" tabindex="-1">Escolha uma pasta para começar. A conversa será aberta quando você enviar sua ideia.</p>
         <section id="login-panel" class="login-panel" aria-labelledby="login-title" hidden>
           <h3 id="login-title">Entre no ChatGPT para continuar</h3>
-          <p>Seu texto continua aqui. Você só precisa conectar sua conta uma vez neste dispositivo.</p>
+          <p>Seu texto continua aqui. Depois de entrar, você decide quando enviar.</p>
           <button id="start-login" type="button" class="primary">Entrar com ChatGPT</button>
           <div id="login-challenge" hidden>
             <p>Abra a página de acesso e digite este código temporário:</p>
@@ -221,8 +221,8 @@
         <div class="preview-actions"><button id="choose-preview" type="button">Escolher arquivo</button><button id="refresh-preview" type="button" disabled hidden>Atualizar prévia</button><button id="preview-source-toggle" type="button" hidden>Ver código</button></div>
       </section>
       <section class="record panel" id="project-record" aria-labelledby="record-heading" hidden>
-        <div class="record-heading-row"><div><p class="eyebrow">CONTEXTO DO PROJETO</p><h3 id="record-heading">Onde estamos</h3></div><button id="refresh-progress" type="button" disabled>Consultar registro</button></div>
-        <p id="progress-status" role="status" aria-live="polite" tabindex="-1">Confira um projeto antes de consultar seus registros.</p>
+        <div class="record-heading-row"><div><p class="eyebrow">CONTEXTO DO PROJETO</p><h3 id="record-heading">Onde estamos</h3></div><button id="refresh-progress" type="button" disabled>Atualizar andamento</button></div>
+        <p id="progress-status" role="status" aria-live="polite" tabindex="-1">Escolha uma pasta para ver o andamento do projeto.</p>
         <div id="progress-result" hidden>
           <p id="record-state" class="record-state"></p>
           <div class="record-stage">
@@ -233,8 +233,8 @@
           <p id="record-empty-help" class="hint" hidden>Ainda não há atividade registrada. Conte na conversa o que você quer criar; o agente cuida dos passos técnicos.</p>
           <div id="record-work">
             <div class="record-timeline" role="group" aria-label="Atividade e próximo passo registrados">
-              <div class="record-timeline-item"><strong>Agora, no registro</strong><p id="record-activity"></p></div>
-              <div class="record-timeline-item"><strong>Depois, no registro</strong><p id="record-next"></p></div>
+              <div class="record-timeline-item"><strong>Agora</strong><p id="record-activity"></p></div>
+              <div class="record-timeline-item"><strong>Próximo passo</strong><p id="record-next"></p></div>
             </div>
             <button id="explain-record" type="button">Entender isto na conversa</button>
             <details class="record-more"><summary>Mais detalhes deste trabalho</summary>

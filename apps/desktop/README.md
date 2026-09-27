@@ -4853,3 +4853,133 @@ account or VM is available, followed by concrete fixes; do not add proxy
 complexity solely to disguise this proof gap. Routing and BRL usage remain
 UNKNOWN because model-attributed counters are not available. No workers were
 used in this slice.
+
+### Desktop visual-language pass after 0.1.13 — 2026-09-27
+
+**Active goal:** an approachable Windows journey from choosing a folder through a
+real Codex conversation, local result/change and restart, without inventing
+Forge state. Public/installed 0.1.13 remains unchanged. The current checkout
+has **uncommitted source changes** in `apps/desktop/ui/index.html`,
+`apps/desktop/ui/progress.mjs`, `apps/desktop/tests/browser.cjs`, and
+`apps/desktop/tests/native.cjs`; preserve them on continuation. No worker is
+active. Model-attributed token/BRL cost is UNKNOWN.
+
+A hidden native run of the **published 0.1.13** used the actual Windows folder
+dialog twice: canceled first, then selected `D:/Forge-method-core`, confirmed
+that selection did not itself accept the project, and continued through Forge
+project readback/onboarding. PASS. The preview file picker in that run remained
+simulated; no real Codex send was requested in this specific dialog test.
+
+A visual review of the native conversation screen found that the visible
+progress panel overused the internal word “registro”. Source-only copy now
+uses “Atualizar andamento”, “Agora”, “Próximo passo” and plain-language state
+labels, while retaining Forge provenance, stale warnings, recorded decisions
+and exact backend values. The UI does not claim the latest chat was committed
+to Forge. Browser suite PASS after this change. One debug native build and
+hidden native test PASS with a real folder selection and Forge readback; a
+viewport screenshot was inspected at `C:/ForgeFast/forge-0113-copy-viewport.png`.
+A final one-word correction to the stale-phase label was browser-tested PASS
+but not recompiled/re-run natively. No Rust source changed; no Rust workspace
+suite or GH CI was run. No commit, push, version bump, or installer publication
+was done for this source-only UI pass.
+
+**Next exact step:** continue the visual-language review of the project record
+and empty/error states, run the browser suite and a single native debug check
+for the consolidated UI slice, then decide whether it forms a coherent next
+alpha package. A genuinely new ChatGPT authorization in a controlled Windows
+account/VM and default-browser button remain NOT_RUN; do not infer them from
+fixture completion or this dialog test.
+
+### Desktop record-language consolidation and native pickers — 2026-09-27
+
+The same uncommitted UI slice now also simplifies the project-record loading,
+empty, slow and failure messages: the main action is “Atualizar andamento”,
+errors say what stayed unchanged, and decision counts say only what Forge shows
+in its current accompaniment. Exact recorded activities/outcomes and provenance
+are still displayed, not synthesized from the latest chat. Files remain
+`apps/desktop/ui/index.html`, `ui/progress.mjs`, `tests/browser.cjs`,
+`tests/native.cjs`, and this README. Public/installed 0.1.13 is unchanged.
+
+**PASS:** JS syntax, full browser suite, one incremental Desktop debug build,
+and hidden native WebView regression with the updated UI. The native run used
+both real Windows dialogs: cancel/select for the project folder and selection
+of a real local preview file; then read Forge project state and safely rendered
+local content. A final native viewport screenshot was inspected at
+`C:/ForgeFast/forge-record-copy-final.png`. A read-only Sandbox feasibility
+probe showed Windows 10 Pro with a hypervisor, but optional-feature status
+requires elevation and was not established. No Rust source changed, no
+workspace-wide tests, GH CI, commit/push, version bump or installer build was
+run. The native picker regression did not send a real Codex message; the
+published 0.1.13 real-send/restart proof remains separate.
+
+**Next exact step:** inspect the remaining first-use/empty conversation screens
+with the same plain-language standard, correct only concrete issues, then
+run one browser/native regression for the consolidated package. After that,
+consider a 0.1.14 alpha if the package is coherent. Genuine browser completion
+of a new ChatGPT login and fresh-account/VM setup are still NOT_RUN and need a
+controlled account/interactive authorization; do not simulate them as proof.
+No subagents are active; token attribution and BRL economics remain UNKNOWN.
+
+### Desktop first-use clarity pass — 2026-09-27
+
+The dirty UI package also removes a redundant disabled “Entrar com ChatGPT”
+button after a device code is shown and replaces the raw signed-out transport
+error with a clear statement that the message was not sent. History-search
+errors give an equivalent human-facing instruction. The login panel no longer
+claims the account will need connecting only once on this device; it says the
+human chooses when to send after entering. It avoids repeated code-entry
+instructions while retaining the password-safety reminder. Files additionally
+changed: `ui/chat.mjs`, `ui/styles.css`, `tests/native-auth.cjs` (plus earlier
+files); no backend/auth protocol was changed.
+
+**PASS:** full browser suite after the final copy edit. Before that final
+sentence edit, a debug native build with an isolated signed-out CODEX_HOME
+passed genuine device-code start/cancel, preserved the draft and proved the
+initial login button disappears while the challenge is active. Screenshot
+`C:/ForgeFast/forge-first-login-revised.png` was inspected. The last copy-only
+sentence edits have not been rebuilt or retested natively; do that once for a
+consolidated package, not after every wording adjustment. The real browser
+authorization completion remains NOT_RUN, as does fresh-account/VM setup.
+No subagents; model/token/BRL attribution UNKNOWN. Source changes remain
+uncommitted and are not present in installed public 0.1.13.
+
+**Next exact step:** review the integrated dirty diff, run one final debug
+native first-use plus real conversation/preview/restart regression for this UI
+package, then decide on a coherent 0.1.14 candidate and release notes. Do not
+claim the controlled completion fixture is real account login proof.
+
+### Desktop 0.1.14 installed candidate — 2026-09-27
+
+The first-use/progress-language UI slice was consolidated and versioned as
+Desktop **0.1.14**. One NSIS candidate was built at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.14_x64-setup.exe`:
+123,057,736 bytes, SHA-256
+`BA7E26638A91224AC9DB939EF4BA2C844B74DB9C1F7BECE3D2D93FAF0BF2970C`.
+It installed silently over the public 0.1.13 with exit 0. Installed product
+version 0.1.14 and core/Codex hashes matched the intended bundle. This is a
+**local tested candidate**, not yet a public 0.1.14 download.
+
+**PASS:** Desktop cargo check, one focused login unit test (one selected), all
+47 Desktop Rust tests, strict Desktop Clippy, JS/browser suite, native
+isolated signed-out device-code start/cancel (no Send), and the installed
+candidate's full hidden native journey with both executable overrides unset.
+That journey used real Windows folder and preview-file dialogs, a real
+existing authenticated Codex account, a real HTML artifact and preview, a
+follow-up change in the same conversation, WebView reload and full process
+restart with ordered history and no resend. The installed screenshot
+`C:/ForgeFast/forge-0114-installed-artifact.png` was visually inspected. The
+separate debug run had passed the same journey before packaging. No core
+workspace build or manual GitHub CI was run.
+
+**NOT_RUN:** genuine completion of a new ChatGPT authorization in a browser,
+the browser-opening button and fresh Windows account/VM setup. The signed-out
+native run cancels the challenge; the existing account proves conversation
+behavior but not new-account entry. Manual accessibility acceptance,
+automatic updates, signing and mobile remain open. No subagents were used;
+model-specific tokens and BRL cost are UNKNOWN. Current source is dirty, with
+0.1.14 code/release notes not yet committed, pushed, tagged or published.
+
+**Next exact step:** review/selectively commit and push 0.1.14, publish the
+exact tested candidate under the maintainer's standing alpha authorization,
+then unauthenticated download/hash check, install the downloaded bytes and
+native smoke. Later test a genuine new-account authorization voluntarily.

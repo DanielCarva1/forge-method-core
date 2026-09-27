@@ -14,8 +14,8 @@ let historyPending = false;
 let historyLoaded = false;
 let slowNotice;
 let historySlowNotice;
-const labels = { absent: 'Sem trabalho registrado.', current: 'Registro disponível. Ele pode não incluir a conversa mais recente.', stale: 'O Forge marcou este registro como desatualizado.', blocked: 'O trabalho registrado tem uma pendência.', completed: 'O trabalho registrado foi concluído. Isso não significa que o produto inteiro está pronto.', abandoned: 'O trabalho registrado foi encerrado sem conclusão.' };
-const stateLabels = { absent: 'Sem trabalho registrado', current: 'Em andamento no registro', stale: 'Registro desatualizado', blocked: 'Pendência registrada', completed: 'Concluído no registro', abandoned: 'Encerrado sem concluir' };
+const labels = { absent: 'O Forge ainda não encontrou trabalho registrado.', current: 'Acompanhamento do Forge disponível. Pode não incluir a conversa mais recente.', stale: 'O acompanhamento do Forge está desatualizado.', blocked: 'O trabalho acompanhado pelo Forge tem uma pendência.', completed: 'O trabalho acompanhado pelo Forge foi concluído. Isso não significa que o produto inteiro está pronto.', abandoned: 'O trabalho acompanhado pelo Forge foi encerrado sem conclusão.' };
+const stateLabels = { absent: 'Sem trabalho registrado', current: 'Em andamento', stale: 'Acompanhamento desatualizado', blocked: 'Há uma pendência', completed: 'Trabalho registrado concluído', abandoned: 'Encerrado sem concluir' };
 const phases = {
   '0-route': ['Preparação', 'Entendendo como começar.'],
   '1-discovery': ['Descoberta', 'Entendendo o problema, as pessoas e os caminhos possíveis.'],
@@ -127,13 +127,14 @@ function validSuggestions(values) {
     && value.alternatives.some(option => option.id === value.recommended_alternative_ref));
 }
 function recordFailure(error) {
-  if (error === 'O Forge está ocupado. Tente consultar o registro novamente.' || error === 'O Forge demorou para responder. Você pode tentar novamente.') {
-    return `${error} A conversa não foi interrompida e nenhum progresso foi presumido.`;
-  }
+  if (error === 'O Forge está ocupado. Tente consultar o registro novamente.')
+    return 'O Forge está ocupado. Tente atualizar o andamento daqui a pouco. A conversa não foi interrompida; nenhum progresso foi presumido.';
+  if (error === 'O Forge demorou para responder. Você pode tentar novamente.')
+    return 'O Forge demorou para responder. Tente atualizar o andamento novamente. A conversa não foi interrompida; nenhum progresso foi presumido.';
   if (error === 'O estado deste projeto não está disponível. Nada foi recriado ou alterado.' || error === 'Esta pasta ainda não usa o Forge. Escolha-a em Minha conversa e clique em “Continuar nesta pasta”.') {
-    return 'O registro deste projeto não está disponível nesta pasta. Nada foi recriado. Confira a pasta em “Escolher pasta do projeto” antes de continuar.';
+    return 'O acompanhamento deste projeto não está disponível nesta pasta. Nada foi recriado. Confira a pasta em “Escolher pasta do projeto” antes de continuar.';
   }
-  return 'Não foi possível consultar o registro. Nenhum progresso foi presumido; você pode continuar conversando e tentar novamente depois.';
+  return 'Não foi possível atualizar o andamento. Nenhum progresso foi presumido; você pode continuar conversando e tentar novamente depois.';
 }
 export function setProgressProject(value) {
   project = value; generation++;
@@ -145,7 +146,7 @@ export function setProgressProject(value) {
   document.querySelector('.record-more').open = false;
   recordPanel.hidden = !value;
   result.hidden = true;
-  status.textContent = value ? 'Consultando o último registro do projeto…' : 'Confira um projeto antes de consultar seus registros.';
+  status.textContent = value ? 'Atualizando o andamento pelo Forge…' : 'Escolha uma pasta para ver o andamento do projeto.';
   controls();
   if (value) void loadProgress();
 }
@@ -157,7 +158,7 @@ export function invalidateProgress() {
   resetHistory();
   if (!result.hidden || pending) {
     result.hidden = true;
-    status.textContent = 'O registro pode estar desatualizado. Consulte novamente para conferir.';
+    status.textContent = 'A conversa pode ter mudado o trabalho. Atualize o andamento para conferir.';
   }
   pending = false;
   controls();
@@ -172,9 +173,9 @@ async function loadProgress() {
   const hadFocus = document.activeElement === button;
   pending = true; controls(); result.hidden = true;
   if (hadFocus) status.focus();
-  status.textContent = 'Consultando os registros do Forge…';
+  status.textContent = 'Atualizando o andamento pelo Forge…';
   const notice = setTimeout(() => {
-    if (current === generation && pending) status.textContent = 'O registro está levando mais tempo para abrir. Você pode continuar conversando enquanto esperamos; nenhum progresso será presumido.';
+    if (current === generation && pending) status.textContent = 'O Forge está demorando para atualizar o andamento. Você pode continuar conversando; nenhum progresso será presumido.';
   }, 6000);
   slowNotice = notice;
   try {
@@ -191,8 +192,8 @@ async function loadProgress() {
       for (const [id, field] of [['record-title', 'title'], ['record-activity', 'current_activity'], ['record-next', 'next_step']]) document.getElementById(id).textContent = data.focus[field];
       document.getElementById('record-outcome').textContent = data.focus.intended_outcome;
       document.getElementById('record-decisions').textContent = data.focus.open_decision_count === 0
-        ? 'Nenhuma decisão aberta consta neste registro.'
-        : `${data.focus.open_decision_count} ${data.focus.open_decision_count === 1 ? 'decisão aberta consta' : 'decisões abertas constam'} neste registro. Converse com seu agente para entender o que precisa decidir.`;
+        ? 'O Forge não mostra decisões em aberto neste acompanhamento.'
+        : `O Forge mostra ${data.focus.open_decision_count} ${data.focus.open_decision_count === 1 ? 'decisão em aberto' : 'decisões em aberto'} neste acompanhamento. Converse com seu agente para entender o que precisa decidir.`;
     } else if (data.status !== 'absent') {
       throw new Error('Missing record details');
     }
@@ -204,7 +205,7 @@ async function loadProgress() {
     document.getElementById('record-empty-help').hidden = data.status !== 'absent';
     document.getElementById('record-phase').textContent = phase[0];
     document.getElementById('record-phase-help').textContent = phase[1];
-    workspacePhase.textContent = data.status === 'absent' ? 'Sem trabalho registrado' : data.status === 'stale' ? `Etapa no registro desatualizado: ${phase[0]}` : `Etapa no registro: ${phase[0]}`;
+    workspacePhase.textContent = data.status === 'absent' ? 'Sem trabalho registrado' : data.status === 'stale' ? `Etapa no Forge (desatualizada): ${phase[0]}` : `Etapa no Forge: ${phase[0]}`;
     workspacePhase.hidden = false;
     const direction = data.accepted_direction;
     const directionPanel = document.getElementById('record-direction');
