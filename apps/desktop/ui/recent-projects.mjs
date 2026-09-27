@@ -4,6 +4,7 @@ import { projectDisplayName } from './project-display.mjs';
 const storageKey = 'forge.projects.v1';
 const list = document.querySelector('#recent-projects');
 const empty = document.querySelector('#projects-empty');
+const openFolderLabel = document.querySelector('#projects-open-folder-label');
 const status = document.querySelector('#projects-status');
 const projectRoot = document.querySelector('#project-root');
 const projectForm = document.querySelector('#project-form');
@@ -42,6 +43,7 @@ function saveProjects() {
 function renderProjects() {
   list.replaceChildren();
   empty.hidden = projects.length > 0;
+  openFolderLabel.textContent = projects.length ? 'Abrir outro projeto' : 'Escolher uma pasta';
   for (const project of projects) {
     const name = projectDisplayName(project);
     const card = document.createElement('article');

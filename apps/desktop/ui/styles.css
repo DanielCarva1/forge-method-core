@@ -186,6 +186,7 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 .conversation-heading { padding-bottom: 18px; border-bottom: 1px solid var(--line); }
 .conversation-heading h2 { font-size: clamp(1.8rem, 3vw, 2.7rem); }
 #project-form { margin-top: 24px; }
+#project-root[aria-invalid="true"] { border-color: var(--focus); border-width: 2px; }
 #start-project { margin-top: 10px; }
 .conversation-picker { margin: 14px 0; padding: 0 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--canvas); }
 .conversation-picker[open] { padding-bottom: 16px; }

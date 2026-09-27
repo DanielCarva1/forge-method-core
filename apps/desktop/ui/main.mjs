@@ -121,6 +121,7 @@ browse.addEventListener('click', async () => {
   }
 });
 projectRoot.addEventListener('input', () => {
+  projectRoot.removeAttribute('aria-invalid');
   setProject(null);
   setProgressProject(null);
   setPreviewProject(null);
@@ -136,6 +137,13 @@ form.addEventListener('submit', async event => {
   event.preventDefault();
   const readOnlyShortcut = event.submitter?.id === 'inspect-project';
   if (inspect.disabled || start.disabled) return;
+  if (!projectRoot.value.trim()) {
+    projectRoot.setAttribute('aria-invalid', 'true');
+    projectStatus.textContent = 'Escolha uma pasta para este projeto. Você pode usar “Escolher pasta…” ou informar o caminho acima.';
+    setup.open = true;
+    projectRoot.focus();
+    return;
+  }
   inspect.disabled = true;
   start.disabled = true;
   browse.disabled = true;

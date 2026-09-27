@@ -55,9 +55,18 @@ impl Transport {
     pub fn start(
         executable: &Path,
         root: &Path,
+        forge_core: Option<&Path>,
         event: impl Fn(Value) + Send + 'static,
     ) -> Result<Self, &'static str> {
         let mut command = tokio::process::Command::new(executable);
+        if let Some(runtime) = forge_core {
+            if !runtime.is_absolute() || !runtime.is_file() {
+                return Err("O Forge não foi encontrado nesta máquina.");
+            }
+            let parent = runtime.parent().ok_or("O Forge não foi encontrado nesta máquina.")?;
+            let path = forge_runtime_path(parent, std::env::var_os("PATH").as_deref())?;
+            command.env("PATH", path).env("FORGE_CORE_EXE", runtime);
+        }
         command
             .args(["app-server", "--listen", "stdio://"])
             .current_dir(root)
@@ -150,6 +159,17 @@ impl Transport {
     }
 }
 
+fn forge_runtime_path(
+    runtime_dir: &Path,
+    inherited: Option<&std::ffi::OsStr>,
+) -> Result<std::ffi::OsString, &'static str> {
+    let mut entries = vec![runtime_dir.to_path_buf()];
+    if let Some(inherited) = inherited {
+        entries.extend(std::env::split_paths(inherited));
+    }
+    std::env::join_paths(entries).map_err(|_| "Não foi possível preparar o acesso ao Forge para o agente.")
+}
+
 fn classify_rejection(method: &str, error: &Value) -> &'static str {
     if method == "thread/resume"
         && error["code"].as_i64() == Some(-32600)
@@ -166,6 +186,18 @@ fn classify_rejection(method: &str, error: &Value) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn agent_path_prefers_the_same_forge_runtime_as_project_commands() {
+        let base = std::env::temp_dir().join("forge-runtime-path-test");
+        let runtime = base.join("bundled");
+        let inherited = std::env::join_paths([base.join("older"), base.join("other")]).unwrap();
+        let configured = forge_runtime_path(&runtime, Some(&inherited)).unwrap();
+        let entries: Vec<_> = std::env::split_paths(&configured).collect();
+        assert_eq!(entries, [runtime, base.join("older"), base.join("other")]);
+        let without_host_path = forge_runtime_path(&base.join("bundled"), None).unwrap();
+        assert_eq!(std::env::split_paths(&without_host_path).collect::<Vec<_>>(), [base.join("bundled")]);
+    }
 
     #[test]
     fn active_writer_rejection_is_distinct_without_exposing_protocol_detail() {

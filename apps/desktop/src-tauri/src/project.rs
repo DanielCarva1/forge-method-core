@@ -157,7 +157,7 @@ pub async fn choose_project_folder(
         .transpose()
 }
 
-fn installed_runtime() -> Result<PathBuf, &'static str> {
+pub(crate) fn installed_runtime() -> Result<PathBuf, &'static str> {
     let path = std::env::var_os("FORGE_CORE_EXE")
         .map(PathBuf::from)
         .or_else(|| {

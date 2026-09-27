@@ -5016,3 +5016,109 @@ approved user journeys and original art, identify the highest-impact missing
 screen/state and implement it without adding another authority store; test
 fresh-account authorization when a controlled interactive account/VM is
 available. No source changes are pending after this checkpoint commit.
+
+### Desktop UI coverage: first visit to My Projects — 2026-09-27
+
+The current UI audit is recorded in `design/ux-audit-2026-09-26.md` under
+“Current journey coverage review.” It maps the approved user journeys and
+visual references. The first concrete gap selected was the empty My Projects
+screen: it offered only an existing-project route. Current source now explains
+that a project folder may be empty or pre-existing and offers two honest
+routes, **Explorar ideias** and **Escolher uma pasta**. The heading changes to
+**Abrir outro projeto** only after a local shortcut exists. No new project
+store, automatic send or Forge authority was introduced.
+
+The same first-use package also replaces the browser's implicit missing-folder
+validation bubble with a visible instruction and field focus when the person
+presses **Continuar nesta pasta** without a path. Whitespace-only paths stay
+local; choosing or typing a folder clears the invalid state.
+
+**PASS:** full browser UI suite, including empty/populated labels, both routes,
+shortcut revalidation and narrow layout; visual review of the controlled empty
+screen at `C:/ForgeFast/forge-projects-empty-final.png`; incremental Desktop
+debug build; hidden native WebView smoke with real Forge project onboarding and
+readback. A second hidden native run specifically proved missing-folder
+feedback, real Windows folder-dialog cancellation/selection and subsequent
+onboarding. The native smoke did not send a Codex turn. No Rust source changed,
+so no Rust workspace suite, release build or manual GH CI was run. This source
+is **not** in the installed/public 0.1.14.
+
+**NOT_RUN:** genuine new-account ChatGPT browser completion, default-browser
+button, manual accessibility acceptance, and a new real Codex send in this
+slice. No subagents; per-model token/BRL economics remain UNKNOWN. Source
+changes are local and uncommitted. **Next exact step:** run a bounded, real
+Codex-on-disposable-project first-use probe to determine whether the agent
+actually invokes the installed Forge guidance and updates authoritative
+project continuity, rather than only chatting and producing a file. Inspect
+the real thread/tool evidence and Forge readback; if it fails, diagnose the
+integration before more visual polish. Group the verified correction with
+this first-use UI work into a coherent alpha package, not a release per label.
+
+### Desktop first-use Codex-to-Forge runtime alignment — 2026-09-27
+
+A real disposable-project probe found that the app's project commands used
+bundled `forge-core 0.13.2`, while the Codex agent's shell found an older
+machine-wide `forge-core 0.12.1`. Current source passes its already-resolved
+project runtime to project-bound Codex subprocesses, prepends only that
+directory to their `PATH`, and sets `FORGE_CORE_EXE`. It changes neither the
+global PATH nor the login-only subprocess. The Start Forge skill is still
+host-installed, not bundled for a clean machine.
+
+**PASS:** focused runtime-PATH unit test, all 48 Desktop Rust unit tests,
+Desktop `cargo check`, strict Desktop Clippy, incremental debug build, full
+browser UI suite, and hidden native first-use/folder-dialog smoke. Two bounded
+real Codex turns were inspected through local tool traces: the first proved
+the 0.12.1 mismatch; the second, after the source fix, resolved and ran core
+0.13.2 for `start` and `workflow resume`, consulted discovery guidance, asked
+a relevant product question, and restored the conversation after WebView
+reload without resending. The second turn used a disposable project; no app
+release or manual GH CI was started. The test harness now reads the **last**
+agent message, not an earlier progress message, for this real-turn assertion.
+
+**PASS:** a separate hidden native run with a real Codex reply restored the
+ordered conversation after WebView reload and full desktop process restart,
+without sending the prompt again. This restart probe used the bounded
+no-tools prompt, not another Forge-activation turn.
+
+**PARTIAL:** the activation agent tried to record a pending decision, but its
+shell tool rejected the composed write command by host policy before execution.
+No decision write or full agent governance continuity is claimed. **NOT_RUN:**
+fresh-account browser authorization, default-browser launch, and clean-machine
+skill/core/Codex setup. No subagents; model-specific token/BRL economics remain
+UNKNOWN. Source changes remain local/uncommitted; installed/public 0.1.14 is
+unchanged. **Next exact step:** package and verify the coherent first-use 0.1.15
+alpha, then investigate the pending-decision command rejection without
+weakening the app's authorization boundary or inventing acceptance.
+
+### Desktop 0.1.15 installed alpha candidate — 2026-09-27
+
+The coherent first-use package was versioned 0.1.15. The focused browser UI
+suite, Desktop cargo check, all 48 Desktop Rust unit tests and strict Desktop
+Clippy passed. One NSIS release build produced
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.15_x64-setup.exe`:
+123,028,746 bytes, SHA-256
+`4491A0B935B190F02A0990A2C276FA1A258FB18D2F892FA07C18C6B5FC8B47DB`.
+It silently upgraded the installed 0.1.14 with exit 0. Installed product
+version is 0.1.15; installed executable SHA-256 is
+`48F8485E7D24D5DD0DEF1DD3A99AF782388F33FAF4FD27BBC1E132990A54CDC2`;
+installed bundled Forge core SHA-256 is
+`CFD6F81B1710D0469A53D12B374258CC122676EA7865F26926B1CDB4C7541EDF`.
+
+**PASS:** on those installed bytes, with core/Codex overrides unset, hidden
+native WebView exercised real Windows folder-dialog cancellation/selection,
+project readback, a real Codex first Send, WebView reload and full process
+restart without resending. The Codex trace for thread
+`01a0e40a-6889-7f70-a9d1-c0a7f7d323cf` confirms it invoked the installed
+bundled Forge core path for `start`; the reply used the project's discovery
+state, asked a relevant question, and made no files or publications. The
+installed test used the host-installed Start Forge skill. No manual GH CI ran.
+
+**PARTIAL:** durable pending-decision writing remains unproven because the
+earlier controlled agent command was rejected before execution. **NOT_RUN:**
+fresh-account browser login completion, default-browser button, clean-machine
+skill availability, manual accessibility acceptance and mobile. This is a
+tested local candidate, not yet a public installer. Model-specific tokens and
+BRL cost remain UNKNOWN. **Next exact step:** selectively commit/push this
+package, publish the exact tested installer under the maintainer's standing
+alpha authorization, verify an unauthenticated download against this SHA-256,
+install those downloaded bytes and rerun a bounded hidden native smoke.

@@ -107,14 +107,14 @@
           <h1 id="projects-title" tabindex="-1">Meus projetos</h1>
           <p class="intro">Volte aos projetos que você já abriu neste aplicativo.</p>
         </div>
-        <a class="action-link primary" href="#workspace" data-project-mode="existing" data-open-folder>Abrir outro projeto <span aria-hidden="true">→</span></a>
+        <a class="action-link primary" href="#workspace" data-project-mode="existing" data-open-folder><span id="projects-open-folder-label">Abrir outro projeto</span> <span aria-hidden="true">→</span></a>
       </div>
       <p id="projects-status" role="status" aria-live="polite"></p>
       <div id="recent-projects" class="recent-projects" role="group" aria-label="Projetos abertos neste aplicativo"></div>
       <div id="projects-empty" class="projects-empty panel">
         <img src="assets/forge.png" alt="" width="56" height="56">
-        <div><h2>Seu espaço começa aqui.</h2><p>Quando você conferir um projeto, ele aparecerá nesta lista para facilitar a próxima visita.</p></div>
-        <a class="action-link" href="#workspace" data-project-mode="existing" data-open-folder>Abrir um projeto</a>
+        <div><h2>Seu espaço começa aqui.</h2><p>Você ainda não abriu projetos neste aplicativo. Comece com uma ideia ou escolha uma pasta para continuar um trabalho. Ela pode estar vazia ou já conter arquivos.</p></div>
+        <a class="action-link primary" href="#explore">Explorar ideias <span aria-hidden="true">→</span></a>
       </div>
       <p class="hint">Esta lista contém apenas atalhos salvos neste dispositivo. Os arquivos e as conversas dos seus projetos não ficam aqui.</p>
     </section>
@@ -135,9 +135,9 @@
           <summary id="project-setup-summary">Escolher pasta do projeto</summary>
           <p>Escolha a pasta onde está ou ficará seu trabalho.</p>
           <p id="project-mode-help" class="hint">Ela pode estar vazia ou já conter arquivos. Se ainda não usa Forge, vamos prepará-la sem apagar o que existe.</p>
-          <form id="project-form">
+          <form id="project-form" novalidate>
             <label for="project-root">Pasta do projeto</label>
-            <input id="project-root" name="project-root" type="text" required autocomplete="off" spellcheck="false" aria-describedby="path-help" placeholder="D:\MeusProjetos\MeuSite">
+            <input id="project-root" name="project-root" type="text" required autocomplete="off" spellcheck="false" aria-describedby="path-help project-status" placeholder="D:\MeusProjetos\MeuSite">
             <p id="path-help" class="hint">Navegue até a pasta do projeto ou cole o caminho aqui.</p>
             <button id="browse-project" type="button">Escolher pasta…</button>
             <button id="start-project" class="primary" type="submit">Continuar nesta pasta <span aria-hidden="true">→</span></button>

@@ -151,7 +151,8 @@ pub async fn list_conversations(
     let project = project::inspect_project(project_root).await?;
     let root = Path::new(&project.project_root);
     let resource_dir = app.path().resource_dir().ok();
-    let transport = Transport::start(&executable(resource_dir.as_deref())?, root, |_| {})?;
+    let runtime = project::installed_runtime()?;
+    let transport = Transport::start(&executable(resource_dir.as_deref())?, root, Some(&runtime), |_| {})?;
     let result = async {
         transport
             .request(
@@ -249,7 +250,7 @@ pub async fn start_login(
     if slot.is_some() { return Err("O acesso já está em andamento."); }
     let resource_dir = app.path().resource_dir().ok();
     let root = std::env::current_dir().map_err(|_| LOGIN_UNAVAILABLE)?;
-    let transport = Transport::start(&executable(resource_dir.as_deref())?, &root, move |value| {
+    let transport = Transport::start(&executable(resource_dir.as_deref())?, &root, None, move |value| {
         if value["method"] == "account/login/completed" {
             if let Some(success) = value["params"]["success"].as_bool() {
                 let _ = events.send(LoginEvent { success });
@@ -460,7 +461,8 @@ pub async fn connect_agent(
     let activity = Arc::new(Mutex::new(Activity::default()));
     let observed = activity.clone();
     let resource_dir = app.path().resource_dir().ok();
-    let transport = Transport::start(&executable(resource_dir.as_deref())?, root, move |value| {
+    let runtime = project::installed_runtime()?;
+    let transport = Transport::start(&executable(resource_dir.as_deref())?, root, Some(&runtime), move |value| {
         if let Some(event) = project_event(value, &observed) {
             let _ = events.send(event);
         }

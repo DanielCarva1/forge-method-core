@@ -131,6 +131,11 @@ async function operatePreviewDialog(page, file) {
       await page.locator('#project-status').filter({ hasText: 'Seleção cancelada' }).waitFor();
       assert.equal(await page.locator('#project-root').inputValue(), '');
     }
+    await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await page.locator('#project-status').filter({ hasText: 'Escolha uma pasta' }).waitFor();
+    assert.equal(await page.locator('#project-root').getAttribute('aria-invalid'), 'true');
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'project-root');
+    console.log('PASS: native first-use form explains a missing folder and focuses the path without starting a project.');
     await page.locator('#connection summary').click();
     await page.getByRole('status').filter({ hasText: 'Aplicativo iniciado' }).waitFor({ timeout: 5000 });
     await page.getByRole('button', { name: 'Verificar novamente' }).click();
@@ -581,14 +586,26 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('#project-setup').evaluate(node => node.open), false);
       console.log('PASS: empty project folder received Forge onboarding and enables Codex connection.');
       if (process.env.FORGE_TEST_AGENT_SMOKE === '1') {
-        const prompt = 'Sem usar ferramentas nem alterar arquivos, responda em português apenas: Olá, vamos criar.';
+        const activationProbe = process.env.FORGE_TEST_FORGE_ACTIVATION === '1';
+        const prompt = activationProbe
+          ? 'Quero criar um pequeno site para organizar receitas, mas ainda não decidi para quem. Antes de escrever arquivos, me ajude a definir o primeiro passo. Use o projeto aberto e o Forge que acompanha o aplicativo; não publique nem instale nada.'
+          : 'Sem usar ferramentas nem alterar arquivos, responda em português apenas: Olá, vamos criar.';
         const composer = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
         await composer.fill(prompt);
         await page.getByRole('button', { name: 'Enviar', exact: true }).click();
         await page.locator('#agent-status').filter({ hasText: 'Resposta recebida' }).waitFor({ timeout: 180000 });
-        const reply = (await page.locator('#messages article[data-role="agent"]').first().innerText()).trim();
+        const reply = (await page.locator('#messages article[data-role="agent"]').last().innerText()).trim();
         assert.ok(reply.length > 5);
         assert.ok((await page.locator('#messages article[data-role="user"]').innerText()).includes(prompt));
+        if (activationProbe) {
+          const threadId = await page.evaluate(() => {
+            const key = Object.keys(localStorage).find(value => value.startsWith('forge.conversation.v1:'));
+            return key ? localStorage.getItem(key) : null;
+          });
+          assert.ok(threadId, 'The activation probe needs the actual Codex thread for tool-trace inspection');
+          console.log(`ACTIVATION_PROBE_THREAD=${threadId}`);
+          console.log(`ACTIVATION_PROBE_REPLY=${reply.replace(/\s+/g, ' ').slice(0, 700)}`);
+        }
         if (process.env.FORGE_TEST_ARTIFACT_JOURNEY === '1') {
           await composer.fill('Crie uma página estática simples em site/index.html neste projeto, com o título "Jardim de ideias" e CSS local. Não use JavaScript, rede, publicação nem modifique arquivos fora deste projeto. Ao terminar, inclua na resposta um link Markdown relativo para eu abrir o arquivo neste aplicativo.');
           await page.getByRole('button', { name: 'Enviar', exact: true }).click();
