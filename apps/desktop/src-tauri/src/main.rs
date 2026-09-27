@@ -3,6 +3,8 @@
 mod agent;
 mod codex_transport;
 mod history;
+mod preview;
+mod preview_site;
 mod progress;
 mod project;
 use tauri::Manager;
@@ -23,9 +25,15 @@ fn app_info() -> AppInfo {
 }
 
 fn main() {
+    let preview_site = std::sync::Arc::new(preview_site::PreviewSiteState::default());
+    let preview_site_protocol = preview_site.clone();
     tauri::Builder::default()
+        .register_uri_scheme_protocol("forgepreview", move |_context, request| {
+            preview_site::serve(&preview_site_protocol, request)
+        })
         .plugin(tauri_plugin_dialog::init())
         .manage(agent::AgentState::default())
+        .manage(preview_site)
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
@@ -43,8 +51,14 @@ fn main() {
             app_info,
             project::choose_project_folder,
             project::inspect_project,
+            project::start_project,
             progress::inspect_progress,
+            progress::inspect_direction_history,
+            preview::choose_preview_file,
+            preview::inspect_preview,
+            preview::clear_preview_site,
             agent::connect_agent,
+            agent::list_conversations,
             agent::send_message,
             agent::interrupt_agent,
             agent::disconnect_agent

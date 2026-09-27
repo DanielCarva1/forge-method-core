@@ -11,7 +11,7 @@
       "minWidth": 360, "minHeight": 480
     }],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; frame-src http://forgepreview.localhost; base-uri 'none'; form-action 'none'",
       "capabilities": []
     }
   },
@@ -20,8 +20,8 @@
     "targets": ["nsis"],
     "publisher": "Stable Studio",
     "category": "DeveloperTool",
-    "shortDescription": "Desktop companion for Forge projects",
-    "longDescription": "A Windows desktop companion for working with existing Forge projects through a supported Codex CLI installation.",
+    "shortDescription": "Create and continue local projects with Forge",
+    "longDescription": "A Windows app for starting or continuing local Forge projects, chatting through a supported Codex CLI installation, and reviewing local results and the Forge record.",
     "homepage": "https://github.com/DanielCarva1/forge-method-core",
     "icon": ["icons/icon.ico", "icons/icon.png"],
     "windows": {

@@ -1,14 +1,33 @@
 import { invalidateProgress } from './progress.mjs';
 import { readReference, saveReference } from './conversation-reference.mjs';
+import { renderAgentMessage } from './message-format.mjs';
+import { previewLinkedFile } from './preview.mjs';
 const byId = id => document.getElementById(id);
 const status = byId('agent-status');
 const connect = byId('connect-agent');
+const connectHelp = byId('connect-help');
 const disconnect = byId('disconnect-agent');
 const send = byId('send-message');
 const stop = byId('interrupt-agent');
 const input = byId('message-text');
+const composerHelp = byId('composer-help');
+const accessNote = byId('agent-access-note');
 const messages = byId('messages');
+const conversationBody = document.querySelector('.conversation-body');
+const messageView = byId('message-view');
 const newConversation = byId('new-conversation');
+const newConversationChoice = byId('new-conversation-choice');
+const conversationPicker = byId('conversation-picker');
+const findConversations = byId('find-conversations');
+const previousConversations = byId('previous-conversations');
+const moreConversations = byId('more-conversations');
+const conversationList = byId('conversation-list');
+const conversationListStatus = byId('conversation-list-status');
+const projectStatus = byId('project-status');
+const projectSetup = byId('project-setup');
+const projectResultHint = byId('project-result-hint');
+const conversationStep = byId('conversation-step');
+const emptyDescription = byId('empty-conversation-description');
 let project = null;
 let connected = false;
 let busy = false;
@@ -17,7 +36,16 @@ let broken = false;
 let generation = 0;
 let channel;
 const items = new Map();
+let rawMessageView = false;
+let restoringHistory = false;
+let listGeneration = 0;
+let listPending = false;
+let listCursor = null;
+let pageNumber = 0;
+let pageCursors = [null];
+let hasPreviousConversation = false;
 const sessionReferences = new Map();
+const unconfirmedSends = new Set();
 const referenceKey = () => JSON.stringify([project.project_id, project.project_root]);
 const invoke = (command, args) => globalThis.__TAURI__.core.invoke(command, args);
 
@@ -35,47 +63,228 @@ function showStatus(text, kind = 'idle') {
 }
 showStatus(status.textContent);
 
+function updateComposerHelp() {
+  composerHelp.textContent = !project
+    ? 'Para enviar, escolha uma pasta para o projeto.'
+    : !connected && unconfirmedSends.has(referenceKey())
+      ? 'O último envio não foi confirmado. Abra a conversa e confira o histórico antes de tentar novamente.'
+    : !connected
+      ? 'Escreva e envie sua ideia. A conversa será aberta antes do envio.'
+      : busy
+        ? 'Seu agente está trabalhando. Você pode interromper se precisar.'
+        : broken
+          ? 'A conexão foi encerrada. Desconecte e tente novamente.'
+          : 'Pronto para conversar. Você continua no controle das mudanças.';
+}
+
 function controls() {
   const focused = document.activeElement;
   connect.disabled = transitioning || connected || !project;
   newConversation.disabled = transitioning || connected;
   disconnect.disabled = transitioning || !connected;
-  send.disabled = transitioning || !connected || busy || broken;
-  input.disabled = transitioning || !connected || busy || broken;
+  send.disabled = transitioning || !project || busy || broken;
+  input.disabled = transitioning || busy || broken;
   stop.disabled = transitioning || !connected || !busy || broken;
+  stop.hidden = !connected || !busy;
+  connect.hidden = connected;
+  connectHelp.hidden = !project || connected;
+  disconnect.hidden = !connected;
+  newConversationChoice.hidden = connected || !project || !hasPreviousConversation;
+  conversationPicker.hidden = !project || connected;
+  if (connected) conversationPicker.open = false;
+  findConversations.disabled = !project || connected || transitioning || listPending;
+  previousConversations.disabled = !project || connected || transitioning || listPending || pageNumber === 0;
+  moreConversations.disabled = !project || connected || transitioning || listPending || !listCursor;
+  projectStatus.hidden = connected;
+  projectResultHint.textContent = 'Pasta confirmada pelo Forge.';
+  conversationStep.textContent = project ? 'SUA CONVERSA' : 'PASSO 2 · SUA CONVERSA';
+  emptyDescription.textContent = connected
+    ? 'Sua conversa está pronta. Conte o que você quer criar ou melhorar.'
+    : 'Conte o que você quer criar ou melhorar. Uma dúvida também é um bom começo.';
+  updateComposerHelp();
+  accessNote.hidden = !project;
   byId('project-root').disabled = transitioning || connected;
   byId('browse-project').disabled = transitioning || connected;
   byId('inspect-project').disabled = transitioning || connected;
-  if (focused?.disabled) status.focus();
+  byId('start-project').disabled = transitioning || connected;
+  if (focused && conversationPicker.hidden && conversationPicker.contains(focused)) status.focus();
+  else if (focused?.disabled) (conversationPicker.contains(focused) ? conversationListStatus : status).focus();
 }
 
 export function setProject(value) {
   project = value;
+  conversationStep.textContent = project ? 'SUA CONVERSA' : 'PASSO 2 · SUA CONVERSA';
+  hasPreviousConversation = false;
+  newConversation.checked = false;
+  if (project) {
+    try { hasPreviousConversation = !!(sessionReferences.get(referenceKey()) ?? readReference(localStorage, project)); }
+    catch { hasPreviousConversation = true; } // Keep the explicit new-conversation escape hatch.
+  }
+  listGeneration++;
+  listPending = false;
+  listCursor = null;
+  pageNumber = 0;
+  pageCursors = [null];
+  conversationList.replaceChildren();
+  conversationListStatus.textContent = 'A busca começa quando você pedir.';
+  conversationPicker.hidden = !project;
+  conversationPicker.open = false;
+  moreConversations.hidden = true;
+  previousConversations.hidden = true;
   connect.disabled = !project || connected;
+  connectHelp.hidden = !project || connected;
+  send.disabled = !project || transitioning || busy || broken;
+  findConversations.disabled = !project || connected || transitioning;
+  moreConversations.disabled = true;
+  previousConversations.disabled = true;
+  newConversationChoice.hidden = connected || !project || !hasPreviousConversation;
+  updateComposerHelp();
+  accessNote.hidden = !project;
+  if (!connected && !transitioning) showStatus(project
+    ? 'Projeto pronto. Escreva sua ideia; a conversa abre quando você enviar.'
+    : 'Escolha uma pasta para começar. A conversa será aberta quando você enviar sua ideia.');
 }
 
-function message(id, role, text, append = false) {
-  let node = items.get(id);
-  if (!node) {
+function validConversationPage(page) {
+  return page && Array.isArray(page.conversations) && page.conversations.length <= 50
+    && (page.next_cursor === null || (typeof page.next_cursor === 'string' && page.next_cursor.length > 0 && page.next_cursor.length <= 1024))
+    && page.conversations.every(choice => choice && typeof choice.id === 'string' && choice.id.length > 0 && choice.id.length <= 200
+      && typeof choice.title === 'string' && choice.title.length > 0 && [...choice.title].length <= 160
+      && Number.isSafeInteger(choice.updated_at) && choice.updated_at >= 0
+      && typeof choice.active === 'boolean');
+}
+
+async function loadConversationChoices(targetPage = 0, cursor = null) {
+  if (!project || connected || transitioning || listPending || targetPage < 0 || (targetPage > 0 && !cursor)) return;
+  const current = ++listGeneration;
+  const root = project.project_root;
+  listPending = true;
+  conversationListStatus.textContent = 'Buscando conversas no Codex…';
+  controls();
+  try {
+    const page = await invoke('list_conversations', { projectRoot: root, cursor });
+    if (current !== listGeneration) return;
+    if (!validConversationPage(page)) throw new Error('Invalid conversation list');
+    if (page.next_cursor && (page.next_cursor === cursor || pageCursors.slice(0, targetPage + 1).includes(page.next_cursor))) throw new Error('Repeated conversation cursor');
+    const rows = document.createDocumentFragment();
+    const listedIds = new Set();
+    for (const choice of page.conversations) {
+      if (listedIds.has(choice.id)) continue;
+      listedIds.add(choice.id);
+      const row = document.createElement('div');
+      row.className = 'conversation-choice';
+      const description = document.createElement('div');
+      description.className = 'conversation-choice-description';
+      const title = document.createElement('strong');
+      title.textContent = choice.title;
+      title.title = choice.title;
+      const date = document.createElement('span');
+      date.textContent = `Atualizada em ${new Date(choice.updated_at * 1000).toLocaleDateString('pt-BR')}`;
+      description.append(title, date);
+      const open = document.createElement('button');
+      open.type = 'button';
+      open.textContent = choice.active ? 'Em andamento' : 'Retomar';
+      open.disabled = choice.active;
+      open.setAttribute('aria-label', `${choice.active ? 'Em andamento' : 'Retomar'}: ${choice.title}`);
+      open.addEventListener('click', async () => {
+        if (!project || connected || transitioning || listPending) return;
+        newConversation.checked = false;
+        conversationPicker.open = false;
+        status.focus();
+        await connectCurrent(choice.id);
+      });
+      row.append(description, open);
+      rows.append(row);
+    }
+    conversationList.replaceChildren(rows);
+    pageNumber = targetPage;
+    pageCursors = pageCursors.slice(0, targetPage + 1);
+    pageCursors[targetPage] = cursor;
+    listCursor = page.next_cursor;
+    previousConversations.hidden = pageNumber === 0;
+    moreConversations.hidden = !listCursor;
+    conversationListStatus.textContent = listedIds.size
+      ? `Página ${pageNumber + 1}: ${listedIds.size} ${listedIds.size === 1 ? 'conversa' : 'conversas'} do índice deste dispositivo para este projeto.`
+      : listCursor ? `Página ${pageNumber + 1}: nenhuma conversa nesta página. Você pode avançar.` : 'Nenhuma conversa encontrada no índice deste dispositivo.';
+  } catch (error) {
+    if (current === listGeneration) conversationListStatus.textContent = typeof error === 'string' ? error : 'Não foi possível buscar as conversas. Tente novamente; a página anterior foi mantida.';
+  } finally {
+    if (current === listGeneration) { listPending = false; controls(); }
+  }
+}
+
+findConversations.addEventListener('click', () => loadConversationChoices());
+previousConversations.addEventListener('click', () => loadConversationChoices(pageNumber - 1, pageCursors[pageNumber - 1]));
+moreConversations.addEventListener('click', () => loadConversationChoices(pageNumber + 1, listCursor));
+
+function paintMessage(item) {
+  if (item.isUser || !item.complete) { item.content.textContent = item.raw; return; }
+  if (rawMessageView) {
+    const raw = document.createElement('pre');
+    raw.className = 'message-raw';
+    raw.textContent = item.raw;
+    item.content.replaceChildren(raw);
+  } else renderAgentMessage(item.content, item.raw, previewLinkedFile);
+}
+
+function nearLatestMessage() {
+  return conversationBody.scrollHeight - conversationBody.clientHeight - conversationBody.scrollTop <= 72;
+}
+
+function showLatestMessage() { conversationBody.scrollTop = conversationBody.scrollHeight; }
+
+messageView.addEventListener('click', () => {
+  const followLatest = nearLatestMessage();
+  rawMessageView = !rawMessageView;
+  messageView.textContent = rawMessageView ? 'Ver texto formatado' : 'Ver texto original';
+  for (const item of items.values()) paintMessage(item);
+  if (followLatest) showLatestMessage();
+});
+
+function message(id, role, text, append = false, complete = false) {
+  const followLatest = !restoringHistory && (role === 'Você' || !messages.childElementCount || nearLatestMessage());
+  let item = items.get(id);
+  if (!item) {
     const article = document.createElement('article');
-    article.dataset.role = role === 'Você' ? 'user' : 'agent';
+    const isUser = role === 'Você';
+    article.dataset.role = isUser ? 'user' : 'agent';
+    const avatar = document.createElement('span');
+    avatar.className = 'message-avatar';
+    avatar.setAttribute('aria-hidden', 'true');
+    if (isUser) avatar.textContent = 'V';
+    else {
+      const logo = document.createElement('img');
+      logo.src = 'assets/forge.png';
+      logo.alt = '';
+      avatar.append(logo);
+    }
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble';
     const title = document.createElement('strong');
     title.textContent = role;
-    node = document.createElement('p');
-    article.append(title, node); messages.append(article); items.set(id, node);
+    const content = document.createElement('div');
+    content.className = 'message-content';
+    item = { article, title, content, raw: '', isUser, complete: false };
+    bubble.append(title, content);
+    article.append(avatar, bubble); messages.append(article); items.set(id, item);
   }
-  node.textContent = append ? node.textContent + text : text;
+  item.raw = append ? item.raw + text : text;
+  item.complete = complete;
+  paintMessage(item);
+  if (complete && !item.isUser) messageView.hidden = false;
+  if (followLatest) showLatestMessage();
+  return item;
 }
 
 function receive(event) {
   if (['running', 'completed', 'interrupted', 'failed', 'disconnected'].includes(event.kind)) invalidateProgress();
   if (event.kind === 'delta' || event.kind === 'message') {
-    message(event.id, 'Codex', event.text, event.kind === 'delta');
+    message(event.id, 'Codex', event.text, event.kind === 'delta', event.kind === 'message');
     return;
   }
   const labels = {
     running: 'O Codex está trabalhando…', activity: 'O Codex está trabalhando…',
-    completed: 'Resposta recebida. Confira o resultado antes de considerar a tarefa concluída.',
+    completed: 'Resposta recebida. Confira o resultado e as mudanças feitas.',
     interrupted: 'Interrompido. O que já foi feito não foi desfeito.',
     failed: 'A execução falhou. Confira o que já foi feito antes de tentar novamente.',
     update_required: 'Atualize o Codex CLI: a versão instalada ainda não suporta o modelo escolhido. Depois, desconecte e conecte novamente.',
@@ -93,61 +302,109 @@ function receive(event) {
   controls();
 }
 
-connect.addEventListener('click', async () => {
+async function connectCurrent(explicitThreadId = null) {
+  if (!project || connected || transitioning) return false;
+  const reviewingSend = unconfirmedSends.has(referenceKey());
+  if (reviewingSend && newConversation.checked) {
+    showStatus('Retome a conversa anterior e confira o envio não confirmado antes de começar outra.', 'error');
+    return false;
+  }
+  ++listGeneration;
+  listPending = false;
   const current = ++generation;
   transitioning = true; broken = false; controls();
   showStatus('Conectando ao Codex com seu login…', 'working');
   try {
-    let threadId = null;
-    if (!newConversation.checked) {
+    let threadId = explicitThreadId;
+    if (!threadId && !newConversation.checked) {
       try { threadId = sessionReferences.get(referenceKey()) ?? readReference(localStorage, project); }
       catch { throw 'Não foi possível consultar a conversa salva neste dispositivo. Para seguir sem retomá-la, marque “Começar outra conversa”.'; }
+    }
+    if (reviewingSend) {
+      let expected;
+      try { expected = sessionReferences.get(referenceKey()) ?? readReference(localStorage, project); }
+      catch { /* The in-memory reference is preferred; missing history fails closed below. */ }
+      if (!expected || threadId !== expected) throw 'Retome a conversa do envio não confirmado antes de reenviar. Se ela não estiver disponível, confira o histórico pelo Codex.';
     }
     channel = new globalThis.__TAURI__.core.Channel();
     channel.onmessage = event => { if (current === generation) receive(event); };
     const conversation = await invoke('connect_agent', { projectRoot: project.project_root, threadId, events: channel });
     if (current !== generation) return;
+    if (reviewingSend && !conversation.resumed) {
+      try { await invoke('disconnect_agent'); } catch { /* Keep the send guard even if cleanup fails. */ }
+      throw 'O Codex não confirmou a retomada da conversa anterior. Confira o histórico antes de reenviar.';
+    }
     connected = true; busy = false;
-    messages.replaceChildren(); items.clear();
-    for (const item of conversation.messages) message(item.id, item.role === 'user' ? 'Você' : item.incomplete ? 'Codex · resposta incompleta' : 'Codex', item.text);
+    conversationPicker.open = false;
+    messages.replaceChildren(); items.clear(); rawMessageView = false;
+    messageView.hidden = true; messageView.textContent = 'Ver texto original';
+    restoringHistory = true;
+    try {
+      for (const item of conversation.messages) message(item.id, item.role === 'user' ? 'Você' : item.incomplete ? 'Codex · resposta incompleta' : 'Codex', item.text, false, item.role === 'agent' && !item.incomplete);
+    } finally { restoringHistory = false; }
+    showLatestMessage();
     sessionReferences.set(referenceKey(), conversation.thread_id);
+    hasPreviousConversation = true;
     let saved = true;
     try { saveReference(localStorage, project, conversation.thread_id); } catch { saved = false; }
     newConversation.checked = false;
+    if (reviewingSend && conversation.resumed) unconfirmedSends.delete(referenceKey());
     showStatus(broken
       ? 'A conexão foi encerrada. Desconecte antes de tentar novamente.'
       : `${conversation.resumed ? 'Conversa retomada. Confira o último registro do Forge e o que já foi feito antes de continuar.' : `Codex conectado ao projeto ${project.project_id}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}`, broken ? 'disconnected' : 'connected');
   } catch (error) { if (current !== generation) return; ++generation; showStatus(typeof error === 'string' ? error : 'Não foi possível conectar ao Codex.', 'error'); }
   transitioning = false;
   controls();
-});
+  if (connected && !broken && !byId('workspace').hidden) {
+    requestAnimationFrame(() => {
+      if (current === generation && connected && !byId('workspace').hidden) send.scrollIntoView({ block: 'nearest' });
+    });
+  }
+  return connected && !broken;
+}
+
+connect.addEventListener('click', () => connectCurrent());
 
 byId('message-form').addEventListener('submit', async event => {
   event.preventDefault();
-  if (!connected || busy || transitioning || broken || !input.value.trim()) return;
+  if (!project || busy || transitioning || broken || !input.value.trim()) return;
+  if (!connected && unconfirmedSends.has(referenceKey())) {
+    showStatus('O envio anterior não foi confirmado. Abra a conversa sem enviar e confira o histórico antes de tentar novamente.', 'error');
+    conversationPicker.open = true;
+    connect.focus();
+    return;
+  }
   const text = input.value;
   if (new TextEncoder().encode(text).length > 64000) {
     showStatus('A mensagem está muito longa. Divida em partes menores; sua conexão continua ativa.', 'error');
     return;
   }
+  if (!connected && !await connectCurrent()) return;
   const current = generation;
   input.value = '';
   busy = true; controls(); stop.disabled = true;
   showStatus('Enviando sua mensagem…', 'working');
   const id = `user-${Date.now()}`;
-  message(id, 'Você', text);
+  const local = message(id, 'Você', text);
+  local.article.dataset.delivery = 'pending';
+  local.title.textContent = 'Você · enviando';
   try {
     await invoke('send_message', { text });
     if (current !== generation) return;
+    local.article.dataset.delivery = 'accepted';
+    local.title.textContent = 'Você';
     controls();
   } catch (error) {
     if (current !== generation) return;
+    local.article.dataset.delivery = 'unconfirmed';
+    local.title.textContent = 'Você · envio não confirmado';
+    unconfirmedSends.add(referenceKey());
     transitioning = true; controls();
     try { await invoke('disconnect_agent'); } catch { broken = true; }
     if (current !== generation) return;
     busy = false; connected = broken; transitioning = false; ++generation;
     if (!input.value) input.value = text;
-    showStatus(`${typeof error === 'string' ? error : 'Falha ao enviar.'} Confira possíveis efeitos antes de reconectar.`, 'error');
+    showStatus(`${typeof error === 'string' ? error : 'Falha ao enviar.'} Abra a conversa e confira o histórico antes de reenviar.`, 'error');
     controls();
   }
 });
@@ -162,16 +419,29 @@ stop.addEventListener('click', async () => {
   catch (error) { if (current !== generation || !busy) return; showStatus(typeof error === 'string' ? error : 'Não foi possível interromper.', 'error'); controls(); }
 });
 
-disconnect.addEventListener('click', async () => {
+async function disconnectCurrent() {
+  if (!connected || transitioning) return false;
   const current = ++generation;
   transitioning = true; controls();
   showStatus('Desconectando…', 'working');
+  let disconnected = false;
   try {
     await invoke('disconnect_agent');
-    if (current !== generation) return;
+    if (current !== generation) return false;
     connected = false; busy = false; broken = false; channel = null;
+    disconnected = true;
     showStatus('Desconectado. As alterações já feitas no projeto permanecem.', 'disconnected');
-  } catch { if (current !== generation) return; showStatus('Não foi possível desconectar. Tente novamente.', 'error'); }
+  } catch { if (current !== generation) return false; showStatus('Não foi possível desconectar. Tente novamente.', 'error'); }
   transitioning = false;
   controls();
-});
+  return disconnected;
+}
+
+export async function prepareProjectSwitch() {
+  if (transitioning) return false;
+  if (!connected) return !byId('project-root').disabled;
+  if (busy && !globalThis.confirm('O Codex ainda está trabalhando. Trocar de projeto vai interromper a resposta; mudanças já feitas podem permanecer. Quer continuar?')) return false;
+  return disconnectCurrent();
+}
+
+disconnect.addEventListener('click', disconnectCurrent);

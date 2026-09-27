@@ -8,9 +8,20 @@ use tokio::{
 };
 use tokio_util::codec::{FramedRead, LinesCodec, LinesCodecError};
 
-pub(crate) const MAX_FRAME_BYTES: usize = 1024 * 1024;
+pub(crate) const MAX_FRAME_BYTES: usize = 16 * 1024 * 1024;
+const INITIALIZE_TIMEOUT: Duration = Duration::from_secs(90);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+fn timeout_for(method: &str) -> Duration {
+    if method == "initialize" {
+        INITIALIZE_TIMEOUT
+    } else {
+        REQUEST_TIMEOUT
+    }
+}
 pub(crate) const REQUEST_REJECTED: &str =
     "O Codex não aceitou a solicitação. Confira a conexão e tente novamente.";
+pub(crate) const THREAD_IN_USE: &str =
+    "Esta conversa está aberta em outro lugar. Feche-a lá ou escolha outra conversa; nada foi alterado.";
 const OVERSIZED_REPLY: &str = "O histórico ou a resposta ultrapassou o limite de leitura deste app. Nada foi apagado. Continue essa conversa pelo Codex CLI; não é necessário repetir o trabalho.";
 
 type Reply = Result<Value, &'static str>;
@@ -96,8 +107,8 @@ impl Transport {
                                 event(json!({"method":"forge/unsupportedInteraction"}));
                             } else { event(value); }
                         } else if let Some((method, reply)) = value["id"].as_u64().and_then(|id| pending.remove(&id)) {
-                            if value.get("error").is_some() {
-                                let _ = reply.send(Err(REQUEST_REJECTED));
+                            if let Some(error) = value.get("error") {
+                                let _ = reply.send(Err(classify_rejection(method, error)));
                             } else if let Some(result) = value.get("result") {
                                 // Protocol initialization requires a notification, not another request.
                                 if method == "initialize" && stdin.write_all(b"{\"method\":\"initialized\",\"params\":{}}\n").await.is_err() { break; }
@@ -121,7 +132,7 @@ impl Transport {
 
     pub async fn request(&self, method: &'static str, params: Value) -> Reply {
         let (reply, response) = oneshot::channel();
-        tokio::time::timeout(Duration::from_secs(30), async {
+        tokio::time::timeout(timeout_for(method), async {
             self.requests
                 .send(Request {
                     method,
@@ -139,9 +150,42 @@ impl Transport {
     }
 }
 
+fn classify_rejection(method: &str, error: &Value) -> &'static str {
+    if method == "thread/resume"
+        && error["code"].as_i64() == Some(-32600)
+        && error["message"].as_str().is_some_and(|message| {
+            message.starts_with("thread ") && message.ends_with(" already has an active writer")
+        })
+    {
+        THREAD_IN_USE
+    } else {
+        REQUEST_REJECTED
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn active_writer_rejection_is_distinct_without_exposing_protocol_detail() {
+        let error =
+            json!({"code":-32600,"message":"thread private-id already has an active writer"});
+        assert_eq!(classify_rejection("thread/resume", &error), THREAD_IN_USE);
+        assert!(!THREAD_IN_USE.contains("private-id"));
+        assert_eq!(classify_rejection("thread/read", &error), REQUEST_REJECTED);
+        assert_eq!(
+            classify_rejection("thread/resume", &json!({"code":-32600,"message":"other"})),
+            REQUEST_REJECTED
+        );
+    }
+
+    #[test]
+    fn cold_start_has_a_longer_bound_without_extending_turn_requests() {
+        assert_eq!(timeout_for("initialize"), Duration::from_secs(90));
+        assert_eq!(timeout_for("account/read"), Duration::from_secs(30));
+        assert_eq!(timeout_for("turn/start"), Duration::from_secs(30));
+    }
 
     #[tokio::test]
     async fn oversized_history_is_rejected_without_truncation() {
@@ -158,11 +202,20 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn multiple_bounded_history_frames_can_exceed_one_frame_in_aggregate() {
+    async fn multi_megabyte_history_turn_remains_readable() {
+        let bytes = vec![b'x'; 4 * 1024 * 1024];
+        let mut lines = FramedRead::new(
+            bytes.as_slice(),
+            LinesCodec::new_with_max_length(MAX_FRAME_BYTES),
+        );
+        assert!(matches!(lines.next().await, Some(Ok(_))));
+    }
+
+    #[tokio::test]
+    async fn multiple_bounded_history_frames_are_read_separately() {
         let line = format!("{{\"data\":\"{}\"}}\n", "x".repeat(600_000));
         assert!(line.len() < MAX_FRAME_BYTES);
         let bytes = format!("{line}{line}");
-        assert!(bytes.len() > MAX_FRAME_BYTES);
         let mut lines = FramedRead::new(
             bytes.as_bytes(),
             LinesCodec::new_with_max_length(MAX_FRAME_BYTES),

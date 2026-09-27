@@ -14,12 +14,21 @@ const assets = new Map([
   ['/recent-projects.mjs', ['recent-projects.mjs', 'text/javascript']],
   ['/connection.mjs', ['connection.mjs', 'text/javascript']],
   ['/chat.mjs', ['chat.mjs', 'text/javascript']],
+  ['/message-format.mjs', ['message-format.mjs', 'text/javascript']],
   ['/conversation-reference.mjs', ['conversation-reference.mjs', 'text/javascript']],
   ['/assets/forge.png', ['assets/forge.png', 'image/png']],
   ['/assets/explore-artwork.png', ['assets/explore-artwork.png', 'image/png']],
   ['/appearance.js', ['appearance.js', 'text/javascript']],
   ['/progress.mjs', ['progress.mjs', 'text/javascript']],
+  ['/preview.mjs', ['preview.mjs', 'text/javascript']],
 ]);
+async function openProjectSetup(page) {
+  if (!await page.locator('#project-setup').evaluate(node => node.open)) await page.locator('#project-setup summary').click();
+}
+async function openConversation(page) {
+  if (!await page.locator('#conversation-picker').evaluate(node => node.open)) await page.locator('#conversation-picker summary').click();
+  await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
+}
 
 (async () => {
   const server = createServer(async (req, res) => {
@@ -41,9 +50,11 @@ const assets = new Map([
     const url = `http://127.0.0.1:${server.address().port}`;
     const workspaceUrl = `${url}#workspace`;
     await page.goto(url);
+    await page.locator('nav a[data-route="home"][aria-current="page"]').waitFor();
     if (process.env.FORGE_HOME_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_HOME_SCREENSHOT, fullPage: true });
     assert.equal(await page.locator('#home').isVisible(), true);
     assert.equal(await page.locator('#workspace').isHidden(), true);
+    assert.equal(await page.locator('#agent-access-note').isHidden(), true);
     assert.equal(await page.locator('nav a[data-route="home"]').getAttribute('aria-current'), 'page');
     await page.getByRole('link', { name: 'Continuar um projeto' }).click();
     await page.locator('#projects').waitFor({ state: 'visible' });
@@ -51,6 +62,7 @@ const assets = new Map([
     await page.getByRole('link', { name: 'Abrir outro projeto' }).click();
     await page.locator('#workspace').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#workspace').isVisible(), true);
+    assert.equal(await page.locator('#project-record').isVisible(), false, 'Do not show a record for an unconfirmed folder');
     assert.equal(await page.locator('#home').isHidden(), true);
     assert.equal(await page.locator('nav a[data-route="workspace"]').getAttribute('aria-current'), 'page');
     console.log('PASS: home and workspace are distinct, reachable screens with current navigation.');
@@ -60,6 +72,9 @@ const assets = new Map([
     assert.equal(await page.locator('#workspace').isHidden(), true);
     assert.equal(await page.locator('nav a[data-route="explore"]').getAttribute('aria-current'), 'page');
     assert.equal(await page.locator('.category-card').count(), 8);
+    const ideaPanel = await page.locator('.open-idea').boundingBox();
+    const ideaTitle = await page.locator('.open-idea h2').boundingBox();
+    assert.ok(ideaTitle.x >= ideaPanel.x + 175, 'Decorative foliage must not cover the callout title');
     if (process.env.FORGE_EXPLORE_SCREENSHOT) {
       await page.screenshot({ path: process.env.FORGE_EXPLORE_SCREENSHOT, fullPage: true });
     }
@@ -76,11 +91,37 @@ const assets = new Map([
     assert.equal(await page.locator('.category-card:visible').count(), 1);
     await page.getByRole('link', { name: /Música/ }).click();
     await page.locator('#workspace').waitFor({ state: 'visible' });
-    assert.match(await page.getByRole('textbox', { name: 'Conte sua ideia' }).inputValue(), /música/i);
+    assert.match(await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).inputValue(), /música/i);
+    // A browser may clear a search input while the screen is hidden, without firing input.
+    await page.locator('#category-query').evaluate(node => { node.value = ''; });
+    await page.getByRole('link', { name: 'Explorar', exact: true }).click();
+    await page.getByRole('searchbox', { name: 'O que te interessa?' }).fill('');
+    await page.waitForFunction(() => [...document.querySelectorAll('.category-card')].every(card => !card.hidden));
+    assert.equal(await page.locator('.category-card:visible').count(), 8);
+    await page.getByRole('link', { name: /Arte e criação/ }).click();
+    const ideaDraft = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
+    assert.match(await ideaDraft.inputValue(), /artístico/i);
+    await ideaDraft.fill('Quero desenhar um livro ilustrado para crianças.');
+    await page.getByRole('link', { name: 'Explorar', exact: true }).click();
+    await page.getByRole('link', { name: /Tecnologia/ }).click();
+    assert.equal(await ideaDraft.inputValue(), 'Quero desenhar um livro ilustrado para crianças.');
+    assert.match(await page.locator('#idea-selection-status').textContent(), /ideia escrita foi mantida/);
+    await page.getByRole('link', { name: 'Como funciona' }).click();
+    await page.locator('#home').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#idea-selection-status').isHidden(), true);
+    assert.equal(await page.locator('#about').evaluate(node => node.open), true);
+    assert.equal(await page.locator('#about .cards').isVisible(), true);
+    await page.waitForFunction(() => document.activeElement === document.querySelector('#about summary'));
+    await page.goto(`${url}#about`);
+    assert.equal(await page.locator('#about').evaluate(node => node.open), true);
+    await page.getByRole('link', { name: 'Minha conversa', exact: true }).click();
+    await page.locator('#workspace').waitFor({ state: 'visible' });
+    assert.equal(await page.getByRole('button', { name: 'Continuar nesta pasta' }).isVisible(), true);
+    if (process.env.FORGE_WORKSPACE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_WORKSPACE_SCREENSHOT, fullPage: true });
     console.log('PASS: Explore filters eight approachable themes and carries the chosen idea into the conversation.');
     const projectsPage = await browser.newPage();
     await projectsPage.addInitScript(() => {
-      window.projectChecks = [];
+      window.projectChecks = []; window.startCalls = []; window.previewReads = [];
       window.__TAURI__ = { core: { invoke: async (command, args) => {
         if (command === 'app_info') return { name: 'Forge', version: '0.1.0' };
         if (command === 'choose_project_folder') {
@@ -93,16 +134,204 @@ const assets = new Map([
           const root = args.projectRoot;
           return { project_id: root.endsWith('two') ? 'second-project' : 'first-project', project_root: root };
         }
+        if (command === 'start_project') {
+          window.startCalls.push(args.projectRoot);
+          const root = args.projectRoot;
+          return { project_id: root.endsWith('two') ? 'second-project' : root.endsWith('new') ? 'new-project' : 'first-project', project_root: root };
+        }
+        if (command === 'choose_preview_file') return window.previewChoice || null;
+        if (command === 'inspect_preview') {
+          window.previewReads.push(args);
+          if (args.filePath.includes('outside')) throw 'Este arquivo não pertence ao projeto aberto.';
+          return window.previewKind === 'image'
+            ? { kind: 'image', relative_path: 'result.png', size_bytes: 100, content: window.previewImage }
+            : window.previewKind === 'html'
+              ? { kind: 'text', relative_path: 'site/index.html', size_bytes: 100, content: '<h1>Site local</h1>', render_url: 'http://forgepreview.localhost/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/index%2Ehtml' }
+            : window.previewKind === 'markdown'
+              ? { kind: 'text', relative_path: 'notes.md', size_bytes: 100, content: '# Resultado\n- **Item** seguro\n<script>não executar</script>\n[fora](https://outside.example/)' }
+            : { kind: 'text', relative_path: 'result.txt', size_bytes: 16, content: window.previewContent || '<script>primeiro</script>' };
+        }
       } } };
     });
     await projectsPage.goto(`${url}#projects`);
     if (process.env.FORGE_PROJECTS_SCREENSHOT) await projectsPage.screenshot({ path: process.env.FORGE_PROJECTS_SCREENSHOT, fullPage: true });
     assert.equal(await projectsPage.locator('#projects-empty').isVisible(), true);
     await projectsPage.getByRole('link', { name: 'Abrir outro projeto' }).click();
+    await projectsPage.locator('#workspace').waitFor({ state: 'visible' });
+    assert.equal(await projectsPage.getByRole('button', { name: 'Continuar nesta pasta' }).isVisible(), true);
     await projectsPage.evaluate(() => { window.folderChoice = 'D:\\one'; });
     await projectsPage.getByRole('button', { name: 'Escolher pasta' }).click();
-    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto encontrado' }).waitFor();
+    await projectsPage.locator('#project-status').filter({ hasText: 'Pasta escolhida' }).waitFor();
     assert.equal(await projectsPage.locator('#project-root').inputValue(), 'D:\\one');
+    assert.deepEqual(await projectsPage.evaluate(() => window.projectChecks), []);
+    await projectsPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await projectsPage.locator('#new-conversation-choice').isHidden(), true, 'A project without a known conversation must not offer another one');
+    assert.deepEqual(await projectsPage.evaluate(() => window.startCalls), ['D:\\one']);
+    assert.equal(await projectsPage.locator('#project-setup').evaluate(node => node.open), false);
+    assert.equal(await projectsPage.getByRole('heading', { name: 'Seu projeto' }).isVisible(), true);
+    assert.equal(await projectsPage.locator('#project-step').textContent(), 'PROJETO EM USO');
+    assert.equal(await projectsPage.locator('#workspace-title').textContent(), 'one');
+    assert.equal(await projectsPage.locator('#project-name').textContent(), 'one');
+    assert.equal(await projectsPage.locator('#confirmed-project-id').textContent(), 'first-project');
+    assert.equal(await projectsPage.locator('#workspace-back').getAttribute('href'), '#projects');
+    assert.equal(await projectsPage.locator('#workspace-back-label').textContent(), 'Voltar aos projetos');
+    assert.equal(await projectsPage.locator('nav a[aria-current="page"]').textContent(), 'Minha conversa');
+    assert.equal(await projectsPage.evaluate(() => document.activeElement?.id), 'message-text');
+    assert.equal(await projectsPage.locator('#project-location').evaluate(node => node.open), false);
+    assert.equal(await projectsPage.locator('#confirmed-root').isVisible(), false);
+    await projectsPage.locator('#project-location summary').click();
+    assert.equal(await projectsPage.locator('#confirmed-root').textContent(), 'D:\\one');
+    assert.equal(await projectsPage.locator('#confirmed-root').isVisible(), true);
+    await projectsPage.locator('#project-location summary').click();
+    assert.equal(await projectsPage.locator('#project-preview').isVisible(), true);
+    assert.equal(await projectsPage.locator('.preview-empty').isVisible(), true, 'An actual empty state precedes any local result');
+    assert.equal(await projectsPage.evaluate(() => document.querySelector('.preview').getBoundingClientRect().top < document.querySelector('.project').getBoundingClientRect().top), true, 'The preview stays above project details before a file is chosen');
+    assert.equal(await projectsPage.locator('#refresh-preview').isVisible(), false, 'No refresh action before choosing a file');
+    assert.equal(await projectsPage.locator('#project-record').isVisible(), true);
+    assert.equal(await projectsPage.locator('.project #project-record').count(), 0, 'Record is a separate panel, not folder setup');
+    await projectsPage.evaluate(() => { window.previewChoice = 'D:\\one\\result.txt'; });
+    await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
+    await projectsPage.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.equal(await projectsPage.locator('#refresh-preview').isVisible(), true);
+    assert.equal(await projectsPage.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), true);
+    assert.equal(await projectsPage.evaluate(() => {
+      const preview = document.querySelector('#project-preview');
+      const heading = preview.querySelector('.preview-heading-row');
+      const result = preview.querySelector('#preview-result');
+      const tools = preview.querySelector('.preview-actions');
+      return heading.compareDocumentPosition(result) & Node.DOCUMENT_POSITION_FOLLOWING
+        ? !!(result.compareDocumentPosition(tools) & Node.DOCUMENT_POSITION_FOLLOWING)
+        : false;
+    }), true, 'The result stays ahead of file tools in reading and keyboard order');
+    assert.equal(await projectsPage.locator('.preview-intro').isVisible(), false, 'Loaded preview omits repeated setup guidance');
+    assert.equal(await projectsPage.locator('.preview-empty').isVisible(), false);
+    assert.equal(await projectsPage.evaluate(() => document.querySelector('.preview').getBoundingClientRect().top < document.querySelector('.project').getBoundingClientRect().top), true);
+    assert.equal(await projectsPage.evaluate(() => document.querySelector('#project-record').getBoundingClientRect().bottom < document.querySelector('.project').getBoundingClientRect().top), true);
+    assert.equal(await projectsPage.locator('#preview-text').textContent(), '<script>primeiro</script>');
+    assert.equal(await projectsPage.locator('#preview-result script').count(), 0);
+    assert.match(await projectsPage.locator('#preview-result').textContent(), /Publicação não verificada/);
+    await projectsPage.getByRole('button', { name: 'Abrir prévia' }).click();
+    assert.equal(await projectsPage.locator('#preview-dialog').isVisible(), true);
+    assert.equal(await projectsPage.locator('#preview-dialog-text').textContent(), '<script>primeiro</script>');
+    assert.equal(await projectsPage.locator('#preview-dialog script').count(), 0);
+    await projectsPage.keyboard.press('Escape');
+    assert.equal(await projectsPage.locator('#preview-dialog').isVisible(), false);
+    await projectsPage.evaluate(() => {
+      window.previewRequestSubmits = 0;
+      document.getElementById('message-form').addEventListener('submit', () => { window.previewRequestSubmits++; });
+    });
+    await projectsPage.locator('#message-text').fill('Mantenha a paleta atual.');
+    await projectsPage.getByRole('button', { name: 'Abrir prévia' }).click();
+    await projectsPage.getByRole('button', { name: 'Pedir mudança na conversa' }).click();
+    assert.equal(await projectsPage.locator('#preview-dialog').isVisible(), false);
+    assert.equal(await projectsPage.locator('#message-text').inputValue(), 'Mantenha a paleta atual.\nQuero mudar o arquivo result.txt: ');
+    await projectsPage.locator('#message-text').fill('Mantenha a paleta atual.');
+    await projectsPage.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
+    assert.equal(await projectsPage.locator('#message-text').inputValue(), 'Mantenha a paleta atual.\nQuero mudar o arquivo result.txt: ');
+    assert.equal(await projectsPage.evaluate(() => document.activeElement?.id), 'message-text');
+    assert.equal(await projectsPage.evaluate(() => window.previewRequestSubmits), 0);
+    if (process.env.FORGE_PREVIEW_SCREENSHOT) await projectsPage.screenshot({ path: process.env.FORGE_PREVIEW_SCREENSHOT, fullPage: true });
+    assert.equal(await projectsPage.locator('.workspace-screen .screen-heading .intro').isVisible(), false, 'Confirmed project omits repeated setup explanation');
+    assert.equal(await projectsPage.evaluate(() => {
+      const conversation = document.querySelector('.workspace.project-ready .conversation').getBoundingClientRect();
+      const composer = document.querySelector('#message-form').getBoundingClientRect();
+      return composer.bottom <= conversation.bottom && composer.left >= conversation.left && composer.right <= conversation.right;
+    }), true, 'Composer must remain inside the conversation card');
+    await projectsPage.evaluate(() => { window.previewContent = 'Atualizado'; });
+    await projectsPage.getByRole('button', { name: 'Atualizar prévia' }).click();
+    assert.equal(await projectsPage.locator('#preview-text').textContent(), 'Atualizado');
+    await projectsPage.evaluate(() => { window.previewKind = 'markdown'; window.previewChoice = 'D:\\one\\notes.md'; });
+    await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
+    await projectsPage.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.equal(await projectsPage.locator('#preview-markdown h3').textContent(), 'Resultado');
+    assert.equal(await projectsPage.locator('#preview-markdown li strong').textContent(), 'Item');
+    assert.equal(await projectsPage.locator('#preview-markdown script').count(), 0);
+    assert.equal(await projectsPage.locator('#preview-markdown a').count(), 0);
+    assert.match(await projectsPage.locator('#preview-markdown').textContent(), /\[fora\]\(https:\/\/outside\.example\/\)/);
+    assert.equal(await projectsPage.locator('#preview-text').isVisible(), false);
+    await projectsPage.getByRole('button', { name: 'Ver texto original' }).click();
+    assert.match(await projectsPage.locator('#preview-text').textContent(), /^# Resultado/);
+    assert.equal(await projectsPage.locator('#preview-markdown').isVisible(), false);
+    await projectsPage.getByRole('button', { name: 'Abrir prévia' }).click();
+    assert.equal(await projectsPage.locator('#preview-dialog-text').isVisible(), true);
+    await projectsPage.getByRole('button', { name: 'Ver leitura' }).last().click();
+    assert.equal(await projectsPage.locator('#preview-dialog-markdown h3').textContent(), 'Resultado');
+    assert.equal(await projectsPage.locator('#preview-dialog script').count(), 0);
+    await projectsPage.getByRole('button', { name: 'Fechar prévia' }).click();
+    await projectsPage.evaluate(() => { window.previewChoice = null; });
+    await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
+    assert.match(await projectsPage.locator('#preview-text').textContent(), /^# Resultado/);
+    assert.equal(await projectsPage.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), true);
+    const imageFixture = `data:image/png;base64,${(await readFile(path.join(__dirname, '..', 'ui', 'assets', 'forge.png'))).toString('base64')}`;
+    await projectsPage.evaluate(image => { window.previewKind = 'image'; window.previewImage = image; window.previewChoice = 'D:\\one\\result.png'; }, imageFixture);
+    await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
+    await projectsPage.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    await projectsPage.waitForFunction(() => document.querySelector('#preview-image').naturalWidth > 0);
+    assert.equal(await projectsPage.locator('#preview-text').isVisible(), false);
+    assert.equal(await projectsPage.locator('#preview-site-note').isVisible(), false);
+    await projectsPage.getByRole('button', { name: 'Abrir prévia' }).click();
+    await projectsPage.waitForFunction(() => document.querySelector('#preview-dialog-image').naturalWidth > 0);
+    assert.equal(await projectsPage.locator('#preview-dialog-image').isVisible(), true);
+    await projectsPage.getByRole('button', { name: 'Fechar prévia' }).click();
+    assert.equal(await projectsPage.locator('#preview-dialog').isVisible(), false);
+    let externalPreviewRequests = 0;
+    await projectsPage.route('https://outside.example/**', route => { externalPreviewRequests++; return route.abort(); });
+    await projectsPage.route('http://forgepreview.localhost/**', route => route.fulfill({
+      contentType: 'text/html',
+      headers: { 'Content-Security-Policy': "default-src 'none'; script-src 'none'; connect-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; frame-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'; sandbox" },
+      body: '<!doctype html><style>h1{color:rgb(11, 80, 34)}</style><h1>Site local</h1><script>parent.previewEscaped=true</script><img src="https://outside.example/tracker">',
+    }));
+    await projectsPage.evaluate(() => { window.previewKind = 'html'; window.previewChoice = 'D:\\one\\site\\index.html'; });
+    await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
+    await projectsPage.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.equal(await projectsPage.locator('#preview-site').isVisible(), true);
+    assert.equal(await projectsPage.locator('#preview-site-note').isVisible(), true);
+    await projectsPage.frameLocator('#preview-site').getByRole('heading', { name: 'Site local' }).waitFor();
+    if (process.env.FORGE_HTML_SCREENSHOT) await projectsPage.screenshot({ path: process.env.FORGE_HTML_SCREENSHOT, fullPage: true });
+    assert.equal(await projectsPage.frameLocator('#preview-site').locator('h1').evaluate(node => getComputedStyle(node).color), 'rgb(11, 80, 34)');
+    assert.equal(await projectsPage.evaluate(() => window.previewEscaped), undefined);
+    assert.equal(externalPreviewRequests, 0);
+    await projectsPage.getByRole('button', { name: 'Ver código' }).click();
+    assert.equal(await projectsPage.locator('#preview-site').isVisible(), false);
+    assert.equal(await projectsPage.locator('#preview-text').textContent(), '<h1>Site local</h1>');
+    await projectsPage.getByRole('button', { name: 'Abrir prévia' }).click();
+    assert.equal(await projectsPage.locator('#preview-dialog-text').isVisible(), true);
+    await projectsPage.getByRole('button', { name: 'Ver prévia visual' }).last().click();
+    assert.equal(await projectsPage.locator('#preview-dialog-site').isVisible(), true);
+    assert.equal(await projectsPage.locator('#preview-dialog-more').isVisible(), true);
+    assert.equal(await projectsPage.locator('#preview-dialog-site').evaluate(node => getComputedStyle(node).pointerEvents), 'none');
+    await projectsPage.getByRole('button', { name: 'Mostrar mais da página' }).click();
+    assert.equal(await projectsPage.locator('#preview-dialog-site').evaluate(node => node.style.height), '1360px');
+    await projectsPage.getByRole('button', { name: 'Ver código' }).last().click();
+    assert.equal(await projectsPage.locator('#preview-dialog-more').isVisible(), false);
+    await projectsPage.getByRole('button', { name: 'Fechar prévia' }).click();
+    await projectsPage.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await projectsPage.evaluate(() => {
+      const project = document.querySelector('.project').getBoundingClientRect();
+      const chat = document.querySelector('.conversation').getBoundingClientRect();
+      const preview = document.querySelector('.preview').getBoundingClientRect();
+      const record = document.querySelector('#project-record').getBoundingClientRect();
+      return chat.bottom < preview.top && preview.bottom < record.top && record.bottom < project.top;
+    }), true);
+    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['conversation', 'project-preview', 'project-record', 'project']);
+    assert.equal(await projectsPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await projectsPage.setViewportSize({ width: 1280, height: 720 });
+    assert.equal(await projectsPage.evaluate(() => {
+      const preview = document.querySelector('.preview').getBoundingClientRect();
+      const record = document.querySelector('#project-record').getBoundingClientRect();
+      const project = document.querySelector('.project').getBoundingClientRect();
+      return preview.bottom < record.top && record.bottom < project.top;
+    }), true, 'The record precedes secondary folder controls beside the conversation');
+    await projectsPage.evaluate(() => { window.previewChoice = 'D:\\outside.txt'; });
+    await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
+    await projectsPage.locator('#preview-status').filter({ hasText: 'não pertence ao projeto' }).waitFor();
+    assert.equal(await projectsPage.locator('#preview-result').isVisible(), false);
+    assert.equal(await projectsPage.locator('#open-preview').isHidden(), true);
+    assert.equal(await projectsPage.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), false);
+    assert.deepEqual(await projectsPage.evaluate(() => window.previewReads.map(read => read.projectRoot)), ['D:\\one', 'D:\\one', 'D:\\one', 'D:\\one', 'D:\\one', 'D:\\one']);
+    if (process.env.FORGE_CONFIRMED_SCREENSHOT) await projectsPage.screenshot({ path: process.env.FORGE_CONFIRMED_SCREENSHOT, fullPage: true });
+    await openProjectSetup(projectsPage);
     await projectsPage.evaluate(() => { window.folderChoice = null; });
     await projectsPage.getByRole('button', { name: 'Escolher pasta' }).click();
     await projectsPage.locator('#project-status').filter({ hasText: 'Seleção cancelada' }).waitFor();
@@ -113,31 +342,45 @@ const assets = new Map([
     await projectsPage.locator('#project-status').filter({ hasText: 'Não foi possível abrir' }).waitFor();
     assert.equal(await projectsPage.locator('#project-root').inputValue(), 'D:\\one');
     await projectsPage.evaluate(() => { window.folderError = false; });
+    await projectsPage.locator('#project-setup summary').click();
     await projectsPage.getByRole('link', { name: 'Meus projetos' }).click();
     assert.equal(await projectsPage.locator('.recent-project').count(), 1);
     assert.equal(await projectsPage.locator('#projects-empty').isHidden(), true);
+    await projectsPage.locator('nav a[data-route="workspace"]').click();
+    assert.equal(await projectsPage.locator('#project-setup').evaluate(node => node.open), false);
+    await projectsPage.getByRole('link', { name: 'Meus projetos' }).click();
     if (process.env.FORGE_PROJECTS_SCREENSHOT) {
       await projectsPage.screenshot({ path: process.env.FORGE_PROJECTS_SCREENSHOT, fullPage: true });
     }
     await projectsPage.reload();
     assert.equal(await projectsPage.locator('.recent-project').count(), 1);
     await projectsPage.getByRole('button', { name: 'Abrir first-project' }).click();
-    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto encontrado' }).waitFor();
+    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
     assert.deepEqual(await projectsPage.evaluate(() => window.projectChecks), ['D:\\one']);
+    await openProjectSetup(projectsPage);
     await projectsPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\two');
-    await projectsPage.getByRole('button', { name: 'Conferir projeto' }).click();
-    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto encontrado' }).waitFor();
+    assert.equal(await projectsPage.locator('#project-preview').isVisible(), false);
+    assert.equal(await projectsPage.locator('#workspace-title').textContent(), 'Vamos dar vida à sua ideia.');
+    assert.equal(await projectsPage.locator('#workspace-back').getAttribute('href'), '#explore');
+    await projectsPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await projectsPage.locator('#workspace-title').textContent(), 'two');
+    assert.equal(await projectsPage.locator('#project-name').textContent(), 'two');
+    assert.equal(await projectsPage.locator('#confirmed-project-id').textContent(), 'second-project');
     await projectsPage.getByRole('link', { name: 'Meus projetos' }).click();
     assert.equal(await projectsPage.locator('.recent-project').count(), 2);
     await projectsPage.locator('#project-root').evaluate(input => { input.disabled = true; });
     await projectsPage.getByRole('button', { name: 'Abrir first-project' }).click();
-    await projectsPage.locator('#projects-status').filter({ hasText: 'Encerre a conversa atual' }).waitFor();
+    await projectsPage.locator('#projects-status').filter({ hasText: 'Não foi possível trocar' }).waitFor();
     assert.equal(await projectsPage.locator('#project-root').inputValue(), 'D:\\two');
     await projectsPage.locator('#project-root').evaluate(input => { input.disabled = false; });
     await projectsPage.evaluate(() => { window.rejectProject = true; });
     await projectsPage.getByRole('button', { name: 'Abrir first-project' }).click();
     await projectsPage.locator('#project-status').filter({ hasText: 'não está disponível' }).waitFor();
     assert.equal(await projectsPage.locator('#project-result').isHidden(), true);
+    assert.equal(await projectsPage.locator('#project-setup').evaluate(node => node.open), true);
+    assert.equal(await projectsPage.locator('#workspace-title').textContent(), 'Vamos dar vida à sua ideia.');
+    assert.equal(await projectsPage.locator('#workspace-back').getAttribute('href'), '#explore');
     assert.equal(await projectsPage.locator('#connect-agent').isDisabled(), true);
     await projectsPage.getByRole('link', { name: 'Meus projetos' }).click();
     await projectsPage.getByRole('button', { name: 'Remover first-project da lista' }).click();
@@ -145,9 +388,10 @@ const assets = new Map([
     assert.equal(await projectsPage.locator('#projects-empty').isVisible(), true);
     await projectsPage.evaluate(() => { Storage.prototype.setItem = () => { throw new Error('Unavailable'); }; window.rejectProject = false; });
     await projectsPage.getByRole('link', { name: 'Abrir outro projeto' }).click();
+    assert.equal(await projectsPage.locator('#project-setup').evaluate(node => node.open), true);
     await projectsPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\three');
-    await projectsPage.getByRole('button', { name: 'Conferir projeto' }).click();
-    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto encontrado' }).waitFor();
+    await projectsPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
     await projectsPage.getByRole('link', { name: 'Meus projetos' }).click();
     assert.equal(await projectsPage.locator('.recent-project').count(), 1);
     await projectsPage.locator('#projects-status').filter({ hasText: 'Não foi possível guardar' }).waitFor();
@@ -155,8 +399,168 @@ const assets = new Map([
       await projectsPage.setViewportSize({ width, height: 844 });
       assert.equal(await projectsPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     }
+    await projectsPage.getByRole('link', { name: 'Abrir outro projeto' }).click();
+    await projectsPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\new');
+    await projectsPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await projectsPage.locator('#project-result-label').textContent(), 'PROJETO PRONTO');
+    assert.equal(await projectsPage.locator('#conversation-step').textContent(), 'SUA CONVERSA');
+    assert.deepEqual(await projectsPage.evaluate(() => window.startCalls), ['D:\\two', 'D:\\three', 'D:\\new']);
+    assert.equal(await projectsPage.locator('#connect-agent').isEnabled(), true);
+    assert.equal(await projectsPage.locator('#message-text').isEnabled(), true);
+    assert.equal(await projectsPage.locator('#send-message').isEnabled(), true);
+    assert.equal(await projectsPage.locator('#agent-access-note').isVisible(), true);
+    assert.match(await projectsPage.locator('#agent-access-note').textContent(), /fora da pasta escolhida.*sem pedir confirmação|sem pedir confirmação.*fora da pasta escolhida/);
+    await projectsPage.locator('#conversation-picker summary').click();
+    assert.equal(await projectsPage.locator('#connect-help').isVisible(), true);
+    const composerSize = await projectsPage.locator('#message-text').evaluate(node => node.getBoundingClientRect().height);
+    await projectsPage.locator('#message-text').fill('Uma ideia com detalhes.\n'.repeat(10));
+    assert.ok(await projectsPage.locator('#message-text').evaluate(node => node.getBoundingClientRect().height) > composerSize, 'Long drafts should expand the composer before scrolling');
+    await projectsPage.locator('#message-text').fill('');
+    await openProjectSetup(projectsPage);
+    const longFolder = 'projeto-' + 'criacao'.repeat(32);
+    await projectsPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill(`D:\\${longFolder}`);
+    await projectsPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    await projectsPage.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await projectsPage.locator('#workspace-title').textContent(), longFolder);
+    assert.equal(await projectsPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await projectsPage.close();
     console.log('PASS: My Projects empty state, verified shortcuts, reload, revalidation, unavailable project, removal, storage failure and narrow layout.');
+    const conversationListPage = await browser.newPage();
+    await conversationListPage.addInitScript(() => {
+      window.listCalls = []; window.connectCalls = []; window.sendCalls = 0; window.failSelection = true; window.failPage = false;
+      window.__TAURI__ = { core: {
+        Channel: class {},
+        invoke: async (command, args) => {
+          if (command === 'app_info') return { name: 'Forge', version: '0.1.1' };
+          if (command === 'start_project') return { project_id: 'list-project', project_root: args.projectRoot };
+          if (command === 'list_conversations') {
+            window.listCalls.push(args);
+            if (args.cursor && window.failPage) throw 'Página indisponível no teste.';
+            return args.cursor
+              ? { conversations: [
+                { id: 'older', title: '<script>literal</script>', updated_at: 100, active: false },
+                { id: 'oldest', title: 'Outra conversa', updated_at: 90, active: false },
+              ], next_cursor: null }
+              : { conversations: [
+                { id: 'busy', title: 'Resposta em andamento', updated_at: 120, active: true },
+                { id: 'older', title: '<script>literal</script>', updated_at: 100, active: false },
+              ], next_cursor: 'next-page' };
+          }
+          if (command === 'connect_agent') {
+            window.connectCalls.push(args.threadId);
+            if (window.failSelection) throw 'A conversa não abriu no teste.';
+            return { thread_id: args.threadId, resumed: true, messages: [{ id: 'old-user', role: 'user', text: 'Texto anterior', incomplete: false }] };
+          }
+          if (command === 'disconnect_agent') return;
+          if (command === 'send_message') window.sendCalls++;
+        },
+      } };
+    });
+    await conversationListPage.goto(workspaceUrl);
+    assert.equal(await conversationListPage.locator('#conversation-picker').isHidden(), true);
+    await conversationListPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\list-project');
+    await conversationListPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await conversationListPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    await conversationListPage.locator('#conversation-picker summary').click();
+    await conversationListPage.getByRole('button', { name: 'Buscar conversas' }).click();
+    await conversationListPage.locator('.conversation-choice').first().waitFor();
+    assert.equal(await conversationListPage.locator('.conversation-choice').count(), 2);
+    assert.equal(await conversationListPage.getByRole('button', { name: 'Em andamento: Resposta em andamento' }).isDisabled(), true);
+    assert.equal(await conversationListPage.locator('#conversation-list script').count(), 0);
+    await conversationListPage.waitForFunction(() => getComputedStyle(document.querySelector('.conversation-choice-description strong')).webkitLineClamp === '2');
+    await conversationListPage.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await conversationListPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await conversationListPage.setViewportSize({ width: 1180, height: 844 });
+    await conversationListPage.getByRole('button', { name: 'Retomar: <script>literal</script>' }).click();
+    await conversationListPage.locator('#agent-status').filter({ hasText: 'A conversa não abriu' }).waitFor();
+    assert.deepEqual(await conversationListPage.evaluate(() => window.connectCalls), ['older']);
+    assert.equal(await conversationListPage.evaluate(() => localStorage.getItem('forge.conversation.v1:["list-project","D:\\\\list-project"]')), null);
+    await conversationListPage.locator('#conversation-picker summary').click();
+    await conversationListPage.evaluate(() => { window.failPage = true; });
+    await conversationListPage.getByRole('button', { name: 'Próxima página' }).click();
+    await conversationListPage.locator('#conversation-list-status').filter({ hasText: 'Página indisponível' }).waitFor();
+    assert.equal(await conversationListPage.locator(':focus').getAttribute('id'), 'conversation-list-status');
+    assert.equal(await conversationListPage.locator('.conversation-choice').count(), 2);
+    assert.equal(await conversationListPage.getByRole('button', { name: 'Em andamento: Resposta em andamento' }).count(), 1);
+    await conversationListPage.evaluate(() => { window.failPage = false; });
+    await conversationListPage.getByRole('button', { name: 'Próxima página' }).click();
+    await conversationListPage.locator('#conversation-list-status').filter({ hasText: 'Página 2' }).waitFor();
+    assert.equal(await conversationListPage.locator('.conversation-choice').count(), 2);
+    assert.equal(await conversationListPage.getByRole('button', { name: 'Em andamento: Resposta em andamento' }).count(), 0);
+    await conversationListPage.getByRole('button', { name: 'Página anterior' }).click();
+    await conversationListPage.locator('#conversation-list-status').filter({ hasText: 'Página 1' }).waitFor();
+    assert.equal(await conversationListPage.getByRole('button', { name: 'Em andamento: Resposta em andamento' }).count(), 1);
+    await conversationListPage.getByRole('button', { name: 'Próxima página' }).click();
+    await conversationListPage.locator('#conversation-list-status').filter({ hasText: 'Página 2' }).waitFor();
+    assert.deepEqual(await conversationListPage.evaluate(() => window.listCalls.map(call => call.cursor)), [null, 'next-page', 'next-page', null, 'next-page']);
+    await conversationListPage.evaluate(() => { window.failSelection = false; });
+    await conversationListPage.getByRole('button', { name: 'Retomar: Outra conversa' }).click();
+    await conversationListPage.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.equal(await conversationListPage.locator(':focus').getAttribute('id'), 'agent-status');
+    assert.deepEqual(await conversationListPage.evaluate(() => window.connectCalls), ['older', 'oldest']);
+    assert.equal(await conversationListPage.locator('#messages article').count(), 1);
+    assert.equal(await conversationListPage.evaluate(() => window.sendCalls), 0);
+    assert.equal(await conversationListPage.locator('#conversation-picker').isHidden(), true);
+    await conversationListPage.close();
+    console.log('PASS: Codex-owned conversation list, active exclusion, safe titles, pagination, failed choice and explicit resume without sending.');
+    const pendingPage = await browser.newPage();
+    await pendingPage.addInitScript(() => {
+      window.__TAURI__ = { core: { invoke: async (command, args) => {
+        if (command === 'app_info') return { name: 'Forge', version: '0.1.1' };
+        if (command === 'start_project') return new Promise(resolve => { window.finishProjectLookup = () => resolve({ project_id: 'pending-project', project_root: args.projectRoot }); });
+      } } };
+    });
+    await pendingPage.goto(`${url}#workspace`);
+    await pendingPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\pending');
+    await pendingPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    assert.equal(await pendingPage.locator('#project-root').isDisabled(), true);
+    assert.equal(await pendingPage.locator('#start-project').isDisabled(), true);
+    await pendingPage.evaluate(() => window.finishProjectLookup());
+    await pendingPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    await pendingPage.close();
+    console.log('PASS: pending project lookup keeps folder and project action locked until readback.');
+    const sendFirstPage = await browser.newPage();
+    await sendFirstPage.addInitScript(() => {
+      window.connectCalls = 0;
+      window.sendCalls = 0;
+      window.connectFailure = true;
+      window.__TAURI__ = { core: {
+        Channel: class {},
+        invoke: async (command, args) => {
+          if (command === 'app_info') return { name: 'Forge', version: '0.1.1' };
+          if (command === 'start_project') return { project_id: 'send-first', project_root: args.projectRoot };
+          if (command === 'connect_agent') {
+            window.connectCalls++;
+            if (window.connectFailure) throw 'Conexão indisponível no teste';
+            return { thread_id: 'send-first-thread', messages: [], resumed: false };
+          }
+          if (command === 'send_message') window.sendCalls++;
+        },
+      } };
+    });
+    await sendFirstPage.goto(workspaceUrl);
+    assert.equal(await sendFirstPage.locator('#send-message').isDisabled(), true);
+    await sendFirstPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\send-first');
+    await sendFirstPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await sendFirstPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.match(await sendFirstPage.locator('#agent-status').textContent(), /Projeto pronto/);
+    const firstDraft = sendFirstPage.getByRole('textbox', { name: 'Sua ideia começa aqui' });
+    await firstDraft.fill('Minha primeira ideia');
+    await sendFirstPage.getByRole('button', { name: 'Enviar', exact: true }).click();
+    await sendFirstPage.locator('#agent-status').filter({ hasText: 'Conexão indisponível no teste' }).waitFor();
+    assert.equal(await firstDraft.inputValue(), 'Minha primeira ideia');
+    assert.equal(await sendFirstPage.evaluate(() => window.sendCalls), 0);
+    assert.equal(await sendFirstPage.locator('#send-message').isEnabled(), true);
+    await sendFirstPage.evaluate(() => { window.connectFailure = false; });
+    await sendFirstPage.getByRole('button', { name: 'Enviar', exact: true }).click();
+    await sendFirstPage.waitForFunction(() => window.sendCalls === 1);
+    assert.equal(await sendFirstPage.evaluate(() => window.connectCalls), 2);
+    assert.equal(await sendFirstPage.locator('#messages article[data-role="user"]').count(), 1);
+    assert.equal(await firstDraft.inputValue(), '');
+    await sendFirstPage.close();
+    console.log('PASS: first Send opens Codex once, preserves the draft on connection failure, then sends exactly once on retry.');
     const keyboardPage = await browser.newPage();
     await keyboardPage.goto(url);
     for (const selector of ['.skip', '.brand', 'nav a:first-child', 'nav a:nth-child(2)', 'nav a:nth-child(3)', 'nav a:nth-child(4)', 'nav a:last-child', '.appearance summary', '#appearance-theme', '#appearance-contrast', '.home-actions a:first-child', '.home-actions a:last-child', '.starter-card:nth-child(1) a', '.starter-card:nth-child(2) a', '.starter-card:nth-child(3) a', '#about summary']) {
@@ -171,7 +575,7 @@ const assets = new Map([
     await keyboardPage.keyboard.press('Shift+Tab');
     assert.equal(await keyboardPage.locator('.back-link').evaluate(node => node === document.activeElement), true);
     assert.ok(await keyboardPage.locator('.back-link').evaluate(node => parseFloat(getComputedStyle(node).outlineWidth) >= 3));
-    for (const selector of ['#project-root', '#browse-project', '#inspect-project', '#connection summary', '#retry', '#new-conversation']) {
+    for (const selector of ['#project-setup summary', '#project-root', '#browse-project', '#start-project', '#connection summary', '#retry', '.conversation-body']) {
       await keyboardPage.keyboard.press('Tab');
       assert.equal(await keyboardPage.locator(selector).evaluate(node => node === document.activeElement), true, `Workspace keyboard order: ${selector}`);
       assert.ok(await keyboardPage.locator(selector).evaluate(node => parseFloat(getComputedStyle(node).outlineWidth) >= 3), `Visible focus: ${selector}`);
@@ -205,7 +609,7 @@ const assets = new Map([
     await page.evaluate(() => { window.__TAURI__ = { core: { invoke: async () => ({ name: 'Forge', version: '0.1.0' }) } }; });
     await page.getByRole('button', { name: 'Verificar novamente' }).click();
     await page.getByRole('status').filter({ hasText: 'Aplicativo iniciado' }).waitFor();
-    await page.getByText('Nenhum agente conectado.', { exact: false }).waitFor();
+    await page.getByText('Escolha uma pasta para começar.', { exact: false }).waitFor();
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
     assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme), 'dark');
@@ -217,11 +621,24 @@ const assets = new Map([
         if (command === 'inspect_progress') {
           window.progressCalls = (window.progressCalls || 0) + 1;
           if (window.delayProgress) return new Promise(resolve => { window.resolveProgress = resolve; });
-          if (window.progressFailure) throw new Error('Unavailable');
-          return { status: window.progressState || 'current', phase: window.progressPhase || '1-discovery', focus: window.progressMissingFocus ? null : { title: 'Recorded task', intended_outcome: 'Accepted outcome', current_activity: 'Recorded activity', next_step: 'Recorded next step', open_decision_count: window.progressDecisionCount ?? 1 } };
+          if (window.progressFailure) throw window.progressFailure === true ? new Error('Unavailable') : window.progressFailure;
+          return {
+            status: window.progressState || 'current', phase: window.progressPhase || '1-discovery',
+            focus: window.progressMissingFocus || window.progressState === 'absent' ? null : { title: 'Recorded task', intended_outcome: 'Accepted outcome', current_activity: 'Recorded activity', next_step: 'Recorded next step', open_decision_count: window.progressDecisionCount ?? 1 },
+            accepted_direction: window.progressNoDirection ? null : { outcome: 'Create a helpful app', constraints: [window.progressConstraint || 'Keep it easy to use'], unacceptable_outcomes: ['Do not delete existing work'], open_uncertainties: [], revision: window.progressRevision || 1, revision_kind: window.progressRevisionKind || 'initial', origin: 'forge_cooperative_record' },
+            recorded_pending_count: window.progressRecordedPending ?? 0,
+            suggested_questions: window.progressSuggestedQuestions ?? [{ question: 'Which direction should we choose?', blocking: true, recommended_alternative_ref: 'simple', alternatives: [{ id: 'simple', description: 'Start simple', consequences: ['Can test sooner'] }, { id: 'rich', description: '<script>Build more</script>', consequences: ['Needs more review'] }] }],
+          };
         }
-        if (command === 'inspect_project') return { project_id: 'test-project', project_root: 'D:\\test-project' };
-          if (command === 'connect_agent') { window.agentEvents = args.events; window.connectedThread = args.threadId; return { thread_id: 'test-thread', messages: args.threadId ? [{ id: 'saved-user', role: 'user', text: 'Saved decision' }, { id: 'saved-agent', role: 'agent', text: 'Partial reply' }] : [], resumed: !!args.threadId }; }
+        if (command === 'inspect_direction_history') {
+          window.historyCalls = (window.historyCalls || 0) + 1;
+          return { earlier_count: 0, revisions: [
+            { active: false, origin: 'forge_cooperative_record', revision: 1, revision_kind: 'initial', outcome: 'Earlier direction', constraints: ['Keep files'], unacceptable_outcomes: [], accepted_at_unix: 1780000000 },
+            { active: true, origin: 'forge_cooperative_record', revision: 2, revision_kind: 'material_supersession', outcome: '<script>Current direction</script>', constraints: [], unacceptable_outcomes: ['No deletion'], accepted_at_unix: 1781000000 },
+          ] };
+        }
+        if (command === 'start_project' || command === 'inspect_project') return { project_id: 'test-project', project_root: args.projectRoot };
+          if (command === 'connect_agent') { window.agentEvents = args.events; window.connectedThread = args.threadId; return { thread_id: 'test-thread', messages: args.threadId ? [{ id: 'saved-user', role: 'user', text: 'Saved decision' }, { id: 'saved-agent', role: 'agent', text: '## Partial reply\n- Saved item' }, { id: 'saved-incomplete', role: 'agent', text: '## Still incomplete', incomplete: true }] : [], resumed: !!args.threadId }; }
         if (command === 'send_message') {
           window.sendCalls++;
           return new Promise((resolve, reject) => { window.resolveSend = resolve; window.rejectSend = reject; });
@@ -233,16 +650,84 @@ const assets = new Map([
       };
     });
     await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\test-project');
-    await page.getByRole('button', { name: 'Conferir projeto' }).click();
-    assert.equal(await page.evaluate(() => window.progressCalls || 0), 0);
+    await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await page.locator('#project-record').isVisible(), true);
+    assert.equal(await page.locator('.project #project-record').count(), 0);
+    assert.equal(await page.locator('#project-setup').evaluate(node => node.open), false);
+    assert.equal(await page.getByRole('heading', { name: 'Onde estamos' }).isVisible(), true);
+    await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
+    assert.equal(await page.evaluate(() => window.progressCalls || 0), 1);
+    assert.equal(await page.locator('#workspace-phase').textContent(), 'Etapa no registro: Descoberta');
+    assert.equal(await page.locator('#workspace-phase').isVisible(), true);
+    assert.equal(await page.locator('#record-activity').textContent(), 'Recorded activity');
+    assert.equal(await page.locator('#record-activity').isVisible(), true, 'Current recorded activity is readable without opening details');
+    assert.equal(await page.locator('#record-next').isVisible(), true, 'The recorded next step is readable without opening details');
+    assert.equal(await page.locator('#record-outcome').isVisible(), false, 'Supporting objective stays in optional details');
+    assert.equal(await page.locator('#record-outcome').textContent(), 'Accepted outcome');
+    await page.locator('#message-text').fill('Minha ideia continua aqui.');
+    await page.getByRole('button', { name: 'Entender isto na conversa' }).click();
+    assert.match(await page.locator('#message-text').inputValue(), /^Minha ideia continua aqui\.\n\nExplique em linguagem simples/);
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'message-text');
+    assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Explaining the record must not send a turn');
+    await page.locator('#message-text').fill('');
+    assert.equal(await page.locator('#record-pending').isVisible(), true);
+    assert.match(await page.locator('#record-pending').textContent(), /não são acordos/);
+    assert.match(await page.locator('#record-suggestions').textContent(), /Can test sooner/);
+    assert.match(await page.locator('#record-suggestions').textContent(), /sugestão do Forge, não uma decisão sua/);
+    assert.equal(await page.locator('#record-suggestions script').count(), 0);
+    assert.equal(await page.evaluate(() => window.historyCalls || 0), 0, 'History must be opt-in');
+    await page.locator('#direction-history summary').click();
+    await page.locator('#direction-history-status').filter({ hasText: '2 direções registradas' }).waitFor();
+    assert.equal(await page.evaluate(() => window.historyCalls), 1);
+    assert.match(await page.locator('#direction-history-list article').first().textContent(), /Direção atual/);
+    assert.match(await page.locator('#direction-history-list article').last().textContent(), /Direção anterior/);
+    await page.locator('#direction-history-list article').first().locator('summary').click();
+    assert.equal(await page.locator('#direction-history-list article').first().locator('details').evaluate(node => node.open), true);
+    assert.equal(await page.locator('#direction-history-list script').count(), 0, 'Recorded text must be literal');
+    assert.match(await page.locator('#direction-history-list').textContent(), /não prova aprovação humana independente/);
+    if (process.env.FORGE_HISTORY_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_HISTORY_SCREENSHOT, fullPage: true });
+    const questionDraft = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
+    await questionDraft.fill('Minha ideia original.');
+    await page.getByRole('button', { name: 'Conversar sobre: Which direction should we choose?' }).click();
+    assert.equal(await questionDraft.inputValue(), 'Minha ideia original.\n\nQuero conversar sobre esta pergunta do registro: Which direction should we choose?');
+    assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Preparing a suggested question must not send a turn');
+    assert.match(await page.locator('#progress-status').textContent(), /nenhuma decisão foi registrada/);
+    await questionDraft.fill('');
+    await page.getByRole('button', { name: 'Conversar sobre a opção: Start simple' }).click();
+    assert.match(await questionDraft.inputValue(), /Ainda não estou escolhendo esta opção/);
+    assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Discussing an option must not choose it or send a turn');
+    await questionDraft.fill('');
+    assert.equal(await page.locator('#record-direction').evaluate(node => node.open), false);
+    await page.locator('#record-direction summary').click();
+    assert.equal(await page.locator('#record-direction-outcome').textContent(), 'Create a helpful app');
+    assert.equal(await page.locator('#record-constraints-list li').textContent(), 'Keep it easy to use');
+    assert.equal(await page.locator('#record-constraints-list').getByText('Which direction should we choose?').count(), 0);
+    assert.match(await page.locator('#record-direction').textContent(), /não comprova aprovação humana independente/);
+    if (process.env.FORGE_DIRECTION_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_DIRECTION_SCREENSHOT, fullPage: true });
+    await page.evaluate(() => { window.progressRevision = 2; window.progressRevisionKind = 'material_supersession'; window.progressConstraint = '<script>changed</script>'; window.progressRecordedPending = 1; });
+    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+    await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
+    await page.locator('#record-direction summary').click();
+    assert.match(await page.locator('#record-revision').textContent(), /Direção revista.*revisão 2/);
+    assert.equal(await page.locator('#record-constraints-list li').textContent(), '<script>changed</script>');
+    assert.equal(await page.locator('#record-direction script').count(), 0);
+    assert.match(await page.locator('#record-pending-count').textContent(), /1 decisão pendente foi recuperada/);
     const stateNames = { current: 'Em andamento no registro', stale: 'Registro desatualizado', blocked: 'Pendência registrada', completed: 'Concluído no registro', abandoned: 'Encerrado sem concluir' };
     for (const state of ['current', 'stale', 'blocked', 'completed', 'abandoned', 'absent']) {
       await page.evaluate(state => { window.progressState = state; }, state);
       await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
       await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
-      assert.equal(await page.locator('#progress-result').isVisible(), state !== 'absent');
-      if (state === 'absent') assert.match(await page.locator('#progress-status').textContent(), /Sem trabalho registrado/);
+      assert.equal(await page.locator('#progress-result').isVisible(), true);
+      if (state === 'absent') {
+        assert.match(await page.locator('#progress-status').textContent(), /Sem trabalho registrado/);
+        assert.equal(await page.locator('#workspace-phase').isVisible(), false);
+        assert.equal(await page.locator('#record-work').isVisible(), false);
+        assert.equal(await page.locator('#record-direction').isVisible(), true);
+      }
       else {
+        assert.equal(await page.locator('#workspace-phase').isVisible(), true);
+        if (state === 'stale') assert.match(await page.locator('#workspace-phase').textContent(), /registro desatualizado/);
         assert.equal(await page.locator('#record-state').textContent(), stateNames[state]);
         assert.equal(await page.locator('#progress-result').getAttribute('data-state'), state);
         assert.equal(await page.locator('#record-phase').textContent(), 'Descoberta');
@@ -250,11 +735,20 @@ const assets = new Map([
         assert.equal(await page.locator('#record-next').textContent(), 'Recorded next step');
         assert.match(await page.locator('#record-decisions').textContent(), /1 decisão aberta/);
         if (state === 'current' && process.env.FORGE_PROGRESS_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_PROGRESS_SCREENSHOT, fullPage: true });
+        if (state === 'current') {
+          assert.equal(await page.locator('.record-more').evaluate(node => node.open), false);
+          await page.locator('.record-more summary').click();
+          assert.equal(await page.locator('#record-decisions').isVisible(), true);
+        }
       }
     }
     await page.evaluate(() => { window.progressState = 'current'; window.progressDecisionCount = 0; });
     await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
     assert.match(await page.locator('#record-decisions').textContent(), /Nenhuma decisão aberta/);
+    await page.evaluate(() => { window.progressNoDirection = true; window.progressRecordedPending = 0; window.progressSuggestedQuestions = []; });
+    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+    assert.equal(await page.locator('#record-direction').isVisible(), false);
+    assert.equal(await page.locator('#record-pending').isVisible(), false);
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.setViewportSize({ width: 1280, height: 720 });
@@ -267,28 +761,55 @@ const assets = new Map([
     await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
     await page.locator('#progress-status').filter({ hasText: 'Não foi possível consultar' }).waitFor();
     assert.equal(await page.locator('#progress-result').isVisible(), false);
+    await page.evaluate(() => { window.progressFailure = 'O Forge está ocupado. Tente consultar o registro novamente.'; });
+    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+    await page.locator('#progress-status').filter({ hasText: 'Forge está ocupado' }).waitFor();
+    assert.match(await page.locator('#progress-status').textContent(), /conversa não foi interrompida/);
+    await page.evaluate(() => { window.progressFailure = 'O estado deste projeto não está disponível. Nada foi recriado ou alterado.'; });
+    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
+    await page.locator('#progress-status').filter({ hasText: 'Nada foi recriado' }).waitFor();
+    assert.equal(await page.locator('#progress-result').isVisible(), false);
     await page.evaluate(() => { window.progressFailure = false; window.progressState = 'current'; });
     await page.evaluate(() => { window.delayProgress = true; });
     await page.getByRole('button', { name: 'Consultar registro', exact: true }).focus();
     await page.keyboard.press('Enter');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'progress-status');
+    await openProjectSetup(page);
     await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\another-project');
     await page.evaluate(() => { window.resolveProgress({ status: 'current', focus: { title: 'Obsolete response' } }); window.delayProgress = false; });
     assert.equal(await page.locator('#progress-result').isVisible(), false);
-    await page.getByRole('button', { name: 'Conferir projeto' }).click();
-    await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
-    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).focus();
+    await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
+    assert.equal(await page.locator('#record-title').textContent(), 'Recorded task');
+    await page.locator('#conversation-picker summary').click();
+    await page.getByRole('button', { name: 'Abrir conversa', exact: true }).focus();
     await page.keyboard.press('Enter');
     await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor();
+    assert.equal(await page.locator('#project-status').isHidden(), true);
+    assert.equal(await page.locator('#project-setup').isVisible(), true);
+    assert.match(await page.locator('#project-result-hint').textContent(), /Pasta confirmada/);
+    assert.equal(await page.locator('#project-result').isVisible(), true);
+    assert.equal(await page.locator('#project-title').textContent(), 'Seu projeto');
+    assert.equal(await page.locator('#conversation-step').textContent(), 'SUA CONVERSA');
+    assert.equal(await page.locator('#connect-agent').isHidden(), true);
+    assert.equal(await page.locator('#new-conversation-choice').isHidden(), true);
+    assert.equal(await page.locator('#disconnect-agent').isVisible(), true);
+    assert.match(await page.locator('#empty-conversation-description').textContent(), /Sua conversa está pronta/);
     assert.equal(await page.locator('#browse-project').isDisabled(), true);
+    assert.equal(await page.locator('#interrupt-agent').isHidden(), true, 'Idle chat should not advertise an unavailable interrupt action');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Histórico da conversa');
     await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'message-text');
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Histórico da conversa');
     await page.keyboard.press('Shift+Tab');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'disconnect-agent');
     await page.evaluate(() => { window.delayProgress = true; });
     await page.getByRole('button', { name: 'Consultar registro', exact: true }).click();
     await page.evaluate(() => { window.agentEvents.onmessage({ kind: 'running' }); window.resolveProgress({ status: 'current', focus: { title: 'Obsolete response' } }); window.delayProgress = false; });
     assert.equal(await page.locator('#progress-result').isVisible(), false);
+    assert.equal(await page.getByRole('button', { name: 'Consultar registro', exact: true }).isEnabled(), true);
     for (const [kind, state] of [['running', 'working'], ['completed', 'completed'], ['interrupted', 'interrupted'], ['failed', 'error']]) {
       await page.evaluate(kind => window.agentEvents.onmessage({ kind }), kind);
       assert.equal(await page.locator('#progress-result').isVisible(), false);
@@ -296,7 +817,52 @@ const assets = new Map([
       assert.equal(await page.locator('#agent-status .status-icon').getAttribute('aria-hidden'), 'true');
       assert.ok((await page.locator('#agent-status span:last-child').textContent()).length > 15);
     }
-    const composer = page.getByRole('textbox', { name: 'Conte sua ideia' });
+    await page.evaluate(() => {
+      window.linkPreviewReads = [];
+      const previous = window.__TAURI__.core.invoke;
+      window.__TAURI__.core.invoke = (command, args) => {
+        if (command !== 'inspect_preview') return previous(command, args);
+        window.linkPreviewReads.push(args);
+        if (args.filePath.includes('outside')) return Promise.reject('Este arquivo não pertence ao projeto aberto.');
+        return Promise.resolve({ kind: 'text', content: 'Arquivo real do projeto', relative_path: 'result.txt', size_bytes: 23 });
+      };
+    });
+    const formattedReply = '# Plano\n- **Criar** uma tela\n- Mostrar `resultado`\n\n```rust\nfn main() { println!("<script>"); }\n```\n> Confirme o **resultado** antes de publicar.\n\n| Etapa | Situação | Observação |\n| --- | --- | --- |\n| Tela | `pronta` | Leia antes de publicar |\n| Arquivo | [abrir](result.txt) | Local |\n\n---\n<script>alert(1)</script>\n[arquivo](result.txt) [fora](D:/outside.md) [web](https://example.com) [abrir](javascript:alert(1))';
+    await page.evaluate(text => window.agentEvents.onmessage({ kind: 'delta', id: 'formatted-reply', text }), formattedReply.slice(0, 24));
+    assert.equal(await page.locator('#messages article[data-role="agent"] h3').count(), 0);
+    await page.evaluate(text => window.agentEvents.onmessage({ kind: 'message', id: 'formatted-reply', text }), formattedReply);
+    const formattedBubble = page.locator('#messages article[data-role="agent"]').last();
+    assert.equal(await formattedBubble.locator('h3').textContent(), 'Plano');
+    assert.equal(await formattedBubble.locator('li').count(), 2);
+    assert.equal(await formattedBubble.locator('li strong').textContent(), 'Criar');
+    assert.notEqual(await formattedBubble.locator('li strong').evaluate(node => getComputedStyle(node).display), 'block');
+    assert.match(await formattedBubble.locator('pre code').textContent(), /fn main/);
+    assert.match(await formattedBubble.locator('blockquote').textContent(), /Confirme o resultado/);
+    assert.equal(await formattedBubble.locator('table th').allTextContents().then(values => values.join('|')), 'Etapa|Situação|Observação');
+    assert.equal(await formattedBubble.locator('table tbody tr').count(), 2);
+    assert.equal(await formattedBubble.locator('hr').count(), 1);
+    if (process.env.FORGE_FORMATTED_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_FORMATTED_SCREENSHOT, fullPage: true });
+    assert.equal(await formattedBubble.locator('script, a[href^="javascript:"]').count(), 0);
+    assert.equal(await formattedBubble.locator('.message-file-link').count(), 3, 'Only project-file candidates become actions');
+    assert.match(await formattedBubble.textContent(), /\[web\]\(https:\/\/example.com\)/);
+    assert.match(await formattedBubble.textContent(), /<script>alert\(1\)<\/script>/);
+    await page.getByRole('button', { name: 'Ver texto original' }).click();
+    assert.equal(await formattedBubble.locator('pre.message-raw').textContent(), formattedReply);
+    await page.getByRole('button', { name: 'Ver texto formatado' }).click();
+    assert.equal(await formattedBubble.locator('h3').textContent(), 'Plano');
+    await formattedBubble.getByRole('button', { name: 'Ver arquivo local: arquivo' }).click();
+    await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.equal(await page.locator('#preview-text').textContent(), 'Arquivo real do projeto');
+    assert.deepEqual(await page.evaluate(() => window.linkPreviewReads[0]), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\result.txt' });
+    await formattedBubble.getByRole('button', { name: 'Ver arquivo local: fora' }).click();
+    await page.locator('#preview-status').filter({ hasText: 'não pertence ao projeto' }).waitFor();
+    assert.equal(await page.locator('#preview-result').isVisible(), false);
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    assert.ok(await formattedBubble.locator('.message-table-scroll').evaluate(node => node.scrollWidth > node.clientWidth), 'A wide response table should scroll within its message');
+    assert.ok(await formattedBubble.locator('pre').evaluate(node => parseFloat(getComputedStyle(node).fontSize) >= 18));
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const composer = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
     await composer.fill('🎨'.repeat(17000));
     await page.getByRole('button', { name: 'Enviar', exact: true }).click();
     assert.equal(await page.evaluate(() => window.sendCalls), 0);
@@ -310,6 +876,16 @@ const assets = new Map([
     assert.equal(await page.evaluate(() => document.activeElement.id), 'agent-status');
     assert.equal(await page.locator('#agent-status').evaluate(node => { const box = node.getBoundingClientRect(); return box.bottom > 0 && box.top < innerHeight; }), true);
     await page.evaluate(() => window.agentEvents.onmessage({ kind: 'running' }));
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Histórico da conversa');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Tabela da resposta');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Ver arquivo local: abrir');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Ver arquivo local: arquivo');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Ver arquivo local: fora');
     await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'interrupt-agent');
     await page.keyboard.press('Enter');
@@ -326,14 +902,26 @@ const assets = new Map([
     assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isDisabled(), true);
     await page.evaluate(() => window.resolveDisconnect());
     await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
+    assert.equal(await page.locator('#project-status').isVisible(), true);
+    assert.equal(await page.locator('#project-setup').isVisible(), true);
+    await page.locator('#conversation-picker summary').click();
+    assert.equal(await page.locator('#connect-agent').isVisible(), true);
+    assert.equal(await page.locator('#new-conversation-choice').isVisible(), true);
+    assert.equal(await page.locator('#disconnect-agent').isHidden(), true);
     await page.evaluate(() => { window.delayDisconnect = false; });
-    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
     assert.equal(await page.evaluate(() => window.connectedThread), 'test-thread');
     assert.match(await page.locator('#messages').textContent(), /Saved decision/);
     assert.match(await page.locator('#messages').textContent(), /Partial reply/);
+    assert.equal(await page.locator('#messages article[data-role="agent"] .message-avatar img').count(), 2);
+    assert.equal(await page.locator('#messages article[data-role="agent"] h4').textContent(), 'Partial reply');
+    assert.equal(await page.locator('#messages article[data-role="agent"]').last().locator('h4').count(), 0);
+    assert.equal(await page.locator('#messages article[data-role="user"] .message-avatar').getAttribute('aria-hidden'), 'true');
+    if (process.env.FORGE_CONVERSATION_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_CONVERSATION_SCREENSHOT, fullPage: true });
     await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
     await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
+    await page.locator('#conversation-picker summary').click();
     await page.getByLabel('Começar outra conversa', { exact: true }).check();
     await page.evaluate(() => {
       const invoke = window.__TAURI__.core.invoke;
@@ -348,11 +936,11 @@ const assets = new Map([
       window.beforeBookmarkSet = Storage.prototype.setItem;
       Storage.prototype.setItem = () => { throw new Error('disk unavailable'); };
     });
-    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Não foi possível salvar o acesso' }).waitFor();
     assert.equal(await page.evaluate(() => window.connectedThread), null);
     await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
-    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
     assert.equal(await page.evaluate(() => window.connectedThread), 'new-thread');
     await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
@@ -363,11 +951,12 @@ const assets = new Map([
         return window.beforeBookmarkInvoke(command, args);
       };
     });
-    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Saved conversation unavailable' }).waitFor();
-    assert.equal(await composer.isDisabled(), true);
+    assert.equal(await composer.isEnabled(), true);
+    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isEnabled(), true);
     await page.evaluate(() => { window.__TAURI__.core.invoke = window.beforeBookmarkInvoke; });
-    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
     console.log('PASS: restored transcript, explicit new conversation, failed save keeps latest session bookmark, unavailable resume never silently starts anew.');
     const disconnectsBeforeRejection = await page.evaluate(() => window.disconnectCalls);
@@ -376,7 +965,42 @@ const assets = new Map([
     await page.evaluate(() => window.rejectSend('Test rejection'));
     await page.locator('#agent-status').filter({ hasText: 'Test rejection' }).waitFor();
     assert.equal(await page.evaluate(() => window.disconnectCalls), disconnectsBeforeRejection + 1);
-    assert.equal(await page.getByRole('button', { name: 'Conectar Codex', exact: true }).isEnabled(), true);
+    assert.equal(await page.locator('#connect-agent').isEnabled(), true);
+    assert.equal(await page.locator('#messages article[data-role="user"]').last().getAttribute('data-delivery'), 'unconfirmed');
+    assert.match(await page.locator('#messages article[data-role="user"]').last().textContent(), /envio não confirmado/);
+    assert.equal(await composer.inputValue(), 'Rejected request');
+    assert.match(await page.locator('#composer-help').textContent(), /último envio não foi confirmado/);
+    const sendsBeforeReview = await page.evaluate(() => window.sendCalls);
+    await page.getByRole('button', { name: 'Enviar', exact: true }).click();
+    await page.locator('#agent-status').filter({ hasText: 'confira o histórico' }).waitFor();
+    assert.equal(await page.evaluate(() => window.sendCalls), sendsBeforeReview, 'An unconfirmed send must not retry automatically');
+    assert.equal(await page.locator('#conversation-picker').evaluate(node => node.open), true, 'Recovery must reveal the history controls');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'connect-agent');
+    if (!await page.locator('#conversation-picker').evaluate(node => node.open)) await page.locator('#conversation-picker summary').click();
+    await page.getByLabel('Começar outra conversa').check();
+    await openConversation(page);
+    await page.locator('#agent-status').filter({ hasText: 'Retome a conversa anterior' }).waitFor();
+    assert.equal(await page.evaluate(() => window.sendCalls), sendsBeforeReview);
+    await page.getByLabel('Começar outra conversa').uncheck();
+    await page.evaluate(() => {
+      const invoke = window.__TAURI__.core.invoke;
+      window.__TAURI__.core.invoke = async (command, args) => {
+        if (command === 'connect_agent') return { thread_id: 'different-thread', messages: [], resumed: false };
+        return invoke(command, args);
+      };
+      window.restoreResumeInvoke = invoke;
+    });
+    await openConversation(page);
+    await page.locator('#agent-status').filter({ hasText: 'não confirmou a retomada' }).waitFor();
+    assert.equal(await page.evaluate(() => window.sendCalls), sendsBeforeReview);
+    await page.evaluate(() => { window.__TAURI__.core.invoke = window.restoreResumeInvoke; });
+    await openConversation(page);
+    await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.equal(await page.evaluate(() => window.connectedThread), 'test-thread');
+    assert.doesNotMatch(await page.locator('#composer-help').textContent(), /último envio não foi confirmado/);
+    assert.equal(await page.evaluate(() => window.sendCalls), sendsBeforeReview, 'Reviewing history must not send a turn');
+    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    console.log('PASS: rejected send remains unconfirmed and cannot silently resend before explicit history review.');
     await page.evaluate(() => {
       const invoke = window.__TAURI__.core.invoke;
       window.__TAURI__.core.invoke = async (command, args) => {
@@ -387,7 +1011,7 @@ const assets = new Map([
         return invoke(command, args);
       };
     });
-    await page.getByRole('button', { name: 'Conectar Codex', exact: true }).click();
+    await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'A conexão foi encerrada' }).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true);
     assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isEnabled(), true);
@@ -451,6 +1075,96 @@ const assets = new Map([
     await page.getByLabel('Tema', { exact: true }).selectOption('light');
     await page.locator('#appearance-status').filter({ hasText: 'não foi possível salvar' }).waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light');
+    // A reload discards the in-page protocol double above. Establish a fresh,
+    // connected workspace specifically for the project-switch contract.
+    await page.goto(workspaceUrl);
+    await page.evaluate(() => {
+      window.disconnectCalls = 0;
+      window.__TAURI__ = { core: {
+        Channel: class {},
+        invoke: async (command, args) => {
+          if (command === 'start_project') return { project_id: 'test-project', project_root: args.projectRoot };
+          if (command === 'connect_agent') {
+            window.agentEvents = args.events;
+            return { thread_id: 'switch-test-thread', messages: [], resumed: false };
+          }
+          if (command === 'disconnect_agent') window.disconnectCalls++;
+        },
+      } };
+    });
+    await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\first-project');
+    await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    await openConversation(page);
+    await page.locator('#agent-status').filter({ hasText: 'Conectado' }).waitFor();
+    const disconnectsBeforeSwitch = await page.evaluate(() => window.disconnectCalls);
+    await page.evaluate(() => window.agentEvents.onmessage({ kind: 'running' }));
+    page.once('dialog', dialog => dialog.dismiss());
+    await page.locator('#project-setup summary').click();
+    assert.equal(await page.locator('#project-setup').evaluate(node => node.open), false);
+    assert.equal(await page.evaluate(() => window.disconnectCalls), disconnectsBeforeSwitch);
+    if (await page.locator('.appearance').evaluate(node => node.open)) await page.locator('.appearance summary').click();
+    await page.getByRole('link', { name: 'Meus projetos' }).click();
+    page.once('dialog', dialog => dialog.dismiss());
+    await page.getByRole('link', { name: 'Abrir outro projeto' }).click();
+    assert.equal(await page.evaluate(() => location.hash), '#projects');
+    assert.equal(await page.evaluate(() => window.disconnectCalls), disconnectsBeforeSwitch);
+    await page.evaluate(() => window.agentEvents.onmessage({ kind: 'completed' }));
+    await page.getByRole('link', { name: 'Abrir outro projeto' }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Desconectado' }).waitFor();
+    assert.equal(await page.locator('#project-setup').evaluate(node => node.open), true);
+    assert.equal(await page.locator('#project-root').isEnabled(), true);
+    assert.equal(await page.evaluate(() => window.disconnectCalls), disconnectsBeforeSwitch + 1);
+    await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\switched-project');
+    await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await page.locator('#confirmed-root').textContent(), 'D:\\switched-project');
+    await page.evaluate(() => {
+      const invoke = window.__TAURI__.core.invoke;
+      window.__TAURI__.core.invoke = async (command, args) => {
+        if (command === 'connect_agent') {
+          window.agentEvents = args.events;
+          return {
+            thread_id: 'long-history-fixture', resumed: true,
+            messages: Array.from({ length: 160 }, (_, index) => ({
+              id: `history-${index}`, role: index % 2 ? 'agent' : 'user',
+              text: `Histórico ${index}: ${'conteúdo legível '.repeat(20)}`, incomplete: false,
+            })),
+          };
+        }
+        return invoke(command, args);
+      };
+    });
+    await openConversation(page);
+    await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    const history = page.getByRole('region', { name: 'Histórico da conversa' });
+    assert.equal(await page.locator('#messages article').count(), 160);
+    assert.equal(await history.evaluate(node => node.scrollHeight > node.clientHeight && node.scrollHeight - node.clientHeight - node.scrollTop < 2), true);
+    assert.equal(await composer.isVisible(), true);
+    assert.equal(await composer.evaluate(node => {
+      const box = node.getBoundingClientRect();
+      return box.top < innerHeight && box.bottom > 0;
+    }), true, 'The composer should be in the viewport after a long conversation opens');
+    await page.waitForFunction(() => {
+      const box = document.getElementById('send-message').getBoundingClientRect();
+      return box.top >= 0 && box.bottom <= innerHeight + 2;
+    }, null, { timeout: 2000 });
+    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).evaluate(node => {
+      const box = node.getBoundingClientRect();
+      return box.top >= 0 && box.bottom <= innerHeight + 2;
+    }), true, 'Send should be in the viewport after a long conversation opens');
+    await history.evaluate(node => { node.scrollTop = 0; });
+    await page.evaluate(() => window.agentEvents.onmessage({ kind: 'message', id: 'new-while-reading', text: 'Resposta posterior' }));
+    assert.equal(await history.evaluate(node => node.scrollTop), 0);
+    await history.evaluate(node => { node.scrollTop = node.scrollHeight; });
+    await page.evaluate(() => window.agentEvents.onmessage({ kind: 'message', id: 'new-at-bottom', text: 'Outra resposta\n'.repeat(40) }));
+    assert.equal(await history.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop < 2), true);
+    await history.focus();
+    assert.equal(await history.evaluate(node => document.activeElement === node), true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    console.log('PASS: controlled long history stays scrollable in the conversation, resumes at latest, preserves earlier reading position, and follows new replies near the end.');
+    console.log('PASS: project switching closes an idle connection; a running turn needs confirmation and does not switch when declined.');
     console.log('PASS: appearance survives reload, overrides OS, follows OS, supports keyboard and tolerates storage failure.');
     console.log('PASS: oversized Unicode remains recoverable, completion-before-ack preserves draft, pending disconnect locks controls, send rejection releases session.');
     console.log('PASS: desktop/mobile overflow, mobile text, retry, keyboard entry, dark theme, honest agent status. Native IPC NOT_RUN.');

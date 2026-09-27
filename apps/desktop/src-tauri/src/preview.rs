@@ -1,0 +1,255 @@
+//! Bounded local preview. Project authority is still resolved by Forge.
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use serde::Serialize;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tauri_plugin_dialog::DialogExt;
+
+const MAX_IMAGE_BYTES: u64 = 5 * 1024 * 1024;
+const MAX_TEXT_BYTES: u64 = 32 * 1024;
+const MAX_HTML_BYTES: u64 = 512 * 1024;
+
+#[derive(Serialize)]
+pub struct Preview {
+    kind: &'static str,
+    content: String,
+    relative_path: String,
+    size_bytes: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    render_url: Option<String>,
+}
+
+#[tauri::command]
+pub async fn choose_preview_file(
+    window: tauri::WebviewWindow,
+) -> Result<Option<String>, &'static str> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    window
+        .dialog()
+        .file()
+        .set_title("Escolha um arquivo deste projeto")
+        .set_parent(&window)
+        .pick_file(move |selection| {
+            let _ = sender.send(selection);
+        });
+    let selection = receiver
+        .await
+        .map_err(|_| "Não foi possível abrir a seleção de arquivos.")?;
+    selection
+        .map(|path| {
+            path.into_path()
+                .map_err(|_| "O arquivo escolhido não tem um caminho local válido.")
+                .and_then(|path| {
+                    path.into_os_string()
+                        .into_string()
+                        .map_err(|_| "O arquivo escolhido não tem um caminho de texto válido.")
+                })
+        })
+        .transpose()
+}
+
+fn image_mime(extension: &str, bytes: &[u8]) -> Option<&'static str> {
+    match extension {
+        "png" if bytes.starts_with(b"\x89PNG\r\n\x1a\n") => Some("image/png"),
+        "jpg" | "jpeg" if bytes.starts_with(b"\xff\xd8\xff") => Some("image/jpeg"),
+        "gif" if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") => Some("image/gif"),
+        "webp" if bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" => {
+            Some("image/webp")
+        }
+        _ => None,
+    }
+}
+
+fn read_preview(root: &Path, requested: &Path) -> Result<Preview, &'static str> {
+    if !requested.is_absolute() {
+        return Err("Escolha um arquivo deste projeto.");
+    }
+    let root = root
+        .canonicalize()
+        .map_err(|_| "Não foi possível conferir a pasta do projeto.")?;
+    let file = requested
+        .canonicalize()
+        .map_err(|_| "Este arquivo não está mais disponível.")?;
+    let relative = file
+        .strip_prefix(&root)
+        .map_err(|_| "Este arquivo não pertence ao projeto aberto.")?;
+    let metadata = file
+        .metadata()
+        .map_err(|_| "Não foi possível ler este arquivo.")?;
+    if !metadata.is_file() {
+        return Err("Escolha um arquivo comum deste projeto.");
+    }
+    let extension = file
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    let is_image = matches!(extension.as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp");
+    let is_text = matches!(
+        extension.as_str(),
+        "txt"
+            | "md"
+            | "json"
+            | "csv"
+            | "html"
+            | "htm"
+            | "css"
+            | "js"
+            | "mjs"
+            | "ts"
+            | "rs"
+            | "py"
+            | "yaml"
+            | "yml"
+            | "toml"
+    );
+    if !is_image && !is_text {
+        return Err("Ainda não há prévia deste formato. Peça ao agente para explicar o resultado na conversa.");
+    }
+    let limit = if is_image {
+        MAX_IMAGE_BYTES
+    } else if matches!(extension.as_str(), "html" | "htm") {
+        MAX_HTML_BYTES
+    } else {
+        MAX_TEXT_BYTES
+    };
+    if metadata.len() > limit {
+        return Err("Este arquivo é grande demais para a prévia. Ele não foi alterado.");
+    }
+    let bytes = std::fs::read(&file).map_err(|_| "Não foi possível ler este arquivo.")?;
+    if bytes.len() as u64 > limit {
+        return Err("Este arquivo é grande demais para a prévia. Ele não foi alterado.");
+    }
+    let (kind, content) = if is_image {
+        let mime = image_mime(&extension, &bytes)
+            .ok_or("A imagem não corresponde ao formato esperado.")?;
+        (
+            "image",
+            format!("data:{mime};base64,{}", STANDARD.encode(&bytes)),
+        )
+    } else {
+        (
+            "text",
+            String::from_utf8(bytes).map_err(|_| "Este texto não usa UTF-8.")?,
+        )
+    };
+    Ok(Preview {
+        kind,
+        content,
+        relative_path: relative.to_string_lossy().into_owned(),
+        size_bytes: metadata.len(),
+        render_url: None,
+    })
+}
+
+#[tauri::command]
+pub async fn inspect_preview(
+    project_root: String,
+    file_path: String,
+    site: tauri::State<'_, Arc<crate::preview_site::PreviewSiteState>>,
+) -> Result<Preview, &'static str> {
+    let generation = site.clear();
+    let project = crate::project::inspect_project(project_root).await?;
+    let root = PathBuf::from(project.project_root);
+    let file = PathBuf::from(file_path);
+    let mut preview = tokio::task::spawn_blocking({
+        let root = root.clone();
+        let file = file.clone();
+        move || read_preview(&root, &file)
+    })
+    .await
+    .map_err(|_| "Não foi possível preparar a prévia.")??;
+    if file
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| {
+            value.eq_ignore_ascii_case("html") || value.eq_ignore_ascii_case("htm")
+        })
+    {
+        let canonical_root = root
+            .canonicalize()
+            .map_err(|_| "Não foi possível conferir a pasta do projeto.")?;
+        let canonical_file = file
+            .canonicalize()
+            .map_err(|_| "Este arquivo não está mais disponível.")?;
+        canonical_file
+            .strip_prefix(&canonical_root)
+            .map_err(|_| "Este arquivo não pertence ao projeto aberto.")?;
+        let site_root = canonical_file
+            .parent()
+            .ok_or("Este arquivo não tem uma pasta válida.")?
+            .to_path_buf();
+        preview.render_url = site.install(generation, site_root, &canonical_file);
+    }
+    Ok(preview)
+}
+
+#[tauri::command]
+pub fn clear_preview_site(site: tauri::State<'_, Arc<crate::preview_site::PreviewSiteState>>) {
+    site.clear();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn shows_project_text_and_reloads_updates_without_interpreting_html() {
+        let root = std::env::temp_dir().join(format!("forge-preview-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let file = root.join("page.html");
+        fs::write(&file, "<script>first</script>").unwrap();
+        let first = read_preview(&root, &file).unwrap();
+        assert_eq!(first.kind, "text");
+        assert_eq!(first.content, "<script>first</script>");
+        fs::write(&file, "<script>updated</script>").unwrap();
+        assert_eq!(
+            read_preview(&root, &file).unwrap().content,
+            "<script>updated</script>"
+        );
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn rejects_outside_files_and_unsupported_formats() {
+        let base = std::env::temp_dir().join(format!("forge-preview-scope-{}", std::process::id()));
+        let root = base.join("project");
+        fs::create_dir_all(&root).unwrap();
+        let outside = base.join("outside.txt");
+        fs::write(&outside, "private").unwrap();
+        assert!(read_preview(&root, &outside).is_err());
+        let svg = root.join("active.svg");
+        fs::write(&svg, "<svg onload='alert(1)'></svg>").unwrap();
+        assert!(read_preview(&root, &svg).is_err());
+        fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn rejects_image_extension_without_matching_signature() {
+        let root = std::env::temp_dir().join(format!("forge-preview-image-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let file = root.join("picture.png");
+        fs::write(&file, b"<svg onload='alert(1)'>").unwrap();
+        assert!(read_preview(&root, &file).is_err());
+        fs::write(&file, b"\x89PNG\r\n\x1a\nfixture").unwrap();
+        assert!(read_preview(&root, &file)
+            .unwrap()
+            .content
+            .starts_with("data:image/png;base64,"));
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn html_preview_accepts_a_bounded_page_larger_than_plain_text_limit() {
+        let root = std::env::temp_dir().join(format!("forge-preview-html-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let html = root.join("index.htm");
+        fs::write(&html, "x".repeat(40 * 1024)).unwrap();
+        assert_eq!(read_preview(&root, &html).unwrap().content.len(), 40 * 1024);
+        let text = root.join("large.txt");
+        fs::write(&text, "x".repeat(40 * 1024)).unwrap();
+        assert!(read_preview(&root, &text).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+}

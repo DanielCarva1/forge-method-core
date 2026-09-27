@@ -19,7 +19,7 @@ use tauri::{ipc::Channel, State};
 // fails through the transport's existing per-frame boundary rather than being truncated.
 const HISTORY_PAGE_LIMIT: usize = 1;
 const MAX_HISTORY_PAGES: usize = 4096;
-const MAX_HISTORY_BYTES: usize = 32 * 1024 * 1024;
+const MAX_HISTORY_BYTES: usize = 128 * 1024 * 1024;
 const HISTORY_LOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 const HISTORY_COMPATIBILITY: &str = "Não foi possível carregar o histórico paginado. Confira a conexão e se o Codex CLI está atualizado. Nada foi apagado; a conversa continua disponível pelo Codex CLI.";
 const HISTORY_INVALID: &str =
@@ -56,6 +56,126 @@ struct Session {
     activity: Arc<Mutex<Activity>>,
 }
 
+#[derive(Serialize)]
+pub struct ConversationChoice {
+    id: String,
+    title: String,
+    updated_at: u64,
+    active: bool,
+}
+
+#[derive(Serialize)]
+pub struct ConversationPage {
+    conversations: Vec<ConversationChoice>,
+    next_cursor: Option<String>,
+}
+
+const CONVERSATION_LIST_INVALID: &str =
+    "O Codex retornou uma lista de conversas incompatível. Nenhuma conversa foi aberta.";
+
+fn conversation_page(value: Value, root: &str) -> Result<ConversationPage, &'static str> {
+    let data = value["data"].as_array().ok_or(CONVERSATION_LIST_INVALID)?;
+    if data.len() > 50 {
+        return Err(CONVERSATION_LIST_INVALID);
+    }
+    let next_cursor = match value.get("nextCursor") {
+        Some(Value::Null) => None,
+        Some(Value::String(cursor)) if !cursor.is_empty() && cursor.len() <= 1024 => {
+            Some(cursor.clone())
+        }
+        _ => return Err(CONVERSATION_LIST_INVALID),
+    };
+    let mut conversations = Vec::new();
+    for thread in data {
+        match thread.get("parentThreadId") {
+            Some(Value::Null) => {}
+            Some(Value::String(_)) => continue, // Not a separate user conversation.
+            _ => return Err(CONVERSATION_LIST_INVALID),
+        }
+        let id = history::validate(thread, root, None).map_err(|_| CONVERSATION_LIST_INVALID)?;
+        if id.len() > 200 {
+            return Err(CONVERSATION_LIST_INVALID);
+        }
+        let title = thread["name"]
+            .as_str()
+            .filter(|text| !text.trim().is_empty())
+            .or_else(|| thread["preview"].as_str())
+            .ok_or(CONVERSATION_LIST_INVALID)?
+            .lines()
+            .next()
+            .unwrap_or("")
+            .trim()
+            .chars()
+            .take(160)
+            .collect::<String>();
+        let title = if title.is_empty() {
+            "Conversa sem título".into()
+        } else {
+            title
+        };
+        let updated_at = thread["updatedAt"]
+            .as_u64()
+            .filter(|time| *time <= 253_402_300_799)
+            .ok_or(CONVERSATION_LIST_INVALID)?;
+        let active = match thread["status"]["type"].as_str() {
+            Some("active") => true,
+            Some("idle" | "notLoaded" | "systemError") => false,
+            _ => return Err(CONVERSATION_LIST_INVALID),
+        };
+        conversations.push(ConversationChoice {
+            id,
+            title,
+            updated_at,
+            active,
+        });
+    }
+    Ok(ConversationPage {
+        conversations,
+        next_cursor,
+    })
+}
+
+/// Read-only list from Codex's own index, scoped to an already confirmed Forge folder.
+#[tauri::command]
+pub async fn list_conversations(
+    project_root: String,
+    cursor: Option<String>,
+) -> Result<ConversationPage, &'static str> {
+    if cursor
+        .as_ref()
+        .is_some_and(|cursor| cursor.is_empty() || cursor.len() > 1024)
+    {
+        return Err("A referência da próxima página é inválida.");
+    }
+    let project = project::inspect_project(project_root).await?;
+    let root = Path::new(&project.project_root);
+    let transport = Transport::start(&executable()?, root, |_| {})?;
+    let result = async {
+        transport
+            .request(
+                "initialize",
+                json!({"clientInfo":{"name":"forge_desktop","version":env!("CARGO_PKG_VERSION")}}),
+            )
+            .await?;
+        let account = transport
+            .request("account/read", json!({"refreshToken":false}))
+            .await?;
+        if account["account"]["type"] != "chatgpt" {
+            return Err("Entre na sua conta ChatGPT pelo Codex CLI e tente novamente.");
+        }
+        let page = transport
+            .request(
+                "thread/list",
+                json!({"cwd":project.project_root,"cursor":cursor,"limit":6,"sortKey":"updated_at","sortDirection":"desc","useStateDbOnly":true}),
+            )
+            .await?;
+        conversation_page(page, &project.project_root)
+    }
+    .await;
+    transport.shutdown().await;
+    result
+}
+
 #[derive(Default)]
 pub struct AgentState {
     session: tokio::sync::Mutex<Option<Arc<Session>>>,
@@ -69,15 +189,39 @@ pub fn begin_close(state: &AgentState) -> bool {
 
 fn executable() -> Result<PathBuf, &'static str> {
     let explicit = std::env::var_os("FORGE_CODEX_EXE").map(PathBuf::from);
+    let desktop = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .and_then(|base| desktop_codex(&base));
     let npm = std::env::var_os("APPDATA").map(|base| PathBuf::from(base).join(
         "npm/node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe"));
     let path = explicit
+        .or(desktop)
         .or(npm)
         .ok_or("Instale o Codex CLI e entre na sua conta antes de conectar.")?;
     if !path.is_absolute() || !path.is_file() {
         return Err("Codex CLI não encontrado. Confira a instalação.");
     }
     Ok(path)
+}
+
+fn desktop_codex(local_app_data: &Path) -> Option<PathBuf> {
+    let bin = local_app_data.join("OpenAI/Codex/bin");
+    std::fs::read_dir(bin)
+        .ok()?
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            if !entry.file_type().ok()?.is_dir() {
+                return None;
+            }
+            let executable = entry.path().join("codex.exe");
+            if !executable.symlink_metadata().ok()?.file_type().is_file() {
+                return None;
+            }
+            let modified = executable.metadata().ok()?.modified().ok()?;
+            Some((modified, executable))
+        })
+        .max_by_key(|(modified, _)| *modified)
+        .map(|(_, executable)| executable)
 }
 
 fn project_event(value: Value, activity: &Mutex<Activity>) -> Option<AgentEvent> {
@@ -197,7 +341,7 @@ async fn initialize(
     if account["account"]["type"] != "chatgpt" {
         return Err("Entre na sua conta ChatGPT pelo Codex CLI e tente conectar novamente.");
     }
-    let instructions = "You are the user's agent inside Forge desktop. Work only on the selected project unless the user explicitly requests otherwise. Use the installed start-forge skill once at the beginning of this conversation, and follow its structured handoff. Forge owns project continuity; use its public interfaces and do not create another state store. Explain progress in the user's language, clearly and simply. A completed response is not proof that the user's task is complete. Treat exploration as conversation, not acceptance. After interruption, reconcile actual effects before continuing. The interface currently cannot display interactive tool forms; ask the user in ordinary conversation when a decision is needed.";
+    let instructions = "You are the user's agent inside Forge desktop. Work only on the selected project unless the user explicitly requests otherwise. Use the installed start-forge skill once at the beginning of this conversation, and follow its structured handoff. Forge owns project continuity; use its public interfaces and do not create another state store. Explain progress in the user's language, clearly and simply. A completed response is not proof that the user's task is complete. Treat exploration as conversation, not acceptance. After interruption, reconcile actual effects before continuing. When you create or substantially change a reviewable local file, identify only files that actually exist and include a Markdown link with a path relative to the project root, such as [Ver página](site/index.html), so the user can inspect it in the app. Do not imply a local file is published or that an unsupported output has a visual preview. The interface currently cannot display interactive tool forms; ask the user in ordinary conversation when a decision is needed.";
     let mut params = json!({"cwd":project_root,"approvalPolicy":"never","sandbox":"danger-full-access","developerInstructions":instructions});
     let (thread, messages) = if let Some(id) = thread_id {
         if id.is_empty() || id.len() > 200 {
@@ -458,6 +602,20 @@ mod tests {
     use crate::codex_transport::MAX_FRAME_BYTES;
     use std::collections::VecDeque;
 
+    #[test]
+    fn finds_only_a_direct_codex_desktop_binary() {
+        let base =
+            std::env::temp_dir().join(format!("forge-codex-discovery-{}", uuid::Uuid::new_v4()));
+        let bin = base.join("OpenAI/Codex/bin");
+        let current = bin.join("current");
+        std::fs::create_dir_all(&current).unwrap();
+        std::fs::create_dir_all(bin.join("incomplete")).unwrap();
+        let executable = current.join("codex.exe");
+        std::fs::write(&executable, b"fixture").unwrap();
+        assert_eq!(desktop_codex(&base), Some(executable));
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
     struct FakeProtocol {
         replies: Mutex<VecDeque<Result<Value, &'static str>>>,
         requests: Mutex<Vec<(&'static str, Value)>>,
@@ -497,6 +655,41 @@ mod tests {
         } else {
             json!({"id":id,"status":status,"items":[{"id":format!("{id}-item"),"type":"agentMessage","text":text}]})
         }
+    }
+
+    #[test]
+    fn conversation_list_projects_only_same_folder_top_level_threads() {
+        let root = std::env::current_dir().unwrap();
+        let root = root.to_str().unwrap();
+        let page = conversation_page(
+            json!({"data":[
+                {"id":"older","cwd":root,"parentThreadId":null,"name":"  Chosen title  ","preview":"Other preview","updatedAt":100,"status":{"type":"notLoaded"}},
+                {"id":"agent","cwd":root,"parentThreadId":"older","name":null,"preview":"Subagent text","updatedAt":90,"status":{"type":"idle"}},
+                {"id":"busy","cwd":root,"parentThreadId":null,"name":null,"preview":"<script>literal</script>\nrest","updatedAt":80,"status":{"type":"active"}}
+            ],"nextCursor":"next"}),
+            root,
+        )
+        .unwrap();
+        assert_eq!(page.conversations.len(), 2);
+        assert_eq!(page.conversations[0].id, "older");
+        assert_eq!(page.conversations[0].title, "Chosen title");
+        assert_eq!(page.conversations[1].title, "<script>literal</script>");
+        assert!(page.conversations[1].active);
+        assert_eq!(page.next_cursor.as_deref(), Some("next"));
+    }
+
+    #[test]
+    fn conversation_list_rejects_wrong_folder_or_malformed_page() {
+        let root = std::env::current_dir().unwrap();
+        let root = root.to_str().unwrap();
+        let thread = json!({"id":"other","cwd":"missing-project","parentThreadId":null,"name":null,"preview":"Another project","updatedAt":100,"status":{"type":"idle"}});
+        assert!(conversation_page(json!({"data":[thread],"nextCursor":null}), root).is_err());
+        assert!(conversation_page(json!({"data":[],"nextCursor":123}), root).is_err());
+        assert!(conversation_page(
+            json!({"data":[{"id":"missing-fields","cwd":root}],"nextCursor":null}),
+            root
+        )
+        .is_err());
     }
 
     #[test]
@@ -556,7 +749,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn lean_resume_pages_more_than_one_frame_without_replaying_a_turn() {
+    async fn lean_resume_pages_without_replaying_a_turn() {
         let root = std::env::current_dir().unwrap();
         let root = root.to_str().unwrap();
         let first = json!({
@@ -572,7 +765,6 @@ mod tests {
         });
         assert!(serde_json::to_vec(&first).unwrap().len() < MAX_FRAME_BYTES);
         assert!(serde_json::to_vec(&second).unwrap().len() < MAX_FRAME_BYTES);
-        const { assert!(1_200_000 > MAX_FRAME_BYTES) };
         let fake = FakeProtocol::new(vec![
             Ok(json!({"thread":thread(root, json!([]))})),
             Ok(json!({"thread":thread(root, json!([]))})),
@@ -746,6 +938,14 @@ mod tests {
         assert_eq!(add_history_bytes(MAX_HISTORY_BYTES, 1), Err(HISTORY_LIMIT));
     }
 
+    #[test]
+    fn substantial_paged_conversation_fits_aggregate_budget() {
+        assert_eq!(
+            add_history_bytes(95 * 1024 * 1024, 1024),
+            Ok(95 * 1024 * 1024 + 1024)
+        );
+    }
+
     #[tokio::test]
     async fn rejected_lean_resume_has_a_compatibility_error() {
         let root = std::env::current_dir().unwrap();
@@ -759,6 +959,22 @@ mod tests {
                 .await
                 .unwrap_err(),
             HISTORY_COMPATIBILITY
+        );
+    }
+
+    #[tokio::test]
+    async fn active_writer_resume_keeps_specific_user_message() {
+        let root = std::env::current_dir().unwrap();
+        let root = root.to_str().unwrap();
+        let fake = FakeProtocol::new(vec![
+            Ok(json!({"thread":thread(root, json!([]))})),
+            Err(crate::codex_transport::THREAD_IN_USE),
+        ]);
+        assert_eq!(
+            resume_saved(&fake, root, "saved-thread", json!({}))
+                .await
+                .unwrap_err(),
+            crate::codex_transport::THREAD_IN_USE
         );
     }
 

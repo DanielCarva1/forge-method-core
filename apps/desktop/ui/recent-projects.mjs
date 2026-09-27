@@ -1,4 +1,5 @@
 // Local shortcuts only. Forge remains the authority for project identity and state.
+import { prepareProjectSwitch } from './chat.mjs';
 const storageKey = 'forge.projects.v1';
 const list = document.querySelector('#recent-projects');
 const empty = document.querySelector('#projects-empty');
@@ -61,16 +62,20 @@ function renderProjects() {
     open.className = 'primary';
     open.textContent = 'Abrir';
     open.setAttribute('aria-label', `Abrir ${project.project_id}`);
-    open.addEventListener('click', () => {
-      if (projectRoot.disabled) {
-        if (projectRoot.value === project.project_root) location.hash = '#workspace';
-        else status.textContent = 'Encerre a conversa atual antes de abrir outro projeto.';
+    open.addEventListener('click', async () => {
+      if (projectRoot.disabled && projectRoot.value === project.project_root) {
+        location.hash = '#workspace';
+        return;
+      }
+      if (projectRoot.disabled && (!await prepareProjectSwitch() || projectRoot.disabled)) {
+        status.textContent = 'Não foi possível trocar de projeto agora. Confira a conversa atual e tente novamente.';
         return;
       }
       projectRoot.value = project.project_root;
       projectRoot.dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelector('#project-setup').open = true;
       location.hash = '#workspace';
-      projectForm.requestSubmit(); // The native resolver validates the shortcut again.
+      projectForm.requestSubmit(document.querySelector('#inspect-project')); // The native resolver validates the shortcut again.
     });
     const remove = document.createElement('button');
     remove.type = 'button';

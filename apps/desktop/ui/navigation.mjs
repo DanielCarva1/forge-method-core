@@ -18,12 +18,16 @@ function renderRoute(moveFocus) {
     else link.removeAttribute('aria-current');
   }
 
-  if (!moveFocus) return;
   const fragment = location.hash.slice(1);
   const target = document.getElementById(fragment);
+  if (fragment === 'about' && target) target.open = true;
+  if (!moveFocus) return;
   const heading = screens.get(route)?.querySelector('h1');
   requestAnimationFrame(() => {
-    if (target && target !== screens.get(route)) target.scrollIntoView({ block: 'start' });
+    if (target && target !== screens.get(route)) {
+      target.scrollIntoView({ block: 'start' });
+      if (fragment === 'about') target.querySelector('summary')?.focus({ preventScroll: true });
+    }
     else heading?.focus({ preventScroll: false });
   });
 }
