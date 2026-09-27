@@ -6033,3 +6033,31 @@ publicly available. **Next exact step:** review/selectively commit and push
 the 0.1.20 package, publish only the tested candidate under maintainer
 authorization, then download unauthenticated and verify the exact bytes and
 installed build. Keep the full nontechnical journey goal active.
+
+### Desktop 0.1.20 public release readback — 2026-09-27
+
+Source commit `fd5e1acd63756744c772b99c5b5d144834217014` was pushed. Annotated
+tag `desktop-v0.1.20-alpha.1` points to that commit and was pushed. The public
+prerelease is
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.20-alpha.1`.
+GitHub reports one installer, 123,075,607 bytes, and its checksum sidecar.
+An unauthenticated direct download to
+`C:/ForgeFast/forge-alpha-0120-public-20260927/Forge_0.1.20_x64-setup.exe`
+matched the exact tested candidate SHA-256
+`282125B2A99E339233A3678602829FC5D6311E2D4A1F62F636C2FCD8FAF9AFE7`.
+Silent reinstallation of **those downloaded bytes** returned exit 0;
+installed 0.1.20 executable and bundled core hashes matched the candidate
+readback above. A hidden native read-only restart against that downloaded
+installation again passed real Codex conversation, exact Forge direction/Work
+Focus and earlier HTML result, with zero sends and unchanged project files.
+No manual GitHub CI or new provider-model turn was run.
+
+This proves public availability and installed-byte continuity, not
+clean-machine/fresh-account setup, mobile, accessibility acceptance or a
+complete autonomous product journey. Cost per real agent turn remains
+UNKNOWN for this package because there was no new turn. **Next exact step:**
+leave the released 0.1.20 installed and use the app to progress one real
+project from the accepted Work Focus toward a visible implemented result,
+avoiding another broad activation or duplicate product decision. Find and
+fix only a concrete blocker exposed by that journey. The full desktop goal
+remains active. No active subagents.
