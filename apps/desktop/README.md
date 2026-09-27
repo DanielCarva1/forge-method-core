@@ -4170,7 +4170,7 @@ used; model-specific token usage and BRL cost remain UNKNOWN.
 and repair a concrete nontechnical UX gap. Keep native acceptance at the
 package boundary and avoid manually starting GitHub CI for each change.
 
-## Desktop 0.1.7 uncertain-send recovery candidate — 2026-09-27
+## Desktop 0.1.7 uncertain-send recovery — 2026-09-27
 
 The installed 0.1.6 end-to-end journey above remains valid for the normal
 path. This package fixes an exceptional but consequential UI recovery gap:
@@ -4214,13 +4214,38 @@ The installed binary restored the existing disposable real Codex conversation
 across the upgrade with zero new Sends, then passed both hidden recovery
 tests. No installer rebuild after hashing.
 
-**Limits and next:** a real lost-acknowledgement test is not a proof of
+**Limits:** a real lost-acknowledgement test is not a proof of
 exactly-once delivery for every Codex version or crash timing. The person
 must review ambiguous work; no automatic resend is claimed. Complete manual
 screen-reader/contrast acceptance, separate clean-machine core/Codex
 installation, auto-update and mobile remain unfinished. Model-specific
-tokens and BRL cost remain UNKNOWN; no worker was used. The candidate is
-**installed but not yet committed, tagged or public**. Review this diff,
-commit/push, publish the exact candidate with its sidecar, freshly download
-and compare public bytes, reinstall that download and recheck history/review
-behavior. Do not rebuild it or manually trigger GitHub CI for this package.
+tokens and BRL cost remain UNKNOWN; no worker was used. Do not rebuild this
+installer or manually trigger GitHub CI for this package.
+
+## Desktop 0.1.7 public release readback — 2026-09-27
+
+**PASS:** source package committed/pushed as `e2b1d2a7`; annotated tag
+`desktop-v0.1.7-alpha.1` points to that commit. Prerelease URL:
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.7-alpha.1`.
+GitHub reported the installer as 4,622,466 bytes with SHA-256
+`BE0F80E5D0175DA05C90C97FEDC38BE588E9F6E80F00A9064AB0F588F02421B5`.
+A fresh unauthenticated download to
+`C:/ForgeFast/forge-alpha-017-public-20260927` matched that exact size,
+hash and `.sha256` sidecar. No rebuild occurred. The downloaded installer
+silently installed over the local 0.1.7 candidate with exit 0; installed
+version is 0.1.7 and executable SHA-256 is
+`4958CE1F052EBD28703948782C3294CEDCB926FC24BBE83F26352D73786CF203`.
+The installed download passed hidden native resume of the pre-upgrade real
+Codex user/reply pair with zero new Sends and the controlled full-process
+uncertain-Send restart guard with explicit review. The real-Codex lost-ack
+probe was run earlier on the same executable hash, not repeated after the
+identical downloaded reinstall. No GitHub CI was manually started. Manual
+complete accessibility/visual acceptance, separate clean-machine core/Codex
+setup, auto-update and mobile remain NOT_RUN/unfinished. Model-specific
+tokens and BRL cost remain UNKNOWN.
+
+**Next smallest product slice:** inspect the actual installed UI against
+approved visual direction and pick one coherent, user-visible gap in the
+nontechnical folder → project → conversation → local-result journey. Reproduce
+it with a hidden native acceptance test before changing code. Keep the
+overall journey goal active and do not add Forge core complexity to fill UI.

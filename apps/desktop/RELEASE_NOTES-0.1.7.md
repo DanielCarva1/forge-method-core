@@ -1,4 +1,4 @@
-# Forge Desktop 0.1.7 alpha — candidate
+# Forge Desktop 0.1.7 alpha.1
 
 This Windows x64 alpha makes recovery after an uncertain message delivery
 safer. It retains the existing project, Codex conversation and local-result
@@ -55,4 +55,21 @@ executable SHA-256
 The installed binary restored a real Codex user/reply pair created before
 this upgrade without a new Send. It also passed the controlled restart guard
 and the real Codex lost-acknowledgement test. The installer was not rebuilt
-after hashing. Publication and fresh public-download verification are pending.
+after hashing.
+
+## Publication readback — 2026-09-27
+
+The prerelease is available at
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.7-alpha.1`
+from tag `desktop-v0.1.7-alpha.1` at commit
+`e2b1d2a7cda0f8bf4fd761162b285855409b356c`. GitHub reported the
+installer asset as 4,622,466 bytes with the expected SHA-256. A fresh,
+unauthenticated public download of the installer and checksum sidecar matched
+the candidate byte-for-byte. That downloaded installer, not a rebuilt file,
+silently installed over the local 0.1.7 candidate with exit 0. Installed
+version and executable hash matched the previously tested installation.
+The downloaded installation restored a pre-upgrade real Codex user/reply pair
+without a new Send and passed the hidden native controlled uncertain-Send
+restart guard. Real Codex lost-acknowledgement behavior was tested on the
+same executable hash before publication; it was not repeated after the
+identical public download. GitHub CI was not manually triggered.
