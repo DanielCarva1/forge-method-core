@@ -1,6 +1,6 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.19` is the published alpha
+Independent Tauri application. Desktop `0.1.22` is the published alpha
 prerelease. Its exact installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
@@ -6421,3 +6421,27 @@ step:** review the full nontechnical journey against current UI and open
 issues, then take the highest-impact remaining gap as one coherent product
 slice. Test positive browser launch only without surfacing a window on the
 maintainer's desktop. Do not resend this completed change request.
+
+### Installed 0.1.22 first-use sign-in boundary — 2026-09-27
+
+Two headless native runs used the **installed public 0.1.22 executable** with
+fresh temporary WebView profiles, disposable project folders and isolated
+`CODEX_HOME`, without using the maintainer's signed-in Codex state. The real
+bundled Codex CLI produced a device-code sign-in challenge. The app kept the
+person's unsent draft, showed that nothing had been sent, displayed the
+Codex-owned access address, and canceled sign-in without losing the draft.
+Screenshot: `C:/ForgeFast/forge-first-login-installed-20260927.png`.
+
+A second run used a **simulated completion** after the challenge. It verified
+that the draft remained intact and the first attempted send supplied the
+installed bundled Start Forge skill and exact bundled Forge executable path.
+Both `native-auth.cjs` runs passed through `native-hidden.ps1` without touching
+the visible desktop or sending a real provider-model turn. Their temporary
+profiles were removed. This extends package-level first-use evidence, but it
+does **not** prove a real new account can finish authorization or that the
+agent then follows the supplied skill. **NOT_RUN:** actual login completion,
+clean-machine install, and positive default-browser launch. **Next exact
+step:** make the real completion path testable without borrowing or changing
+the maintainer's login; then verify the signed-in first response and Forge
+activation in a disposable project, or move to a concrete UI defect if that
+test environment is unavailable. Keep the full nontechnical journey goal active.
