@@ -6507,3 +6507,38 @@ step:** review this diff and prepare a coherent next alpha package containing
 the first-use wording and project-finding improvements; run package-boundary
 checks, install/update the single candidate headlessly, verify its hash and
 download before calling the new version available.
+
+### Desktop 0.1.23 candidate and installed upgrade — 2026-09-27
+
+The first-use wording and searchable recent-project shortcuts are packaged as
+Desktop 0.1.23. Version changes are scoped to Desktop Cargo, lockfile and Tauri
+config. The release scope and limits are in `RELEASE_NOTES-0.1.23.md`.
+
+**PASS:** eight frontend unit tests, full browser UI suite, Desktop offline
+`cargo check`, all 50 Desktop crate tests, strict Clippy, `git diff --check`,
+and one NSIS release build. The candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.23_x64-setup.exe`,
+123,073,611 bytes, SHA-256
+`EA27A6081F8F3A4F4318487833C08F624FDE606F2A5A9E94DA08F11EA1C1818A`.
+Silent installation over public 0.1.22 returned exit 0 and did not change
+the candidate hash. Installed app SHA-256 is
+`F362B88D44F9DDDB0DD7D6B8CB4CCF0CF91D90AF98DCFBF880E260CF3EEB2076`;
+bundled core 0.13.2 remains
+`CFD6F81B1710D0469A53D12B374258CC122676EA7865F26926B1CDB4C7541EDF`.
+Hidden native installed smoke passed identity, navigation, long-history fixture
+and appearance; the real disposable Forge project was found among 50 shortcuts
+and reopened through native inspection with zero sends. A first-use simulated
+login completion verified the bundled Start Forge instructions and exact core
+path without attempting a real account login or provider-model turn. No
+manual GitHub CI was run.
+
+**NOT_RUN:** clean-machine setup, real fresh-account login completion,
+successful default-browser launch, manual accessibility acceptance, mobile,
+self-contained distribution, or a new provider turn through 0.1.23. The parent
+executed this slice without subagents; per-task API-equivalent BRL cost and
+Pro-quota impact remain UNKNOWN, not zero. The tested candidate is **local**, not
+public yet. **Next exact step:** review and selectively commit/push this release
+package, publish only the tested candidate under the maintainer's standing
+alpha authorization, then download without authentication and verify exact
+bytes and installed identity before calling it available. Keep the full
+nontechnical journey goal active.
