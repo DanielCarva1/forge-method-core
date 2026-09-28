@@ -164,6 +164,73 @@ fn local_html_path(root: &Path, requested: &Path) -> Result<PathBuf, &'static st
     Ok(file)
 }
 
+#[cfg(windows)]
+fn default_browser_executable() -> Result<PathBuf, &'static str> {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+
+    #[link(name = "shlwapi")]
+    unsafe extern "system" {
+        fn AssocQueryStringW(
+            flags: u32,
+            string_type: u32,
+            association: *const u16,
+            extra: *const u16,
+            output: *mut u16,
+            length: *mut u32,
+        ) -> i32;
+    }
+
+    // The HTTPS protocol identifies the user's browser; the .html association
+    // can instead point to an editor or another non-browser application.
+    const ASSOCSTR_EXECUTABLE: u32 = 2;
+    let association: Vec<u16> = "https".encode_utf16().chain(std::iter::once(0)).collect();
+    let verb: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+    let mut length = 0;
+    unsafe {
+        AssocQueryStringW(
+            0,
+            ASSOCSTR_EXECUTABLE,
+            association.as_ptr(),
+            verb.as_ptr(),
+            std::ptr::null_mut(),
+            &mut length,
+        );
+    }
+    if !(2..=32768).contains(&length) {
+        return Err("Defina um navegador padrão no Windows para abrir esta página.");
+    }
+    let mut output = vec![0_u16; length as usize];
+    let result = unsafe {
+        AssocQueryStringW(
+            0,
+            ASSOCSTR_EXECUTABLE,
+            association.as_ptr(),
+            verb.as_ptr(),
+            output.as_mut_ptr(),
+            &mut length,
+        )
+    };
+    if result != 0 {
+        return Err("Não foi possível consultar o navegador padrão do Windows.");
+    }
+    let end = output
+        .iter()
+        .position(|&unit| unit == 0)
+        .unwrap_or(output.len());
+    if end == 0 {
+        return Err("Não foi possível consultar o navegador padrão do Windows.");
+    }
+    Ok(PathBuf::from(OsString::from_wide(&output[..end])))
+}
+
+#[cfg(windows)]
+fn local_html_url(file: &Path) -> Result<String, &'static str> {
+    tauri::Url::from_file_path(file)
+        .map(|url| url.to_string())
+        .map_err(|_| "Não foi possível preparar o endereço desta página.")
+}
+
 #[tauri::command]
 pub async fn open_site_in_browser(
     project_root: String,
@@ -173,25 +240,13 @@ pub async fn open_site_in_browser(
     let file = local_html_path(Path::new(&project.project_root), Path::new(&file_path))?;
     #[cfg(windows)]
     {
-        use std::os::windows::ffi::OsStrExt;
-        #[link(name = "shell32")]
-        unsafe extern "system" {
-            fn ShellExecuteW(
-                window: isize,
-                operation: *const u16,
-                file: *const u16,
-                parameters: *const u16,
-                directory: *const u16,
-                show: i32,
-            ) -> isize;
-        }
-        let operation: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
-        let path: Vec<u16> = file.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
-        let launched = unsafe {
-            ShellExecuteW(0, operation.as_ptr(), path.as_ptr(), std::ptr::null(), std::ptr::null(), 1)
-        };
-        if launched <= 32 { Err("Não foi possível solicitar a abertura desta página no navegador.") }
-        else { Ok(()) }
+        let url = local_html_url(&file)?;
+        let browser = default_browser_executable()?;
+        std::process::Command::new(browser)
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|_| "Não foi possível solicitar a abertura desta página no navegador.")
     }
     #[cfg(not(windows))]
     {
@@ -326,6 +381,20 @@ mod tests {
         assert!(local_html_path(&root, &script).is_err());
         assert!(local_html_path(&root, &outside).is_err());
         assert!(local_html_path(&root, Path::new("index.html")).is_err());
+        #[cfg(windows)]
+        {
+            let spaced = root.join("a page #1.html");
+            let url = local_html_url(&spaced).unwrap();
+            assert!(url.starts_with("file:///"));
+            assert!(url.contains("a%20page%20%231.html"));
+        }
         fs::remove_dir_all(base).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "Requires a Windows user with a configured default browser; does not launch it"]
+    fn default_browser_association_points_to_an_executable() {
+        assert!(default_browser_executable().unwrap().is_file());
     }
 }

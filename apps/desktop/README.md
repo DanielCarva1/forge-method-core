@@ -6739,3 +6739,128 @@ turn was used; task-level BRL and Pro-quota impact remain UNKNOWN.
 **Next exact step:** exercise a fresh-account login completion or a safely
 isolated positive external-browser launch, whichever can be verified without
 taking the maintainer's active desktop, then address any concrete failure.
+
+### Default-browser handoff correction — 2026-09-27
+
+The installed 0.1.24 app still hands a `.html` file path to Windows
+`ShellExecuteW`. Windows resolves that by the file's application association,
+which may be an editor rather than the person's default browser. The source
+Desktop implementation now queries the executable associated with the HTTPS
+protocol, converts the already project-validated HTML path into an encoded
+`file:` URL, and passes that URL as one argument to the browser executable.
+It fails with an actionable status when no browser association can be
+resolved; it does not silently fall back to a non-browser HTML handler. The
+protected in-app preview and project-bound file validation remain unchanged.
+Relevant Windows API references: `AssocQueryStringW` and `ASSOCSTR_EXECUTABLE`
+in Microsoft Learn (`learn.microsoft.com/en-us/windows/win32/api/shlwapi/`).
+
+**PASS:** focused Desktop `cargo check`; five preview tests (one opt-in
+association probe ignored by default); the explicit opt-in Windows association
+probe resolved an existing executable without launching it; all 50 regular
+Desktop crate tests; strict Clippy; full headless browser UI suite;
+`git diff --check`; incremental Desktop debug build; hidden native debug
+smoke for project selection, bounded preview and Forge record. An existing
+headless axe scan found no automatic WCAG/best-practice violations across
+eight seeded UI states, but could not determine contrast for many elements
+over gradients, so accessibility acceptance is **PARTIAL**, not complete.
+`cargo fmt --check` on the whole Desktop crate fails on pre-existing
+formatting outside this change; no broad formatting rewrite was made.
+
+**NOT_RUN:** positive external-browser launch on the maintainer's active
+Windows desktop, fresh-account login completion, clean-machine install,
+manual accessibility acceptance. This source change is **not** in the
+installed/public 0.1.24 package. Current local modifications are
+`src-tauri/src/preview.rs`, `ui/preview.mjs` and this checkpoint. No subagent
+or provider-model turn was used; per-task BRL and Pro-quota impact remain
+UNKNOWN. **Next exact step:** arrange an isolated positive browser-launch
+readback that cannot surface on the active desktop; if that is not possible,
+keep it NOT_RUN and package only with an explicit limitation after a coherent
+next Desktop update. Do not claim that association lookup proves navigation.
+
+### Isolated browser rendering readback — 2026-09-27
+
+The registered HTTPS browser executable on this Windows account is Chrome.
+Playwright launched that exact executable **headlessly** with an isolated
+browser context and opened the real generated project's `file:` URL. A new
+idea could be saved and remained visible after page reload (`1` before and
+after), confirming that the local HTML, script and browser storage work in
+that browser without taking focus from the maintainer's desktop. The
+association probe and URL-encoding unit test above cover the two new native
+handoff inputs. This still does **not** exercise the Forge button or its
+native command spawning a visible browser, so that positive end-to-end path
+remains **NOT_RUN** rather than silently promoted to PASS. No provider turn
+was sent and the persistent project files were not edited by this browser
+test; only the isolated browser profile stored the test idea.
+
+**Next exact step:** keep the actual Forge-to-browser launch limitation
+explicit, then either verify it in an isolated Windows desktop session or
+include this narrowly scoped fix in the next coherent Desktop alpha with a
+clear unverified-path note. Continue the remaining first-use/login and visual
+journey against the app itself; do not treat headless HTML rendering as full
+native acceptance.
+
+### First-use and completed-work clarity — 2026-09-27
+
+The hidden native first-use test passed with an isolated `CODEX_HOME` and
+fixture login completion: the person's unsent draft survived, no early
+message was sent, and the first post-login send supplied the bundled Start
+Forge guidance path to the Codex thread. **Real provider login completion
+remains NOT_RUN**; the fixture is not a substitute for authenticating a new
+account. No maintainer credentials were changed.
+
+Visual readback of the real project showed that the completed-work badge
+could be read as the *whole project* being finished while the Forge project
+stage still said Discovery. The source UI now says “Esta parte foi concluída”
+and explains “O projeto pode continuar”; it does not change or infer any
+Forge state. The full headless browser UI suite passed, including the
+completed-state assertion. An incremental Desktop debug build passed, and a
+hidden native run against the existing real project passed project/record,
+preview and first-use smoke without a provider turn. The resulting native
+screenshot is `C:/ForgeFast/forge-next-record-completed-20260927.png`.
+
+**State:** source-only, not installed/public. Local changes are
+`src-tauri/src/preview.rs`, `ui/preview.mjs`, `ui/progress.mjs`,
+`tests/browser.cjs` and this checkpoint. Browser-launch button, real fresh
+login and clean-machine install remain NOT_RUN. No subagent was used;
+per-task BRL and Pro-quota impact remain UNKNOWN. **Next exact step:** review
+the integrated five-file diff, then prepare a coherent Desktop alpha package
+with explicit limitations rather than treating this source build as an app
+update. The native browser handoff itself needs an isolated positive test or
+must remain a declared limitation of that package.
+
+### Desktop 0.1.25 candidate installed locally — 2026-09-27
+
+The 0.1.25 package combines default-browser handoff correction and clearer
+completed-work wording. `RELEASE_NOTES-0.1.25.md` states both changes and
+limits. Version changed only in Desktop Cargo manifest/lock and Tauri config.
+
+**PASS:** focused Desktop `cargo check` and five preview tests; all 50
+regular Desktop crate tests; strict Clippy; eight frontend unit tests;
+the full headless browser suite from the preceding slice; `git diff --check`;
+one NSIS release build. No core-workspace or GitHub CI run was triggered.
+The exact candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.25_x64-setup.exe`,
+123,042,265 bytes, SHA-256
+`F76671E32C235F614C059DD3C6CA7537B6C6C55B22E00BF4E471AC096B930CC3`.
+The `.sha256` sidecar sits beside it. Silent installation over public
+0.1.24 returned exit 0 without changing the candidate hash; installed
+version is 0.1.25 and executable SHA-256 is
+`A6DCDA319C241CDD089D3FF33A44204C8ACB6CC5424F842537AA268EE6CCAC39`.
+
+The **installed** candidate passed hidden native selection with the real
+Windows folder dialog, Forge onboarding/record, safe local preview and
+navigation. The test flag `FORGE_TEST_AGENT_SMOKE=1` also sent **one real
+simple Codex prompt** in a disposable project and verified a reply plus
+WebView-reload continuity. That provider turn was not needed for the browser
+change and should not be repeated casually; it used no tools or file edits.
+A separate hidden native read-only run reopened the existing real 33-message
+conversation and preserved message order after reload without a send.
+
+**NOT_RUN:** Forge button launching the external browser, fresh-account real
+provider login, clean-machine setup, manual accessibility acceptance,
+mobile and offline self-contained distribution. This is **installed locally,
+not committed or public**. No subagent was used; task-level BRL and Pro-quota
+impact remain UNKNOWN. **Next exact step:** review and selectively commit/push
+the package, then publish this exact tested installer under the maintainer's
+standing alpha authorization and verify an unauthenticated download's exact
+bytes before calling 0.1.25 available. Do not rebuild the candidate.

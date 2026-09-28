@@ -15,8 +15,8 @@ let historyPending = false;
 let historyLoaded = false;
 let slowNotice;
 let historySlowNotice;
-const labels = { absent: 'Ainda não há andamento registrado no Forge para este projeto.', current: 'Acompanhamento do Forge disponível. Pode não incluir a conversa mais recente.', stale: 'O acompanhamento do Forge está desatualizado.', blocked: 'O trabalho acompanhado pelo Forge tem uma pendência.', completed: 'O trabalho acompanhado pelo Forge foi concluído. Isso não significa que o produto inteiro está pronto.', abandoned: 'O trabalho acompanhado pelo Forge foi encerrado sem conclusão.' };
-const stateLabels = { absent: 'Sem andamento registrado', current: 'Em andamento', stale: 'Acompanhamento desatualizado', blocked: 'Há uma pendência', completed: 'Trabalho registrado concluído', abandoned: 'Encerrado sem concluir' };
+const labels = { absent: 'Ainda não há andamento registrado no Forge para este projeto.', current: 'Acompanhamento do Forge disponível. Pode não incluir a conversa mais recente.', stale: 'O acompanhamento do Forge está desatualizado.', blocked: 'O trabalho acompanhado pelo Forge tem uma pendência.', completed: 'Esta parte do trabalho foi concluída. O projeto pode continuar.', abandoned: 'O trabalho acompanhado pelo Forge foi encerrado sem conclusão.' };
+const stateLabels = { absent: 'Sem andamento registrado', current: 'Em andamento', stale: 'Acompanhamento desatualizado', blocked: 'Há uma pendência', completed: 'Esta parte foi concluída', abandoned: 'Encerrado sem concluir' };
 const phases = {
   '0-route': ['Preparação', 'Entendendo como começar.'],
   '1-discovery': ['Descoberta', 'Entendendo o problema, as pessoas e os caminhos possíveis.'],

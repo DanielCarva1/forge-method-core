@@ -279,7 +279,7 @@ openSiteBrowser.addEventListener('click', async () => {
     await globalThis.__TAURI__.core.invoke('open_site_in_browser', { projectRoot: root, filePath: selected });
     if (project?.project_root === root && filePath === selected) status.textContent = 'Abertura solicitada ao navegador padrão. Esta página roda fora da prévia protegida do Forge.';
   } catch {
-    if (project?.project_root === root && filePath === selected) status.textContent = 'Não foi possível abrir esta página no navegador. O arquivo não foi alterado.';
+    if (project?.project_root === root && filePath === selected) status.textContent = 'Não foi possível abrir esta página no navegador. Confira o navegador padrão nas configurações do Windows; o arquivo não foi alterado.';
   } finally { browserOpening = false; controls(); }
 });
 sourceToggle.addEventListener('click', () => showSource(!sourceVisible));

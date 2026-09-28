@@ -931,7 +931,7 @@ async function openConversation(page) {
     assert.equal(await page.locator('#record-direction script').count(), 0);
     assert.match(await page.locator('#record-pending-count').textContent(), /1 decisão pendente foi recuperada/);
     assert.match(await page.locator('#record-pending-count').textContent(), /texto original da escolha não está disponível aqui/);
-    const stateNames = { current: 'Em andamento', stale: 'Acompanhamento desatualizado', blocked: 'Há uma pendência', completed: 'Trabalho registrado concluído', abandoned: 'Encerrado sem concluir' };
+    const stateNames = { current: 'Em andamento', stale: 'Acompanhamento desatualizado', blocked: 'Há uma pendência', completed: 'Esta parte foi concluída', abandoned: 'Encerrado sem concluir' };
     for (const state of ['current', 'stale', 'blocked', 'completed', 'abandoned', 'absent']) {
       await page.evaluate(state => { window.progressState = state; }, state);
       await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
@@ -960,7 +960,10 @@ async function openConversation(page) {
         assert.equal(await page.locator('#progress-result').getAttribute('data-state'), state);
         assert.equal(await page.locator('#record-phase').textContent(), 'Descoberta');
         assert.equal(await page.locator('#record-activity-label').textContent(), state === 'completed' ? 'Resultado registrado' : state === 'abandoned' ? 'Último registro' : 'Agora');
-        if (state === 'completed') assert.match(await page.locator('#record-phase-help').textContent(), /Este trabalho foi concluído; a etapa geral pode continuar aqui/);
+        if (state === 'completed') {
+          assert.match(await page.locator('#progress-status').textContent(), /Esta parte do trabalho foi concluída. O projeto pode continuar/);
+          assert.match(await page.locator('#record-phase-help').textContent(), /Este trabalho foi concluído; a etapa geral pode continuar aqui/);
+        }
         assert.equal(await page.locator('#record-outcome').textContent(), 'Accepted outcome');
         assert.equal(await page.locator('#record-next').textContent(), 'Recorded next step');
         assert.match(await page.locator('#record-decisions').textContent(), /1 decisão em aberto/);
