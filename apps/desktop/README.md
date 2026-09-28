@@ -8104,3 +8104,28 @@ remain NOT_RUN/PARTIAL.
 under the user's standing alpha authorization, download it without
 authentication, compare bytes, install the downloaded bytes and repeat hidden
 native smoke. Do not rebuild or call 0.1.34 available before public readback.
+
+### Desktop 0.1.34 public readback — 2026-09-28
+
+Code commit `c7bb5d4a` was pushed on `codex/desktop-shell` and tagged
+`desktop-v0.1.34-alpha.1`. The tested candidate and its SHA-256 sidecar were
+published as the [0.1.34 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.34-alpha.1).
+Unauthenticated downloads returned a 123,142,636-byte installer, SHA-256
+`D905C644CF8ECA72C3EC2B6053F51E9567DF06E889643FC0010DC2DA26692E22`,
+matching candidate and sidecar. Installing those downloaded bytes silently
+over the installed candidate returned exit 0; the file remained unchanged and
+the installed executable reports 0.1.34 with SHA-256
+`9881933D91ACEB74695974EB0081EC94426B4400A0BBF1DA970BAD82E807DB60`.
+The downloaded installation passed hidden native smoke with actual folder
+selection, Forge onboarding and record readback, narrow record shortcut,
+isolated local preview and controlled conversation events. The new cited-file
+behavior passed browser fixtures; actual Codex Send was NOT_RUN in this
+0.1.34 slice, while the separate public 0.1.33 real-Codex journey remains
+documented above. Clean-machine setup, mobile-device use and manual
+screen-reader acceptance remain NOT_RUN/PARTIAL. No subagent was used and
+model-attributed tokens, API-equivalent BRL and Pro-quota impact remain
+UNKNOWN. No candidate rebuild or manual GitHub CI run followed publication.
+
+**Next product step:** continue the open UI coverage gap using the approved
+visual references and actual user journeys; do not treat these alpha packages
+as completion of the Forge Desktop objective.

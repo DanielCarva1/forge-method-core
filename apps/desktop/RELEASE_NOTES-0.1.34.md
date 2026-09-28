@@ -38,5 +38,10 @@ Silent installation over public 0.1.33 returned exit 0; candidate bytes did
 not change. The installed executable reports 0.1.34 and has SHA-256
 `9881933D91ACEB74695974EB0081EC94426B4400A0BBF1DA970BAD82E807DB60`.
 The installed candidate passed hidden native smoke, including actual Windows
-folder selection and Forge onboarding. Public download readback remains
-pending at this point; do not call it available until that passes.
+folder selection and Forge onboarding. The published installer and sidecar
+were downloaded without authentication; the installer was 123,142,636 bytes
+with the same SHA-256 as both the candidate and sidecar. Silent installation
+of those downloaded bytes returned exit 0, preserved the downloaded hash and
+produced the installed executable hash above. Hidden native smoke passed again
+after that installation. No rebuild or manual GitHub CI was run after the
+candidate was tested.
