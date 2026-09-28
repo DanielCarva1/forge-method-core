@@ -8616,3 +8616,28 @@ tested candidate under the standing alpha authorization, download without
 authentication and compare size/hash; install those bytes and repeat hidden
 native smoke. Do not rebuild the candidate. Then continue the wider Desktop
 goal; do not call this alpha the finished product.
+
+### Desktop 0.1.39 public readback — 2026-09-28
+
+The reviewed source commits `7c010dbc` and `11e1a09b` were pushed on
+`codex/desktop-shell`. Tag `desktop-v0.1.39-alpha.1` points to `11e1a09b`.
+The exact candidate and 93-byte SHA-256 sidecar were published in the
+[0.1.39 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.39-alpha.1).
+Unauthenticated downloads returned 123,163,988 bytes and SHA-256
+`E221914913EBA0C2FADFB4567CFFEC4D5FB8A107F36B596B3D0389BAA0C7D1A3`,
+identical to the tested candidate and sidecar. Silent installation of the
+download returned exit 0 without changing its hash. The installed executable
+reports 0.1.39, SHA-256
+`542CE6A62A62AD437291EB1D96CDD3F18602C873D07B3D7F6C856AA3A823D9BC`.
+Downloaded-installation hidden native smoke passed. Candidate installation had
+also passed actual Windows folder/file/PDF picker checks; these dialogs were
+not repeated after the byte-identical download. The new suggestion action was
+verified as an unsent draft, not as an actual Codex reply. Clean-machine setup,
+physical mobile-device use and manual screen-reader acceptance remain
+unverified. No manual GitHub CI run. Per-model tokens, BRL-equivalent cost and
+Pro-quota impact remain UNKNOWN.
+
+**Next product slice:** continue improving the nontechnical workspace from
+real app journeys, prioritizing concrete gaps over another visual-only alpha.
+Keep the installed 0.1.39 distinct from future source work. Preserve the
+pending-choice/historical-prose boundary and the one existing Codex history.

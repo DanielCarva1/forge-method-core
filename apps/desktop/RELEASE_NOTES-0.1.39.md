@@ -12,4 +12,6 @@ This remains an unsigned Windows x64 alpha without an auto-updater. The bundled 
 
 ## Candidate and public readback
 
-The single tested NSIS candidate is `Forge_0.1.39_x64-setup.exe`, 123,163,988 bytes, SHA-256 `E221914913EBA0C2FADFB4567CFFEC4D5FB8A107F36B596B3D0389BAA0C7D1A3`. Silent installation over public 0.1.38 returned exit 0 and left the candidate bytes unchanged. The installed executable reports 0.1.39 and has SHA-256 `542CE6A62A62AD437291EB1D96CDD3F18602C873D07B3D7F6C856AA3A823D9BC`. Installed-candidate hidden native smoke passed. Public download and installation readback are pending publication; no manual GitHub CI was run.
+The single tested NSIS candidate is `Forge_0.1.39_x64-setup.exe`, 123,163,988 bytes, SHA-256 `E221914913EBA0C2FADFB4567CFFEC4D5FB8A107F36B596B3D0389BAA0C7D1A3`. Silent installation over public 0.1.38 returned exit 0 and left the candidate bytes unchanged. The installed executable reports 0.1.39 and has SHA-256 `542CE6A62A62AD437291EB1D96CDD3F18602C873D07B3D7F6C856AA3A823D9BC`. Installed-candidate hidden native smoke passed.
+
+The published installer and SHA-256 sidecar downloaded without authentication. The downloaded installer matched the tested candidate's byte count and hash. Silent installation of those downloaded bytes returned exit 0 without changing them, produced the same installed executable hash, and passed hidden native smoke again. No candidate rebuild or manual GitHub CI run followed publication.
