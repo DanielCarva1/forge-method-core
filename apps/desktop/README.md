@@ -8515,3 +8515,36 @@ work. Audit a user journey that has not been proven end to end on the current
 alpha (especially using a real result from a Codex turn and returning to it
 after restart); fix a concrete UX/backend connection gap if observed. Do not
 add a second history store or present inferred historical decisions as fact.
+
+### Installed 0.1.38 real-result journey — 2026-09-28
+
+One additional hidden Windows run against the downloaded and installed public
+0.1.38 used a disposable project and three actual Codex turns: a no-tools
+reply, creation of local `site/index.html`, and a change to its visible title.
+The app displayed the generated page in its isolated preview, prepared a
+change request without sending it, then displayed the changed title after
+the explicit Send. A WebView reload and a full native process restart both
+restored the real conversation in order without re-sending any turn. The
+native harness reported PASS. Screenshot
+`D:/Temp/User/forge-0138-real-result.png` was reviewed; it shows the real
+agent reply, local file action, preview, change action and composer in the
+same workspace. No real user project was modified. The fixture is removed
+by the harness after the run.
+
+This proves the result/change/conversation-continuity path on the installed
+alpha, not automatic re-opening of the selected preview after restart. The
+pending-choice action still has only a controlled IPC proof, and historical
+decision prose is not available through the pinned core. Model-attributed
+tokens, BRL-equivalent cost and Pro quota impact remain UNKNOWN. The next
+useful product check is whether a returning nontechnical person can find a
+previous result without knowing its filename; verify that journey before
+adding any new persistence or duplicated project history.
+
+A separate installed 0.1.38 hidden native **controlled-history** test passed
+after full process restart: a restored file citation reopened its
+project-bound preview and prepared a change without sending; an
+outside-project path was refused, and two distinct citations stayed
+individually selectable. This is not a replay of the real Codex fixture and
+does not prove automatic preview selection. Together with the real-result
+journey, it supports explicit recovery via the conversation, while the exact
+returning-user experience still warrants observation.
