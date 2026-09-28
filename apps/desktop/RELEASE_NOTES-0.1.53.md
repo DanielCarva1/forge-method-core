@@ -41,4 +41,10 @@ The installed executable reports ProductVersion 0.1.53, SHA-256
 and passed the hidden native smoke with real Forge project/record readback,
 onboarding and protected preview. The installed candidate did not run a new
 real Codex turn; the real restart check above used the same source's debug
-executable. Public download verification remains pending publication.
+executable. The prerelease was published at
+https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.53-alpha.1.
+An unauthenticated download of the installer and sidecar matched the candidate
+size and SHA-256 exactly. Silent installation of the downloaded bytes exited
+0, preserved the file hash, installed ProductVersion 0.1.53 with the same
+executable hash, and passed the hidden native smoke. This is same-machine
+evidence, not clean-machine installation.

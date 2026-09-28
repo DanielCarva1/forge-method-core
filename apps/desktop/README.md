@@ -1,12 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.53` is the current source version;
-`0.1.52` remains the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.52-alpha.1)
-until the tested candidate is published and downloaded again.
+Independent Tauri application. Desktop `0.1.53` is the current source version
+and the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.53-alpha.1).
 The exact installer was downloaded without authentication, hash-checked,
 installed and tested in the hidden native app.
-Its installer was downloaded without authentication, hash-checked, installed
-and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -9827,3 +9824,25 @@ Its sidecar is 93 bytes. The installed executable SHA-256 is
 under the maintainer's standing alpha authorization; download anonymously,
 verify exact bytes and repeat installation readback. Do not rebuild it or
 call 0.1.53 public before that check.
+
+### Desktop 0.1.53 public readback — 2026-09-28
+
+Package commit `a9103b09` was pushed on `codex/desktop-shell`, tagged
+`desktop-v0.1.53-alpha.1` and published as the
+[0.1.53 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.53-alpha.1).
+Unauthenticated downloads returned the 123,040,987-byte installer and 93-byte
+sidecar; installer SHA-256
+`1ED8B945DF44400CC697E8A6735C5D00D9E57D4D5B3F534A022AA4512FFDD377`
+matched the exact tested candidate and sidecar. Silent installation of the
+downloaded file over the installed candidate exited 0, preserved its bytes,
+installed ProductVersion 0.1.53 and the same executable SHA-256
+`A841B2C05F78EE1FE1D76452C8CB68165E44625E81E1084BF8D198941D17F6A6`.
+The downloaded installation passed hidden native smoke with project/record
+readback, onboarding and safe preview; a new real Codex Send was NOT_RUN for
+the downloaded build. The source-equivalent debug build did pass one real
+reply/restart/resume check earlier in this package. The empty-thread limitation
+remains; clean-machine setup, fresh login completion, external browser launch
+and manual screen-reader acceptance remain NOT_RUN. No manual GH CI ran.
+
+**Next product step:** continue the approachable UI and end-to-end gaps; do
+not mistake this coherent alpha package for full Forge Desktop completion.
