@@ -33,5 +33,11 @@ The installed executable reports ProductVersion 0.1.44, SHA-256
 `72BFB98A1EEC5432E61CD7E455BDBB7DA5112A76BCE33ECFC14D57C1D4F91C9D`.
 The candidate remained byte-identical after installation. Hidden native smoke
 of the installed package passed, including a full process restart and a new
-project-bound read of the selected result. Public downloaded-file readback
-is pending publication. A source commit alone does not update the app.
+project-bound read of the selected result. Package commit `fb86808a` was
+pushed and tagged `desktop-v0.1.44-alpha.1`. An unauthenticated public
+download returned the same 123,091,825 bytes and SHA-256 as the tested
+candidate and published sidecar. Silent installation of those downloaded
+bytes over the candidate returned exit 0, preserved the downloaded file, and
+installed the same 0.1.44 executable hash. The downloaded installation
+passed hidden native smoke again, including the full process restart and
+fresh file read. A source commit alone does not update the app.

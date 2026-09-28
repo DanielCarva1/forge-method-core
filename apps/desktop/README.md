@@ -9003,3 +9003,24 @@ BRL cost and Pro quota attribution remain UNKNOWN.
 **State:** candidate installed and tested; commit, push, tag, public download
 and downloaded-file install/readback remain. No worker was delegated. After
 publication, continue the broad Desktop goal at another user-visible gap.
+
+### Desktop 0.1.44 public readback — 2026-09-28
+
+Package commit `fb86808a` was pushed on `codex/desktop-shell`; annotated tag
+`desktop-v0.1.44-alpha.1` points to it. The exact tested candidate and
+sidecar were published in the [0.1.44 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.44-alpha.1).
+Unauthenticated downloads returned 123,091,825 bytes and SHA-256
+`60873230D44C0D04A71C3E6BF46E265BF2F591D6104FC2E79516BE124344D83D`,
+identical to the candidate and public sidecar. Silent installation of the
+downloaded bytes over the candidate returned exit 0, and the downloaded
+file retained its hash. The installed executable reports ProductVersion
+0.1.44, SHA-256
+`72BFB98A1EEC5432E61CD7E455BDBB7DA5112A76BCE33ECFC14D57C1D4F91C9D`.
+Downloaded-installation hidden native smoke passed, including a full process
+restart, project reopen, and fresh native read of its previously selected
+result. Real Codex Send was NOT_RUN in this preview-continuity package.
+No manual GitHub CI or candidate rebuild followed publication. Continue the
+broad Desktop goal at the next user-visible gap; clean-machine setup,
+physical mobile access and manual screen-reader acceptance remain separate
+unverified work. Model-attributed tokens, BRL cost and Pro quota attribution
+remain UNKNOWN.
