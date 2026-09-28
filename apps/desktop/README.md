@@ -10010,3 +10010,31 @@ candidate had already passed one real Codex reply/restart/Home-resume check;
 that exact real exchange was NOT_RUN again after downloading. No broad suite
 or manual GH CI ran. Continue product UI and distribution work; this alpha is
 not completion.
+
+### Desktop 0.1.57 Explore-to-project candidate — 2026-09-28
+
+Choosing an Explore theme now confirms near the workspace heading that its
+initial idea is ready in the conversation and nothing was sent. A visible
+action in that same heading chooses a folder; once a folder is selected, the
+action prepares that project through the existing path without sending the
+draft or reopening the picker. A preparation failure is also shown beside the
+action, without losing the draft. The action disappears after successful setup.
+This addresses a 360px view where the composer is far below the project form.
+Focused headless `tests/composer-folder.cjs` passed at 360px for folder choice,
+visible failure/retried preparation, draft preservation, action disappearance,
+and one explicit Send; no horizontal overflow was observed. The rebuilt debug app
+passed focused hidden-native `tests/native-composer-folder.cjs`: an Explore
+draft prepared a disposable real Forge project via the new action, Home
+reopened it through native inspection, and no Codex Send occurred. That native
+build preceded the additional top-of-page failure message; its failure case
+has focused browser coverage only. The source version is now 0.1.57. One NSIS
+candidate (`Forge_0.1.57_x64-setup.exe`, 123,050,785 bytes, SHA-256
+`F8C85C18EBF0EED265C826B8E438B1B500E9E0C505CF1B887B9385C4DF85B43E`)
+was installed silently over 0.1.56: exit 0, unchanged candidate bytes,
+installed ProductVersion 0.1.57 and executable SHA-256
+`0CC10EBB0F8C81DD7863AB9894C412C5339B0C7379D115265C615DB5336BABE3`.
+The installed candidate passed the focused hidden-native real Forge project
+preparation/Home-reopen check with no Codex Send. No broad suite or manual GH
+CI ran. Next: review the diff, commit/push/tag and publish this exact candidate
+under standing alpha authorization, then verify the anonymous download and
+installed readback. Do not rebuild the candidate.

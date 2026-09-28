@@ -5,7 +5,7 @@ import { setPreviewProject } from './preview.mjs';
 import { rememberProject } from './recent-projects.mjs';
 import { projectDisplayName } from './project-display.mjs';
 import './navigation.mjs';
-import { chooseStarter } from './explore.mjs';
+import { chooseStarter, clearStarterHandoff, showStarterHandoffError } from './explore.mjs';
 
 const status = document.querySelector('#native-status');
 const retry = document.querySelector('#retry');
@@ -200,10 +200,12 @@ form.addEventListener('submit', async event => {
     workspaceBackLabel.textContent = 'Voltar aos projetos';
     setup.open = false;
     projectStatus.textContent = 'Projeto pronto. Escreva para começar ou continuar a conversa; nada foi enviado.';
+    clearStarterHandoff();
     openedProject = true;
     if (!document.querySelector('#workspace').hidden) document.querySelector('#message-text').focus();
   } catch (error) {
     projectStatus.textContent = typeof error === 'string' ? error : 'Não foi possível conferir o projeto. Tente novamente.';
+    showStarterHandoffError(projectStatus.textContent);
   } finally {
     inspect.disabled = false;
     start.disabled = false;

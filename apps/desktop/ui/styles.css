@@ -50,6 +50,8 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 #home-project-list { margin-top: 8px; font-size: .9rem; }
 .screen-heading { margin-block: 24px; max-width: 900px; }
 .screen-heading h1 { font-size: clamp(2rem, 4vw, 2.6rem); }
+#idea-choose-folder { max-width: 100%; margin-top: 8px; }
+#idea-choose-folder[hidden] { display: none; }
 .back-link { display: inline-flex; gap: 8px; align-items: center; min-height: 48px; font-weight: 650; }
 .explore-heading { position: relative; isolation: isolate; padding: 36px 0 34px; }
 .explore-heading::before { content: ""; position: absolute; z-index: -1; right: 0; top: -60px; width: 470px; height: 165px; background: url("assets/explore-artwork.png") -900px 0 / 1536px 1024px no-repeat; mask-image: linear-gradient(to right, transparent, #000 24%); pointer-events: none; }
