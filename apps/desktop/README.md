@@ -6604,3 +6604,90 @@ continue the full nontechnical journey. Bundle it with a coherent later alpha
 rather than claiming an installer update from a source commit. The real
 fresh-account login, clean-machine setup and safe positive browser launch
 remain unverified.
+
+### First-use folder clarity — 2026-09-27
+
+The full nontechnical desktop journey remains the active objective. A hidden
+native visual audit of installed 0.1.23 covered Home, Explore, selected idea,
+and the empty conversation without sending a provider turn. The project input
+displayed `D:\MeusProjetos\MeuSite` as a placeholder, which could look like
+an already selected folder. The source UI now says **Nenhuma pasta escolhida**
+and explicitly offers the folder picker or a pasted path. The path remains
+empty until the user actually chooses or enters one. Native screenshot hooks
+were added for repeatable visual readback.
+
+**PASS:** two full headless browser UI suite runs, `node --check` on touched
+scripts, `git diff --check`, and visual inspection of
+`C:/ForgeFast/forge-empty-folder-clarity-20260927.png`. The browser test
+asserts that the empty-state placeholder is not passed as a real path. The
+installed native 0.1.23 visual smoke passed twice **before** this source copy
+change. An incremental offline Desktop debug build of the changed UI passed.
+Two hidden native debug runs then passed: the revised first-use screenshot
+(`C:/ForgeFast/forge-debug-firstuse-folder-clarity-20260927.png`), real
+Windows folder-dialog cancel and selection, onboarding of disposable empty
+`C:/ForgeFast/forge-firstuse-folder-20260927`, bounded Forge record readback,
+and authenticated Codex connection/disconnection with **zero messages sent**.
+No Rust source change, provider-model turn, or subagent was involved. Per-task
+BRL and Pro-quota impact remain UNKNOWN, not zero.
+
+**Pending local changes:** `ui/index.html`, `tests/browser.cjs`, and
+`tests/native.cjs`; no commit, push, version bump or installer update in this
+slice. **Next exact step:** test a first real Codex message and result from a
+new disposable project (the folder selection and idle connection already
+passed), then bundle this clarity change with a coherent Desktop alpha and
+run package-boundary checks. Do not imply a source commit updated the
+installed app.
+
+### Real desktop creation-and-change journey — 2026-09-27
+
+The source debug build passed a hidden native run with the actual Windows
+folder picker and real Codex. A disposable project received one initial
+message, then Codex created `site/index.html` with local CSS. The app opened
+that file in its isolated HTML preview, exposed a **Pedir mudança neste
+arquivo** action without sending prematurely, sent the follow-up in the same
+conversation, and refreshed the rendered page after the file changed. A
+WebView reload restored both sides of the conversation without resending.
+The screenshot `C:/ForgeFast/forge-debug-artifact-journey-20260927.png`
+visually confirms the real generated page inside the app. The test's generated
+project lives under a temporary WebView test profile; it did not modify a
+maintainer project.
+
+**PASS:** hidden native `native.cjs` with `FORGE_TEST_PROJECT`, real folder
+selection, `FORGE_TEST_AGENT_SMOKE=1`, and
+`FORGE_TEST_ARTIFACT_JOURNEY=1`; all assertions passed. This proves the
+tested debug-build journey on this authenticated Windows machine, not a fresh
+account, clean machine, installed candidate, or mobile. No subagent was used.
+Per-task BRL and Pro-quota impact remain UNKNOWN. **Next exact step:** prepare
+the coherent Desktop 0.1.24 alpha package for the project-record and first-use
+clarity changes, run package-boundary checks, install the single candidate
+headlessly over 0.1.23, and verify its hash. Do not claim publication until
+the public download matches that candidate.
+
+### Desktop 0.1.24 candidate installed locally — 2026-09-27
+
+The 0.1.24 package combines the quieter project record and unambiguous
+first-use folder field. `RELEASE_NOTES-0.1.24.md` records the exact changes
+and limits. **PASS:** eight frontend unit tests, the full headless browser
+suite, Desktop offline `cargo check`, all 50 Desktop crate tests, strict
+Clippy, `git diff --check`, and one NSIS release build. No core-workspace or
+GitHub CI run was triggered for these Desktop UI changes.
+
+The one candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.24_x64-setup.exe`,
+123,068,738 bytes, SHA-256
+`EC12F1AC8347FD54163716EDDC91455772EA83003E9CFA4835C60E6CE967B803`.
+Its silent installation over 0.1.23 returned exit 0, did not change its hash,
+and installed version 0.1.24 (executable SHA-256
+`13E7E514C1741D6F95E1254BCB50062896A2E87FA3FB0FC848B2243CAA739EAF`).
+The **installed** candidate passed a hidden native run of actual Windows
+folder selection, Forge project onboarding and record readback, plus an idle
+authenticated Codex connection/disconnection with zero sends. A real
+Codex-generated page, same-chat change and reload had passed in the source
+debug build before packaging. Clean-machine setup, fresh-account login and
+positive external-browser opening remain unverified.
+
+**State:** installed locally, not yet committed or public. No subagents were
+used. Per-task BRL and Pro-quota impact remain UNKNOWN. **Next exact step:**
+review and selectively commit/push this package, publish only the already
+tested candidate under the maintainer's standing alpha authorization, then
+download anonymously and compare exact bytes before calling it available.

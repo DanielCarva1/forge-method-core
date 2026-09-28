@@ -69,6 +69,7 @@ async function operatePreviewDialog(page, file) {
     const context = browser.contexts()[0];
     let page = context.pages()[0] || await context.waitForEvent('page', { timeout: 5000 });
     await page.locator('#home').waitFor({ state: 'visible' });
+    if (process.env.FORGE_HOME_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_HOME_SCREENSHOT, fullPage: true });
     const formatted = await page.evaluate(async () => {
       const { renderAgentMessage } = await import('./message-format.mjs');
       const content = document.createElement('div');
@@ -123,9 +124,11 @@ async function operatePreviewDialog(page, file) {
     await page.getByRole('link', { name: /Tecnologia/ }).click();
     assert.equal(await draft.inputValue(), 'Minha própria ideia não pode sumir.');
     assert.match(await page.locator('#idea-selection-status').textContent(), /ideia escrita foi mantida/);
+    if (process.env.FORGE_IDEA_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_IDEA_SCREENSHOT, fullPage: true });
     console.log('PASS: native first-use help and idea selection preserve a handwritten draft.');
     await page.locator('nav a[data-route="workspace"]').click();
     await page.locator('#workspace').waitFor({ state: 'visible' });
+    if (process.env.FORGE_FIRST_USE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_FIRST_USE_SCREENSHOT, fullPage: true });
     assert.equal(await page.getByRole('button', { name: 'Escolher pasta' }).isEnabled(), true);
     if (process.env.FORGE_TEST_FOLDER_DIALOG === 'select') {
       await operateFolderDialog(page, 'cancel');

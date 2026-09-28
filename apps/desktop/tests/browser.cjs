@@ -173,6 +173,9 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#projects-open-folder-label').textContent(), 'Escolher uma pasta');
     await projectsPage.getByRole('link', { name: 'Escolher uma pasta' }).click();
     await projectsPage.locator('#workspace').waitFor({ state: 'visible' });
+    if (process.env.FORGE_EMPTY_FOLDER_SCREENSHOT) await projectsPage.screenshot({ path: process.env.FORGE_EMPTY_FOLDER_SCREENSHOT, fullPage: true });
+    assert.equal(await projectsPage.locator('#project-root').getAttribute('placeholder'), 'Nenhuma pasta escolhida');
+    assert.equal(await projectsPage.locator('#project-root').inputValue(), '', 'The empty-state label must not become a real project path');
     assert.equal(await projectsPage.getByRole('button', { name: 'Continuar nesta pasta' }).isVisible(), true);
     await projectsPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     await projectsPage.locator('#project-status').filter({ hasText: 'Escolha uma pasta' }).waitFor();
