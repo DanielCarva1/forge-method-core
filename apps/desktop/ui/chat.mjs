@@ -41,6 +41,7 @@ const emptyDescription = byId('empty-conversation-description');
 const resumeLastConversation = byId('resume-last-conversation');
 const previewLastResult = byId('preview-last-result');
 const previewIntro = byId('preview-intro');
+const emptyPreviewText = 'Quando o agente indicar um arquivo, você poderá abri-lo aqui. Também pode escolher um arquivo da pasta do projeto.';
 const confirmReviewedSend = byId('confirm-reviewed-send');
 let project = null;
 let connected = false;
@@ -165,7 +166,7 @@ export function setProject(value) {
   project = value;
   lastResultPath = null;
   previewLastResult.hidden = true;
-  previewIntro.textContent = 'Quando houver um arquivo, confira o resultado aqui.';
+  previewIntro.textContent = emptyPreviewText;
   citedFiles.hidden = true;
   citedFiles.open = false;
   citedFilesList.replaceChildren();
@@ -325,7 +326,7 @@ function updateLastResultAction() {
   previewLastResult.hidden = !lastResultPath;
   previewIntro.textContent = lastResultPath
     ? citedEarlier ? 'Um resultado anterior tem um arquivo. Confira-o aqui antes de pedir mudanças.' : 'A resposta cita um arquivo. Confira-o aqui antes de pedir mudanças.'
-    : 'Quando houver um arquivo, confira o resultado aqui.';
+    : emptyPreviewText;
   citedFiles.hidden = paths.length < 2;
   citedFilesSummary.textContent = `${paths.length} arquivos citados na resposta`;
   citedFilesMore.hidden = paths.length <= 20;

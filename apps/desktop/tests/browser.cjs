@@ -235,6 +235,7 @@ async function openConversation(page) {
     await projectsPage.locator('#project-location summary').click();
     assert.equal(await projectsPage.locator('#project-preview').isVisible(), true);
     assert.equal(await projectsPage.locator('.preview-empty').isVisible(), true, 'An actual empty state precedes any local result');
+    assert.match(await projectsPage.locator('#preview-intro').textContent(), /agente indicar um arquivo.*escolher um arquivo da pasta/);
     assert.equal(await projectsPage.locator('#preview-status').isVisible(), false, 'The untouched empty state does not repeat the same message');
     assert.equal(await projectsPage.evaluate(() => document.querySelector('#project-record').getBoundingClientRect().top < document.querySelector('.preview').getBoundingClientRect().top), true, 'The real record precedes an empty preview');
     assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['conversation', 'project-record', 'project-preview', 'project']);
@@ -262,8 +263,9 @@ async function openConversation(page) {
     assert.equal(await projectsPage.evaluate(() => document.querySelector('.preview').getBoundingClientRect().top < document.querySelector('.project').getBoundingClientRect().top), true);
     assert.equal(await projectsPage.evaluate(() => document.querySelector('#project-record').getBoundingClientRect().bottom < document.querySelector('.project').getBoundingClientRect().top), true);
     assert.equal(await projectsPage.locator('#preview-text').textContent(), '<script>primeiro</script>');
+    assert.equal(await projectsPage.evaluate(() => !!(document.getElementById('request-preview-change').compareDocumentPosition(document.querySelector('.preview-origin')) & Node.DOCUMENT_POSITION_FOLLOWING)), true, 'Change request appears before result metadata and optional browser controls');
     assert.equal(await projectsPage.locator('#preview-result script').count(), 0);
-    assert.match(await projectsPage.locator('#preview-result').textContent(), /Publicação não verificada/);
+    assert.match(await projectsPage.locator('#preview-result').textContent(), /Esta prévia não confirma publicação na internet/);
     await projectsPage.getByRole('button', { name: 'Abrir prévia' }).click();
     assert.equal(await projectsPage.locator('#preview-dialog').isVisible(), true);
     assert.equal(await projectsPage.locator('#preview-dialog-site-note').isVisible(), false, 'A text file must not show site-only limitations');
@@ -999,9 +1001,9 @@ async function openConversation(page) {
     await page.evaluate(() => { window.progressNoDirection = true; window.progressState = 'absent'; });
     await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
-    assert.match(await page.locator('#progress-status').textContent(), /Ainda não há andamento registrado no Forge/);
-    assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem andamento registrado');
-    assert.match(await page.locator('#record-empty-help').textContent(), /Você pode começar ou continuar pela conversa/);
+    assert.match(await page.locator('#progress-status').textContent(), /Ainda não há um próximo passo registrado/);
+    assert.equal(await page.locator('#workspace-phase').textContent(), 'Próximo passo ainda não registrado');
+    assert.match(await page.locator('#record-empty-help').textContent(), /Comece pela conversa ao lado.*arquivos continuam na pasta escolhida/);
     await page.evaluate(() => { window.progressState = 'current'; window.progressDecisionCount = 0; });
     await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     assert.match(await page.locator('#record-decisions').textContent(), /não mostra decisões em aberto/);

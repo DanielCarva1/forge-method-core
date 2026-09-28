@@ -7045,3 +7045,133 @@ No subagent was used; per-task BRL and Pro-quota impact remain UNKNOWN.
 remaining high-impact first-use/preview and conversation gaps rather than
 repeating already proved browser or read-only history tests. Avoid publishing
 another alpha for test-only changes; collect a coherent user-visible package.
+
+### Installed first-use audit and clearer empty states — 2026-09-27
+
+A hidden native audit of installed 0.1.26 captured Home, Explore, and the
+first-use conversation on an isolated Windows desktop. The real Windows folder
+dialog then canceled and selected a fresh disposable directory
+`D:/Temp/User/forge-0126-new-project-audit`. Forge initialized that exact empty
+folder through the existing action, returned its authoritative empty record,
+and enabled the composer without sending a provider turn. The same smoke
+checked onboarding of a separate folder with an existing file (unchanged),
+local protected preview, path rejection and frontend-to-Rust identity. All
+passed. Screenshots are under `C:/ForgeFast/forge-0126-*-audit.png`.
+The installed project's initial screen repeated **Sem andamento registrado**
+without making the next action obvious; the empty preview also assumed the
+person knew which file to inspect. These were concrete clarity issues, not
+backend failures.
+
+**Source-only UI correction:** `ui/progress.mjs` and `ui/index.html` now say the
+next step is not yet recorded and invite the person to begin in the adjacent
+conversation, while keeping the distinction between Forge's record and files.
+`ui/chat.mjs` and the HTML empty preview now explain that an agent-cited file
+can be opened here, or a file can be chosen from the project folder. No
+fictitious progress or result was added. Browser/native test expectations were
+updated, including explicit assertions for the guidance. `node --check`,
+`git diff --check`, full mocked-IPC browser suite and source-built hidden native
+folder/onboarding/preview smoke passed. Native screenshot
+`C:/ForgeFast/forge-next-empty-record-audit.png` showed the clearer copy.
+No Rust behavior changed, so no new Rust check/test was run for this UI text
+slice. Other concurrent Rust work on this machine made the source debug build
+slow (~5m); no process was killed.
+
+**Current state:** installed/public 0.1.26 remains unchanged. Local uncommitted
+edits: `ui/progress.mjs`, `ui/index.html`, `ui/chat.mjs`,
+`tests/browser.cjs`, `tests/native.cjs`, `tests/native-auth.cjs`,
+`tests/artifact-resume.cjs`, and this README. The disposable project folder
+remains intentionally available for another bounded first-use test; it is
+not a user project. No subagent or provider turn was used; task-level BRL and
+Pro-quota impact remain UNKNOWN. **Next exact step:** inspect a real
+conversation/result screen for a concrete remaining interaction or clarity
+gap, then integrate any related fix before considering the next alpha. Do not
+publish a new installer solely for these text changes. Keep the external
+browser button, fresh-account real login, clean-machine install and manual
+accessibility acceptance as NOT_RUN.
+
+### Real-result conversation audit — 2026-09-27
+
+The source-built hidden native app resumed the existing disposable Codex chat
+`01a0e25f-27b4-7f73-b3e8-9298bccdde2f` in
+`D:/Temp/User/forge-desktop-webview-ENrGgT/new-project`. This chat has 33 real
+messages and an actual local `site/index.html` result. The read-only test
+opened the agent-cited file, displayed the updated "Jardim de ideias renovado"
+page in the protected preview, prepared a change request in the same
+conversation, then fully restarted the native process and repeated the check.
+It verified message count/order, composer focus and viewport visibility, and
+unchanged file SHA-256. **PASS:** no Send, provider turn or file edit occurred.
+Screenshots: `C:/ForgeFast/forge-next-real-result-preview.png` and
+`C:/ForgeFast/forge-next-real-result-change.png`. The latter was inspected
+visually: the request draft, Send button, local result, and change action were
+visible together. This is native read-only continuity evidence, **not** a new
+real provider response or proof of external-browser launching.
+
+The screenshot exposed one plain-language gap: "Publicação não verificada"
+is ambiguous for a new user. Source `ui/index.html` now says the file is from
+the chosen project folder and the preview does not confirm publication on the
+internet. Related browser/native assertions were updated. The complete
+mocked-IPC browser suite passed, as did JS syntax checks and `git diff
+--check`. A direct run of `artifact-resume.cjs` without its required fixture
+variables exited before testing; it is **NOT_RUN**, not a product failure.
+The native real-result pass above preceded this last copy edit; no rebuilt
+native binary or installer yet contains the latest sentence.
+
+**Current state:** public/installed 0.1.26 is unchanged. Nine local files are
+modified: `ui/progress.mjs`, `ui/index.html`, `ui/chat.mjs`, `tests/browser.cjs`,
+`tests/native.cjs`, `tests/native-auth.cjs`, `tests/artifact-resume.cjs`,
+`tests/native-real-result-readonly.cjs`, and this README. No commit, push or
+release this slice. No subagent was used; task-level BRL and Pro-quota impact
+remain UNKNOWN. **Next exact step:** review the integrated diff, rebuild the
+source Desktop only at the next coherent package boundary, and verify the
+final preview copy plus first-use empty state in the hidden native app before
+version bump/installer work. Continue inspecting higher-impact #91/#92 UX
+gaps; do not publish an alpha solely for wording. External-browser launch,
+fresh-account login, clean-machine install and manual accessibility remain
+NOT_RUN.
+
+### Desktop 0.1.27 installed candidate — 2026-09-27
+
+The coherent user-visible package combines clearer first-project guidance,
+the result's local/publication wording, and a **Pedir mudança neste arquivo**
+action immediately below the displayed result rather than buried after
+technical preview notes. `RELEASE_NOTES-0.1.27.md` describes scope and limits.
+Version changed only in the Desktop Cargo manifest/lock and Tauri config. No
+Forge engine, Codex protocol or project-state behavior was changed. The
+published alpha remains 0.1.26 until 0.1.27 is uploaded and downloaded back.
+
+**PASS:** integrated diff review; complete mocked-IPC browser suite; eight
+frontend unit tests; Desktop `cargo check`, 50 passed crate tests (one
+conditional browser-association test ignored), strict Clippy; JS syntax and
+`git diff --check`; source-built hidden native first-use/authoritative-record
+smoke; and read-only native restart of a real 33-message conversation and
+actual HTML result. The change action was in the visible viewport before
+scrolling, then focused the composer without sending. The same source build
+showed the final plain-language preview copy. No new provider turn was spent.
+Rust checks were run once at the package boundary, not after each UI edit.
+
+One NSIS candidate was built with the pinned staged Forge core 0.13.2:
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.27_x64-setup.exe`,
+123,106,078 bytes, SHA-256
+`F25D5B43D28D0FCD7E01B3D1ABE093E21D7AB49A61A59C3B6897AB894D83C724`.
+Its `.sha256` sidecar is adjacent. Silent installation over public 0.1.26
+returned exit 0 and left candidate bytes unchanged. The installed executable
+reports 0.1.27 and has SHA-256
+`410C0208EADD831DD3622BE24628F8025C1FAC3BCEDE57F583CF5764805C418A`.
+The installed app passed hidden native smoke with an actual Windows folder
+dialog and, separately, with an actual file dialog. The installed read-only
+real-result/restart check also passed with no Send or file change. One run
+using **both** real dialogs timed out after the Markdown preview step; it
+passed on retry, including protected HTML/CSS/image rendering. The timeout
+cause is unknown. The hidden runner now prints its log on timeout, and the
+native test offers opt-in step diagnostics for any recurrence. Do not erase
+that first incomplete run from the evidence or call its cause resolved.
+
+**State:** 0.1.27 is installed locally, not yet committed or published. No
+GitHub CI was run. External-browser button launch, fresh-account login,
+clean-machine install, manual accessibility acceptance, mobile and offline
+self-contained distribution remain NOT_RUN/unfinished. No subagent was used;
+per-task BRL and Pro-quota impact remain UNKNOWN. **Next exact step:** review
+and selectively commit/push this package, tag/release the exact tested
+installer under the maintainer's standing alpha publication authorization,
+then download unauthenticated bytes and verify size/hash and installed
+readback. Do not rebuild this candidate.

@@ -15,8 +15,8 @@ let historyPending = false;
 let historyLoaded = false;
 let slowNotice;
 let historySlowNotice;
-const labels = { absent: 'Ainda não há andamento registrado no Forge para este projeto.', current: 'Acompanhamento do Forge disponível. Pode não incluir a conversa mais recente.', stale: 'O acompanhamento do Forge está desatualizado.', blocked: 'O trabalho acompanhado pelo Forge tem uma pendência.', completed: 'Esta parte do trabalho foi concluída. O projeto pode continuar.', abandoned: 'O trabalho acompanhado pelo Forge foi encerrado sem conclusão.' };
-const stateLabels = { absent: 'Sem andamento registrado', current: 'Em andamento', stale: 'Acompanhamento desatualizado', blocked: 'Há uma pendência', completed: 'Esta parte foi concluída', abandoned: 'Encerrado sem concluir' };
+const labels = { absent: 'Ainda não há um próximo passo registrado para este projeto.', current: 'Acompanhamento do Forge disponível. Pode não incluir a conversa mais recente.', stale: 'O acompanhamento do Forge está desatualizado.', blocked: 'O trabalho acompanhado pelo Forge tem uma pendência.', completed: 'Esta parte do trabalho foi concluída. O projeto pode continuar.', abandoned: 'O trabalho acompanhado pelo Forge foi encerrado sem conclusão.' };
+const stateLabels = { absent: 'Próximo passo ainda não registrado', current: 'Em andamento', stale: 'Acompanhamento desatualizado', blocked: 'Há uma pendência', completed: 'Esta parte foi concluída', abandoned: 'Encerrado sem concluir' };
 const phases = {
   '0-route': ['Preparação', 'Entendendo como começar.'],
   '1-discovery': ['Descoberta', 'Entendendo o problema, as pessoas e os caminhos possíveis.'],
@@ -215,14 +215,14 @@ async function loadProgress() {
     emptyHelp.hidden = data.status !== 'absent';
     emptyHelp.textContent = direction
       ? 'O objetivo está registrado. O próximo trabalho ainda não foi definido no Forge. Continue a conversa para combiná-lo com o agente.'
-      : 'Quando houver trabalho registrado, ele aparecerá aqui. Você pode começar ou continuar pela conversa; seus arquivos não dependem deste painel.';
+      : 'Comece pela conversa ao lado. Quando um próximo passo for registrado no Forge, ele aparecerá aqui. Seus arquivos continuam na pasta escolhida.';
     document.getElementById('record-phase').textContent = phase[0];
     document.getElementById('record-phase-help').textContent = data.status === 'completed'
       ? `${phase[1]} Este trabalho foi concluído; a etapa geral pode continuar aqui.` : phase[1];
     document.getElementById('record-activity-label').textContent = data.status === 'completed'
       ? 'Resultado registrado' : data.status === 'abandoned' ? 'Último registro' : 'Agora';
     workspacePhase.textContent = data.status === 'absent'
-      ? direction ? 'Direção registrada; próximo trabalho pendente' : 'Sem andamento registrado'
+      ? direction ? 'Direção registrada; próximo trabalho pendente' : stateLabels.absent
       : data.status === 'stale' ? `Etapa do projeto (desatualizada): ${phase[0]}` : `Etapa do projeto: ${phase[0]}`;
     workspacePhase.hidden = false;
     const directionPanel = document.getElementById('record-direction');

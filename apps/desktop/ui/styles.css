@@ -139,7 +139,7 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 .preview-markdown > :last-child { margin-bottom: 12px; }
 .preview iframe, .preview-dialog iframe { display: block; width: 100%; min-height: 290px; aspect-ratio: 16 / 10; margin: 14px 0; border: 1px solid var(--line); border-radius: 16px; background: white; pointer-events: none; }
 .preview #preview-result > :first-child:not([hidden]) { margin-top: 6px; }
-.preview #request-preview-change { margin-top: 4px; }
+.preview #request-preview-change { margin: 12px 0 8px; }
 .message-file-link { min-height: 48px; margin: -8px 0; padding: 4px 2px; border: 0; border-radius: 4px; background: transparent; color: inherit; font-weight: inherit; text-decoration: underline; text-underline-offset: .2em; }
 .message-file-link:not(:disabled):hover { box-shadow: none; text-decoration-thickness: 2px; }
 .preview-dialog iframe { min-height: min(60vh, 560px); }

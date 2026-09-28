@@ -221,6 +221,7 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.getByRole('heading', { name: 'Onde estamos' }).isVisible(), true);
       assert.equal(await page.locator('#project-record').isVisible(), true);
       assert.equal(await page.locator('.preview-empty').isVisible(), true);
+      assert.match(await page.locator('#preview-intro').textContent(), /agente indicar um arquivo.*escolher um arquivo da pasta/);
       assert.equal(await page.locator('.project #project-record').count(), 0);
       if (await page.evaluate(() => innerWidth > 900)) {
         assert.equal(await page.evaluate(() => document.querySelector('#project-preview').getBoundingClientRect().top < document.querySelector('.project').getBoundingClientRect().top), true);
@@ -311,8 +312,9 @@ async function operatePreviewDialog(page, file) {
         assert.equal(await page.locator('#record-pending').evaluate(node => !!(node.compareDocumentPosition(document.getElementById('record-direction-card')) & Node.DOCUMENT_POSITION_FOLLOWING)), true,
           'Native unresolved questions should precede optional technical direction');
       }
-      if (recordedPhase === 'Sem andamento registrado') {
+      if (recordedPhase === 'Próximo passo ainda não registrado') {
         assert.equal(await page.locator('#record-empty-help').isVisible(), true);
+        assert.match(await page.locator('#record-empty-help').textContent(), /Comece pela conversa ao lado.*arquivos continuam na pasta escolhida/);
         assert.equal(await page.locator('.record-stage').isVisible(), false);
         assert.equal(await page.locator('#record-work').isVisible(), false);
         assert.equal(await page.locator('#record-direction').isVisible(), false);
@@ -357,7 +359,7 @@ async function operatePreviewDialog(page, file) {
         }
       } else assert.equal(await page.locator('#record-questions-shortcut').isVisible(), false);
       if (process.env.FORGE_RECORD_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_RECORD_SCREENSHOT, fullPage: true });
-      console.log(`PASS: actual bounded Forge workflow readback displayed ${recordedPhase === 'Sem andamento registrado' ? 'its honest empty state' : 'separately from agent activity'}.`);
+      console.log(`PASS: actual bounded Forge workflow readback displayed ${recordedPhase === 'Próximo passo ainda não registrado' ? 'its honest empty state' : 'separately from agent activity'}.`);
       if (process.env.FORGE_TEST_DIRECTION_HISTORY === '1') {
         await page.locator('#direction-history summary').click();
         await page.locator('#direction-history-status').filter({ hasText: /direç(ão|ões) registrada/ }).waitFor({ timeout: 35000 });
@@ -461,7 +463,7 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('#confirmed-root').textContent(), newProject);
       assert.equal(await page.locator('#workspace-title').textContent(), 'new-project');
       await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 35000 });
-      assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem andamento registrado');
+      assert.equal(await page.locator('#workspace-phase').textContent(), 'Próximo passo ainda não registrado');
       assert.equal(await page.locator('#record-empty-help').isVisible(), true);
       console.log('PASS: one folder action initialized a new project and its Forge record without a second setup command.');
       assert.equal(await page.locator('#connect-agent').isEnabled(), true);
@@ -493,7 +495,7 @@ async function operatePreviewDialog(page, file) {
         await page.waitForFunction(before => window.terminalRecordReads > before, readsBefore);
         await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 35000 });
         assert.equal(await page.locator('#progress-result').isVisible(), true);
-        assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem andamento registrado');
+        assert.equal(await page.locator('#workspace-phase').textContent(), 'Próximo passo ainda não registrado');
         await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
         await page.evaluate(() => window.restoreTerminalRecordInvoke());
         console.log('PASS: native WebView terminal event automatically re-reads the unchanged, authoritative Forge project record (controlled agent event; no real Codex turn).');
@@ -584,6 +586,7 @@ async function operatePreviewDialog(page, file) {
         console.error('Site preview diagnosis:', previewResponses, await page.evaluate(() => ({ pageUrl: location.href, src: document.querySelector('#preview-site').src, text: document.querySelector('#preview-text').textContent, status: document.querySelector('#preview-status').textContent })), await Promise.all(page.frames().map(async frame => ({ url: frame.url(), body: (await frame.locator('body').textContent().catch(() => 'unavailable'))?.slice(0, 300) }))));
         throw error;
       }
+      if (process.env.FORGE_NATIVE_DIAGNOSTICS === '1') console.log('DIAG: site heading visible');
       assert.equal(await page.locator('#preview-site-note').isVisible(), true);
       assert.equal(await page.locator('#preview-site-note').evaluate(node => node.open), false);
       await page.locator('#preview-site-note summary').click();
@@ -597,7 +600,9 @@ async function operatePreviewDialog(page, file) {
         }
         return getComputedStyle(node).color;
       }), 'rgb(11, 80, 34)', 'Local CSS should finish loading before its color is asserted');
+      if (process.env.FORGE_NATIVE_DIAGNOSTICS === '1') console.log('DIAG: local CSS applied');
       assert.ok(await page.frameLocator('#preview-site').getByRole('img', { name: 'Arte local' }).evaluate(node => node.naturalWidth > 0));
+      if (process.env.FORGE_NATIVE_DIAGNOSTICS === '1') console.log('DIAG: local image loaded');
       assert.equal(await page.evaluate(() => window.previewEscaped), false);
       await page.waitForTimeout(1400);
       assert.deepEqual(outsidePreviewRequests, [], 'Preview must not request an external resource or follow automatic navigation');
@@ -609,6 +614,7 @@ async function operatePreviewDialog(page, file) {
       await page.getByRole('button', { name: 'Ver prévia visual' }).click();
       await page.getByRole('button', { name: 'Abrir prévia' }).click();
       await page.frameLocator('#preview-dialog-site').getByRole('heading', { name: 'Prévia visual local' }).waitFor({ timeout: 20000 });
+      if (process.env.FORGE_NATIVE_DIAGNOSTICS === '1') console.log('DIAG: expanded site visible');
       assert.equal(await page.locator('#preview-dialog-site-note').isVisible(), true, 'Site preview should disclose its restrictions');
       const dialogFrame = page.frameLocator('#preview-dialog-site');
       assert.equal(await dialogFrame.locator('body').evaluate(() => document.documentElement.scrollHeight > innerHeight), true, 'Long local site should overflow the enlarged preview');
@@ -707,7 +713,7 @@ async function operatePreviewDialog(page, file) {
           await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
           assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
           await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias' }).waitFor({ timeout: 20000 });
-          assert.match(await page.locator('.preview-origin').first().textContent(), /Publicação não verificada/);
+          assert.match(await page.locator('.preview-origin').first().textContent(), /Esta prévia não confirma publicação na internet/);
           if (process.env.FORGE_ARTIFACT_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_ARTIFACT_SCREENSHOT, fullPage: true });
           await page.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
           assert.match(await composer.inputValue(), /site\\index\.html/);

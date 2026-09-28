@@ -63,7 +63,11 @@ public static class ForgeHiddenNativeTest {
 try {
   $powershell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
   $timeoutMs = if ($testScript -eq 'native-personal-ideas.cjs') { [uint32]1380000 } elseif ($testScript -eq 'native-forge-decision.cjs' -and $env:FORGE_DECISION_CONTINUE -eq '1') { [uint32]720000 } elseif ($env:FORGE_TEST_ARTIFACT_JOURNEY -eq '1' -or $testScript -in @('native-real-inflight.cjs', 'native-forge-decision.cjs')) { [uint32]480000 } else { [uint32]300000 }
-  $code = [ForgeHiddenNativeTest]::Run($powershell, $runner, $timeoutMs)
+  try { $code = [ForgeHiddenNativeTest]::Run($powershell, $runner, $timeoutMs) }
+  catch {
+    if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log }
+    throw
+  }
   Get-Content -LiteralPath $log
   if ($code -ne 0) { throw "Native hidden smoke failed with exit code $code" }
 } finally {

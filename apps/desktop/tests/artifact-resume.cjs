@@ -67,7 +67,7 @@ if (!profile || !project || !executable) throw new Error('Set FORGE_ARTIFACT_PRO
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
     assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
     await page.frameLocator('#preview-site').getByRole('heading', { name: heading, exact: true }).waitFor({ timeout: 20000 });
-    assert.match(await page.locator('.preview-origin').first().textContent(), /Publicação não verificada/);
+    assert.match(await page.locator('.preview-origin').first().textContent(), /Esta prévia não confirma publicação na internet/);
     if (process.env.FORGE_EXPECT_RECORDED_OBJECTIVE === '1') {
       const recordedObjective = page.locator('#record-direction-card');
       assert.equal(await recordedObjective.isVisible(), true, 'The real Forge objective remains available');
@@ -79,10 +79,10 @@ if (!profile || !project || !executable) throw new Error('Set FORGE_ARTIFACT_PRO
       await recordedObjective.locator(':scope > summary').click();
     }
     if (process.env.FORGE_EXPECT_EMPTY_RECORD_COPY === '1') {
-      await page.locator('#progress-status').filter({ hasText: 'Ainda não há andamento registrado no Forge' }).waitFor({ timeout: 35000 });
-      assert.equal(await page.locator('#workspace-phase').textContent(), 'Sem andamento registrado');
+      await page.locator('#progress-status').filter({ hasText: 'Ainda não há um próximo passo registrado' }).waitFor({ timeout: 35000 });
+      assert.equal(await page.locator('#workspace-phase').textContent(), 'Próximo passo ainda não registrado');
       assert.equal(await page.locator('.record-stage').isVisible(), false);
-      assert.match(await page.locator('#record-empty-help').textContent(), /Você pode começar ou continuar pela conversa/);
+      assert.match(await page.locator('#record-empty-help').textContent(), /Comece pela conversa ao lado/);
     }
     if (process.env.FORGE_ARTIFACT_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_ARTIFACT_SCREENSHOT, fullPage: true });
     await page.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();

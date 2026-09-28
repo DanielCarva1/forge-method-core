@@ -1,4 +1,4 @@
-// Read-only installed-app journey: a real Codex result, change draft and
+// Read-only native-app journey: a real Codex result, change draft and
 // conversation survive a full native process restart without another Send.
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const { spawn } = require('node:child_process');
@@ -12,7 +12,7 @@ const assert = require('node:assert/strict');
 const exe = process.env.FORGE_DESKTOP_EXE;
 const project = process.env.FORGE_TEST_PROJECT;
 const threadId = process.env.FORGE_TEST_RESUME_THREAD_ID;
-assert.ok(exe && project && threadId, 'Set installed app, existing project and existing Codex thread');
+assert.ok(exe && project && threadId, 'Set native app executable, existing project and existing Codex thread');
 const site = path.join(project, 'site', 'index.html');
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 
@@ -88,8 +88,18 @@ async function inspectResult(page) {
   await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
   assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
   await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias renovado' }).waitFor();
-  await page.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
-  assert.match(await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).inputValue(), /site\\index\.html/);
+  const changeAction = page.getByRole('button', { name: 'Pedir mudança neste arquivo' });
+  const changeBounds = await changeAction.boundingBox();
+  assert.ok(changeBounds && changeBounds.y >= 0 && changeBounds.y < await page.evaluate(() => innerHeight), 'Change action should be visible with the result before scrolling');
+  assert.equal(await page.evaluate(() => !!(document.getElementById('request-preview-change').compareDocumentPosition(document.getElementById('preview-site-note')) & Node.DOCUMENT_POSITION_FOLLOWING)), true, 'Change action should precede optional safety details');
+  if (process.env.FORGE_REAL_RESULT_PREVIEW_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_REAL_RESULT_PREVIEW_SCREENSHOT });
+  await changeAction.click();
+  const composer = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
+  assert.match(await composer.inputValue(), /site\\index\.html/);
+  assert.equal(await composer.evaluate(node => document.activeElement === node), true, 'Change request should focus the composer');
+  const composerBounds = await composer.boundingBox();
+  assert.ok(composerBounds.y >= 0 && composerBounds.y < await page.evaluate(() => innerHeight), 'Change request should expose the composer');
+  if (process.env.FORGE_REAL_RESULT_CHANGE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_REAL_RESULT_CHANGE_SCREENSHOT });
   assert.equal(await page.locator('#messages article').count(), messagesBefore, 'Preparing a change must not send a message');
 }
 
@@ -116,7 +126,7 @@ async function inspectResult(page) {
     assert.deepEqual(after, before, 'Full process restart must preserve message count and order');
     await inspectResult(app.page);
     assert.equal(sha256(await readFile(site)), initialHash, 'Read-only journey must not edit the generated page');
-    console.log(`PASS: installed native app reopened ${after.count} real messages, previewed the changed HTML and prepared a new request across a full process restart; no Send or file edit.`);
+    console.log(`PASS: native app reopened ${after.count} real messages, previewed the changed HTML and prepared a new request across a full process restart; no Send or file edit.`);
   } finally {
     await stop(app);
     const resolved = path.resolve(profile);
