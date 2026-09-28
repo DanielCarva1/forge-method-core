@@ -1,5 +1,10 @@
 # Approved visual direction
 
+The current 0.1.34 UI slice makes short cited-file choices visible on a new
+reply and gives an empty Forge record a direct route to the same unsent
+conversation. These are discoverability changes, not new project state or a
+new design system; longer/restored file lists keep their quiet default.
+
 Implementation scope: UI stories #81 and #83. This is the independent desktop
 shell, not a claim of a released application or complete design system.
 

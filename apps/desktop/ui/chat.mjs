@@ -345,6 +345,10 @@ function paintMessage(item) {
       choices.append(summary, list, more);
       item.content.after(choices);
       item.fileChoices = choices;
+      // A short, newly completed list should be discoverable without another
+      // click. Restored history and long lists stay folded; later repaints keep
+      // the person's own open/closed choice.
+      choices.open = !restoringHistory && distinctPaths.length <= 3;
     }
     item.fileChoices.hidden = false;
     item.fileChoices.querySelector('summary').textContent = `Conferir ${distinctPaths.length} arquivos da resposta`;

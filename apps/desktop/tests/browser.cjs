@@ -1042,6 +1042,8 @@ async function openConversation(page) {
         assert.match(await page.locator('#progress-status').textContent(), /direção foi registrada no Forge, mas o próximo trabalho ainda não/);
         assert.equal(await page.locator('#workspace-phase').textContent(), 'Direção registrada; próximo trabalho pendente');
         assert.equal(await page.locator('#record-state').textContent(), 'Direção registrada; próximo trabalho pendente');
+        assert.equal(await page.locator('#record-state').isVisible(), false, 'The empty record must not repeat its status as a badge');
+        assert.equal(await page.locator('#record-start-conversation').isVisible(), true);
         assert.equal(await page.locator('#workspace-phase').isVisible(), true);
         assert.equal(await page.locator('.record-stage').isVisible(), false, 'An absent record must not look like an active discovery stage');
         assert.match(await page.locator('#record-empty-help').textContent(), /O objetivo está registrado.*próximo trabalho ainda não foi definido/);
@@ -1052,6 +1054,8 @@ async function openConversation(page) {
         if (process.env.FORGE_ABSENT_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_ABSENT_SCREENSHOT, fullPage: true });
       }
       else {
+        assert.equal(await page.locator('#record-state').isVisible(), true);
+        assert.equal(await page.locator('#record-start-conversation').isVisible(), false);
         assert.equal(await page.locator('#workspace-phase').isVisible(), true);
         assert.equal(await page.locator('.record-stage').isVisible(), true);
         assert.equal(await page.locator('#record-empty-help').isVisible(), false);
@@ -1082,6 +1086,11 @@ async function openConversation(page) {
     assert.match(await page.locator('#progress-status').textContent(), /Ainda não há um próximo passo registrado/);
     assert.equal(await page.locator('#workspace-phase').textContent(), 'Próximo passo ainda não registrado');
     assert.match(await page.locator('#record-empty-help').textContent(), /Comece pela conversa\..*arquivos continuam na pasta escolhida/);
+    assert.equal(await page.locator('#record-state').isVisible(), false);
+    const messagesBeforeEmptyAction = await page.locator('#messages article[data-role="user"]').count();
+    await page.getByRole('button', { name: 'Conversar sobre meu projeto' }).click();
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'message-text', 'The empty-record action opens the same unsent composer');
+    assert.equal(await page.locator('#messages article[data-role="user"]').count(), messagesBeforeEmptyAction, 'Opening the composer does not send');
     await page.evaluate(() => { window.progressState = 'current'; window.progressDecisionCount = 0; });
     await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     assert.match(await page.locator('#record-decisions').textContent(), /não mostra decisões em aberto/);
@@ -1240,9 +1249,10 @@ async function openConversation(page) {
     assert.equal(await page.locator('#preview-last-result').getAttribute('hidden'), '', 'Several distinct files must not be guessed as one result');
     assert.equal(await formattedBubble.locator('.message-result-action').count(), 0, 'Several cited files must not produce one guessed action beside the reply');
     assert.equal(await formattedBubble.locator('.message-file-choices summary').textContent(), 'Conferir 3 arquivos da resposta');
-    await formattedBubble.locator('.message-file-choices summary').click();
+    assert.equal(await formattedBubble.locator('.message-file-choices').evaluate(node => node.open), true, 'A short new file list should be visible without another click');
     assert.equal(await formattedBubble.locator('.message-file-choices-list button').count(), 3, 'The reply must offer each cited file without guessing one');
     await formattedBubble.locator('.message-file-choices summary').click();
+    assert.equal(await formattedBubble.locator('.message-file-choices').evaluate(node => node.open), false, 'People may fold the short list again');
     assert.equal(await page.locator('#preview-cited-files').isVisible(), true, 'Several cited files should remain individually available beside the preview');
     await page.locator('#preview-cited-files summary').click();
     assert.equal(await page.locator('#preview-cited-files-list button').count(), 3, 'Repeated citations should not duplicate a choice');
@@ -1254,6 +1264,7 @@ async function openConversation(page) {
     assert.equal(await formattedBubble.locator('pre.message-raw').textContent(), formattedReply);
     await page.getByRole('button', { name: 'Ver texto formatado' }).click();
     assert.equal(await formattedBubble.locator('h3').textContent(), 'Plano');
+    assert.equal(await formattedBubble.locator('.message-file-choices').evaluate(node => node.open), false, 'Switching text views must preserve the choice to fold files');
     await formattedBubble.getByRole('button', { name: 'Ver arquivo local: arquivo' }).click();
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await page.locator('#preview-text').textContent(), 'Arquivo real do projeto');

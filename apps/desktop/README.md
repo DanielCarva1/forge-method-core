@@ -8064,3 +8064,43 @@ subagent was used and per-model cost attribution remains UNKNOWN.
 **Next product step:** inspect a different remaining user-visible journey or
 accessibility gap; do not turn this passing zoom probe into a claim that #95 or
 mobile access is complete.
+
+### Desktop 0.1.34 candidate preparation — 2026-09-28
+
+The active Forge Desktop goal continues. This UI-only package makes two
+concrete journeys clearer: short newly completed cited-file lists open for
+individual preview selection (without guessing one result), and an absent
+Forge record offers **Conversar sobre meu projeto** into the same unsent
+composer. Restored/long file lists remain folded, and a manual fold persists.
+The redundant absent-state badge is hidden; native Forge record/status remains
+the authority. The bundled core stays intentionally pinned to 0.13.2.
+
+Files changed: `ui/chat.mjs`, `ui/index.html`, `ui/progress.mjs`,
+`ui/styles.css`, `tests/browser.cjs`, `tests/native.cjs`, Desktop version files,
+`design/README.md`, this checkpoint and `RELEASE_NOTES-0.1.34.md`. No subagent
+is active. JavaScript syntax, Desktop focused `cargo check`, all 50 non-ignored
+Desktop tests and browser UI suite passed; the 0.1.33 debug hidden native smoke
+also passed with the new UI source, including real onboarding, narrow record
+shortcut and no Send. Actual Codex Send was not repeated for this UI-only slice;
+the previous public 0.1.33 real journey remains the evidence for that path.
+Attributable model tokens, API-equivalent BRL and Pro-quota impact remain
+UNKNOWN; no savings claim is made.
+
+Strict Desktop Clippy passed. The single NSIS candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.34_x64-setup.exe`,
+123,142,636 bytes, SHA-256
+`D905C644CF8ECA72C3EC2B6053F51E9567DF06E889643FC0010DC2DA26692E22`.
+Silent installation over public 0.1.33 returned exit 0 without changing the
+candidate bytes. The installed 0.1.34 executable has SHA-256
+`9881933D91ACEB74695974EB0081EC94426B4400A0BBF1DA970BAD82E807DB60`.
+Installed-candidate hidden native smoke passed with actual Windows folder
+selection, new-project Forge onboarding and record readback, narrow record
+shortcut, isolated local preview and controlled conversation events. Actual
+Codex Send was NOT_RUN in this package; prior public 0.1.33 real-journey proof
+is separate. Clean-machine/mobile-device/manual screen-reader acceptance
+remain NOT_RUN/PARTIAL.
+
+**Next exact step:** selectively commit/push/tag, publish this same candidate
+under the user's standing alpha authorization, download it without
+authentication, compare bytes, install the downloaded bytes and repeat hidden
+native smoke. Do not rebuild or call 0.1.34 available before public readback.

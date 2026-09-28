@@ -483,6 +483,15 @@ async function operatePreviewDialog(page, file) {
       await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 35000 });
       assert.equal(await page.locator('#workspace-phase').textContent(), 'Próximo passo ainda não registrado');
       assert.equal(await page.locator('#record-empty-help').isVisible(), true);
+      assert.equal(await page.locator('#record-state').isVisible(), false, 'A new project must not repeat the empty record status as a badge');
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Andamento' }).click();
+      const messagesBeforeRecordAction = await page.locator('#messages article[data-role="user"]').count();
+      await page.getByRole('button', { name: 'Conversar sobre meu projeto' }).click();
+      assert.equal(await page.locator('#project-conversation').isVisible(), true);
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'message-text');
+      assert.equal(await page.locator('#messages article[data-role="user"]').count(), messagesBeforeRecordAction, 'The record shortcut must not Send');
+      await page.setViewportSize(initialViewport);
       console.log('PASS: one folder action initialized a new project and its Forge record without a second setup command.');
       assert.equal(await page.locator('#connect-agent').isEnabled(), true);
       assert.equal(await page.locator('#send-message').isEnabled(), true);

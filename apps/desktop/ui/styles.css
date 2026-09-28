@@ -253,6 +253,8 @@ summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 6
 #progress-status { font-size: .9rem; }
 .record h4 { font-size: 1.2rem; margin: 12px 0 20px; overflow-wrap: anywhere; }
 .record-state { display: inline-block; margin: 8px 0 0; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--soft); font-weight: 700; }
+.record-state[hidden], #record-start-conversation[hidden] { display: none; }
+#record-start-conversation { margin-top: 4px; }
 #record-questions-shortcut { margin: 8px 0 0 10px; }
 #record-questions-shortcut[hidden] { display: none; }
 .record-stage { margin: 12px 0; padding: 14px 18px; border-radius: 18px; background: var(--soft); }

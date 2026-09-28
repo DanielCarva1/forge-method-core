@@ -3,6 +3,7 @@ const button = document.getElementById('refresh-progress');
 const status = document.getElementById('progress-status');
 const result = document.getElementById('progress-result');
 const questionsShortcut = document.getElementById('record-questions-shortcut');
+const startConversation = document.getElementById('record-start-conversation');
 const recordPanel = document.getElementById('project-record');
 const workspacePhase = document.getElementById('workspace-phase');
 const historyPanel = document.getElementById('direction-history');
@@ -209,12 +210,15 @@ async function loadProgress() {
     }
     document.getElementById('record-work').hidden = !hasWork;
     const phase = phases[data.phase] || ['Etapa registrada', 'Converse com seu agente para entender esta etapa.'];
-    document.getElementById('record-state').textContent = data.status === 'absent' && direction
+    const recordState = document.getElementById('record-state');
+    recordState.textContent = data.status === 'absent' && direction
       ? 'Direção registrada; próximo trabalho pendente' : stateLabels[data.status];
+    recordState.hidden = data.status === 'absent';
     result.dataset.state = data.status;
     document.querySelector('.record-stage').hidden = data.status === 'absent';
     const emptyHelp = document.getElementById('record-empty-help');
     emptyHelp.hidden = data.status !== 'absent';
+    startConversation.hidden = data.status !== 'absent';
     emptyHelp.textContent = direction
       ? 'O objetivo está registrado. O próximo trabalho ainda não foi definido no Forge. Continue a conversa para combiná-lo com o agente.'
       : 'Comece pela conversa. Quando um próximo passo for registrado no Forge, ele aparecerá aqui. Seus arquivos continuam na pasta escolhida.';
@@ -261,6 +265,11 @@ async function loadProgress() {
   }
 }
 button.addEventListener('click', loadProgress);
+startConversation.addEventListener('click', () => {
+  if (!project || result.hidden || startConversation.hidden) return;
+  showWorkspacePane('conversation');
+  document.getElementById('message-text').focus();
+});
 questionsShortcut.addEventListener('click', () => {
   if (!project || result.hidden || questionsShortcut.hidden) return;
   const heading = document.getElementById('record-pending-heading');
