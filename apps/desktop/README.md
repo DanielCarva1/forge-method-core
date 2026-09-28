@@ -8009,3 +8009,36 @@ Pro-quota impact remain UNKNOWN.
 **Next product step:** continue the connected UI journey from a concrete
 remaining gap in the approved visual direction. Do not treat this alpha
 package as completion of the Forge Desktop goal.
+
+### Desktop 0.1.33 real narrow journey — 2026-09-28
+
+The installed public 0.1.33 binary was run on an isolated hidden Windows
+desktop at 390 x 844 against a disposable project. The opt-in native test now
+selects the actual narrow conversation pane, sends a short real Codex turn,
+creates `site/index.html` with CSS using a second real turn, opens that local
+result through its direct file action or individual cited-file choice, requests
+a change through the same conversation, verifies the changed file and refreshed
+isolated preview, then reloads the WebView and restarts the app process. The
+final full journey passed without resending on resume. The real generated
+preview was visually reviewed at
+`D:/Temp/User/forge-0133-real-narrow-result.png`; it is readable, but its
+content is a disposable agent-generated test page, not approved Forge art.
+
+Only `tests/native.cjs` changed to cover this path and handle panels hidden by
+the narrow navigation. JavaScript syntax and `git diff --check` passed; no Rust
+source, package bytes or product UI changed, so no new installer was built.
+Early retries exposed test assumptions about which pane was visible, whether
+the agent returned a Markdown link rather than multiple cited files, and
+whether a hidden project-status node could be awaited as visible. Those were
+test-harness mismatches and were corrected. One initial real-reply wait timed
+out after 180 seconds; its cause was not established, although later real
+turns and the full journey passed. This is same-machine proof for one
+disposable project, not a guarantee for all provider sessions. Mobile-device
+access, manual screen-reader acceptance and clean-machine setup remain
+NOT_RUN/PARTIAL. No subagent was used; model-attributed tokens, API-equivalent
+BRL and Pro-quota impact remain UNKNOWN. The repeated real-agent probes were
+not free and are included as rework, not hidden as one successful attempt.
+
+**Next product step:** work on a remaining user-visible gap rather than
+repeating the now-proven real-Codex narrow journey. Keep the Forge Desktop
+goal active; no new release is needed for this test-only change.

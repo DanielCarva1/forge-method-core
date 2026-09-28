@@ -29,12 +29,17 @@ project progress or modifies the Forge backend.
 - Same-machine installation over 0.1.32 passed. The published installer and
   sidecar were downloaded without authentication, matched the candidate bytes,
   and the downloaded file passed silent installation and hidden native smoke.
+- After publication, the installed public bytes passed a hidden native
+  390px real-Codex journey in a disposable project: Send, generated local HTML,
+  isolated preview, a follow-up change in the same conversation, WebView reload
+  and full process restart without replaying a turn.
 
 ## Limits
 
 - This is a responsive desktop-shell improvement, not mobile-device
   distribution or secure remote-agent access. Manual screen-reader acceptance
-  and a real Codex Send in the narrow view remain unverified.
+  remains unverified. The real-Codex test is one bounded disposable journey,
+  not proof of every account, project or provider response.
 - The preview is local and protected; it does not confirm publication or fully
   execute interactive websites. Clean-machine setup and fresh-account login
   completion remain unverified.
@@ -56,4 +61,7 @@ published sidecar. Installing those downloaded bytes returned exit 0 without
 changing their hash; the installed executable retained the SHA-256 above.
 Hidden native smoke passed after that installation, including real folder
 onboarding, record readback, narrow panel switching, local preview and
-controlled conversation events. Actual Codex Send was not run.
+controlled conversation events. A later opt-in test of the same installed
+public binary exercised actual Codex Send, local result/change and restart.
+One earlier real-reply wait timed out; later real-agent runs passed, so that
+intermittent provider/transport condition is not claimed resolved.

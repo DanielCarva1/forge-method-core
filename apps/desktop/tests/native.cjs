@@ -816,6 +816,13 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('#project-setup').evaluate(node => node.open), false);
       console.log('PASS: empty project folder received Forge onboarding and enables Codex connection.');
       if (process.env.FORGE_TEST_AGENT_SMOKE === '1') {
+        if (process.env.FORGE_TEST_AGENT_SMOKE_NARROW === '1') {
+          await page.setViewportSize({ width: 390, height: 844 });
+          assert.equal(await page.locator('#mobile-workspace-nav').isVisible(), true);
+          await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Conversa' }).click();
+          assert.equal(await page.locator('#project-conversation').isVisible(), true);
+          assert.equal(await page.locator('#project-preview').isVisible(), false);
+        }
         const activationProbe = process.env.FORGE_TEST_FORGE_ACTIVATION === '1';
         const prompt = activationProbe
           ? 'Quero criar um pequeno site para organizar receitas, mas ainda não decidi para quem. Antes de escrever arquivos, me ajude a definir o primeiro passo. Use o projeto aberto e o Forge que acompanha o aplicativo; não publique nem instale nada.'
@@ -823,10 +830,25 @@ async function operatePreviewDialog(page, file) {
         const composer = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
         await composer.fill(prompt);
         await page.getByRole('button', { name: 'Enviar', exact: true }).click();
-        await page.locator('#agent-status').filter({ hasText: 'Resposta recebida' }).waitFor({ timeout: 180000 });
+        try {
+          await page.locator('#agent-status').filter({ hasText: 'Resposta recebida' }).waitFor({ timeout: 180000 });
+        } catch (error) {
+          const observed = await page.evaluate(() => ({
+            agentStatus: document.querySelector('#agent-status')?.textContent,
+            connectionStatus: document.querySelector('#connection-status')?.textContent,
+            messages: document.querySelector('#messages')?.textContent?.slice(-1200),
+            selectedPane: document.querySelector('.workspace')?.dataset.mobilePane,
+            conversationVisible: !!document.querySelector('#project-conversation')?.getClientRects().length,
+          }));
+          throw new Error(`Real Codex reply was not received: ${JSON.stringify(observed)}`, { cause: error });
+        }
         const reply = (await page.locator('#messages article[data-role="agent"]').last().innerText()).trim();
         assert.ok(reply.length > 5);
         assert.ok((await page.locator('#messages article[data-role="user"]').innerText()).includes(prompt));
+        if (process.env.FORGE_TEST_AGENT_SMOKE_NARROW === '1') {
+          assert.equal(await page.locator('#project-conversation').isVisible(), true);
+          assert.equal(await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Conversa' }).getAttribute('aria-pressed'), 'true');
+        }
         if (activationProbe) {
           const threadId = await page.evaluate(() => {
             const key = Object.keys(localStorage).find(value => value.startsWith('forge.conversation.v1:'));
@@ -845,10 +867,18 @@ async function operatePreviewDialog(page, file) {
           await access(generatedFile);
           const generated = await readFile(generatedFile, 'utf8');
           assert.match(generated, /Jardim de ideias/);
-          const fileAction = page.locator('#messages article[data-role="agent"]').last().getByRole('button', { name: /Ver arquivo local:/ }).filter({ hasText: /site\/index\.html|página|arquivo/i }).first();
-          if (await fileAction.count() !== 1) console.error('Generated reply without local-file action:', await page.locator('#messages article[data-role="agent"]').last().innerText());
-          assert.equal(await fileAction.count(), 1, 'The completed reply must expose a local-file action');
-          await fileAction.click();
+          const result = page.locator('#messages article[data-role="agent"]').last();
+          const directFileAction = result.getByRole('button', { name: /Ver arquivo local:/ }).filter({ hasText: /site\/index\.html|página|arquivo/i }).first();
+          if (await directFileAction.count() === 1) {
+            await directFileAction.click();
+          } else {
+            const choices = result.locator('.message-file-choices');
+            assert.equal(await choices.count(), 1, 'The reply must expose generated files even when the agent omits a Markdown link');
+            await choices.locator('summary').click();
+            const indexFile = choices.getByRole('button', { name: /Conferir arquivo da resposta: site[\\/]index\.html/ });
+            assert.equal(await indexFile.count(), 1, 'The generated index file must be individually selectable');
+            await indexFile.click();
+          }
           await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
           assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
           await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias' }).waitFor({ timeout: 20000 });
@@ -862,20 +892,31 @@ async function operatePreviewDialog(page, file) {
           await page.locator('#messages article[data-role="agent"]').nth(2).waitFor({ timeout: 180000 });
           await page.locator('#agent-status').filter({ hasText: 'Resposta recebida' }).waitFor({ timeout: 180000 });
           assert.match(await readFile(generatedFile, 'utf8'), /Jardim de ideias renovado/);
+          if (process.env.FORGE_TEST_AGENT_SMOKE_NARROW === '1') {
+            assert.equal(await page.locator('#project-conversation').isVisible(), true, 'Change request returns to the conversation');
+            await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+          }
           await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias renovado' }).waitFor({ timeout: 20000 });
           assert.equal(await page.locator('#messages article[data-role="user"]').count(), 3);
           console.log('PASS: real Codex-created local HTML opened in the isolated preview and refreshed automatically after a follow-up in the same conversation.');
+        }
+        if (process.env.FORGE_TEST_AGENT_SMOKE_NARROW === '1') {
+          await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Conversa' }).click();
         }
         await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
         await page.locator('#agent-status').filter({ hasText: 'Desconectado' }).waitFor({ timeout: 10000 });
         await page.reload();
         await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(newProject);
         await submit.click();
-        await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 15000 });
+        await page.waitForFunction(() => document.querySelector('#project-status')?.textContent?.includes('Projeto pronto'), null, { timeout: 15000 });
         await openConversation(page);
         await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor({ timeout: 110000 });
         assert.ok((await page.locator('#messages').innerText()).includes(prompt));
         assert.ok((await page.locator('#messages').innerText()).includes(reply));
+        if (process.env.FORGE_TEST_AGENT_SMOKE_NARROW === '1') {
+          assert.equal(await page.locator('#mobile-workspace-nav').isVisible(), true);
+          assert.equal(await page.locator('#project-conversation').isVisible(), true);
+        }
         restartHistory = {
           count: await page.locator('#messages article').count(),
           first: await page.locator('#messages article').first().textContent(),
@@ -1011,7 +1052,7 @@ async function operatePreviewDialog(page, file) {
       await page.locator('nav a[data-route="workspace"]').click();
       await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(restartProject);
       await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
-      await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 25000 });
+      await page.waitForFunction(() => document.querySelector('#project-status')?.textContent?.includes('Projeto pronto'), null, { timeout: 25000 });
       await page.evaluate(() => {
         window.restartSendCount = 0;
         const originalCore = window.__TAURI__.core;
