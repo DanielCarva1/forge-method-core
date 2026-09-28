@@ -1,10 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.45` is the current source version;
-`0.1.44` is the latest published and publicly verified
-[alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.44-alpha.1).
+Independent Tauri application. Desktop `0.1.45` is the current source version
+and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.45-alpha.1).
 Its installer was downloaded without authentication, hash-checked, installed
-over `0.1.43` and tested in the hidden native app.
+over `0.1.44` and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -9087,3 +9086,24 @@ remain NOT_RUN.
 and downloaded-file install/readback remain. Next smallest step: publish
 exactly this candidate and verify the public bytes and installed app; then
 continue the broader Desktop goal at a user-visible gap.
+
+### Desktop 0.1.45 public readback — 2026-09-28
+
+Package commit `59c646e7` was pushed on `codex/desktop-shell` and tagged
+`desktop-v0.1.45-alpha.1`. The exact candidate and SHA sidecar are available
+in the [0.1.45 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.45-alpha.1).
+Unauthenticated downloads returned 123,142,647 bytes and SHA-256
+`001123DC5D143F36C3D96587B605F2525AB1AF992DA1A8FAECF42DBFD97B06D6`,
+identical to the tested candidate and sidecar. Silent installation of the
+downloaded bytes over the candidate returned exit 0 and preserved the file
+hash. The installed executable reports ProductVersion 0.1.45, SHA-256
+`E3E71BAC16B63CCA976CF6FBC6C7B4021254B71EE3E78E323DED1E1285416B78`.
+Downloaded-installation hidden native auth and real-result/restart smokes
+passed; no Send, project-file edit or system-clipboard write occurred.
+This is same-machine package proof, not real provider login completion or
+clean-machine setup. No manual GitHub CI ran. The broad Desktop goal stays
+active; per-model tokens, BRL cost and Pro quota attribution remain UNKNOWN.
+
+**Next smallest step:** inspect a remaining user-visible journey against the
+approved design, fix a demonstrated gap, and package that coherent slice;
+do not infer full Forge completion from this first-use improvement.
