@@ -42,5 +42,11 @@ candidate hash. The installed executable reports Windows ProductVersion
 0.1.41 and SHA-256
 `8EB032BB93F2B9D38AF4B50AB9291EE1F912ECCEB8B515080E07E2DF69472550`.
 Hidden native installed-candidate smoke passed against projects with both one
-and four real objective revisions, without sending a message. Public download
-verification is pending publication.
+and four real objective revisions, without sending a message. The prerelease
+assets then downloaded without authentication. The downloaded installer was
+exactly 123,095,229 bytes with SHA-256
+`3E35663AC600714476DB7737C8A585DA693D0DFAB8D02EE5159E995593B66A6E`,
+matching the candidate and sidecar. Silent installation of the downloaded bytes
+over the candidate returned exit 0 without changing the installer file,
+produced the same 0.1.41 executable hash, and passed hidden native smoke again.
+No candidate rebuild or manual GitHub CI run followed publication.

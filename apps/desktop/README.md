@@ -1,9 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.41` is the current source version;
-the latest [published alpha is 0.1.40](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.40-alpha.1).
+Independent Tauri application. Desktop `0.1.41` is the current source version
+and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.41-alpha.1).
 Its installer was downloaded without authentication, hash-checked, installed
-over `0.1.39` and tested in the hidden native app.
+over `0.1.40` and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -8812,3 +8812,26 @@ Pro quota attribution remain UNKNOWN; no savings claimed. After publication,
 keep the broad Desktop goal active for remaining visual, accessibility and
 supported-platform/distribution gaps rather than treating this alpha as the
 finished product.
+
+### Desktop 0.1.41 public readback — 2026-09-28
+
+Package commit `7433a46f` was pushed on `codex/desktop-shell`; annotated tag
+`desktop-v0.1.41-alpha.1` points to it. The exact tested candidate and its
+SHA-256 sidecar were published in the [0.1.41 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.41-alpha.1).
+Unauthenticated downloads returned 123,095,229 bytes and SHA-256
+`3E35663AC600714476DB7737C8A585DA693D0DFAB8D02EE5159E995593B66A6E`,
+identical to the candidate and sidecar. Silent installation of those downloaded
+bytes over the tested candidate returned exit 0 and left the installer hash
+unchanged. The installed executable reports ProductVersion 0.1.41 and SHA-256
+`8EB032BB93F2B9D38AF4B50AB9291EE1F912ECCEB8B515080E07E2DF69472550`.
+Downloaded-installation hidden native smoke passed, including one real Forge
+objective revision and the corrected unsent explanation action. No manual
+GitHub CI, candidate rebuild or further real Codex Send followed publication.
+
+The 0.1.41 build is available for use. It does not complete the broader
+Desktop objective: clean-machine setup, physical mobile access, manual
+screen-reader acceptance, and all journey variations remain separate work.
+Next product work should prioritize a user-visible gap in the create/chat/
+result/return journey or the documented accessibility/distribution limits,
+not another copy-only release. Model-token, BRL and Pro-quota attribution
+remain UNKNOWN.
