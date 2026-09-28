@@ -103,6 +103,22 @@ async function openConversation(page) {
     assert.equal(await page.locator('#workspace').isHidden(), true);
     assert.equal(await page.locator('nav a[data-route="explore"]').getAttribute('aria-current'), 'page');
     assert.equal(await page.locator('.category-card').count(), 8);
+    for (const width of [1536, 1280, 1180, 1100]) {
+      await page.setViewportSize({ width, height: 844 });
+      const heading = await page.locator('.explore-heading > div').boundingBox();
+      const search = await page.locator('.category-search').boundingBox();
+      const cards = await page.locator('.category-grid').boundingBox();
+      if (width >= 1160) {
+        assert.ok(search.x >= heading.x + heading.width - 1, 'Wide Explore search must sit beside the invitation');
+      } else {
+        assert.ok(search.y >= heading.y + heading.height - 1, 'Narrow Explore search must stack below the invitation');
+      }
+      assert.ok(cards.y >= Math.max(heading.y + heading.height, search.y + search.height) - 1,
+        'Explore cards must remain below the invitation and search');
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true,
+        `Explore must not require horizontal scrolling at ${width}px`);
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
     const ideaPanel = await page.locator('.open-idea').boundingBox();
     const ideaTitle = await page.locator('.open-idea h2').boundingBox();
     assert.ok(ideaTitle.x >= ideaPanel.x + 175, 'Decorative foliage must not cover the callout title');

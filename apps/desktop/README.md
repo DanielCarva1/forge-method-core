@@ -8548,3 +8548,28 @@ individually selectable. This is not a replay of the real Codex fixture and
 does not prove automatic preview selection. Together with the real-result
 journey, it supports explicit recovery via the conversation, while the exact
 returning-user experience still warrants observation.
+
+### Desktop Explore layout follow-up — 2026-09-28
+
+The returning-user result shortcut was checked on the installed 0.1.38 with a
+hidden native controlled-history run. The existing restored file action was
+visible and opened the project-bound preview after process restart; no second
+result store or guessed file was added. A separate visual comparison found a
+concrete gap on Explore: the search sat below the invitation even at desktop
+width, pushing the approved theme art down. Source now places invitation and
+search in one row from 1160px, while narrower widths retain the stacked form.
+The decorative art was moved above the search label to keep the label legible.
+
+The browser suite passed with explicit 1536/1280/1180/1100px layout bounds,
+filtering, keyboard and mobile checks. A debug desktop rebuild and hidden
+native smoke passed; its 1180px screenshot
+`D:/Temp/User/forge-explore-native-1180.png` was visually reviewed. This is
+**source/debug-build work only**: the published/installed 0.1.38 installer
+still has the prior layout. No Rust core changes or broad Rust test suite were
+needed. Actual Codex Send was NOT_RUN in this follow-up; the earlier installed
+real-result journey remains the evidence for that path. Per-model tokens,
+BRL-equivalent cost and Pro-quota impact remain UNKNOWN.
+
+Next: continue closing concrete UI/BE journeys rather than treating this layout
+refinement as completion. Bundle it with a coherent future desktop alpha,
+validate that installer, and only then describe the new layout as installed.
