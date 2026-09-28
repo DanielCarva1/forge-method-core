@@ -10079,3 +10079,20 @@ with real native reconnect and zero Sends. No Rust tests, broad suite or
 manual GH CI ran. Next: review the diff, commit/push/tag and publish this
 exact candidate under standing alpha authorization, then verify the anonymous
 download against the candidate. Do not rebuild the candidate.
+
+### Desktop 0.1.58 public readback — 2026-09-28
+
+Package commit `23953162` and tag `desktop-v0.1.58-alpha.1` were pushed.
+The [0.1.58 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.58-alpha.1)
+contains the tested installer and 93-byte sidecar. Unauthenticated downloads
+matched the candidate's 123,118,485 bytes and SHA-256
+`402BCE522E39F7DF047997FFBC92EECE661FE71810ACF3E6E9FAF12D77C14DAB`;
+the downloaded sidecar text matched exactly. The exact candidate bytes were
+already installed over 0.1.57, with exit 0, ProductVersion 0.1.58 and
+installed executable SHA-256
+`0C6F276F46CD8971FCE435B5E341B451950D5245DF3CCC1E67AF8FE1DC4A8135`.
+That installed candidate passed the focused hidden-native reconnect check with
+an injected disconnect notice, real native reconnect and zero Codex Sends.
+The downloaded copy was hash-verified but not installed a second time. No
+unplanned transport loss, new real Codex turn, broad suite or manual GH CI
+ran. Continue the Desktop product goal; this alpha is not full completion.
