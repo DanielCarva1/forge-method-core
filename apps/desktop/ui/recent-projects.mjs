@@ -37,12 +37,14 @@ function readProjects() {
 
 let projects = readProjects();
 
-function saveProjects() {
+function saveProjects(next = projects) {
   try {
-    localStorage.setItem(storageKey, JSON.stringify(projects));
+    localStorage.setItem(storageKey, JSON.stringify(next));
     status.textContent = '';
+    return true;
   } catch {
     status.textContent = 'Não foi possível guardar esta lista neste dispositivo. Seus projetos não foram alterados.';
+    return false;
   }
 }
 
@@ -102,10 +104,15 @@ function renderProjects() {
     remove.textContent = 'Remover da lista';
     remove.setAttribute('aria-label', `Remover ${name} da lista de projetos`);
     remove.addEventListener('click', () => {
-      projects = projects.filter(item => item.project_root !== project.project_root);
+      const remaining = projects.filter(item => item.project_root !== project.project_root);
+      if (!saveProjects(remaining)) {
+        status.textContent = 'Não foi possível remover o atalho neste dispositivo. Tente novamente; seus arquivos não foram alterados.';
+        return;
+      }
+      projects = remaining;
       forgetPreviewProject(project.project_root);
-      saveProjects();
       renderProjects();
+      status.textContent = `Atalho de ${name} removido desta lista. Os arquivos do projeto continuam na pasta.`;
     });
     actions.append(open, remove);
     card.append(icon, details, actions);

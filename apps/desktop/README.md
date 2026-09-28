@@ -9617,3 +9617,28 @@ remain UNKNOWN.
 **Next smallest step:** inspect another high-impact real-user journey gap and
 bundle it with this dialog improvement before the next coherent installer.
 Do not call 0.1.51 updated or claim whole-product completion.
+
+### Desktop project-shortcut removal consistency — 2026-09-28
+
+The next concrete UI integrity gap was removal of a recent-project shortcut
+when device storage rejects writes. Previously the card vanished in memory
+although the saved list was unchanged, and its preview bookmark was forgotten
+before persistence succeeded. Removal now writes the proposed list first;
+only a successful write removes the card and associated preview bookmark.
+The visible success message says clearly that the project files remain in
+their folder. On failure, the shortcut stays visible and the message says no
+files were changed. This changes only local shortcut UI, not Forge project
+state. Files: `ui/recent-projects.mjs`, `tests/browser.cjs`, this checkpoint.
+
+A regression assertion failed before the fix and the complete browser suite
+passed after it. A fresh Desktop debug build and hidden native smoke passed,
+including real Forge record/project readback, onboarding and preview. The
+native smoke did not simulate a storage-write failure; that path is proven by
+the controlled browser suite. Actual Codex conversation and browser launch
+were not run in this slice. No Rust source changed; no full core workspace or
+manual GH CI ran. No worker was delegated; per-model tokens, BRL cost and Pro
+quota attribution remain UNKNOWN. Public/installed 0.1.51 does not include
+these two post-release UI slices.
+
+**Next smallest step:** continue the create/chat/result/restart journey and
+assemble a meaningful next alpha package from the accepted source slices.

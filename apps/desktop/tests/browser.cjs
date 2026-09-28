@@ -693,6 +693,10 @@ async function openConversation(page) {
     await projectsPage.getByRole('link', { name: 'Meus projetos' }).click();
     assert.equal(await projectsPage.locator('.recent-project').count(), 1);
     await projectsPage.locator('#projects-status').filter({ hasText: 'Não foi possível guardar' }).waitFor();
+    await projectsPage.getByRole('button', { name: 'Remover three da lista de projetos' }).click();
+    assert.equal(await projectsPage.locator('.recent-project').count(), 1, 'A failed shortcut removal must remain visible rather than contradict stored state');
+    assert.equal(await projectsPage.evaluate(() => JSON.parse(localStorage.getItem('forge.projects.v1')).length), 0, 'A failed shortcut write cannot change stored shortcuts');
+    await projectsPage.locator('#projects-status').filter({ hasText: 'Não foi possível remover' }).waitFor();
     for (const width of [390, 1180]) {
       await projectsPage.setViewportSize({ width, height: 844 });
       assert.equal(await projectsPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
