@@ -74,6 +74,8 @@ let hasPreviousConversation = false;
 let hasResumableConversation = false;
 const sessionReferences = new Map();
 const unconfirmedSends = new Map(); // Project key -> Codex thread ID; no message copy.
+const projectDrafts = new Map(); // Unsent text stays in this app session, never in a different project.
+const projectKey = value => JSON.stringify([value.project_id, value.project_root]);
 const referenceKey = () => JSON.stringify([project.project_id, project.project_root]);
 const invoke = (command, args) => globalThis.__TAURI__.core.invoke(command, args);
 
@@ -173,7 +175,21 @@ function controls() {
 }
 
 export function setProject(value) {
+  if (project) {
+    const previousKey = projectKey(project);
+    const leavingProject = value
+      ? projectKey(value) !== previousKey
+      : byId('project-root').value.trim() !== project.project_root;
+    if (leavingProject) {
+      if (input.value) projectDrafts.set(previousKey, input.value);
+      else projectDrafts.delete(previousKey);
+      input.value = '';
+    }
+  }
   project = value;
+  if (project && !input.value && projectDrafts.has(projectKey(project))) {
+    input.value = projectDrafts.get(projectKey(project));
+  }
   lastResultPath = null;
   previewLastResult.hidden = true;
   previewIntro.textContent = emptyPreviewText;
@@ -695,6 +711,7 @@ byId('message-form').addEventListener('submit', async event => {
     return;
   }
   input.value = '';
+  projectDrafts.delete(referenceKey());
   busy = true; controls(); stop.disabled = true;
   showStatus('Enviando sua mensagem…', 'working');
   const id = `user-${Date.now()}`;
@@ -720,13 +737,22 @@ byId('message-form').addEventListener('submit', async event => {
     try { await invoke('disconnect_agent'); } catch { broken = true; }
     if (current !== generation) return;
     busy = false; connected = broken; transitioning = false; ++generation;
-    if (!input.value) input.value = text;
+    if (!input.value) {
+      input.value = text;
+      projectDrafts.set(referenceKey(), text);
+    }
     showStatus(`${typeof error === 'string' ? error : 'Falha ao enviar.'} Abra a conversa e confira o histórico antes de reenviar.`, 'error');
     controls();
   }
 });
 
-input.addEventListener('input', controls);
+input.addEventListener('input', () => {
+  if (project) {
+    if (input.value) projectDrafts.set(referenceKey(), input.value);
+    else projectDrafts.delete(referenceKey());
+  }
+  controls();
+});
 
 stop.addEventListener('click', async () => {
   const current = generation;

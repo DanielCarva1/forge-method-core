@@ -1,9 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.46` is the current source version
-and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.46-alpha.1).
-Its installer was downloaded without authentication, hash-checked, installed
-over `0.1.45` and tested in the hidden native app.
+Independent Tauri application. Desktop `0.1.47` is the current source version.
+The previous [0.1.46 alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.46-alpha.1)
+was downloaded without authentication, hash-checked, installed over `0.1.45`
+and tested in the hidden native app. The 0.1.47 package is being prepared.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -9197,3 +9197,45 @@ Pro quota attribution remain UNKNOWN.
 **Next smallest step:** inspect the remaining real-user journey and close a
 demonstrated UI/backend or accessibility gap; do not infer complete product
 readiness from this manual-update affordance.
+
+### Desktop 0.1.47 draft isolation candidate — 2026-09-28
+
+The browser UI suite reproduced a real cross-project draft leak: after typing
+an unsent message in project A, **Abrir outro projeto** showed it in the new
+project view. `ui/chat.mjs` now keeps unsent text in a project-keyed in-memory
+map for the current app session. Leaving A clears the composer; reopening A
+restores its unsent text. A fresh idea without a starter is empty, while an
+Explore starter still fills the composer without sending. This does not add
+localStorage, a project registry, backend state, or persistence across app
+restart. Clearing a draft and reconfirming the same folder does not resurrect
+stale text. Existing uncertain-send protection remains intact.
+
+Changed: `ui/chat.mjs`, browser/native regression tests, Desktop version files,
+`RELEASE_NOTES-0.1.47.md`, and this checkpoint. The browser suite was red on
+the exact leak before the fix, then passed. JavaScript syntax and diff checks
+passed. Desktop `cargo check`, two focused identity tests, 51 non-ignored crate
+tests (one ignored), and strict Clippy passed; no core workspace suite or
+manual GitHub CI ran. The hidden native debug WebView passed project draft
+isolation/restoration. The installed 0.1.47 candidate passed the same native
+switch journey, an independent new-idea journey with one real Codex reply in
+a new project, and signed-out first-use auth. A combined native run passed the
+real reply but timed out when its next test tried to edit a folder while the
+conversation remained connected; splitting the two independent journeys
+resolved that test setup collision. No user-visible app window was opened.
+
+One NSIS candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.47_x64-setup.exe`
+has 123,092,052 bytes, SHA-256
+`E397A974F81419C409D17F58B75A06323487BD75A90423FF2A2DE3F7704E6DF8`.
+Its sidecar has 93 bytes. Silent installation over public 0.1.46 exited 0,
+preserved candidate bytes and installed ProductVersion 0.1.47, executable
+SHA-256
+`660DE983355AD29DDC72467E59B7053C6317A0D43A254810077C2C215694DF34`.
+No worker was delegated; per-model tokens, BRL cost and Pro quota attribution
+remain UNKNOWN. Clean-machine setup, external-browser launch, real provider
+login completion, physical mobile access and manual screen-reader acceptance
+remain NOT_RUN.
+
+**State:** candidate installed and tested. Next exact step: review diff,
+commit/push/tag, publish this exact candidate and sidecar, verify anonymous
+download bytes and reinstall, then continue the broad Desktop goal.

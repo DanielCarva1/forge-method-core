@@ -734,7 +734,8 @@ async function openConversation(page) {
     await projectsPage.locator('#workspace').waitFor({ state: 'visible' });
     assert.equal(await projectsPage.locator('#project-root').inputValue(), '', 'The Home new-idea action also needs a fresh project choice');
     assert.equal(await projectsPage.locator('#project-result').isHidden(), true);
-    assert.equal(await projectsPage.getByRole('button', { name: 'Escolher pasta para continuar' }).isEnabled(), true, 'The draft remains available for a new folder, but cannot be sent yet');
+    assert.equal(await projectsPage.locator('#message-text').inputValue(), '', 'A fresh idea without a starter must not inherit the previous project draft');
+    assert.equal(await projectsPage.getByRole('button', { name: 'Escolher pasta para continuar' }).isDisabled(), true, 'A fresh idea without text cannot be sent');
     await projectsPage.close();
     console.log('PASS: My Projects empty state, verified shortcuts, reload, revalidation, unavailable project, removal, storage failure and narrow layout.');
     const manyProjectsPage = await browser.newPage();
@@ -2087,6 +2088,7 @@ async function openConversation(page) {
     await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
     await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conectado' }).waitFor();
+    await page.locator('#message-text').fill('Rascunho privado do primeiro projeto');
     assert.equal(await page.locator('#project-root').isDisabled(), true, 'An active Codex connection locks direct folder editing');
     const disconnectsBeforeSwitch = await page.evaluate(() => window.disconnectCalls);
     await page.evaluate(() => window.agentEvents.onmessage({ kind: 'running' }));
@@ -2100,7 +2102,7 @@ async function openConversation(page) {
     assert.equal(await page.evaluate(() => location.hash), '#explore', 'Declining interruption keeps the person on Explore');
     assert.equal(await page.locator('#confirmed-root').textContent(), 'D:\\first-project');
     assert.equal(await page.evaluate(() => window.disconnectCalls), disconnectsBeforeSwitch);
-    assert.equal(await page.locator('#message-text').inputValue(), '', 'Declining interruption must not alter the existing draft');
+    assert.equal(await page.locator('#message-text').inputValue(), 'Rascunho privado do primeiro projeto', 'Declining interruption must not alter the existing draft');
     if (await page.locator('.appearance').evaluate(node => node.open)) await page.locator('.appearance summary').click();
     await page.getByRole('link', { name: 'Meus projetos' }).click();
     page.once('dialog', dialog => dialog.dismiss());
@@ -2114,6 +2116,7 @@ async function openConversation(page) {
     assert.equal(await page.locator('#project-root').isEnabled(), true);
     assert.equal(await page.evaluate(() => window.disconnectCalls), disconnectsBeforeSwitch + 1);
     assert.equal(await page.locator('#project-root').inputValue(), '', 'Opening another project must not retain the previous folder');
+    assert.equal(await page.locator('#message-text').inputValue(), '', 'Opening another project must not carry the previous project draft');
     assert.equal(await page.locator('#project-result').isHidden(), true, 'The previous project must not appear confirmed during folder choice');
     assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).count(), 0, 'Sending must wait for the new folder');
     assert.equal(await page.getByRole('button', { name: 'Escolher pasta para continuar' }).count(), 1);
@@ -2130,6 +2133,12 @@ async function openConversation(page) {
     await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
     assert.equal(await page.evaluate(() => window.disconnectCalls), disconnectsBeforeShortcut + 1, 'Opening a different saved project must disconnect the old Codex conversation first');
     assert.equal(await page.locator('#confirmed-root').textContent(), 'D:\\first-project');
+    assert.equal(await page.locator('#message-text').inputValue(), 'Rascunho privado do primeiro projeto', 'Reopening a project restores its unsent draft in this app session');
+    await page.locator('#message-text').fill('');
+    await page.locator('#project-setup summary').click();
+    await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await page.locator('#message-text').inputValue(), '', 'Clearing a draft must not resurrect it when confirming the same folder again');
     assert.match(await page.locator('#agent-status').textContent(), /Projeto pronto\. Escreva sua ideia; a conversa abre quando você enviar\./);
     await page.evaluate(() => {
       const invoke = window.__TAURI__.core.invoke;

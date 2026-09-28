@@ -1278,15 +1278,21 @@ async function operatePreviewDialog(page, file) {
       await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(process.env.FORGE_TEST_PROJECT);
       await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
       await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 35000 });
+      await page.locator('#message-text').fill('Rascunho exclusivo deste projeto');
       await page.locator('nav a[data-route="projects"]').click();
       await page.getByRole('link', { name: 'Abrir outro projeto' }).click();
       await page.locator('#workspace').waitFor({ state: 'visible' });
       assert.equal(await page.locator('#project-root').inputValue(), '');
       assert.equal(await page.locator('#project-result').isHidden(), true);
       assert.equal(await page.locator('#messages article').count(), 0);
+      assert.equal(await page.locator('#message-text').inputValue(), '', 'The old project draft must not appear in another project');
       assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).count(), 0);
       assert.equal(await page.getByRole('button', { name: 'Escolher pasta para continuar' }).count(), 1);
-      console.log('PASS: native Open Another Project clears the previous folder and conversation before a new folder is confirmed.');
+      await page.locator('nav a[data-route="projects"]').click();
+      await page.locator('#recent-projects .recent-project').filter({ hasText: process.env.FORGE_TEST_PROJECT }).getByRole('button', { name: /^Abrir / }).click();
+      await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 35000 });
+      assert.equal(await page.locator('#message-text').inputValue(), 'Rascunho exclusivo deste projeto', 'Returning to the original project restores its unsent draft');
+      console.log('PASS: native project switching isolates the previous folder, conversation and unsent draft; reopening restores that draft without sending.');
     }
     if (process.env.FORGE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_SCREENSHOT, fullPage: true });
     console.log('PASS: real native window, frontend-to-Rust identity and retry.');
