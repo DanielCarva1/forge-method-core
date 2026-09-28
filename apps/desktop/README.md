@@ -9890,3 +9890,18 @@ without another Send, and native preview path rejection preserving a validated
 result. Full Rust/browser suites and manual GH CI were not run. The candidate
 is installed locally but **not yet public**; publication/download readback
 remains next. No model-specific token or BRL cost attribution is available.
+
+### Desktop 0.1.54 public readback — 2026-09-28
+
+Commit `cb4c514e` and tag `desktop-v0.1.54-alpha.1` were pushed. The
+[0.1.54 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.54-alpha.1)
+contains the exact tested installer and sidecar. An unauthenticated download
+matched the 123,074,217-byte candidate and SHA-256
+`732E915472785745FFAE2D260110760448881E75222F52EBF2F76CD0239E5FFC`.
+The downloaded installer silently reinstalled over 0.1.54 with exit 0 and
+installed executable SHA-256
+`6D09B50E2FDED316885F099F0E2792016B2A6D55F12A1BD0C59B6273630B87F3`.
+A focused hidden-native real-Codex empty-thread/restart check passed again.
+No manual GH CI or broad suite ran. Clean-machine installation and the other
+limitations in `RELEASE_NOTES-0.1.54.md` remain NOT_RUN. Continue product UI
+work; do not treat this alpha package as completion of the Desktop goal.
