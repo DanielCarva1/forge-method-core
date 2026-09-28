@@ -39,5 +39,11 @@ candidate bytes. The installed executable reports ProductVersion 0.1.46,
 SHA-256
 `DA5C1E8960BE7E6F9E2070BF048F45AEEB8001A97728B1DAA103206A4C876FF7`.
 Hidden native general shell, signed-out first-use, and real-result/restart
-smokes passed on the installed candidate. Public-download readback remains
-to be recorded after publication; source commit alone does not update the app.
+smokes passed on the installed candidate. Package commit `ab01d930` was
+pushed and tagged `desktop-v0.1.46-alpha.1`. The unauthenticated public
+download and sidecar returned the same 123,117,912 bytes and SHA-256 as the
+candidate. Silent installation of those downloaded bytes over the candidate
+returned exit 0, kept the file hash intact, and installed the same 0.1.46
+executable hash. Hidden native general and signed-out auth smokes passed
+again on the downloaded installation. Source commit alone does not update
+the app.

@@ -1,10 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.46` is the current source version;
-`0.1.45` is the latest published and publicly verified
-[alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.45-alpha.1).
+Independent Tauri application. Desktop `0.1.46` is the current source version
+and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.46-alpha.1).
 Its installer was downloaded without authentication, hash-checked, installed
-over `0.1.44` and tested in the hidden native app.
+over `0.1.45` and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -9177,3 +9176,24 @@ remain NOT_RUN.
 and downloaded-file install/readback remain. Next exact step: publish this
 candidate and verify the public bytes and installed app, then continue the
 broader Desktop UI/product goal.
+
+### Desktop 0.1.46 public readback — 2026-09-28
+
+Package commit `ab01d930` was pushed on `codex/desktop-shell` and tagged
+`desktop-v0.1.46-alpha.1`. The exact tested candidate and sidecar are in the
+[0.1.46 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.46-alpha.1).
+Unauthenticated downloads returned 123,117,912 bytes and SHA-256
+`98CFE23151DD7D93D1A3871612380EC7A4D20AE4B40AEBB3F123BAB102DDF98D`,
+identical to the candidate and public sidecar. Silent installation of the
+downloaded bytes over the candidate returned exit 0 and preserved the file
+hash. Installed ProductVersion is 0.1.46, executable SHA-256
+`DA5C1E8960BE7E6F9E2070BF048F45AEEB8001A97728B1DAA103206A4C876FF7`.
+Downloaded-installation hidden native general and signed-out auth smokes
+passed. This is same-machine package proof, not external-browser launch,
+clean-machine setup or real provider login completion. No manual GitHub CI
+ran. The broad Desktop goal stays active; per-model tokens, BRL cost and
+Pro quota attribution remain UNKNOWN.
+
+**Next smallest step:** inspect the remaining real-user journey and close a
+demonstrated UI/backend or accessibility gap; do not infer complete product
+readiness from this manual-update affordance.
