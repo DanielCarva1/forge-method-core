@@ -1528,7 +1528,7 @@ async function openConversation(page) {
         return Promise.resolve({ kind: 'text', content: window.linkPreviewContent || 'Arquivo real do projeto', relative_path: 'result.txt', size_bytes: 23 });
       };
     });
-    const formattedReply = '# Plano\n- **Criar** uma tela\n- Mostrar `resultado` em `site/index.html`; `https://example.com/outside.html` é apenas texto.\n\n```rust\n// site/index.html must remain code, not an action\nfn main() { println!("<script>"); }\n```\n> Confirme o **resultado** antes de publicar.\n\n| Etapa | Situação | Observação |\n| --- | --- | --- |\n| Tela | `pronta` | Leia antes de publicar |\n| Arquivo | [abrir](result.txt) | Local |\n\n---\n<script>alert(1)</script>\n[arquivo](result.txt) [fora](D:/outside.md) [web](https://example.com) [abrir](javascript:alert(1))';
+    const formattedReply = '# Plano\n- **Criar** uma tela\n- Mostrar `resultado` em `site/index.html`; `https://example.com/outside.html` é apenas texto.\n\n```rust\n// site/index.html must remain code, not an action\nfn main() { println!("<script>"); }\n```\n> Confirme o **resultado** antes de publicar.\n\n| Etapa | Situação | Observação |\n| --- | --- | --- |\n| Tela | `pronta` | Leia antes de publicar |\n| Arquivo | [abrir](result.txt) | Local |\n\n---\n<script>alert(1)</script>\n[arquivo](result.txt) [fora](D:/outside.md) [web](https://example.com) [cred](https://@example.com) [abrir](javascript:alert(1))';
     await page.evaluate(text => window.agentEvents.onmessage({ kind: 'delta', id: 'formatted-reply', text }), formattedReply.slice(0, 24));
     assert.equal(await page.locator('#messages article[data-role="agent"]').last().locator('h3').count(), 0);
     await page.evaluate(text => window.agentEvents.onmessage({ kind: 'message', id: 'formatted-reply', text }), formattedReply);
@@ -1545,6 +1545,7 @@ async function openConversation(page) {
     if (process.env.FORGE_FORMATTED_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_FORMATTED_SCREENSHOT, fullPage: true });
     assert.equal(await formattedBubble.locator('script, a[href^="javascript:"]').count(), 0);
     assert.equal(await formattedBubble.locator('.message-file-link').count(), 4, 'Only project-file candidates become actions');
+    assert.equal(await formattedBubble.locator('.message-web-link').count(), 1, 'An HTTPS citation needs an explicit browser action');
     assert.equal(await page.locator('#preview-last-result').getAttribute('hidden'), '', 'Several distinct files must not be guessed as one result');
     assert.equal(await formattedBubble.locator('.message-result-action').count(), 0, 'Several cited files must not produce one guessed action beside the reply');
     assert.equal(await formattedBubble.locator('.message-file-choices summary').textContent(), 'Conferir 3 arquivos da resposta');
@@ -1557,8 +1558,29 @@ async function openConversation(page) {
     assert.equal(await page.locator('#preview-cited-files-list button').count(), 3, 'Repeated citations should not duplicate a choice');
     assert.equal(await formattedBubble.getByRole('button', { name: 'Ver arquivo local: site/index.html' }).count(), 1, 'An inline-code file reference should offer the same safe preview action');
     assert.equal(await formattedBubble.locator('code').filter({ hasText: 'https://example.com/outside.html' }).count(), 1, 'An inline-code URL must remain inert text');
-    assert.match(await formattedBubble.textContent(), /\[web\]\(https:\/\/example.com\)/);
+    assert.equal(await formattedBubble.locator('.message-web-link').textContent(), 'web ↗');
+    assert.match(await formattedBubble.textContent(), /\[cred\]\(https:\/\/@example\.com\)/);
+    assert.match(await formattedBubble.textContent(), /\[abrir\]\(javascript:alert\(1\)\)/);
     assert.match(await formattedBubble.textContent(), /<script>alert\(1\)<\/script>/);
+    await page.evaluate(() => {
+      window.externalLinkCalls = [];
+      window.externalConfirmText = '';
+      window.originalConfirm = window.confirm;
+      window.confirm = text => { window.externalConfirmText = text; return window.allowExternalLink || false; };
+      const invoke = window.__TAURI__.core.invoke;
+      window.__TAURI__.core.invoke = (command, args) => {
+        if (command === 'open_external_link') { window.externalLinkCalls.push(args); return Promise.resolve(); }
+        return invoke(command, args);
+      };
+    });
+    await formattedBubble.locator('.message-web-link').click();
+    assert.equal(await page.evaluate(() => window.externalLinkCalls.length), 0, 'Declining the URL cannot launch a browser');
+    assert.match(await page.evaluate(() => window.externalConfirmText), /https:\/\/example\.com\//, 'Confirmation shows the complete destination');
+    await page.evaluate(() => { window.allowExternalLink = true; });
+    await formattedBubble.locator('.message-web-link').click();
+    await formattedBubble.locator('.message-web-status').filter({ hasText: 'Abertura solicitada' }).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.externalLinkCalls), [{ url: 'https://example.com/' }]);
+    await page.evaluate(() => { window.confirm = window.originalConfirm; });
     await page.getByRole('button', { name: 'Ver texto original' }).click();
     assert.equal(await formattedBubble.locator('pre.message-raw').textContent(), formattedReply);
     await page.getByRole('button', { name: 'Ver texto formatado' }).click();
@@ -1705,6 +1727,8 @@ async function openConversation(page) {
     assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Ver arquivo local: arquivo');
     await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Ver arquivo local: fora');
+    await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Abrir site externo: web (example.com)');
     await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Conferir 3 arquivos da resposta');
     await page.keyboard.press('Tab');

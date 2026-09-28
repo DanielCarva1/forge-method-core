@@ -152,6 +152,15 @@ async function operatePreviewDialog(page, file) {
     assert.equal(await page.locator('#about').evaluate(node => node.open), true);
     const nativeInfo = await page.evaluate(() => window.__TAURI__.core.invoke('app_info'));
     await page.locator('#app-version').filter({ hasText: `Versão instalada: ${nativeInfo.version}` }).waitFor();
+    const refusedLinks = await page.evaluate(async () => {
+      const invalid = ['javascript:alert(1)', 'file:///C:/secret.txt', 'https://@example.com/'];
+      return Promise.all(invalid.map(async url => {
+        try { await window.__TAURI__.core.invoke('open_external_link', { url }); return false; }
+        catch { return true; }
+      }));
+    });
+    assert.deepEqual(refusedLinks, [true, true, true], 'Native IPC must reject unsafe links without launching a browser');
+    console.log('PASS: installed native command rejects unsafe external addresses without a browser launch.');
     assert.equal(await page.getByRole('button', { name: 'Ver versões disponíveis' }).isVisible(), true);
     assert.equal(await page.locator('#updates-url').isHidden(), true);
     if (process.env.FORGE_UPDATES_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_UPDATES_SCREENSHOT, fullPage: true });

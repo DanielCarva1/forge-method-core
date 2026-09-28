@@ -8,6 +8,15 @@ function localPreviewPath(value) {
   return path;
 }
 
+function externalBrowserUrl(value) {
+  if (!value || value.length > 1024 || /[\s\\\u0000-\u001f\u007f]/.test(value) || /^https?:\/\/[^/?#]*@/i.test(value)) return null;
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) return null;
+    return url;
+  } catch { return null; }
+}
+
 function fileAction(path, label, onLocalFile, inlineCode = false) {
   const button = document.createElement('button');
   button.type = 'button';
@@ -23,7 +32,21 @@ function fileAction(path, label, onLocalFile, inlineCode = false) {
   return button;
 }
 
-function appendInline(parent, value, onLocalFile) {
+function webAction(url, label, onExternalUrl) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'message-web-link';
+  button.setAttribute('aria-label', `Abrir site externo: ${label} (${url.host})`);
+  button.append(document.createTextNode(`${label} `));
+  const arrow = document.createElement('span');
+  arrow.setAttribute('aria-hidden', 'true');
+  arrow.textContent = '↗';
+  button.append(arrow);
+  button.addEventListener('click', () => { void onExternalUrl(url.href, button); });
+  return button;
+}
+
+function appendInline(parent, value, onLocalFile, onExternalUrl) {
   const tokens = /\*\*[^*\n]+\*\*|`[^`\n]+`|\[[^\]\n]{1,120}\]\([^)\n]{1,1024}\)/g;
   let offset = 0;
   let match;
@@ -33,9 +56,14 @@ function appendInline(parent, value, onLocalFile) {
     if (match[0].startsWith('[')) {
       const separator = match[0].indexOf('](');
       const label = match[0].slice(1, separator);
-      const path = localPreviewPath(match[0].slice(separator + 2, -1));
+      const destination = match[0].slice(separator + 2, -1);
+      const path = localPreviewPath(destination);
+      const url = onExternalUrl ? externalBrowserUrl(destination) : null;
       if (path && onLocalFile) {
         parent.append(fileAction(path, label, onLocalFile));
+        formatted = true;
+      } else if (url) {
+        parent.append(webAction(url, label, onExternalUrl));
         formatted = true;
       } else parent.append(document.createTextNode(match[0]));
     } else {
@@ -82,7 +110,7 @@ function isTableAt(lines, index) {
     && divider.every(cell => /^:?-{3,}:?$/.test(cell)) ? header : null;
 }
 
-export function renderAgentMessage(target, raw, onLocalFile) {
+export function renderAgentMessage(target, raw, onLocalFile, onExternalUrl) {
   const lines = raw.replace(/\r\n?/g, '\n').split('\n');
   const fragment = document.createDocumentFragment();
   let paragraph = [];
@@ -93,7 +121,7 @@ export function renderAgentMessage(target, raw, onLocalFile) {
   function flushParagraph() {
     if (!paragraph.length) return;
     const node = document.createElement('p');
-    formatted = appendInline(node, paragraph.join('\n'), onLocalFile) || formatted;
+    formatted = appendInline(node, paragraph.join('\n'), onLocalFile, onExternalUrl) || formatted;
     fragment.append(node);
     paragraph = [];
   }
@@ -131,7 +159,7 @@ export function renderAgentMessage(target, raw, onLocalFile) {
       for (const value of header) {
         const cell = document.createElement('th');
         cell.scope = 'col';
-        appendInline(cell, value, onLocalFile);
+        appendInline(cell, value, onLocalFile, onExternalUrl);
         headRow.append(cell);
       }
       head.append(headRow); table.append(head);
@@ -144,7 +172,7 @@ export function renderAgentMessage(target, raw, onLocalFile) {
         const tr = document.createElement('tr');
         for (const value of row) {
           const cell = document.createElement('td');
-          appendInline(cell, value, onLocalFile);
+          appendInline(cell, value, onLocalFile, onExternalUrl);
           tr.append(cell);
         }
         body.append(tr);
@@ -160,7 +188,7 @@ export function renderAgentMessage(target, raw, onLocalFile) {
       while (i < lines.length && /^ {0,3}> ?/.test(lines[i]));
       i -= 1;
       const paragraph = document.createElement('p');
-      appendInline(paragraph, content.join('\n'), onLocalFile);
+      appendInline(paragraph, content.join('\n'), onLocalFile, onExternalUrl);
       quote.append(paragraph); fragment.append(quote);
       continue;
     }
@@ -178,7 +206,7 @@ export function renderAgentMessage(target, raw, onLocalFile) {
       const level = Math.min(intendedLevel, previousHeadingLevel + 1);
       previousHeadingLevel = level;
       const node = document.createElement(`h${level}`);
-      appendInline(node, heading[2], onLocalFile);
+      appendInline(node, heading[2], onLocalFile, onExternalUrl);
       fragment.append(node);
       continue;
     }
@@ -191,7 +219,7 @@ export function renderAgentMessage(target, raw, onLocalFile) {
         fragment.append(list);
       }
       const item = document.createElement('li');
-      appendInline(item, bullet[2], onLocalFile);
+      appendInline(item, bullet[2], onLocalFile, onExternalUrl);
       list.append(item);
       continue;
     }

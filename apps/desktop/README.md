@@ -1,7 +1,7 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.50` is the current source version
-and the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.50-alpha.1).
+Independent Tauri application. Desktop `0.1.51` is the current source version;
+`0.1.50` is the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.50-alpha.1).
 Its installer was downloaded without authentication, hash-checked, installed
 and tested in the hidden native app.
 Later source edits described in the latest checkpoint are not yet in that
@@ -9518,3 +9518,50 @@ physical mobile access and manual screen-reader acceptance remain NOT_RUN.
 **Next smallest step:** inspect the real create/chat/result journey for another
 user-facing friction point and close a coherent UI slice before preparing the
 next installer. Do not build or publish a package solely for this copy change.
+
+### Desktop 0.1.51 external citation actions candidate — 2026-09-28
+
+Accepted goal remains the complete, approachable Forge Desktop alpha with
+project selection/onboarding, Codex conversation, real result preview and
+durable resume; UI complexity stays outside the user's path. This package
+closes a real chat gap: public web citations in completed Codex replies now
+have an explicit browser action. It asks for confirmation with the full URL,
+then requests the system browser; only HTTP(S) without embedded credentials
+is eligible. Other schemes and suspicious syntax remain inert text. Local
+project-file actions and protected previews are unchanged. The previously
+verified completion-copy cleanup is included. No worker was delegated in this
+slice; requested/observed worker model is not applicable. Per-model tokens,
+BRL-equivalent cost and Pro quota attribution remain UNKNOWN; no savings claim.
+
+Changed: `ui/message-format.mjs`, `ui/chat.mjs`, `ui/styles.css`,
+`src-tauri/src/main.rs`, browser/native tests, Desktop version/config/lock,
+`RELEASE_NOTES-0.1.51.md`, and this checkpoint. Browser test first failed on
+the missing link action, then passed with confirmation/refusal, native-call
+arguments, unsafe citation text and keyboard traversal. Five JavaScript
+connection tests, 52 Desktop Rust tests (one ignored), a focused URL validation
+test, and strict Desktop Clippy passed. An installed 0.1.51 candidate passed
+hidden native smoke with real Forge readback. A separate installed-candidate
+readback recovered 39 real Codex messages across two process starts, rendered
+the protected local HTML preview and made zero Send calls. A native negative
+IPC check rejected `javascript:`, `file:` and credentialed HTTPS destinations
+in the installed app without launching a browser. During that native rerun,
+the first automatic Forge-record consultation failed with the known generic
+lookup error and the explicit retry passed; the trigger of this occurrence
+was not isolated, so first-read stability remains PARTIAL. Actual
+external-browser launch, clean-machine setup, fresh provider login completion,
+and manual screen-reader acceptance remain NOT_RUN. No manual GH CI ran.
+
+The single NSIS candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.51_x64-setup.exe`:
+123,047,917 bytes, SHA-256
+`9B069FD0561BD059719C3EF22159553ABFAA10EBF2CD6D3F35A9B5BE14351F91`.
+Its sidecar is 93 bytes. Silent upgrade from installed 0.1.50 exited 0;
+candidate hash stayed identical. Installed ProductVersion is 0.1.51 and
+executable SHA-256 is
+`A7949DA7CF6B762C8824DEA14D279A00A2991CB28CB2F3B8E80072BC82668748`.
+
+**State:** candidate tested, not yet published. Next exact step: review the
+diff, commit/push/tag, publish the exact
+candidate and sidecar, verify anonymous download bytes and reinstall. Then
+continue closing substantial UI gaps; do not treat this alpha package as
+whole-product completion.

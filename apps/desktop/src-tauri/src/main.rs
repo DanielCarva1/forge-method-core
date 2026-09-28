@@ -26,7 +26,45 @@ fn app_info() -> AppInfo {
 
 #[tauri::command]
 fn open_updates_page() -> Result<(), &'static str> {
-    // No URL from the WebView is accepted here: only the project's public releases page.
+    // Fixed project URL, not a WebView-supplied destination.
+    open_browser_url("https://github.com/DanielCarva1/forge-method-core/releases")
+}
+
+fn validated_external_url(value: &str) -> Result<tauri::Url, &'static str> {
+    if value.is_empty()
+        || value.len() > 1024
+        || value
+            .chars()
+            .any(|c| c.is_whitespace() || c.is_control() || c == '\\')
+        || value
+            .split_once("://")
+            .is_some_and(|(_, authority_and_path)| {
+                authority_and_path
+                    .split(&['/', '?', '#'][..])
+                    .next()
+                    .is_some_and(|authority| authority.contains('@'))
+            })
+    {
+        return Err("Este endereço não pode ser aberto.");
+    }
+    let url = tauri::Url::parse(value).map_err(|_| "Este endereço não pode ser aberto.")?;
+    if !matches!(url.scheme(), "http" | "https")
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+    {
+        return Err("Este endereço não pode ser aberto.");
+    }
+    Ok(url)
+}
+
+#[tauri::command]
+fn open_external_link(url: String) -> Result<(), &'static str> {
+    let url = validated_external_url(&url)?;
+    open_browser_url(url.as_str())
+}
+
+fn open_browser_url(address: &str) -> Result<(), &'static str> {
     #[cfg(windows)]
     {
         #[link(name = "shell32")]
@@ -41,12 +79,16 @@ fn open_updates_page() -> Result<(), &'static str> {
             ) -> isize;
         }
         let operation: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
-        let url: Vec<u16> = "https://github.com/DanielCarva1/forge-method-core/releases"
-            .encode_utf16()
-            .chain(std::iter::once(0))
-            .collect();
+        let url: Vec<u16> = address.encode_utf16().chain(std::iter::once(0)).collect();
         let result = unsafe {
-            ShellExecuteW(0, operation.as_ptr(), url.as_ptr(), std::ptr::null(), std::ptr::null(), 1)
+            ShellExecuteW(
+                0,
+                operation.as_ptr(),
+                url.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                1,
+            )
         };
         if result <= 32 {
             Err("Não foi possível abrir o navegador. Copie o endereço mostrado na tela.")
@@ -55,7 +97,10 @@ fn open_updates_page() -> Result<(), &'static str> {
         }
     }
     #[cfg(not(windows))]
-    { Err("Abra o endereço mostrado na tela em seu navegador.") }
+    {
+        let _ = address;
+        Err("Abra o endereço mostrado na tela em seu navegador.")
+    }
 }
 
 fn main() {
@@ -84,6 +129,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             app_info,
             open_updates_page,
+            open_external_link,
             project::choose_project_folder,
             project::inspect_project,
             project::start_project,
@@ -117,5 +163,40 @@ mod tests {
         let info = app_info();
         assert_eq!(info.name, "Forge");
         assert!(!info.version.is_empty());
+    }
+
+    #[test]
+    fn external_url_accepts_only_explicit_web_destinations() {
+        assert_eq!(
+            validated_external_url("https://example.com/path?q=1")
+                .unwrap()
+                .as_str(),
+            "https://example.com/path?q=1"
+        );
+        assert_eq!(
+            validated_external_url("http://example.com")
+                .unwrap()
+                .as_str(),
+            "http://example.com/"
+        );
+        for url in [
+            "javascript:alert(1)",
+            "file:///C:/secret.txt",
+            "https://user:pass@example.com/",
+            "https://@example.com/",
+            "https://example.com/ bad",
+            "https://example.com\\@evil.test/",
+            "https://example.com/\nnext",
+            "//example.com",
+            "https://",
+        ] {
+            assert!(
+                validated_external_url(url).is_err(),
+                "unexpectedly accepted {url:?}"
+            );
+        }
+        assert!(
+            validated_external_url(&format!("https://example.com/{}", "a".repeat(1024))).is_err()
+        );
     }
 }

@@ -378,6 +378,27 @@ findConversations.addEventListener('click', () => loadConversationChoices());
 previousConversations.addEventListener('click', () => loadConversationChoices(pageNumber - 1, pageCursors[pageNumber - 1]));
 moreConversations.addEventListener('click', () => loadConversationChoices(pageNumber + 1, listCursor));
 
+async function openExternalUrl(url, button) {
+  if (!globalThis.confirm(`Abrir este site fora do Forge?\n\n${url}\n\nConfira o endereço antes de continuar.`)) return;
+  let feedback = button.nextElementSibling;
+  if (!feedback?.classList.contains('message-web-status')) {
+    feedback = document.createElement('span');
+    feedback.className = 'message-web-status';
+    feedback.setAttribute('role', 'status');
+    button.after(feedback);
+  }
+  button.disabled = true;
+  feedback.textContent = 'Solicitando abertura…';
+  try {
+    await invoke('open_external_link', { url });
+    feedback.textContent = 'Abertura solicitada ao navegador.';
+  } catch {
+    feedback.textContent = 'Não foi possível abrir. Confira o navegador padrão.';
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function paintMessage(item) {
   if (item.isUser || !item.complete) {
     item.previewPaths = [];
@@ -387,7 +408,7 @@ function paintMessage(item) {
     return;
   }
   const formatted = document.createElement('div');
-  renderAgentMessage(formatted, item.raw, previewLinkedFile);
+  renderAgentMessage(formatted, item.raw, previewLinkedFile, openExternalUrl);
   item.previewPaths = [...new Set([...formatted.querySelectorAll('.message-file-link')].map(button => button.dataset.previewPath))];
   const distinctPaths = [...new Map(item.previewPaths.map(path => [path.replace(/\\/g, '/').toLowerCase(), path])).values()];
   if (distinctPaths.length === 1) {
