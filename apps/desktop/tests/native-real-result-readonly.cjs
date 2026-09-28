@@ -140,6 +140,9 @@ async function inspectResult(page) {
 
     app = await launch(profile);
     await openProject(app.page);
+    await app.page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
+    assert.equal(await app.page.locator('#preview-path').textContent(), 'site\\index.html', 'Previously selected real result should reopen without another click');
+    await app.page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias renovado' }).waitFor();
     const after = await resume(app.page);
     assert.deepEqual(after, before, 'Full process restart must preserve message count and order');
     await inspectResult(app.page);

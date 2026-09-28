@@ -68,6 +68,8 @@ const assert = require('node:assert/strict');
     await page.locator('#login-code').filter({ hasText: /[A-Z0-9-]+/ }).waitFor({ timeout: 60000 });
     assert.equal(await page.locator('#start-login').isHidden(), true);
     assert.equal(await page.locator('#login-url').textContent(), 'https://auth.openai.com/codex/device');
+    assert.equal(await page.locator('#copy-login-code').isVisible(), true);
+    assert.equal(await page.evaluate(() => typeof navigator.clipboard?.writeText), 'function');
     if (process.env.FORGE_AUTH_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_AUTH_SCREENSHOT });
     if (fakeCompletion) {
       await page.locator('#login-panel').waitFor({ state: 'hidden', timeout: 30000 });

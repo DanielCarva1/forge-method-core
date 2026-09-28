@@ -9,6 +9,7 @@ const loginPanel = byId('login-panel');
 const loginChallenge = byId('login-challenge');
 const loginStatus = byId('login-status');
 const loginCode = byId('login-code');
+const copyLoginCodeButton = byId('copy-login-code');
 const loginUrl = byId('login-url');
 const startLoginButton = byId('start-login');
 const finishLoginButton = byId('finish-login');
@@ -139,6 +140,7 @@ function controls() {
   finishLoginButton.disabled = loginPending || !loginActive;
   cancelLoginButton.disabled = loginPending || !loginActive;
   openLoginPageButton.disabled = loginPending || !loginActive;
+  copyLoginCodeButton.disabled = loginPending || !loginActive;
   connect.hidden = connected;
   connectHelp.hidden = !project || connected;
   disconnect.hidden = !connected;
@@ -608,6 +610,15 @@ startLoginButton.addEventListener('click', async () => {
 });
 
 finishLoginButton.addEventListener('click', () => void finishLogin());
+copyLoginCodeButton.addEventListener('click', async () => {
+  if (!loginActive || loginPending || !loginCode.textContent) return;
+  try {
+    await navigator.clipboard.writeText(loginCode.textContent);
+    loginStatus.textContent = 'Código copiado. Cole-o na página de acesso.';
+  } catch {
+    loginStatus.textContent = 'Não foi possível copiar. Selecione o código acima e copie manualmente.';
+  }
+});
 cancelLoginButton.addEventListener('click', async () => {
   if (!loginActive || loginPending) return;
   loginPending = true; controls();

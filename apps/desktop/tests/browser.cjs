@@ -900,6 +900,11 @@ async function openConversation(page) {
     const loginPage = await browser.newPage();
     await loginPage.addInitScript(() => {
       window.authFinished = false; window.sentAfterLogin = 0;
+      window.copiedLoginCode = null;
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => {
+        if (window.copyLoginFails) throw new Error('clipboard unavailable');
+        window.copiedLoginCode = text;
+      } } });
       window.__TAURI__ = { core: {
         Channel: class { onmessage = null; },
         invoke: async (command, args) => {
@@ -934,6 +939,20 @@ async function openConversation(page) {
     await loginPage.locator('#login-code').filter({ hasText: 'ABCD-1234' }).waitFor();
     assert.equal(await loginPage.locator('#start-login').isHidden(), true);
     assert.equal(await loginPage.locator('#login-url').textContent(), 'https://auth.openai.com/codex/device');
+    await loginPage.getByRole('button', { name: 'Copiar código' }).click();
+    await loginPage.locator('#login-status').filter({ hasText: 'Código copiado' }).waitFor();
+    assert.equal(await loginPage.evaluate(() => window.copiedLoginCode), 'ABCD-1234');
+    await loginPage.evaluate(() => { window.copyLoginFails = true; });
+    await loginPage.getByRole('button', { name: 'Copiar código' }).click();
+    await loginPage.locator('#login-status').filter({ hasText: 'Selecione o código' }).waitFor();
+    assert.equal(await loginDraft.inputValue(), 'Minha ideia permanece');
+    await loginPage.setViewportSize({ width: 360, height: 720 });
+    await loginPage.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
+    await loginPage.getByRole('button', { name: 'Copiar código' }).click();
+    assert.equal(await loginPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Enlarged first-use login must not scroll sideways');
+    assert.equal(await loginPage.locator('#copy-login-code').isVisible(), true);
+    await loginPage.setViewportSize({ width: 1180, height: 820 });
+    await loginPage.evaluate(() => { document.documentElement.style.removeProperty('font-size'); });
     await loginPage.getByRole('button', { name: 'Já entrei · verificar' }).click();
     await loginPage.locator('#login-status').filter({ hasText: 'Aguardando a confirmação' }).waitFor();
     await loginPage.evaluate(() => { window.authFinished = true; window.loginEvents.onmessage({ success: true }); });

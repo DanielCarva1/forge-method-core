@@ -1,9 +1,10 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.41` is the current source version
-and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.41-alpha.1).
+Independent Tauri application. Desktop `0.1.45` is the current source version;
+`0.1.44` is the latest published and publicly verified
+[alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.44-alpha.1).
 Its installer was downloaded without authentication, hash-checked, installed
-over `0.1.40` and tested in the hidden native app.
+over `0.1.43` and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -9046,3 +9047,43 @@ remain NOT_RUN. Next smallest action: use the installed app to examine the
 remaining screen-reader/keyboard journey before changing accessibility code;
 do not infer a defect from viewport emulation alone. Per-model token, BRL
 and Pro-quota attribution remain UNKNOWN.
+
+### Desktop 0.1.45 first-use access candidate — 2026-09-28
+
+The device-login challenge now has **Copiar código** beside the temporary
+code, with success or manual-copy guidance when clipboard access fails.
+The signed-out native 0.1.44 baseline already preserved the draft and
+prevented early Send. The changed browser UI suite passed successful and
+failed copy attempts plus 360px/200% enlarged access controls. The hidden
+native debug and installed 0.1.45 WebView showed the copy action and an
+available clipboard API; neither test wrote to the user's system clipboard.
+The native auth journey still preserves the draft and cancels safely; real
+provider login completion remains NOT_RUN. A separate hidden native test
+resumed 39 real Codex messages after a full app restart and confirmed that
+the previously chosen real HTML result reappeared automatically, before
+another file click, without Send or project-file edit.
+
+Changed: `ui/index.html`, `ui/chat.mjs`, `ui/styles.css`, browser and native
+tests, Desktop version files, `RELEASE_NOTES-0.1.45.md`, and this checkpoint.
+Browser suite, JavaScript syntax, Desktop `cargo check`, 51 non-ignored
+Desktop Rust tests (one ignored), strict Clippy, release build, and hidden
+native general, auth, and real-result smokes passed. No core workspace
+suite or manual GitHub CI ran; bundled core remains 0.13.2.
+
+One candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.45_x64-setup.exe`
+has 123,142,647 bytes, SHA-256
+`001123DC5D143F36C3D96587B605F2525AB1AF992DA1A8FAECF42DBFD97B06D6`.
+Its silent installation over public 0.1.44 returned exit 0 and kept the
+candidate bytes unchanged. The installed executable reports ProductVersion
+0.1.45, SHA-256
+`E3E71BAC16B63CCA976CF6FBC6C7B4021254B71EE3E78E323DED1E1285416B78`.
+No worker was delegated. Per-model tokens, BRL cost, and Pro quota
+attribution are UNKNOWN; no savings claim. Clean-machine setup, real login
+completion, physical mobile access and manual screen-reader acceptance
+remain NOT_RUN.
+
+**State:** installed and tested candidate; commit, push, tag, public download
+and downloaded-file install/readback remain. Next smallest step: publish
+exactly this candidate and verify the public bytes and installed app; then
+continue the broader Desktop goal at a user-visible gap.
