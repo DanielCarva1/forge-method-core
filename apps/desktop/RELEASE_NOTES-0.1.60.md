@@ -38,5 +38,7 @@ Windows folder selection, native Forge project preparation and Home reopen at
 360px with zero Sends; and real project-bound result preview, rejected outside
 file preserving the prior result/layout, full app restart, and a prepared but
 unsent change request. The Codex history in the latter check was a controlled
-fixture, not a real new Codex turn. Anonymous release download readback is
-pending publication.
+fixture, not a real new Codex turn. After publication, an unauthenticated
+download matched the exact candidate size and SHA-256, and its downloaded
+`.sha256` sidecar matched byte-for-byte. The downloaded copy was not installed
+a second time; the exact candidate bytes had already been installed and tested.

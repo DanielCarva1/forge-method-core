@@ -1,11 +1,10 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.60` is the current source and
-installed candidate version; the latest published alpha is
-[0.1.59](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.59-alpha.1)
-until the 0.1.60 package is published and its download checked.
-The 0.1.60 candidate was installed over 0.1.59 and tested in the hidden native
-app.
+Independent Tauri application. Desktop `0.1.60` is the current source,
+installed and latest
+[published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.60-alpha.1).
+The exact 0.1.60 installer was installed over 0.1.59, tested in the hidden
+native app, then downloaded anonymously and hash-checked after publication.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -10209,3 +10208,17 @@ but unsent change request. That test used controlled Codex history, not a new
 real turn. No broad suite, Rust tests or manual GH CI ran. Next: review and
 publish this exact candidate under standing alpha authorization, then verify
 the anonymous download hash. Do not rebuild it.
+
+### Desktop 0.1.60 public readback — 2026-09-28
+
+Package commit `ff512a2c` and tag `desktop-v0.1.60-alpha.1` were pushed.
+The [0.1.60 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.60-alpha.1)
+contains the tested installer and 93-byte sidecar. Unauthenticated downloads
+matched the candidate's 123,044,511 bytes and SHA-256
+`62632B5B475C63C236F119B836E7E7A8D088D02298587DE335FAED1A3AD46103`;
+the sidecar matched byte-for-byte. The downloaded copy was hash-verified but
+not installed a second time. The same exact candidate bytes had already been
+installed over 0.1.59 and passed both focused hidden-native folder/project
+and result-preview/restart checks. No broad suite, Rust tests, new real Codex
+turn or manual GH CI ran. Continue the Desktop product goal; this alpha is
+not full completion.
