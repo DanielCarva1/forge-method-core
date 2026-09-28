@@ -381,6 +381,13 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#message-text').inputValue(), 'Mantenha a paleta atual.\nQuero mudar o arquivo result.txt: ');
     assert.equal(await projectsPage.evaluate(() => document.activeElement?.id), 'message-text');
     assert.equal(await projectsPage.evaluate(() => window.previewRequestSubmits), 0);
+    await projectsPage.setViewportSize({ width: 1280, height: 844 });
+    assert.equal(await projectsPage.evaluate(() => {
+      const conversation = document.getElementById('project-conversation').getBoundingClientRect();
+      const preview = document.getElementById('project-preview').getBoundingClientRect();
+      return document.querySelector('.workspace').classList.contains('preview-loaded')
+        && preview.width >= conversation.width * 1.15 && document.documentElement.scrollWidth <= innerWidth;
+    }), true, 'An actual result should receive a wider desktop preview without horizontal overflow');
     if (process.env.FORGE_PREVIEW_SCREENSHOT) await projectsPage.screenshot({ path: process.env.FORGE_PREVIEW_SCREENSHOT, fullPage: true });
     const mobileDraft = await projectsPage.locator('#message-text').inputValue();
     await projectsPage.setViewportSize({ width: 390, height: 844 });
@@ -1150,6 +1157,12 @@ async function openConversation(page) {
         return input.width >= 180 && send.left >= input.right - 2 &&
           send.top < input.bottom && send.bottom > input.top && notice.bottom <= input.top;
       }), true, `Writing and Send should share one composer row while the capability notice stays visible at ${width}x${height}`);
+      assert.equal(await page.evaluate(() => {
+        const conversation = document.getElementById('project-conversation').getBoundingClientRect();
+        const preview = document.getElementById('project-preview').getBoundingClientRect();
+        return !document.querySelector('.workspace').classList.contains('preview-loaded')
+          && conversation.width >= preview.width * 1.15 && document.documentElement.scrollWidth <= innerWidth;
+      }), true, 'Before a result exists, desktop writing should have more space than the empty preview');
       if (width === 1180 && process.env.FORGE_COMPOSER_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_COMPOSER_SCREENSHOT });
       if (width === 1180) assert.equal(await page.evaluate(() => {
         window.scrollTo(0, 0);

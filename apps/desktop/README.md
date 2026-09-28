@@ -9697,3 +9697,34 @@ attribution remain UNKNOWN.
 **Next smallest step:** continue closing substantial create/chat/result/restart
 UI gaps against real user journeys. Alpha publication is not full-product
 completion; keep the overarching Forge goal active.
+
+### Desktop adaptive workspace emphasis in source — 2026-09-28
+
+The accepted goal remains an approachable end-to-end Desktop alpha. A visual
+comparison of controlled current Home, Projects and Conversation captures
+with the approved conversation reference showed that the same desktop column
+ratio was used with and without a real result. Current source now gives the
+conversation slightly more width while the preview is empty, and gives the
+actual preview more width once a project file has loaded. This uses the
+existing `preview-loaded` UI class, not new state or fake content; one-column
+layouts at 900px and below are unchanged. Files: `ui/styles.css`, focused
+geometry assertions in `tests/browser.cjs` and `tests/native.cjs`, and this
+checkpoint.
+
+The new browser assertion failed before the CSS change. An initial larger
+writing column pushed the recorded next step below the 1180x820 first
+viewport; the ratio was corrected before acceptance. The full browser suite
+then passed at desktop, narrow and 200% text sizes. A fresh Desktop debug
+build and hidden native smoke passed with both empty and loaded preview width
+assertions, real Forge readback, onboarding and protected preview. Final
+controlled browser captures were inspected:
+`D:/Temp/User/forge-adaptive-preview-final.png` and
+`D:/Temp/User/forge-adaptive-writing-final.png`. They show fixture content,
+not a real Codex turn or native IPC. No Rust source or backend
+protocol changed, so no Rust suite or manual GitHub CI ran. No worker was
+delegated; model token and BRL cost attribution remain UNKNOWN. Public and
+installed 0.1.52 do **not** include this source-only layout adjustment.
+
+**Next smallest step:** continue testing the actual create/chat/result/restart
+path and package this layout with another meaningful UI improvement rather
+than publishing a one-CSS-change installer. Keep the full Forge goal active.

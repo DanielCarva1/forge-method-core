@@ -260,6 +260,11 @@ async function operatePreviewDialog(page, file) {
       assert.match(await page.locator('#preview-intro').textContent(), /arquivos citados na conversa.*escolha um da pasta/);
       assert.equal(await page.locator('.project #project-record').count(), 0);
       if (await page.evaluate(() => innerWidth > 900)) {
+        assert.equal(await page.evaluate(() => {
+          const conversation = document.getElementById('project-conversation').getBoundingClientRect();
+          const preview = document.getElementById('project-preview').getBoundingClientRect();
+          return conversation.width >= preview.width * 1.15 && document.documentElement.scrollWidth <= innerWidth;
+        }), true, 'Native writing view should favor conversation width before a result is available');
         assert.equal(await page.evaluate(() => document.querySelector('#project-preview').getBoundingClientRect().top < document.querySelector('.project').getBoundingClientRect().top), true);
         assert.equal(await page.evaluate(() => document.querySelector('#project-preview').getBoundingClientRect().top < document.querySelector('#project-record').getBoundingClientRect().top), true);
         const nativeViewport = await page.evaluate(() => {
@@ -697,6 +702,11 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), true);
       assert.equal(await page.locator('.preview-empty').isVisible(), false);
       if (await page.evaluate(() => innerWidth > 900)) {
+        assert.equal(await page.evaluate(() => {
+          const conversation = document.getElementById('project-conversation').getBoundingClientRect();
+          const preview = document.getElementById('project-preview').getBoundingClientRect();
+          return preview.width >= conversation.width * 1.15 && document.documentElement.scrollWidth <= innerWidth;
+        }), true, 'Native result view should give the real preview more room without horizontal overflow');
         assert.equal(await page.evaluate(() => document.querySelector('.preview').getBoundingClientRect().top < document.querySelector('.project').getBoundingClientRect().top), true);
         assert.equal(await page.evaluate(() => document.querySelector('#project-record').getBoundingClientRect().bottom < document.querySelector('.project').getBoundingClientRect().top), true);
       }
