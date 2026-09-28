@@ -236,12 +236,12 @@ choose.addEventListener('click', async () => {
 });
 refresh.addEventListener('click', loadPreview);
 export async function refreshPreviewAfterTurn() {
-  // A completed Codex turn may have changed the selected file. Reuse the
+  // A stopped Codex turn may already have changed the selected file. Reuse the
   // native project-bound read; never infer another file from reply text.
   if (!project || !filePath || result.hidden || pending) return;
   if (dialog.open) {
     refreshAfterDialog = true;
-    dialogStatus.textContent = 'O Codex terminou. A prévia será atualizada ao fechar esta janela.';
+    dialogStatus.textContent = 'A conversa parou. A prévia será atualizada ao fechar esta janela.';
     return;
   }
   await loadPreview();

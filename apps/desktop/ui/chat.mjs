@@ -399,9 +399,9 @@ function message(id, role, text, append = false, complete = false) {
 }
 
 function receive(event) {
-  if (['running', 'completed', 'interrupted', 'failed', 'disconnected'].includes(event.kind)) invalidateProgress();
-  if (['completed', 'interrupted', 'failed'].includes(event.kind)) refreshProgressAfterTurn();
-  if (event.kind === 'completed') void refreshPreviewAfterTurn();
+  if (['running', 'completed', 'interrupted', 'failed', 'disconnected', 'update_required'].includes(event.kind)) invalidateProgress();
+  if (['completed', 'interrupted', 'failed', 'disconnected', 'update_required'].includes(event.kind)) refreshProgressAfterTurn();
+  if (['completed', 'interrupted', 'failed', 'disconnected', 'update_required'].includes(event.kind)) void refreshPreviewAfterTurn();
   if (event.kind === 'delta' || event.kind === 'message') {
     message(event.id, 'Codex', event.text, event.kind === 'delta', event.kind === 'message');
     return;

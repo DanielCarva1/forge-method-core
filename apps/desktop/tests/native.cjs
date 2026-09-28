@@ -496,9 +496,18 @@ async function operatePreviewDialog(page, file) {
         await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 35000 });
         assert.equal(await page.locator('#progress-result').isVisible(), true);
         assert.equal(await page.locator('#workspace-phase').textContent(), 'Próximo passo ainda não registrado');
+        for (const kind of ['disconnected', 'update_required']) {
+          await page.evaluate(() => window.terminalRecordEvents.onmessage({ kind: 'running' }));
+          assert.equal(await page.locator('#progress-result').isVisible(), false);
+          const readsBeforeTerminal = await page.evaluate(() => window.terminalRecordReads);
+          await page.evaluate(kind => window.terminalRecordEvents.onmessage({ kind }), kind);
+          await page.waitForFunction(before => window.terminalRecordReads > before, readsBeforeTerminal);
+          await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 35000 });
+          assert.equal(await page.locator('#progress-result').isVisible(), true, `${kind} must restore the native Forge record`);
+        }
         await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
         await page.evaluate(() => window.restoreTerminalRecordInvoke());
-        console.log('PASS: native WebView terminal event automatically re-reads the unchanged, authoritative Forge project record (controlled agent event; no real Codex turn).');
+        console.log('PASS: native WebView completed, disconnected and update-required events re-read the unchanged, authoritative Forge project record (controlled agent events; no real Codex turn).');
       }
       assert.equal(await page.locator('#agent-access-note').isVisible(), true);
       assert.match(await page.locator('#agent-access-note').textContent(), /sem pedir confirmação/);
@@ -544,6 +553,35 @@ async function operatePreviewDialog(page, file) {
       await writeFile(previewText, 'updated fixture');
       await page.getByRole('button', { name: 'Atualizar prévia' }).click();
       await page.locator('#preview-text').filter({ hasText: 'updated fixture' }).waitFor({ timeout: 20000 });
+      if (process.env.FORGE_TEST_TERMINAL_RECORD === '1') {
+        await page.evaluate(() => {
+          const originalCore = window.__TAURI__.core;
+          const invoke = originalCore.invoke;
+          const facade = Object.create(originalCore);
+          Object.defineProperty(facade, 'invoke', { value: (command, args) => {
+            if (command === 'connect_agent') {
+              window.previewTerminalEvents = args.events;
+              return Promise.resolve({ thread_id: 'controlled-native-preview-thread', resumed: false, messages: [] });
+            }
+            if (command === 'disconnect_agent') return Promise.resolve();
+            return invoke(command, args);
+          } });
+          window.__TAURI__.core = facade;
+          window.restorePreviewTerminalInvoke = () => { window.__TAURI__.core = originalCore; };
+        });
+        await openConversation(page);
+        await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor();
+        for (const kind of ['interrupted', 'failed']) {
+          const changed = `file changed before ${kind}`;
+          await writeFile(previewText, changed);
+          await page.evaluate(kind => window.previewTerminalEvents.onmessage({ kind }), kind);
+          await page.locator('#preview-text').filter({ hasText: changed }).waitFor({ timeout: 20000 });
+          assert.equal(await page.locator('#preview-result').isVisible(), true);
+        }
+        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await page.evaluate(() => window.restorePreviewTerminalInvoke());
+        console.log('PASS: interrupted and failed Codex events re-read the already selected real project file in the native WebView (controlled agent events; no real Send).');
+      }
       await page.getByRole('button', { name: 'Abrir prévia' }).click();
       await writeFile(previewText, 'updated while enlarged');
       await page.evaluate(async () => { const { refreshPreviewAfterTurn } = await import('./preview.mjs'); await refreshPreviewAfterTurn(); });

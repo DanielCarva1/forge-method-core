@@ -1144,6 +1144,19 @@ async function openConversation(page) {
       assert.equal(await page.locator('#agent-status .status-icon').getAttribute('aria-hidden'), 'true');
       assert.ok((await page.locator('#agent-status span:last-child').textContent()).length > 15);
     }
+    for (const kind of ['disconnected', 'update_required']) {
+      await page.evaluate(() => window.agentEvents.onmessage({ kind: 'running' }));
+      assert.equal(await page.locator('#progress-result').isVisible(), false);
+      const priorProgressReads = await page.evaluate(() => window.progressCalls || 0);
+      await page.evaluate(kind => window.agentEvents.onmessage({ kind }), kind);
+      await page.waitForFunction(previous => (window.progressCalls || 0) > previous, priorProgressReads);
+      await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
+      assert.equal(await page.locator('#progress-result').isVisible(), true, `${kind} must restore the independent Forge record without a manual click`);
+      await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+      await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
+      await openConversation(page);
+      await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    }
     await page.evaluate(() => {
       window.linkPreviewReads = [];
       const previous = window.__TAURI__.core.invoke;
@@ -1156,7 +1169,7 @@ async function openConversation(page) {
     });
     const formattedReply = '# Plano\n- **Criar** uma tela\n- Mostrar `resultado` em `site/index.html`; `https://example.com/outside.html` é apenas texto.\n\n```rust\n// site/index.html must remain code, not an action\nfn main() { println!("<script>"); }\n```\n> Confirme o **resultado** antes de publicar.\n\n| Etapa | Situação | Observação |\n| --- | --- | --- |\n| Tela | `pronta` | Leia antes de publicar |\n| Arquivo | [abrir](result.txt) | Local |\n\n---\n<script>alert(1)</script>\n[arquivo](result.txt) [fora](D:/outside.md) [web](https://example.com) [abrir](javascript:alert(1))';
     await page.evaluate(text => window.agentEvents.onmessage({ kind: 'delta', id: 'formatted-reply', text }), formattedReply.slice(0, 24));
-    assert.equal(await page.locator('#messages article[data-role="agent"] h3').count(), 0);
+    assert.equal(await page.locator('#messages article[data-role="agent"]').last().locator('h3').count(), 0);
     await page.evaluate(text => window.agentEvents.onmessage({ kind: 'message', id: 'formatted-reply', text }), formattedReply);
     const formattedBubble = page.locator('#messages article[data-role="agent"]').last();
     assert.equal(await formattedBubble.locator('h3').textContent(), 'Plano');
@@ -1193,15 +1206,22 @@ async function openConversation(page) {
     await page.evaluate(() => { window.linkPreviewContent = 'Arquivo alterado pelo Codex'; window.agentEvents.onmessage({ kind: 'completed' }); });
     await page.locator('#preview-text').filter({ hasText: 'Arquivo alterado pelo Codex' }).waitFor();
     assert.deepEqual(await page.evaluate(() => window.linkPreviewReads[2]), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\site\\index.html' }, 'A completed turn refreshes only the selected project file');
+    for (const kind of ['interrupted', 'failed']) {
+      const expected = `Arquivo alterado antes de ${kind}`;
+      const readsBefore = await page.evaluate(() => window.linkPreviewReads.length);
+      await page.evaluate(({ kind, expected }) => { window.linkPreviewContent = expected; window.agentEvents.onmessage({ kind }); }, { kind, expected });
+      await page.locator('#preview-text').filter({ hasText: expected }).waitFor();
+      assert.equal(await page.evaluate(() => window.linkPreviewReads.length), readsBefore + 1, `${kind} must re-read only the already selected file`);
+    }
     await page.getByRole('button', { name: 'Abrir prévia' }).click();
-    const readsBeforeDialogCompletion = await page.evaluate(() => window.linkPreviewReads.length);
-    await page.evaluate(() => { window.linkPreviewContent = 'Arquivo mudado durante leitura'; window.agentEvents.onmessage({ kind: 'completed' }); });
-    assert.equal(await page.locator('#preview-dialog').evaluate(node => node.open), true, 'A completed turn must not close an enlarged preview being read');
-    assert.equal(await page.evaluate(() => window.linkPreviewReads.length), readsBeforeDialogCompletion, 'An open dialog defers the native file read');
+    const readsBeforeDialogFailure = await page.evaluate(() => window.linkPreviewReads.length);
+    await page.evaluate(() => { window.linkPreviewContent = 'Arquivo mudado durante leitura'; window.agentEvents.onmessage({ kind: 'failed' }); });
+    assert.equal(await page.locator('#preview-dialog').evaluate(node => node.open), true, 'A failed turn must not close an enlarged preview being read');
+    assert.equal(await page.evaluate(() => window.linkPreviewReads.length), readsBeforeDialogFailure, 'An open dialog defers the native file read');
     assert.match(await page.locator('#preview-dialog-status').textContent(), /atualizada ao fechar/);
     await page.getByRole('button', { name: 'Fechar prévia' }).click();
     await page.locator('#preview-text').filter({ hasText: 'Arquivo mudado durante leitura' }).waitFor();
-    assert.equal(await page.evaluate(() => window.linkPreviewReads.length), readsBeforeDialogCompletion + 1, 'Closing the dialog refreshes once');
+    assert.equal(await page.evaluate(() => window.linkPreviewReads.length), readsBeforeDialogFailure + 1, 'Closing the dialog refreshes once');
     await page.getByRole('button', { name: 'Conferir arquivo citado: site/index.html' }).click();
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.deepEqual(await page.evaluate(() => window.linkPreviewReads.at(-1)), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\site\\index.html' }, 'A cited-file choice uses the same project-bound native preview');

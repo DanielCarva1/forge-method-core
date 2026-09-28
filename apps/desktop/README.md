@@ -1,7 +1,8 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.27` is the published alpha
-prerelease. Its exact installer was downloaded back, hash-checked and installed.
+Independent Tauri application. Desktop `0.1.28` is the published alpha
+prerelease; `0.1.29` is a tested local candidate, not yet public. The 0.1.28
+installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -7324,3 +7325,75 @@ the project record and resume without technical help. Do not invent
 historical decision wording not present in Forge authority. Avoid another
 alpha solely for copy or repeating the same provider turn without a
 specific hypothesis.
+
+### Desktop record recovery after Codex disconnect — 2026-09-27
+
+Active objective remains the complete, approachable Windows journey. In the
+source after public 0.1.28, a Codex turn hid the Forge record pending a fresh
+read, but `disconnected` and `update_required` events did not trigger that
+read. The record could remain hidden until a manual click. The event bridge
+now re-reads the independent, authoritative Forge record after either event;
+it does not assume progress, send a message, or change project files.
+
+**Changed, uncommitted:** `ui/chat.mjs`, `tests/browser.cjs`,
+`tests/native.cjs`, and this README. The browser regression failed before
+the fix because no read occurred, then the complete mocked-IPC browser suite
+passed. A source debug build and the hidden native Windows smoke passed with
+controlled terminal events and real Rust-to-Forge record reads. The native
+test did not send a real Codex turn; actual unexpected provider disconnect
+and update-required incidents remain NOT_RUN. No Rust source changed, so no
+crate or workspace tests were repeated. `git diff --check` passed. The
+installed/public 0.1.28 still does not include this fix. No subagent was
+used; task-level tokens, API-equivalent BRL, and subscription-quota impact
+remain UNKNOWN.
+
+**Next exact step:** inspect the remaining project-record/resume journey for
+one higher-impact issue that can be verified without inventing missing Forge
+history. Then review the integrated diff, run appropriate focused and native
+checks, and package a coherent next alpha rather than publishing this small
+event fix alone. Keep the active goal open.
+
+### Desktop 0.1.29 installed recovery candidate — 2026-09-28
+
+The second concrete journey gap was a stale preview after an abnormal Codex
+turn: an interrupted or failed turn can leave file changes on disk, but the
+opened file was re-read only after normal completion. The UI now calls the
+existing project-bound preview read after all terminal events, without
+inferring a new result or retrying a failed preview. An enlarged preview
+still waits for the reader to close it. This joins the record-recovery fix
+above as one recovery package; no Forge core, conversation protocol, or
+project-state implementation changed.
+
+**PASS:** the browser test reproduced the stale preview before the fix,
+then the complete mocked-IPC browser suite passed. A source and installed
+hidden native Windows smoke used controlled Codex terminal events to re-read
+an actually changed local file and the existing authoritative Forge record.
+Desktop `cargo check`, all 50 regular crate tests (one ignored optional
+browser association test), strict Clippy, eight frontend unit tests, JS
+syntax checks and `git diff --check` passed. The installed candidate also
+resumed the existing real 33-message Codex chat, showed its actual HTML
+result, drafted a change request and survived a full process restart with
+no Send or file edit. No new real Codex turn or GitHub CI was run. Actual
+unexpected provider failure/disconnection remains NOT_RUN.
+
+Desktop version is 0.1.29 in Cargo manifest/lock and Tauri config. The
+single NSIS candidate with pinned Forge core 0.13.2 is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.29_x64-setup.exe`,
+123,071,538 bytes, SHA-256
+`299CCC8718241168318E9BCFA98A6AAC187573A01EEF44EA3FB3711F45DD14A1`.
+The adjacent sidecar matches. Silent installation over public 0.1.28
+returned exit 0 without changing the candidate bytes. Installed 0.1.29
+executable SHA-256 is
+`EF66C040BF1B4E86181F121388EE5A817EE2AF59CA356EA5F2EAECF8791A0959`.
+`RELEASE_NOTES-0.1.29.md` states scope and limits. The package is installed
+locally but **not committed, pushed or published**. No subagent was used;
+task-level model tokens, API-equivalent BRL and Pro-quota impact remain
+UNKNOWN. The older combined two-dialog timeout, external-browser launch,
+fresh-account login completion, clean-machine setup, manual accessibility,
+mobile and offline self-contained distribution remain open or NOT_RUN.
+
+**Next exact step:** review the integrated diff, selectively commit/push
+with the maintainer identity, tag the exact code state, publish the tested
+installer and sidecar under the standing alpha authorization, then download
+both unauthenticated and verify exact bytes and installed readback. Do not
+rebuild the candidate. Keep the larger Windows journey goal active.
