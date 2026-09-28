@@ -7589,3 +7589,198 @@ remains active. Next, prioritize a remaining #91 user-facing gap with a
 safe, specific native test hypothesis, then tackle the core-authority design
 needed for readable decision history in #92 only if the product genuinely
 needs it. Do not invent missing decision wording in the Desktop UI.
+
+### Bounded installed-UI audit after 0.1.30 — 2026-09-28
+
+The active journey goal is not complete. The installed 0.1.30 app was inspected
+headlessly with the existing real 33-message Codex result and its actual local
+HTML. Screenshots are `D:/Temp/User/forge-0130-real-preview.png` and
+`D:/Temp/User/forge-0130-change-request.png`; the read-only native test
+passed, including full process restart and unchanged project file. The
+installed app's project-record view was also captured at
+`D:/Temp/User/forge-0130-record-collapsed.png` and
+`D:/Temp/User/forge-0130-record-full.png`; hidden native smoke passed. The
+screens show a visible same-conversation change action, an explicit local/not-
+published distinction, and the real Forge stage rather than invented progress.
+No new visual defect was established by this audit, so no speculative UI edit
+was made. The focused ignored Windows test for resolving a configured HTTPS
+default-browser executable passed, but it deliberately does **not** launch
+the browser; positive external launch remains NOT_RUN to avoid disturbing
+the maintainer's active desktop. No real Codex Send occurred in this audit.
+
+**Next exact step:** stop repeating read-only visual checks. Examine #92's
+accepted-decision requirement against the core's existing durable decision
+contract and decide a minimal authority-preserving path before changing UI.
+If no readable decision text is durably available, do not fabricate it from
+chat or create desktop-owned state. No subagent, model-attributed task tokens,
+API-equivalent BRL or Pro-quota attribution was available; costs are UNKNOWN.
+
+### #92 decision-authority boundary — 2026-09-28
+
+Read-only contract inspection confirmed that the current decision audit cannot
+provide a plain-language accepted-decision list. `DecisionNeedRaisedEvent`
+stores `question_digest`, not the question or its alternatives;
+`DecisionResolvedEvent` stores `selected_alternative_ref`, not its wording.
+`WorkflowReplacementDecisionAudit` projects policy/decision references,
+status, record digests and the selected alternative reference. Searching the
+Rust source found `DecisionNeedRaisedEvent` construction only in test fixtures;
+the event can also enter through the external typed governance interface, but
+the current Solo Cooperative path does not synthesize a readable accepted
+decision from a suggested question. The Desktop correctly renders the
+accepted objective revisions and separates suggested questions from durable
+pending counts, but it cannot satisfy #92's pending/accepted/revised decision
+wording criterion by copy changes alone. This is a backend contract boundary,
+not an invitation to infer agreement from chat. No source code, native app or
+installed release was changed in this read-only audit.
+
+Further contract inspection refined that conclusion: each decision ledger
+record has a `bundle_digest`, and the typed policy's `WorkflowDecisionRule`
+contains the question and alternative descriptions. A core-owned readback may
+be able to resolve readable wording **conditionally** by loading the exact
+historical bundle, checking the question against `question_digest`, and
+matching the selected alternative reference. Current bundle wording alone
+must never be attached to an older receipt after a policy/domain-pack change.
+This has not been implemented or verified; historical bundle availability and
+Solo decision recording still need investigation. It is therefore premature
+to require a new ledger event field or to claim the current UI can show the
+wording.
+
+**Next exact step:** determine whether the exact historical policy bundle is
+retained and readable for each decision receipt. Only then choose between a
+verified read-only join and a minimal new core-owned decision record, with
+origin, acceptance and revision semantics. Do not modify the UI as though
+this data already exists. The broad Windows journey goal remains active;
+costs remain UNKNOWN.
+
+### Desktop expanded-preview navigation refresh — 2026-09-28
+
+The broad Windows journey goal remains active. A concrete #91 stale-result
+path was reproduced: if a Codex turn stopped while an enlarged preview was
+open, changing app route before closing that dialog cleared its queued
+refresh. Returning to the conversation could show the old file contents.
+
+**Source-only, uncommitted:** `ui/preview.mjs` now lets the normal dialog
+close handler honor the queued refresh on route change instead of discarding
+it. `tests/browser.cjs` reproduced the path RED before the fix and passed
+after it; `tests/native.cjs` exercised the route change against a real
+Forge-onboarded project file and native Rust preview read. The full browser
+suite, hidden source-built native smoke, JavaScript syntax checks and
+`git diff --check` passed. Controlled Codex terminal events were used; a
+real provider turn in this precise sequence was NOT_RUN. No Rust source
+changed, so Rust crate tests were not rerun; no installer was built or
+published. Earlier checkpoint-only edits to this README are still local.
+No subagent was used; model-attributed tokens, API-equivalent BRL and Pro
+quota impact remain UNKNOWN.
+
+**Next exact step:** review this small integrated diff and decide whether it
+belongs with another concrete #91 recovery fix in a later alpha package.
+Do not repeat read-only visual checks or present this source-only fix as
+installed. If the maintainer asks to pause the active goal, pause it and
+stop work.
+
+### Expanded-preview fix review — 2026-09-28
+
+The integrated diff was reviewed after the native and browser checks. The
+change is limited to the route-change handler: it no longer discards a queued
+file refresh before the dialog's existing close handler can perform it.
+Project changes still clear that queue in `setPreviewProject`, so a refresh
+cannot carry over to a different project. The browser regression and hidden
+native test both cover leaving the expanded preview after a controlled turn
+completion, returning to the workspace, and seeing the changed project file.
+`git diff --check` passed; Git reported only working-tree line-ending warnings.
+
+**Decision:** keep the reviewed source-only fix and tests for a later coherent
+alpha package. It is not installed or published, and a real Codex provider
+turn in this precise timing remains NOT_RUN. No further UI change is justified
+by this review alone. The next bounded product step should target one
+remaining end-to-end journey gap with a reproducible user-visible failure,
+not another broad audit. No commit, push, build or installer was made here.
+
+### #92 historical decision wording feasibility — 2026-09-28
+
+The closed kernel release registry keeps its admitted core bundle documents,
+including earlier releases. The Domain Pack lifecycle writes generation
+material as immutable files and its raw inventory walks the historical ledger
+chain, checking each reachable generation manifest. However, the exposed
+admitted-generation view loads only the **active** generation; there is no
+existing kernel read API that reconstructs the exact historical effective
+bundle for an arbitrary workflow decision record. A desktop-side join against
+the current bundle would therefore be unsafe after a policy or Domain Pack
+change.
+
+There is a second binding limit: `DecisionNeedRaisedEvent.question_digest`
+contains a digest rather than question text, and the existing audit projection
+does not prove that it equals the historical policy rule's question. The
+kernel's own ledger fixture uses a well-formed synthetic digest instead of a
+digest derived from the rule wording. A future read-only resolver must return
+wording only after it can verify the exact historical effective bundle **and**
+the question digest and selected alternative reference; otherwise it must
+leave wording unavailable rather than guess. This inspection did not change
+contracts, runtime code or the installed app, and did not establish that Solo
+Cooperative currently records every human product decision in this ledger.
+
+**Next bounded step:** define and test the core-owned readback contract with
+explicit unavailable cases before any Desktop wording change. Do not build
+another Desktop-owned decision store. No Codex turn, Rust build, commit or
+publication was performed; task-level cost attribution remains UNKNOWN.
+
+### Desktop conversation-first package in progress — 2026-09-28
+
+The maintainer directed work back to a complete, friendly, attractive UI
+connected to the existing backend rather than further speculative backend
+investigation. The active source package now includes the earlier expanded-
+preview route-refresh fix plus two conversation improvements: the composer
+places writing and **Enviar** together near the approved visual reference;
+before a project is confirmed, a drafted idea instead offers **Escolher pasta
+para continuar**. That action opens the existing folder picker, keeps the
+draft, and does not start a project or send a message. Selecting a folder
+still requires the existing explicit **Continuar nesta pasta** confirmation.
+First-use guidance now allows writing and choosing a folder in either order.
+
+Browser regression reproduced the previous composer separation and passed
+after the layout fix. The full browser UI suite passed after the first-use
+flow change. A source-built Windows app passed hidden native smoke with real
+Forge onboarding, project-record readback and controlled Codex terminal
+events. Native screenshots of first-use and workspace were captured under
+`D:/Temp/User/forge-new-*-20260928.png`; the first-use screenshot was reviewed.
+JavaScript syntax checks and `git diff --check` passed before the version bump.
+Real Codex Send in this precise new first-use sequence is NOT_RUN; existing
+provider-send evidence is separate. No Rust source changed; the code is not
+yet installed or published. The Desktop version is bumped in source to
+0.1.31 for one candidate after package validation. No subagent was used;
+model-attributed tokens, API-equivalent BRL and Pro-quota impact are UNKNOWN.
+
+**Next exact step:** finish package validation, write 0.1.31 release notes,
+build one NSIS candidate, install that exact file over public 0.1.30, then
+publish and verify the downloaded bytes under the maintainer's standing
+publication authorization. Do not repeatedly rebuild candidates or run
+GitHub CI for each frontend edit. The broader UI/product journey remains
+active after this alpha package.
+
+### Desktop 0.1.31 installed candidate — 2026-09-28
+
+The single NSIS candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.31_x64-setup.exe`,
+123,079,445 bytes, SHA-256
+`A167B06A826B52D9FDCD544D5CA07D41F7356F81ADC2442CF868B2D171EED887`.
+It was silently installed over public 0.1.30 (exit 0); its hash was unchanged.
+The installed 0.1.31 executable reports 0.1.31 and has SHA-256
+`49713D34D8EF62382B7A68AEEEF617DEF6160D36FEF18D82CCA3A288218F92CB`.
+
+**PASS:** browser UI suite, eight frontend unit tests, JavaScript syntax,
+Desktop `cargo check`, six focused preview tests (one optional association
+test ignored), all 50 non-ignored Desktop tests, strict Desktop Clippy,
+`git diff --check`, release build, and hidden native smoke on the installed
+candidate. The hidden installed run used a real Windows folder dialog opened
+from the draft and canceled without losing it; it also validated real Forge
+onboarding and read-only project-file/record behavior. No manual GitHub CI or
+separate core workspace run occurred. Real Codex Send in the precise new
+first-use sequence remains NOT_RUN, as does a real provider turn in the
+preview timing window. Clean-machine install and full-product UI acceptance
+remain NOT_RUN/PARTIAL. No subagent was used; attributable per-model tokens,
+BRL equivalent and Pro-quota impact remain UNKNOWN.
+
+**Next exact step:** selectively commit and push the reviewed package, tag
+the code, publish this same tested installer and matching hash sidecar as an
+alpha prerelease, download both public files without authentication, compare
+bytes and test the downloaded installer. Do not rebuild the candidate.

@@ -349,9 +349,12 @@ summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 6
 .workspace.project-ready .empty-conversation p { margin: 4px 0; }
 #resume-last-conversation { min-height: 48px; padding-inline: 16px; }
 #message-form { padding-top: 20px; border-top: 1px solid var(--line); }
+#message-form .composer-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; min-width: 0; }
+#message-form .composer-row #message-text { flex: 1 1 220px; width: auto; }
+#message-form .composer-row .chat-actions { flex: 0 1 auto; align-items: flex-end; gap: 8px; margin: 0; }
 #message-text { field-sizing: content; min-height: 3.5rem; max-height: min(40vh, 20rem); overflow-y: auto; }
 .agent-access-note { margin: 8px 0; padding: 12px 16px; border-left: 3px solid var(--accent); border-radius: 0 12px 12px 0; background: var(--canvas); font-size: .9rem; }
-#message-form .chat-actions { margin-block: 8px 0; }
+#message-form .agent-access-note { margin: 0; }
 .about { margin-block: 28px; }
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
 .cards article { padding-top: 24px; }

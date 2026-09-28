@@ -208,7 +208,7 @@ async function openConversation(page) {
     await projectsPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     assert.deepEqual(await projectsPage.evaluate(() => window.startCalls), [], 'Blank paths must not reach the native initializer');
     await projectsPage.evaluate(() => { window.folderChoice = 'D:\\one'; });
-    await projectsPage.getByRole('button', { name: 'Escolher pasta' }).click();
+    await projectsPage.locator('#browse-project').click();
     await projectsPage.locator('#project-status').filter({ hasText: 'Pasta escolhida' }).waitFor();
     assert.equal(await projectsPage.locator('#project-root').inputValue(), 'D:\\one');
     assert.equal(await projectsPage.locator('#project-root').getAttribute('aria-invalid'), null);
@@ -438,12 +438,12 @@ async function openConversation(page) {
     if (process.env.FORGE_CONFIRMED_SCREENSHOT) await projectsPage.screenshot({ path: process.env.FORGE_CONFIRMED_SCREENSHOT, fullPage: true });
     await openProjectSetup(projectsPage);
     await projectsPage.evaluate(() => { window.folderChoice = null; });
-    await projectsPage.getByRole('button', { name: 'Escolher pasta' }).click();
+    await projectsPage.locator('#browse-project').click();
     await projectsPage.locator('#project-status').filter({ hasText: 'Seleção cancelada' }).waitFor();
     assert.equal(await projectsPage.locator('#project-root').inputValue(), 'D:\\one');
     assert.equal(await projectsPage.locator('#project-result').isVisible(), true);
     await projectsPage.evaluate(() => { window.folderError = true; });
-    await projectsPage.getByRole('button', { name: 'Escolher pasta' }).click();
+    await projectsPage.locator('#browse-project').click();
     await projectsPage.locator('#project-status').filter({ hasText: 'Não foi possível abrir' }).waitFor();
     assert.equal(await projectsPage.locator('#project-root').inputValue(), 'D:\\one');
     await projectsPage.evaluate(() => { window.folderError = false; });
@@ -543,7 +543,7 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#project-root').inputValue(), '');
     assert.equal(await projectsPage.locator('#project-setup').evaluate(node => node.open), true);
     assert.match(await projectsPage.locator('#message-text').inputValue(), /artístico/i);
-    assert.equal(await projectsPage.locator('#send-message').isDisabled(), true);
+    assert.equal(await projectsPage.getByRole('button', { name: 'Escolher pasta para continuar' }).isEnabled(), true, 'A suggested idea should lead directly to folder choice');
     assert.equal((await projectsPage.evaluate(() => window.startCalls)).length, startsBeforeNewIdea, 'Exploring an idea must not create a project');
     await projectsPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\home-fixture');
     await projectsPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
@@ -553,7 +553,7 @@ async function openConversation(page) {
     await projectsPage.locator('#workspace').waitFor({ state: 'visible' });
     assert.equal(await projectsPage.locator('#project-root').inputValue(), '', 'The Home new-idea action also needs a fresh project choice');
     assert.equal(await projectsPage.locator('#project-result').isHidden(), true);
-    assert.equal(await projectsPage.locator('#send-message').isDisabled(), true);
+    assert.equal(await projectsPage.getByRole('button', { name: 'Escolher pasta para continuar' }).isEnabled(), true, 'The draft remains available for a new folder, but cannot be sent yet');
     await projectsPage.close();
     console.log('PASS: My Projects empty state, verified shortcuts, reload, revalidation, unavailable project, removal, storage failure and narrow layout.');
     const manyProjectsPage = await browser.newPage();
@@ -694,12 +694,15 @@ async function openConversation(page) {
     await sendFirstPage.addInitScript(() => {
       window.connectCalls = 0;
       window.sendCalls = 0;
+      window.folderChoices = 0;
+      window.projectStarts = 0;
       window.connectFailure = true;
       window.__TAURI__ = { core: {
         Channel: class {},
         invoke: async (command, args) => {
           if (command === 'app_info') return { name: 'Forge', version: '0.1.1' };
-          if (command === 'start_project') return { project_id: 'send-first', project_root: args.projectRoot };
+          if (command === 'choose_project_folder') { window.folderChoices++; return 'D:\\send-first'; }
+          if (command === 'start_project') { window.projectStarts++; return { project_id: 'send-first', project_root: args.projectRoot }; }
           if (command === 'connect_agent') {
             window.connectCalls++;
             if (window.connectFailure) throw 'Conexão indisponível no teste';
@@ -711,12 +714,17 @@ async function openConversation(page) {
     });
     await sendFirstPage.goto(workspaceUrl);
     assert.equal(await sendFirstPage.locator('#send-message').isDisabled(), true);
-    await sendFirstPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\send-first');
+    const firstDraft = sendFirstPage.getByRole('textbox', { name: 'Sua ideia começa aqui' });
+    await firstDraft.fill('Minha primeira ideia');
+    await sendFirstPage.getByRole('button', { name: 'Escolher pasta para continuar' }).click();
+    assert.equal(await sendFirstPage.locator('#project-root').inputValue(), 'D:\\send-first');
+    assert.equal(await firstDraft.inputValue(), 'Minha primeira ideia');
+    assert.equal(await sendFirstPage.evaluate(() => window.folderChoices), 1);
+    assert.equal(await sendFirstPage.evaluate(() => window.projectStarts), 0, 'Selecting a folder must not start or modify the project');
+    assert.equal(await sendFirstPage.evaluate(() => window.sendCalls), 0, 'Selecting a folder must not send the draft');
     await sendFirstPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     await sendFirstPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
     assert.match(await sendFirstPage.locator('#agent-status').textContent(), /Projeto pronto/);
-    const firstDraft = sendFirstPage.getByRole('textbox', { name: 'Sua ideia começa aqui' });
-    await firstDraft.fill('Minha primeira ideia');
     await sendFirstPage.getByRole('button', { name: 'Enviar', exact: true }).click();
     await sendFirstPage.locator('#agent-status').filter({ hasText: 'Conexão indisponível no teste' }).waitFor();
     assert.equal(await firstDraft.inputValue(), 'Minha primeira ideia');
@@ -880,6 +888,13 @@ async function openConversation(page) {
           emptyHeadingBox.top >= historyBox.top && emptyHeadingBox.bottom <= historyBox.bottom &&
           historyBox.bottom <= formBox.top + 1;
       }), true, `Project-ready invitation, history and Send must fit without overlap at ${width}x${height}`);
+      assert.equal(await page.evaluate(() => {
+        const input = document.getElementById('message-text').getBoundingClientRect();
+        const send = document.getElementById('send-message').getBoundingClientRect();
+        const notice = document.getElementById('agent-access-note').getBoundingClientRect();
+        return input.width >= 180 && send.left >= input.right - 2 &&
+          send.top < input.bottom && send.bottom > input.top && notice.bottom <= input.top;
+      }), true, `Writing and Send should share one composer row while the capability notice stays visible at ${width}x${height}`);
       if (width === 1180 && process.env.FORGE_COMPOSER_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_COMPOSER_SCREENSHOT });
       if (width === 1180) assert.equal(await page.evaluate(() => {
         window.scrollTo(0, 0);
@@ -1278,6 +1293,17 @@ async function openConversation(page) {
     await page.getByRole('button', { name: 'Fechar prévia' }).click();
     await page.locator('#preview-text').filter({ hasText: 'Arquivo mudado durante leitura' }).waitFor();
     assert.equal(await page.evaluate(() => window.linkPreviewReads.length), readsBeforeDialogFailure + 1, 'Closing the dialog refreshes once');
+    await page.getByRole('button', { name: 'Abrir prévia' }).click();
+    const readsBeforeNavigation = await page.evaluate(() => window.linkPreviewReads.length);
+    await page.evaluate(() => {
+      window.linkPreviewContent = 'Arquivo alterado antes de navegar';
+      window.agentEvents.onmessage({ kind: 'completed' });
+      location.hash = '#explore';
+    });
+    await page.locator('#preview-dialog').waitFor({ state: 'hidden' });
+    await page.evaluate(() => { location.hash = '#workspace'; });
+    await page.locator('#preview-text').filter({ hasText: 'Arquivo alterado antes de navegar' }).waitFor({ timeout: 5000 });
+    assert.equal(await page.evaluate(() => window.linkPreviewReads.length), readsBeforeNavigation + 1, 'Navigating away from an enlarged preview must not discard the pending project-file refresh');
     await page.getByRole('button', { name: 'Conferir arquivo citado: site/index.html' }).click();
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.deepEqual(await page.evaluate(() => window.linkPreviewReads.at(-1)), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\site\\index.html' }, 'A cited-file choice uses the same project-bound native preview');
@@ -1740,7 +1766,8 @@ async function openConversation(page) {
     assert.equal(await page.evaluate(() => window.disconnectCalls), disconnectsBeforeSwitch + 1);
     assert.equal(await page.locator('#project-root').inputValue(), '', 'Opening another project must not retain the previous folder');
     assert.equal(await page.locator('#project-result').isHidden(), true, 'The previous project must not appear confirmed during folder choice');
-    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true, 'Sending must wait for the new folder');
+    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).count(), 0, 'Sending must wait for the new folder');
+    assert.equal(await page.getByRole('button', { name: 'Escolher pasta para continuar' }).count(), 1);
     assert.equal(await page.locator('#messages article').count(), 0, 'The previous transcript must not appear in the new-project view');
     await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\switched-project');
     await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
@@ -1809,7 +1836,7 @@ async function openConversation(page) {
     assert.equal(await page.locator('#project-setup').evaluate(node => node.open), true);
     assert.equal(await page.locator('#messages article').count(), 0, 'Previous-project messages must not remain in the new-project view');
     assert.equal(await page.locator('#preview-cited-files').getAttribute('hidden'), '', 'Previous-project file citations must be cleared on project switch');
-    assert.equal(await page.locator('#send-message').isDisabled(), true);
+    assert.equal(await page.getByRole('button', { name: 'Escolher pasta para continuar' }).isEnabled(), true, 'An Explore draft should lead to folder choice without sending');
     assert.match(await page.locator('#message-text').inputValue(), /artístico/i);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     console.log('PASS: controlled long history stays scrollable in the conversation, resumes at latest, preserves earlier reading position, and follows new replies near the end.');

@@ -130,7 +130,7 @@
         <p class="eyebrow">SEU ESPAÇO DE CRIAÇÃO</p>
         <h1 id="workspace-title" tabindex="-1">Vamos dar vida à sua ideia.</h1>
         <p id="workspace-phase" class="workspace-phase" hidden></p>
-        <p class="intro">Escolha onde guardar o projeto. Depois conte sua ideia: a conversa começa quando você enviar.</p>
+        <p class="intro">Escreva sua ideia e escolha onde guardar o projeto. Você decide quando enviar a mensagem.</p>
         <p id="idea-selection-status" class="idea-selection-status" role="status" aria-live="polite" hidden></p>
       </div>
       <div class="workspace">
@@ -195,10 +195,12 @@
         </div>
         <form id="message-form">
           <label for="message-text" class="visually-hidden">Sua ideia começa aqui</label>
-          <textarea id="message-text" rows="1" required placeholder="Escreva sua ideia ou peça uma mudança…"></textarea>
-          <p id="composer-help" class="hint" role="status" aria-live="polite">Para enviar, escolha uma pasta para o projeto.</p>
           <p id="agent-access-note" class="agent-access-note" hidden><strong>Atenção:</strong> o Codex pode executar comandos e alterar arquivos fora da pasta escolhida sem pedir confirmação. Use projetos de confiança.</p>
-          <div class="chat-actions"><button id="send-message" class="primary" disabled>Enviar <span aria-hidden="true">→</span></button><button id="interrupt-agent" type="button" disabled hidden>Interromper</button></div>
+          <div class="composer-row">
+            <textarea id="message-text" rows="1" required aria-describedby="composer-help agent-access-note" placeholder="Escreva sua ideia ou peça uma mudança…"></textarea>
+            <div class="chat-actions"><button id="send-message" class="primary" disabled><span id="send-label">Enviar</span><span aria-hidden="true">→</span></button><button id="interrupt-agent" type="button" disabled hidden>Interromper</button></div>
+          </div>
+          <p id="composer-help" class="hint" role="status" aria-live="polite">Sua ideia fica aqui. Nada é enviado antes de confirmar a pasta.</p>
         </form>
       </section>
       <section class="preview panel" id="project-preview" aria-labelledby="preview-heading" hidden>

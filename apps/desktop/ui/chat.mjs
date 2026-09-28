@@ -97,7 +97,7 @@ function offerLogin(error) {
 
 function updateComposerHelp() {
   composerHelp.textContent = !project
-    ? 'Para enviar, escolha uma pasta para o projeto.'
+    ? 'Sua ideia fica aqui. Nada é enviado antes de confirmar a pasta.'
     : unconfirmedSends.has(referenceKey())
       ? connected
         ? 'O último envio não foi confirmado. Confira as mensagens e escolha “Já conferi o envio” antes de enviar outra.'
@@ -118,12 +118,18 @@ function updateResumeAction() {
     ? 'Conferir envio anterior' : 'Continuar conversa anterior';
 }
 
+function updateSendControl() {
+  byId('send-label').textContent = project ? 'Enviar' : 'Escolher pasta para continuar';
+  send.disabled = transitioning || loginPending || !loginPanel.hidden || busy || broken ||
+    (!project && !input.value.trim()) || (connected && unconfirmedSends.has(referenceKey()));
+}
+
 function controls() {
   const focused = document.activeElement;
   connect.disabled = transitioning || connected || !project || !loginPanel.hidden;
   newConversation.disabled = transitioning || connected;
   disconnect.disabled = transitioning || !connected;
-  send.disabled = transitioning || loginPending || !loginPanel.hidden || !project || busy || broken || (connected && unconfirmedSends.has(referenceKey()));
+  updateSendControl();
   input.disabled = transitioning || busy || broken;
   stop.disabled = transitioning || !connected || !busy || broken;
   stop.hidden = !connected || !busy;
@@ -208,7 +214,7 @@ export function setProject(value) {
   previousConversations.hidden = true;
   connect.disabled = !project || connected;
   connectHelp.hidden = !project || connected;
-  send.disabled = !project || transitioning || busy || broken || (connected && unconfirmedSends.has(referenceKey()));
+  updateSendControl();
   findConversations.disabled = !project || connected || transitioning;
   moreConversations.disabled = true;
   previousConversations.disabled = true;
@@ -581,7 +587,14 @@ confirmReviewedSend.addEventListener('click', () => {
 
 byId('message-form').addEventListener('submit', async event => {
   event.preventDefault();
-  if (!project || busy || transitioning || broken || !input.value.trim()) return;
+  if (!input.value.trim() || busy || transitioning || broken) return;
+  if (!project) {
+    const setup = byId('project-setup');
+    setup.open = true;
+    setup.scrollIntoView({ block: 'start' });
+    byId('browse-project').click(); // Reuse the normal picker; folder choice alone never starts a project.
+    return;
+  }
   if (unconfirmedSends.has(referenceKey())) {
     showStatus('O envio anterior não foi confirmado. Abra a conversa sem enviar e confira o histórico antes de tentar novamente.', 'error');
     if (!connected) { conversationPicker.open = true; connect.focus(); }
@@ -635,6 +648,8 @@ byId('message-form').addEventListener('submit', async event => {
     controls();
   }
 });
+
+input.addEventListener('input', controls);
 
 stop.addEventListener('click', async () => {
   const current = generation;

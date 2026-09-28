@@ -347,7 +347,7 @@ dialog.addEventListener('close', () => {
     void refreshPreviewAfterTurn();
   }
 });
-addEventListener('hashchange', () => { refreshAfterDialog = false; clearExpanded(); });
+addEventListener('hashchange', clearExpanded);
 
 function prepareChangeRequest() {
   if (!project || result.hidden) return;

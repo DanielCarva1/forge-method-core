@@ -45,7 +45,7 @@ let projectMode = 'new';
 
 function resetWorkspaceHeading() {
   workspaceTitle.textContent = 'Vamos dar vida à sua ideia.';
-  workspaceIntro.textContent = 'Escolha onde guardar o projeto. Depois conte sua ideia: a conversa começa quando você enviar.';
+  workspaceIntro.textContent = 'Escreva sua ideia e escolha onde guardar o projeto. Você decide quando enviar a mensagem.';
   workspaceBack.href = '#explore';
   workspaceBackLabel.textContent = 'Voltar às ideias';
 }

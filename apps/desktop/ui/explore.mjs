@@ -40,6 +40,7 @@ export function chooseStarter(link) {
   }
   composer.value = link.dataset.starter;
   lastSuggestedDraft = composer.value;
+  composer.dispatchEvent(new Event('input', { bubbles: true }));
   clearIdeaStatus();
 }
 

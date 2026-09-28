@@ -13,12 +13,12 @@ async function openConversation(page) {
   await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
 }
 
-async function operateFolderDialog(page, mode, folder) {
+async function operateFolderDialog(page, mode, folder, trigger = '#browse-project') {
   const helper = spawn('py', ['-3.12', path.join(__dirname, 'folder-dialog.py'), mode, ...(folder ? [folder] : [])], { windowsHide: true });
   let output = '';
   helper.stdout.on('data', chunk => { output += chunk; });
   helper.stderr.on('data', chunk => { output += chunk; });
-  await page.getByRole('button', { name: 'Escolher pasta' }).click();
+  await page.locator(trigger).click();
   const [code] = await once(helper, 'exit');
   assert.equal(code, 0, `Native folder-dialog helper failed: ${output}`);
 }
@@ -152,11 +152,12 @@ async function operatePreviewDialog(page, file) {
     await page.locator('nav a[data-route="workspace"]').click();
     await page.locator('#workspace').waitFor({ state: 'visible' });
     if (process.env.FORGE_FIRST_USE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_FIRST_USE_SCREENSHOT, fullPage: true });
-    assert.equal(await page.getByRole('button', { name: 'Escolher pasta' }).isEnabled(), true);
+    assert.equal(await page.locator('#browse-project').isEnabled(), true);
     if (process.env.FORGE_TEST_FOLDER_DIALOG === 'select') {
-      await operateFolderDialog(page, 'cancel');
+      await operateFolderDialog(page, 'cancel', undefined, '#send-message');
       await page.locator('#project-status').filter({ hasText: 'Seleção cancelada' }).waitFor();
       assert.equal(await page.locator('#project-root').inputValue(), '');
+      assert.equal(await draft.inputValue(), 'Minha própria ideia não pode sumir.');
     }
     await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     await page.locator('#project-status').filter({ hasText: 'Escolha uma pasta' }).waitFor();
@@ -626,9 +627,18 @@ async function operatePreviewDialog(page, file) {
         await page.locator('#preview-text').filter({ hasText: 'changed while choosing another file' }).waitFor({ timeout: 20000 });
         assert.equal(await page.evaluate(() => window.nativePickerRefreshReads), 1, 'Canceling the picker must re-read only the previously selected real file');
         await page.evaluate(() => window.restoreNativePreviewPicker());
+        await page.getByRole('button', { name: 'Abrir prévia' }).click();
+        await writeFile(previewText, 'changed before leaving expanded preview');
+        await page.evaluate(() => {
+          window.previewTerminalEvents.onmessage({ kind: 'completed' });
+          location.hash = '#explore';
+        });
+        await page.locator('#preview-dialog').waitFor({ state: 'hidden' });
+        await page.evaluate(() => { location.hash = '#workspace'; });
+        await page.locator('#preview-text').filter({ hasText: 'changed before leaving expanded preview' }).waitFor({ timeout: 20000 });
         await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
         await page.evaluate(() => window.restorePreviewTerminalInvoke());
-        console.log('PASS: terminal Codex events re-read the real project file, including an in-flight read or canceled file picker (controlled agent events; no real Send).');
+        console.log('PASS: terminal Codex events re-read the real project file after an in-flight read, canceled picker or expanded-preview navigation (controlled agent events; no real Send).');
       }
       await page.getByRole('button', { name: 'Abrir prévia' }).click();
       await writeFile(previewText, 'updated while enlarged');
@@ -1011,7 +1021,7 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('#project-root').inputValue(), '');
       assert.equal(await page.locator('#project-result').isHidden(), true);
       assert.equal(await page.locator('#project-setup').evaluate(node => node.open), true);
-      assert.equal(await page.locator('#send-message').isDisabled(), true);
+      assert.equal(await page.getByRole('button', { name: 'Escolher pasta para continuar' }).isEnabled(), true);
       assert.match(await page.locator('#message-text').inputValue(), /artístico/i);
       console.log('PASS: native Explore starts a new idea with its draft but without silently reusing the previous project.');
       if (process.env.FORGE_TEST_NEW_IDEA_REAL_SEND === '1') {
@@ -1045,7 +1055,8 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('#project-root').inputValue(), '');
       assert.equal(await page.locator('#project-result').isHidden(), true);
       assert.equal(await page.locator('#messages article').count(), 0);
-      assert.equal(await page.locator('#send-message').isDisabled(), true);
+      assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).count(), 0);
+      assert.equal(await page.getByRole('button', { name: 'Escolher pasta para continuar' }).count(), 1);
       console.log('PASS: native Open Another Project clears the previous folder and conversation before a new folder is confirmed.');
     }
     if (process.env.FORGE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_SCREENSHOT, fullPage: true });
