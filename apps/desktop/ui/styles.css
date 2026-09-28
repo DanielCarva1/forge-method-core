@@ -103,7 +103,11 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 .projects-empty h2 { margin: 0; }
 .projects-empty p { color: var(--muted); }
 .projects-empty .action-link { margin-left: auto; }
-.workspace { display: grid; grid-template-columns: minmax(300px, .78fr) minmax(0, 1.72fr); gap: 24px; align-items: start; scroll-margin-top: 20px; }
+.workspace { display: grid; grid-template-columns: minmax(0, 1.72fr) minmax(300px, .78fr); gap: 24px; align-items: start; scroll-margin-top: 20px; }
+.workspace:not(.project-ready) .project { grid-column: 2; grid-row: 1; }
+.workspace:not(.project-ready) .conversation { grid-column: 1; grid-row: 1; min-height: 0; }
+.workspace:not(.project-ready) .conversation-body { min-height: 0; max-height: none; overflow: visible; }
+.workspace:not(.project-ready) .empty-conversation { display: none; }
 .mobile-workspace-nav { display: none; }
 .workspace.project-ready { grid-template-columns: minmax(0, 1.18fr) minmax(340px, 1fr); }
 .workspace.project-ready.preview-loaded { grid-template-columns: minmax(0, 1fr) minmax(340px, 1.35fr); }
@@ -418,6 +422,8 @@ footer { color: var(--muted); padding-block: 8px 32px; }
   .projects-heading::before { display: none; }
   .workspace-screen::before, .workspace-screen .screen-heading::after { display: none; }
   .workspace, .cards, .starter-grid { grid-template-columns: 1fr; }
+  .workspace:not(.project-ready) .project,
+  .workspace:not(.project-ready) .conversation { grid-column: auto; grid-row: auto; }
   .workspace.project-ready { grid-template-columns: 1fr; }
   .workspace.project-ready.preview-loaded { grid-template-columns: 1fr; }
   .workspace.project-ready .project, .workspace.project-ready .conversation, .workspace.project-ready .preview, .workspace.project-ready .record,
@@ -435,6 +441,7 @@ footer { color: var(--muted); padding-block: 8px 32px; }
   .workspace.project-ready .conversation-body { flex: 0 1 auto; min-height: 150px; max-height: min(50vh, 480px); }
 }
 @media (max-width: 700px) {
+  .workspace-screen:not(:has(.workspace.project-ready)) .screen-heading h1 { font-size: clamp(2rem, 8vw, 2.5rem); line-height: 1.08; }
   header .brand { order: 1; }
   header .development { order: 2; margin-left: auto; }
   header > nav { order: 3; flex: 1 0 100%; }

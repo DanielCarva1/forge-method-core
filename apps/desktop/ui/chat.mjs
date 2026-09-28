@@ -141,7 +141,7 @@ function updateComposerHelp() {
       : busy
         ? 'Seu agente está trabalhando. Você pode interromper se precisar.'
         : broken
-          ? 'A conexão foi encerrada. Desconecte e tente novamente.'
+          ? reconnectable ? 'Use “Reabrir conversa” para continuar sem reenviar sua mensagem.' : 'Atualize o Codex antes de continuar. Sua conversa não foi apagada.'
           : 'Pronto para conversar. Você continua no controle das mudanças.';
   if (composerHelp.textContent !== help) composerHelp.textContent = help;
   const note = project && draftStorageFailed
@@ -195,7 +195,7 @@ function controls() {
   moreConversations.disabled = !project || connected || transitioning || listPending || !loginPanel.hidden || !listCursor;
   projectStatus.hidden = connected;
   projectResultHint.textContent = 'Pasta confirmada pelo Forge.';
-  conversationStep.textContent = project ? 'SUA CONVERSA' : 'PASSO 2 · SUA CONVERSA';
+  conversationStep.textContent = 'SUA CONVERSA';
   emptyDescription.textContent = connected
     ? 'Sua conversa está pronta. Conte o que você quer criar ou melhorar.'
     : hasResumableConversation
@@ -265,7 +265,7 @@ export function setProject(value) {
     messageView.textContent = 'Ver texto original';
     if (!loginActive) loginPanel.hidden = true;
   }
-  conversationStep.textContent = project ? 'SUA CONVERSA' : 'PASSO 2 · SUA CONVERSA';
+  conversationStep.textContent = 'SUA CONVERSA';
   hasPreviousConversation = false;
   hasResumableConversation = false;
   newConversation.checked = false;

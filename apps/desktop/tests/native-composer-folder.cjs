@@ -47,6 +47,17 @@ if (!executable) throw new Error('Set FORGE_DESKTOP_EXE');
       } });
       window.__TAURI__.core = facade;
     });
+    await page.setViewportSize({ width: 360, height: 700 });
+    await page.getByRole('link', { name: 'Minha conversa', exact: true }).click();
+    const firstIdea = await page.evaluate(() => {
+      const conversation = document.querySelector('#project-conversation').getBoundingClientRect();
+      const project = document.querySelector('#project-panel').getBoundingClientRect();
+      const composer = document.querySelector('#message-text').getBoundingClientRect();
+      return { conversationTop: conversation.top, projectTop: project.top, composerTop: composer.top,
+        workspaceTop: document.querySelector('#workspace').getBoundingClientRect().top };
+    });
+    assert.ok(firstIdea.conversationTop < firstIdea.projectTop, 'Native narrow first-use must show idea before folder setup');
+    assert.ok(firstIdea.composerTop - firstIdea.workspaceTop < 700, 'Native narrow first-use composer must be within one short screen');
     await page.getByRole('link', { name: 'Explorar', exact: true }).click();
     await page.getByRole('link', { name: /Arte e criação/ }).click();
     const draft = page.locator('#message-text');
@@ -54,7 +65,7 @@ if (!executable) throw new Error('Set FORGE_DESKTOP_EXE');
     assert.match(idea, /artístico/);
     await page.locator('#project-root').fill(project);
     await page.getByRole('button', { name: 'Preparar projeto nesta pasta' }).click();
-    await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 90000 });
+    await page.waitForFunction(() => document.querySelector('#project-status').textContent.includes('Projeto pronto'), null, { timeout: 90000 });
     await page.locator('#idea-choose-folder').waitFor({ state: 'hidden' });
     assert.equal(await page.locator('#confirmed-root').textContent(), project);
     assert.equal(await draft.inputValue(), idea);
@@ -66,14 +77,14 @@ if (!executable) throw new Error('Set FORGE_DESKTOP_EXE');
     assert.match(await page.locator('#home-project-copy').textContent(), new RegExp(path.basename(project)));
     assert.equal(await page.locator('#home-hero-project-action').textContent(), 'Continuar último projeto');
     await page.locator('#home-hero-project-action').click();
-    await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 30000 });
+    await page.waitForFunction(() => document.querySelector('#project-status').textContent.includes('Projeto pronto'), null, { timeout: 30000 });
     assert.deepEqual(await page.evaluate(() => window.nativeCalls), { start: 1, inspect: 1, send: 0 });
     assert.equal(await page.locator('#confirmed-root').textContent(), project);
     await page.evaluate(() => { location.hash = '#updates'; });
     await page.locator('#updates h3').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#about').evaluate(node => node.open), true);
     assert.match(await page.locator('#app-version').textContent(), /Versão instalada:/);
-    console.log('PASS: hidden native Forge prepared and reopened one real project from Home with native inspection and no Codex Send; update help is reachable.');
+    console.log('PASS: hidden native 360px idea-first layout; Explore prepared and Home reopened a real project with native inspection and no Codex Send.');
   } finally {
     await browser?.close().catch(() => {});
     if (child?.pid && child.exitCode === null && child.signalCode === null) {

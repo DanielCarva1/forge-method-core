@@ -148,7 +148,7 @@ projectRoot.addEventListener('input', () => {
   setPreviewProject(null);
   resultPanel.hidden = true;
   projectLocation.open = false;
-  projectStep.textContent = 'PASSO 1 · SEU PROJETO';
+  projectStep.textContent = 'SEU PROJETO';
   projectTitle.textContent = projectMode === 'new' ? 'Onde vamos criar?' : 'Qual projeto vamos abrir?';
   setupSummary.textContent = 'Escolher pasta do projeto';
   resetWorkspaceHeading();

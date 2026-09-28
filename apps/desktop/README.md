@@ -10096,3 +10096,43 @@ an injected disconnect notice, real native reconnect and zero Codex Sends.
 The downloaded copy was hash-verified but not installed a second time. No
 unplanned transport loss, new real Codex turn, broad suite or manual GH CI
 ran. Continue the Desktop product goal; this alpha is not full completion.
+
+### Unpublished idea-first narrow-screen layout — 2026-09-28
+
+Before a project is ready, the conversation now appears before the folder
+form, matching the invitation to write an idea first. The
+composer and folder form are the same controls and existing backend path:
+attempting to send without a project opens folder selection rather than
+sending anything. The desktop-width grid puts the conversation on the left
+and the folder sidebar on the right, preserving reading and keyboard order;
+the narrow layout stacks conversation above folder. Numbered step labels were removed
+because either idea or folder can now come first. The oversized empty-state
+illustration is hidden before project setup at both widths; the narrow heading is more
+compact so the composer is within one short screen at 360px. The connected
+conversation and its mobile panes remain unchanged.
+
+Focused headless `tests/composer-folder.cjs` passed at 360px and 1180px:
+conversation precedes folder, the composer is within 700px of the workspace
+start at 360px and visible without scrolling at 1180px, there is no horizontal overflow, writing and requesting folder selection
+preserves the unsent draft, and the Explore retry/explicit-Send path remains
+intact. Visual outputs were inspected at
+`D:/Temp/User/forge-first-idea-360.png` and
+`D:/Temp/User/forge-first-idea-wide.png`. A debug app built before the final
+desktop-width spacing adjustment passed focused
+hidden-native `tests/native-composer-folder.cjs` at 360px: idea-first order,
+real disposable Forge project preparation via Explore, Home reopen through
+native inspection, zero Codex Sends. A real native folder-dialog choice from
+the generic idea-first composer was NOT_RUN in this slice; earlier folder
+selection evidence remains separate. No Rust tests, broad suite, manual GH
+CI ran. The source version is now 0.1.59. One NSIS candidate
+(`Forge_0.1.59_x64-setup.exe`, 123,091,571 bytes, SHA-256
+`36EE2AEA005AF68EFA3488149A01DE0651270AA3674D5160D5AA52EA1C71A661`)
+was installed silently over 0.1.58: exit 0, unchanged candidate bytes,
+installed ProductVersion 0.1.59 and executable SHA-256
+`D5AA8AB443B1262677AB988101F9E608B2884649362A191CC59E1A7823C131E7`.
+The installed candidate passed the focused hidden-native 360px idea-first,
+real project preparation and Home reopen check with zero Codex Sends. The
+final wide layout was browser-checked, not native rechecked. Next: review
+the diff, commit/push/tag and publish this exact candidate under standing
+alpha authorization, then verify the anonymous download against the
+candidate. Do not rebuild it.
