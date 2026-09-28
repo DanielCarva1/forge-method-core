@@ -7292,3 +7292,35 @@ package with the maintainer Git identity, tag the exact code state, publish
 the already tested installer and sidecar under the standing alpha
 authorization, then download both unauthenticated and verify size/hash and
 installed readback. Do not rebuild the candidate.
+
+### Desktop 0.1.28 public release readback — 2026-09-27
+
+Package commit `d1da280d` was pushed on `codex/desktop-shell` using the
+maintainer identity. Annotated tag `desktop-v0.1.28-alpha.1` resolves to
+that commit. Public prerelease:
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.28-alpha.1`.
+GitHub lists the exact installer and SHA-256 sidecar. An unauthenticated
+download of both to `C:/ForgeFast/forge-alpha-0128-public-20260927`
+matched the tested candidate: 123,102,085 bytes, SHA-256
+`C8ED4DD0F4B87027FA3C66DCD2715E44C7CEA8D0390A6D58E107ED2B66DDC5B5`.
+Silent installation of those downloaded bytes exited 0 and left them
+unchanged. The installed executable reports 0.1.28 and SHA-256
+`F03422B1172DE05AE433BF9FEDD5FE6FFC5C40AAEE2CCF557C0751D0EB71750B`.
+The downloaded installation passed the hidden read-only real-result/restart
+test again against the existing 33-message Codex chat, with no Send or file
+edit. No manual GitHub CI was run. This proves public byte continuity and
+same-machine update, not a clean-machine installation.
+
+**State:** 0.1.28 is public and installed; working tree was clean before
+this post-release checkpoint. Goal remains active: the broader user
+journey, #91 and #92 are not declared complete. The combined two-dialog
+timeout remains an unexplained historical observation. External-browser
+launch, fresh-account login, clean-machine install, manual accessibility,
+mobile and offline self-contained distribution remain NOT_RUN/unfinished.
+No subagent was used; per-task BRL and subscription-quota impact are
+UNKNOWN. **Next exact step:** inspect the next highest-impact Windows
+journey gap in actual 0.1.28, especially whether a person can understand
+the project record and resume without technical help. Do not invent
+historical decision wording not present in Forge authority. Avoid another
+alpha solely for copy or repeating the same provider turn without a
+specific hypothesis.
