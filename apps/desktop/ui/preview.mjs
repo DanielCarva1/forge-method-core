@@ -38,6 +38,7 @@ let project = null;
 let filePath = null;
 let generation = 0;
 let pending = false;
+let previewReadPending = false;
 let browserOpening = false;
 let renderUrl = null;
 let formattedMarkdown = false;
@@ -45,6 +46,8 @@ let fileOnly = false;
 let sourceVisible = false;
 let dialogSiteHeight = 560;
 let refreshAfterDialog = false;
+let refreshAfterPendingRead = false;
+let refreshAfterPicker = false;
 
 function showSource(value) {
   sourceVisible = value;
@@ -139,7 +142,10 @@ export function setPreviewProject(value) {
   filePath = null;
   generation++;
   pending = false;
+  previewReadPending = false;
   refreshAfterDialog = false;
+  refreshAfterPendingRead = false;
+  refreshAfterPicker = false;
   clearResult();
   panel.hidden = !value;
   workspace.classList.toggle('project-ready', !!value);
@@ -156,6 +162,7 @@ async function loadPreview() {
   const root = project.project_root;
   const selected = filePath;
   pending = true;
+  previewReadPending = true;
   clearResult();
   controls();
   status.hidden = false;
@@ -203,7 +210,17 @@ async function loadPreview() {
       status.textContent = typeof error === 'string' ? error : 'Não foi possível mostrar este arquivo. Ele não foi alterado; escolha outro ou tente atualizar.';
     }
   } finally {
-    if (current === generation) { pending = false; controls(); }
+    if (current === generation) {
+      pending = false;
+      previewReadPending = false;
+      controls();
+      // A terminal event may have arrived while this read was in flight.
+      // Re-read only a successful selected preview; never retry a failed one.
+      if (refreshAfterPendingRead) {
+        refreshAfterPendingRead = false;
+        if (!result.hidden) void loadPreview();
+      }
+    }
   }
 }
 
@@ -230,7 +247,16 @@ choose.addEventListener('click', async () => {
     if (current === generation) status.textContent = 'Não foi possível escolher um arquivo. Tente novamente.';
     return;
   } finally {
-    if (current === generation) { pending = false; controls(); }
+    if (current === generation) {
+      pending = false;
+      controls();
+      if (refreshAfterPicker) {
+        refreshAfterPicker = false;
+        // A canceled picker preserves the prior file. A newly selected file
+        // already receives its own read below.
+        if (!result.hidden) void loadPreview();
+      }
+    }
   }
   if (current === generation) void loadPreview();
 });
@@ -238,7 +264,16 @@ refresh.addEventListener('click', loadPreview);
 export async function refreshPreviewAfterTurn() {
   // A stopped Codex turn may already have changed the selected file. Reuse the
   // native project-bound read; never infer another file from reply text.
-  if (!project || !filePath || result.hidden || pending) return;
+  if (!project || !filePath) return;
+  if (previewReadPending) {
+    refreshAfterPendingRead = true;
+    return;
+  }
+  if (pending) {
+    if (!result.hidden) refreshAfterPicker = true;
+    return;
+  }
+  if (result.hidden) return;
   if (dialog.open) {
     refreshAfterDialog = true;
     dialogStatus.textContent = 'A conversa parou. A prévia será atualizada ao fechar esta janela.';

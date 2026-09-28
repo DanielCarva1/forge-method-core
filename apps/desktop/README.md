@@ -7429,3 +7429,135 @@ tokens, API-equivalent BRL and Pro-quota impact remain UNKNOWN.
 particular, do not treat suggested decisions as agreements or fabricate
 missing historical wording. Avoid another release solely for copy or a
 repeat of the same real Codex turn without a specific new hypothesis.
+
+### Desktop #91/#92 authority audit — 2026-09-28
+
+The broad Windows journey goal remains active. This is a read-only acceptance
+audit after public 0.1.29, not a new product release or a claim that either
+issue is finished. The worktree was clean at `71e7c843` before this note.
+
+**#91 (result and changes): PARTIAL.** Public 0.1.29 can reopen the real
+33-message Codex chat, render its changed local HTML result in a protected
+preview, prepare a change request in the same composer and retain that draft
+through a full process restart. A real local PDF can be selected and shown as
+a nonvisual file card without opening its bytes. Native tests cover an
+out-of-project rejection, unavailable and updated previews, blocked scripts
+and external requests. These are concrete installed-app checks, but the
+positive external-browser launch and a real Codex reply citing a nonvisual
+file remain NOT_RUN; do not close #91 on the existing evidence alone.
+
+**#92 (decisions and stages): PARTIAL.** The UI derives the current stage and
+activity from `workflow resume`, and reads accepted objective text plus
+revision origin/history from `workflow report`. It separates pending-record
+counts from suggested questions; suggestions are not presented as agreements.
+The core's `DecisionNeedRaisedEvent` retains a `question_digest`, not the
+question text. Its `DecisionResolvedEvent` retains the selected alternative
+reference, not readable choice wording. Replacement `decision_history` and
+resume `human_decisions.recovered_pending` project those IDs/statuses only.
+The desktop therefore cannot truthfully display a readable list of accepted
+decision wording from the current authoritative interface. Do not recover
+wording from chat by inference or add desktop-owned decision state. Current
+installed-core 0.13.2 read-only check against the real 33-message fixture
+returned objective revision 1, one objective-history entry, zero durable
+pending decisions, zero decision-history entries and completed current work;
+that fixture cannot prove pending/resolved/revised decision presentation.
+The Solo Cooperative `DecisionRequired` objective branch is intentionally
+read-only and its kernel test asserts unchanged ledger bytes. Thus its
+question is not a recovered durable decision at all; presenting it as one
+would be a product error, not merely a missing UI field.
+
+**Next exact step:** leave #92 explicitly partial rather than adding a desktop
+decision database or silently making the read-only Solo branch durable. Audit
+the next directly testable Windows journey gap in #91, starting with the
+positive external-browser action only in an isolated environment where the
+default browser cannot forward the request to the maintainer's active desktop;
+the existing hidden WebView alone does not guarantee that. Fix a reproduced
+failure, not an assumed one. If full accepted-decision history is
+later prioritized, design that as an explicit core-authority contract change
+with provenance and migration, not a copy-only Desktop patch. Use focused
+Rust checks only for affected crates and hidden native UI tests; no release
+solely for this checkpoint. No agent was delegated; task-level tokens,
+API-equivalent BRL and subscription-quota impact remain UNKNOWN.
+
+### Desktop preview read/turn overlap — 2026-09-28
+
+Active objective remains the complete, approachable Windows journey. A
+concrete #91 gap was reproduced: when a Codex terminal event arrived while
+the selected-file preview read was still in flight, the UI discarded that
+event because `pending` was true and the visible result was temporarily
+hidden. The old read could then display stale file bytes. This is distinct
+from the already-released 0.1.29 fix for turns that end after a preview read.
+
+**Source-only, uncommitted:** `ui/preview.mjs` now queues one fresh native
+project-bound read when a turn stops during an in-flight preview read. It
+coalesces terminal events and re-reads only after a successful first read;
+an unavailable or invalid file is not retried automatically. Switching
+projects clears the queue. `tests/browser.cjs` reproduces the exact ordering
+with a held stale read: it failed before the fix and passed after it.
+`tests/native.cjs` exercises the same ordering in the hidden Windows WebView
+using a real Forge-onboarded project file and real Rust preview reads, with
+controlled Codex terminal events and no Send.
+
+**PASS:** full mocked-IPC browser suite, including the negative case where a
+failed in-flight file read is not retried and the reader can retry manually;
+the browser suite also verifies that a queued refresh from one project cannot
+leak into the next project after a switch;
+incremental offline Desktop debug
+build; hidden native Windows smoke including the new real-file overlap check,
+normal and abnormal terminal refreshes, onboarding, protected HTML preview,
+nonvisual file card, and project-bound rejection. Native output explicitly
+marked the real Codex conversation NOT_RUN in this smoke. No Rust source
+changed, so focused Rust crate tests were not repeated; no installer was
+built or published. The positive external-browser action still cannot be
+safely tested against the maintainer's default browser from only a hidden
+WebView, because the browser may forward the request to the active desktop.
+No subagent was used; per-task tokens, API-equivalent BRL and Pro quota
+impact remain UNKNOWN.
+
+**Next exact step:** inspect the integrated diff, then investigate one more
+meaningful user-facing recovery gap before consolidating a coherent alpha
+package. Do not package this race fix alone or call #91/#92 complete.
+
+### Desktop 0.1.30 candidate checkpoint — 2026-09-28
+
+The active objective remains the complete, approachable Windows journey. A
+second concrete #91 race was reproduced: a turn could stop while the file
+picker was open; canceling it preserved a stale selected-file preview.
+`ui/preview.mjs` now refreshes that same file after cancellation, while a
+new selection receives its normal read. This is packaged with the earlier
+in-flight preview-read fix. No desktop-owned result or decision state was
+added. The edited source is `ui/preview.mjs`, `tests/browser.cjs`,
+`tests/native.cjs`, the three Desktop version files, and
+`RELEASE_NOTES-0.1.30.md`.
+
+**PASS:** both browser regressions failed before their respective fixes and
+passed afterward; the complete browser suite, eight frontend unit tests,
+JavaScript syntax checks, Desktop `cargo check -p forge-desktop`, five focused
+preview tests, all 50 non-ignored Desktop tests, strict Desktop Clippy, and
+hidden source-native smoke passed. The hidden native test used real project
+files and Rust reads with controlled Codex terminal events. A separate
+read-only run reopened an existing real 33-message Codex conversation,
+previewed its actual HTML, prepared a change request, and retained that draft
+through a full process restart; no Send or file edit occurred. The separate
+core workspace and manual GitHub CI were not rerun for these Desktop changes.
+
+One installer candidate was built and silently installed over public 0.1.29:
+`D:\forge-method-core-build-cache\main-target\release\bundle\nsis\Forge_0.1.30_x64-setup.exe`,
+123,098,780 bytes, SHA-256
+`204A103BB2D78E82816DD6A93A6E7DEC0E7FD6048681C79CEBF1E8EAA010B92D`.
+The candidate hash remained unchanged; installed `forge-desktop.exe` reports
+0.1.30 and SHA-256
+`C1F01E9E3612DF2D8B14EA0C669073E8F26FFA3F51952AF0685CBA0B6CB17F79`.
+The installed candidate passed hidden native smoke and the real read-only
+conversation/restart run. This is same-machine installed proof, not public
+download or clean-machine proof. Real provider behavior in the precise race
+windows, positive default-browser launch, fresh-account login, manual screen
+reader acceptance, and full #91/#92 acceptance remain NOT_RUN or PARTIAL.
+No subagent was used in this package. Model-attributed tokens, API-equivalent
+BRL and subscription-quota impact remain UNKNOWN.
+
+**Next exact step:** selectively commit and push this reviewed 0.1.30 package,
+tag the exact code, publish the already tested installer and matching sidecar
+as an alpha prerelease, then download the public bytes unauthenticated,
+compare hashes, and test installation/readback without rebuilding the
+candidate. Keep the broad journey goal active.

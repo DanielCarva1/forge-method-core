@@ -1213,6 +1213,62 @@ async function openConversation(page) {
       await page.locator('#preview-text').filter({ hasText: expected }).waitFor();
       assert.equal(await page.evaluate(() => window.linkPreviewReads.length), readsBefore + 1, `${kind} must re-read only the already selected file`);
     }
+    await page.evaluate(() => {
+      window.previewRaceReads = 0;
+      window.pauseNextPreviewRead = true;
+      const previous = window.__TAURI__.core.invoke;
+      window.__TAURI__.core.invoke = (command, args) => {
+        if (command !== 'inspect_preview') return previous(command, args);
+        window.previewRaceReads++;
+        if (window.rejectNextPreviewRead) {
+          window.rejectNextPreviewRead = false;
+          return new Promise((_, reject) => {
+            window.releaseRejectedPreviewRead = () => reject('Este arquivo não está mais disponível.');
+          });
+        }
+        if (!window.pauseNextPreviewRead) return previous(command, args);
+        window.pauseNextPreviewRead = false;
+        return new Promise(resolve => {
+          window.releaseOldPreviewRead = () => resolve({ kind: 'text', content: 'Antes do fim do turno', relative_path: 'result.txt', size_bytes: 19 });
+        });
+      };
+    });
+    await page.getByRole('button', { name: 'Atualizar prévia' }).click();
+    await page.waitForFunction(() => typeof window.releaseOldPreviewRead === 'function');
+    await page.evaluate(() => {
+      window.linkPreviewContent = 'Depois do fim do turno';
+      window.agentEvents.onmessage({ kind: 'failed' });
+      window.releaseOldPreviewRead();
+    });
+    await page.locator('#preview-text').filter({ hasText: 'Depois do fim do turno' }).waitFor({ timeout: 5000 });
+    assert.equal(await page.evaluate(() => window.previewRaceReads), 2, 'A stopped turn during an in-flight preview read must schedule one fresh read');
+    await page.evaluate(() => { window.rejectNextPreviewRead = true; });
+    await page.getByRole('button', { name: 'Atualizar prévia' }).click();
+    await page.waitForFunction(() => typeof window.releaseRejectedPreviewRead === 'function');
+    await page.evaluate(() => {
+      window.agentEvents.onmessage({ kind: 'failed' });
+      window.releaseRejectedPreviewRead();
+    });
+    await page.locator('#preview-status').filter({ hasText: 'Este arquivo não está mais disponível' }).waitFor();
+    assert.equal(await page.evaluate(() => window.previewRaceReads), 3, 'A failed in-flight read must not be retried automatically');
+    await page.getByRole('button', { name: 'Atualizar prévia' }).click();
+    await page.locator('#preview-text').filter({ hasText: 'Depois do fim do turno' }).waitFor();
+    assert.equal(await page.evaluate(() => window.previewRaceReads), 4, 'The person can still retry a failed read explicitly');
+    await page.evaluate(() => {
+      const previous = window.__TAURI__.core.invoke;
+      window.__TAURI__.core.invoke = (command, args) => command === 'choose_preview_file'
+        ? new Promise(resolve => { window.cancelHeldPreviewPicker = () => resolve(null); })
+        : previous(command, args);
+    });
+    await page.getByRole('button', { name: 'Escolher arquivo' }).click();
+    await page.waitForFunction(() => typeof window.cancelHeldPreviewPicker === 'function');
+    await page.evaluate(() => {
+      window.linkPreviewContent = 'Alterado enquanto escolhia arquivo';
+      window.agentEvents.onmessage({ kind: 'completed' });
+      window.cancelHeldPreviewPicker();
+    });
+    await page.locator('#preview-text').filter({ hasText: 'Alterado enquanto escolhia arquivo' }).waitFor({ timeout: 5000 });
+    assert.equal(await page.evaluate(() => window.previewRaceReads), 5, 'Canceling the picker after a turn must refresh the previously selected file once');
     await page.getByRole('button', { name: 'Abrir prévia' }).click();
     const readsBeforeDialogFailure = await page.evaluate(() => window.linkPreviewReads.length);
     await page.evaluate(() => { window.linkPreviewContent = 'Arquivo mudado durante leitura'; window.agentEvents.onmessage({ kind: 'failed' }); });
@@ -1605,6 +1661,34 @@ async function openConversation(page) {
     await page.getByLabel('Tema', { exact: true }).selectOption('light');
     await page.locator('#appearance-status').filter({ hasText: 'não foi possível salvar' }).waitFor();
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'light');
+    await page.evaluate(async () => {
+      window.boundaryPreview = await import('./preview.mjs');
+      window.boundaryPreviewReads = 0;
+      window.__TAURI__ = { core: { invoke: async command => {
+        if (command !== 'inspect_preview') return null;
+        window.boundaryPreviewReads++;
+        const preview = { kind: 'text', content: 'Result from selected project', relative_path: 'result.txt', size_bytes: 28 };
+        if (!window.holdBoundaryPreview) return preview;
+        window.holdBoundaryPreview = false;
+        return new Promise(resolve => { window.releaseBoundaryPreview = () => resolve(preview); });
+      } } };
+      window.boundaryPreview.setPreviewProject({ project_root: 'D:\\boundary-project' });
+      await window.boundaryPreview.previewLinkedFile('result.txt');
+      window.holdBoundaryPreview = true;
+    });
+    await page.getByRole('button', { name: 'Atualizar prévia' }).click();
+    await page.waitForFunction(() => typeof window.releaseBoundaryPreview === 'function');
+    await page.evaluate(() => {
+      void window.boundaryPreview.refreshPreviewAfterTurn();
+      window.boundaryPreview.setPreviewProject(null);
+      window.releaseBoundaryPreview();
+    });
+    assert.equal(await page.locator('#project-preview').isHidden(), true, 'Switching away must hide the old project preview');
+    await page.evaluate(async () => {
+      window.boundaryPreview.setPreviewProject({ project_root: 'D:\\next-project' });
+      await window.boundaryPreview.previewLinkedFile('result.txt');
+    });
+    assert.equal(await page.evaluate(() => window.boundaryPreviewReads), 3, 'A queued refresh from the old project must not leak into the next project');
     // A reload discards the in-page protocol double above. Establish a fresh,
     // connected workspace specifically for the project-switch contract.
     await page.goto(workspaceUrl);

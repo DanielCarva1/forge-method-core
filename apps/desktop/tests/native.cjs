@@ -578,9 +578,57 @@ async function operatePreviewDialog(page, file) {
           await page.locator('#preview-text').filter({ hasText: changed }).waitFor({ timeout: 20000 });
           assert.equal(await page.locator('#preview-result').isVisible(), true);
         }
+        await page.evaluate(() => {
+          const previousCore = window.__TAURI__.core;
+          const previousInvoke = previousCore.invoke;
+          window.nativePreviewRaceReads = 0;
+          const facade = Object.create(previousCore);
+          Object.defineProperty(facade, 'invoke', { value: async (command, args) => {
+            if (command !== 'inspect_preview') return previousInvoke(command, args);
+            window.nativePreviewRaceReads++;
+            const preview = await previousInvoke(command, args);
+            if (window.nativePreviewRaceReads !== 1) return preview;
+            return new Promise(resolve => { window.releaseNativePreviewRead = () => resolve(preview); });
+          } });
+          window.__TAURI__.core = facade;
+          window.restoreNativePreviewRace = () => { window.__TAURI__.core = previousCore; };
+        });
+        await page.getByRole('button', { name: 'Atualizar prévia' }).click();
+        await page.waitForFunction(() => typeof window.releaseNativePreviewRead === 'function');
+        await writeFile(previewText, 'changed while preview was loading');
+        await page.evaluate(() => {
+          window.previewTerminalEvents.onmessage({ kind: 'failed' });
+          window.releaseNativePreviewRead();
+        });
+        await page.locator('#preview-text').filter({ hasText: 'changed while preview was loading' }).waitFor({ timeout: 20000 });
+        assert.equal(await page.evaluate(() => window.nativePreviewRaceReads), 2, 'Native preview must re-read after a terminal event interrupts an in-flight read');
+        await page.evaluate(() => window.restoreNativePreviewRace());
+        await page.evaluate(() => {
+          const previousCore = window.__TAURI__.core;
+          const previousInvoke = previousCore.invoke;
+          window.nativePickerRefreshReads = 0;
+          const facade = Object.create(previousCore);
+          Object.defineProperty(facade, 'invoke', { value: (command, args) => {
+            if (command === 'choose_preview_file') return new Promise(resolve => { window.cancelNativePreviewPicker = () => resolve(null); });
+            if (command === 'inspect_preview') window.nativePickerRefreshReads++;
+            return previousInvoke(command, args);
+          } });
+          window.__TAURI__.core = facade;
+          window.restoreNativePreviewPicker = () => { window.__TAURI__.core = previousCore; };
+        });
+        await page.getByRole('button', { name: 'Escolher arquivo' }).click();
+        await page.waitForFunction(() => typeof window.cancelNativePreviewPicker === 'function');
+        await writeFile(previewText, 'changed while choosing another file');
+        await page.evaluate(() => {
+          window.previewTerminalEvents.onmessage({ kind: 'completed' });
+          window.cancelNativePreviewPicker();
+        });
+        await page.locator('#preview-text').filter({ hasText: 'changed while choosing another file' }).waitFor({ timeout: 20000 });
+        assert.equal(await page.evaluate(() => window.nativePickerRefreshReads), 1, 'Canceling the picker must re-read only the previously selected real file');
+        await page.evaluate(() => window.restoreNativePreviewPicker());
         await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
         await page.evaluate(() => window.restorePreviewTerminalInvoke());
-        console.log('PASS: interrupted and failed Codex events re-read the already selected real project file in the native WebView (controlled agent events; no real Send).');
+        console.log('PASS: terminal Codex events re-read the real project file, including an in-flight read or canceled file picker (controlled agent events; no real Send).');
       }
       await page.getByRole('button', { name: 'Abrir prévia' }).click();
       await writeFile(previewText, 'updated while enlarged');
