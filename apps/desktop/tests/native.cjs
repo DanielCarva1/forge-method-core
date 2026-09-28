@@ -310,8 +310,16 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('#project-record').isVisible(), false);
       await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Andamento' }).click();
       assert.equal(await page.locator('#project-record').isVisible(), true, 'Native narrow workspace can inspect the real Forge record');
-      assert.equal(await page.locator('.workspace .project').isVisible(), true, 'The folder controls remain reachable with the record');
+      assert.equal(await page.locator('#project-panel').isVisible(), false, 'Record view does not repeat the folder and connection card');
       if (process.env.FORGE_MOBILE_PROGRESS_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_MOBILE_PROGRESS_SCREENSHOT, fullPage: true });
+      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Projeto' }).click();
+      assert.equal(await page.locator('#project-panel').isVisible(), true, 'Native narrow project controls remain one choice away');
+      assert.equal(await page.locator('#project-name').isVisible(), false, 'The narrow project name is not duplicated in the card');
+      assert.equal(await page.locator('#project-setup summary').textContent(), 'Trocar de projeto');
+      if (process.env.FORGE_MOBILE_PROJECT_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_MOBILE_PROJECT_SCREENSHOT, fullPage: true });
+      await page.locator('#project-setup summary').click();
+      assert.equal(await page.locator('#browse-project').isVisible(), true, 'The Windows folder picker is still reachable from the project pane');
+      await page.locator('#project-setup summary').click();
       await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
       assert.equal(await page.locator('#project-preview').isVisible(), true);
       if (process.env.FORGE_MOBILE_PREVIEW_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_MOBILE_PREVIEW_SCREENSHOT, fullPage: true });
@@ -320,7 +328,7 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       if (process.env.FORGE_MOBILE_WORKSPACE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_MOBILE_WORKSPACE_SCREENSHOT, fullPage: true });
       await page.setViewportSize(initialViewport);
-      console.log('PASS: native narrow workspace switches conversation, real record and preview without changing the project.');
+      console.log('PASS: native narrow workspace switches conversation, real record, project controls and preview without changing the project.');
       await page.evaluate(() => window.restoreProgressInvoke());
       assert.ok((await page.locator('#record-state').textContent()).length > 0);
       assert.ok((await page.locator('#record-phase').textContent()).length > 0);

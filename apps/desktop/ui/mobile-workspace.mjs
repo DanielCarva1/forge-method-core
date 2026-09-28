@@ -7,6 +7,7 @@ const panels = {
   conversation: document.querySelector('.workspace .conversation'),
   preview: document.getElementById('project-preview'),
   progress: document.getElementById('project-record'),
+  project: document.getElementById('project-panel'),
 };
 
 export function showWorkspacePane(pane, focus = false) {

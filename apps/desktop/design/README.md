@@ -1,5 +1,13 @@
 # Approved visual direction
 
+For the narrow confirmed-project workspace, Conversation, Preview, Progress
+and Project are four direct choices over the same existing panels. Progress
+does not append the technical folder/connection card; Project keeps switching
+folders and inspecting connection details one choice away. At 480px and below,
+the choices form a balanced two-column grid. The project name remains in the
+workspace heading rather than repeating inside the narrow Project card. Wider
+layouts and first-use folder selection are unchanged.
+
 The current 0.1.34 UI slice makes short cited-file choices visible on a new
 reply and gives an empty Forge record a direct route to the same unsent
 conversation. These are discoverability changes, not new project state or a

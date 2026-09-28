@@ -241,7 +241,7 @@ async function openConversation(page) {
     assert.match(await projectsPage.locator('#preview-intro').textContent(), /agente indicar um arquivo.*escolher um arquivo da pasta/);
     assert.equal(await projectsPage.locator('#preview-status').isVisible(), false, 'The untouched empty state does not repeat the same message');
     assert.equal(await projectsPage.evaluate(() => document.querySelector('#project-record').getBoundingClientRect().top < document.querySelector('.preview').getBoundingClientRect().top), true, 'The real record precedes an empty preview');
-    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['project-conversation', 'project-record', 'project-preview', 'project']);
+    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['project-conversation', 'project-record', 'project-preview', 'project-panel']);
     assert.equal(await projectsPage.locator('#refresh-preview').isVisible(), false, 'No refresh action before choosing a file');
     assert.equal(await projectsPage.locator('#project-record').isVisible(), true);
     assert.equal(await projectsPage.locator('.project #project-record').count(), 0, 'Record is a separate panel, not folder setup');
@@ -249,7 +249,7 @@ async function openConversation(page) {
     await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
     await projectsPage.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await projectsPage.evaluate(() => document.activeElement?.id), 'preview-heading', 'Moving the preview above the record gives keyboard focus to its result heading');
-    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['project-conversation', 'project-preview', 'project-record', 'project']);
+    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['project-conversation', 'project-preview', 'project-record', 'project-panel']);
     assert.equal(await projectsPage.locator('#refresh-preview').isVisible(), true);
     assert.equal(await projectsPage.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), true);
     assert.equal(await projectsPage.evaluate(() => {
@@ -310,11 +310,22 @@ async function openConversation(page) {
     await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Andamento' }).click();
     assert.equal(await projectsPage.locator('#project-record').isVisible(), true);
     assert.equal(await projectsPage.evaluate(() => document.activeElement?.dataset.mobilePaneButton), 'progress');
-    assert.equal(await projectsPage.locator('.project').isVisible(), true, 'The project folder remains reachable from mobile progress');
+    assert.equal(await projectsPage.locator('#project-panel').isVisible(), false, 'The record should not repeat the folder and connection card');
+    await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Projeto' }).click();
+    assert.equal(await projectsPage.locator('#project-panel').isVisible(), true, 'The project folder remains directly reachable');
+    assert.equal(await projectsPage.locator('#project-record').isVisible(), false);
+    assert.equal(await projectsPage.locator('#project-name').isVisible(), false, 'The narrow project card does not repeat the title above it');
+    assert.equal(await projectsPage.locator('#workspace-title').isVisible(), true);
+    assert.equal(await projectsPage.locator('#project-setup summary').textContent(), 'Trocar de projeto');
+    await projectsPage.locator('#project-setup summary').click();
+    assert.equal(await projectsPage.locator('#browse-project').isVisible(), true, 'The same folder picker remains reachable');
+    await projectsPage.locator('#project-setup summary').click();
+    await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Projeto' }).focus();
     await projectsPage.keyboard.press('Shift+Tab');
-    assert.equal(await projectsPage.evaluate(() => document.activeElement?.dataset.mobilePaneButton), 'preview');
+    assert.equal(await projectsPage.evaluate(() => document.activeElement?.dataset.mobilePaneButton), 'progress');
     await projectsPage.keyboard.press('Enter');
-    assert.equal(await projectsPage.locator('#project-preview').isVisible(), true, 'Keyboard activation switches panels');
+    assert.equal(await projectsPage.locator('#project-record').isVisible(), true, 'Keyboard activation switches panels');
+    await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
     await projectsPage.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
     assert.equal(await projectsPage.locator('#project-conversation').isVisible(), true, 'A change request must return to the same conversation');
     assert.equal(await projectsPage.evaluate(() => document.activeElement?.id), 'message-text');
@@ -325,6 +336,8 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#mobile-workspace-nav').isVisible(), false);
     assert.equal(await projectsPage.locator('#project-preview').isVisible(), true);
     assert.equal(await projectsPage.locator('#project-record').isVisible(), true);
+    assert.equal(await projectsPage.locator('#project-panel').isVisible(), true, 'Wide layout still shows the project card');
+    assert.equal(await projectsPage.locator('#project-name').isVisible(), true, 'Wide layout keeps the project name in its sidebar');
     assert.equal(await projectsPage.locator('.workspace-screen .screen-heading .intro').isVisible(), false, 'Confirmed project omits repeated setup explanation');
     assert.equal(await projectsPage.evaluate(() => {
       const conversation = document.querySelector('.workspace.project-ready .conversation').getBoundingClientRect();
@@ -443,7 +456,7 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#project-conversation').isVisible(), true);
     assert.equal(await projectsPage.locator('#project-preview').isVisible(), false);
     assert.equal(await projectsPage.locator('#project-record').isVisible(), false);
-    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['project-conversation', 'project-preview', 'project-record', 'project']);
+    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['project-conversation', 'project-preview', 'project-record', 'project-panel']);
     assert.equal(await projectsPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await projectsPage.setViewportSize({ width: 1280, height: 720 });
     assert.equal(await projectsPage.evaluate(() => {
@@ -1702,7 +1715,8 @@ async function openConversation(page) {
       await page.setViewportSize({ width, height: 844 });
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
       // Single-line paths scroll within their field by design; button labels must not clip.
-      assert.equal(await page.locator('button, input, textarea').evaluateAll(nodes => nodes.filter(n => n.getClientRects().length).every(n => (n.tagName === 'INPUT' || n.scrollWidth <= n.clientWidth + 2) && n.scrollHeight <= n.clientHeight + 2)), true);
+      const clipped = await page.locator('button, input, textarea').evaluateAll(nodes => nodes.filter(n => n.getClientRects().length && ((n.tagName !== 'INPUT' && n.scrollWidth > n.clientWidth + 2) || n.scrollHeight > n.clientHeight + 2)).map(n => ({ id: n.id, text: n.textContent?.trim().slice(0, 60), width: [n.scrollWidth, n.clientWidth], height: [n.scrollHeight, n.clientHeight] })));
+      assert.deepEqual(clipped, [], 'Visible controls must not clip at enlarged text');
     }
     await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
     await page.emulateMedia({ forcedColors: 'active' });

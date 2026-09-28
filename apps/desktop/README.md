@@ -8129,3 +8129,51 @@ UNKNOWN. No candidate rebuild or manual GitHub CI run followed publication.
 **Next product step:** continue the open UI coverage gap using the approved
 visual references and actual user journeys; do not treat these alpha packages
 as completion of the Forge Desktop objective.
+
+### Desktop 0.1.35 narrow workspace package in progress — 2026-09-28
+
+The active objective continues after the public 0.1.34 delivery. A real narrow
+native capture showed that the Andamento view also appended the entire folder
+and connection card, repeating the project name and lengthening the screen.
+The existing mobile pane switch now offers a fourth **Projeto** choice over the
+same original project panel. Andamento shows only the Forge record; Projeto
+keeps folder switching and connection inspection one choice away. At 480px and
+below the choices are a two-column grid, including 200% enlarged text. The
+already-present workspace heading owns the visible project name in narrow
+mode; the project card does not repeat it. The first-use screen and wide layout
+remain unchanged. No new project store, route, backend command or agent state
+was added.
+
+Changed source: `ui/index.html`, `ui/mobile-workspace.mjs`, `ui/styles.css`,
+`tests/browser.cjs`, `tests/native.cjs`, Desktop version files, design and
+release notes. Browser suite PASS; an embedded-UI debug build passed hidden
+native smoke with real project/record readback and folder-picker reachability.
+Native screenshots reviewed:
+`D:/Temp/User/forge-0135-progress-project-grid.png` and
+`D:/Temp/User/forge-0135-project-pane-final.png`. The first native attempt
+used the previous debug binary and could not find the new tab; rebuilding the
+debug binary resolved this test-setup mismatch. One browser run also exposed
+enlarged-text clipping on the new Andamento tab; CSS was corrected and the
+suite passed. No real Codex turn was repeated for this UI-only slice. No
+subagent is active; model-attributed tokens, API-equivalent BRL and Pro-quota
+impact remain UNKNOWN.
+
+Final Desktop `cargo check`, all 50 non-ignored Desktop tests, strict Clippy,
+JavaScript syntax and `git diff --check` passed. The single NSIS candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.35_x64-setup.exe`,
+123,135,285 bytes, SHA-256
+`B2D24C149529E5DE7FC77C47F10796DB2067F0E58240587B23E2B98652259384`.
+Silent installation over public 0.1.34 returned exit 0 without changing the
+candidate bytes; the installed 0.1.35 executable has SHA-256
+`16FF5987A7138A17E612F87EF4BC512F27E7CFBD9568233F3C8C379FFFF349E7`.
+Installed-candidate hidden native smoke passed with actual Windows folder
+selection, new-project Forge onboarding/record readback, separate narrow
+project controls and progress view, and isolated preview. Actual Codex Send
+remains NOT_RUN for this UI-only package; prior real 0.1.33 evidence is
+separate. Clean-machine/mobile-device/manual screen-reader acceptance remain
+NOT_RUN/PARTIAL.
+
+**Next exact step:** selectively commit/push/tag, publish this same candidate
+under the standing alpha authorization, download unauthenticated, compare
+bytes, install the downloaded file and repeat hidden native smoke. Do not
+rebuild or call 0.1.35 available before public readback.
