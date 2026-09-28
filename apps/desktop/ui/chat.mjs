@@ -44,6 +44,7 @@ const projectResultHint = byId('project-result-hint');
 const conversationStep = byId('conversation-step');
 const emptyDescription = byId('empty-conversation-description');
 const resumeLastConversation = byId('resume-last-conversation');
+const reopenConversation = byId('reopen-conversation');
 const previewLastResult = byId('preview-last-result');
 const previewIntro = byId('preview-intro');
 const emptyPreviewText = 'Confira arquivos citados na conversa ou escolha um da pasta do projeto.';
@@ -56,6 +57,7 @@ let loginActive = false;
 let loginPending = false;
 let loginCompletedEarly = false;
 let broken = false;
+let reconnectable = false;
 let generation = 0;
 let channel;
 let activeThreadId = null; // A new empty thread is not yet durable Codex history.
@@ -152,7 +154,7 @@ function updateComposerHelp() {
 }
 
 function updateResumeAction() {
-  resumeLastConversation.hidden = !project || connected || !hasResumableConversation || messages.childElementCount > 0;
+  resumeLastConversation.hidden = !project || connected || !hasResumableConversation;
   resumeLastConversation.disabled = transitioning || !loginPanel.hidden;
   if (project) resumeLastConversation.textContent = unconfirmedSends.has(referenceKey())
     ? 'Conferir envio anterior' : 'Continuar conversa anterior';
@@ -183,6 +185,8 @@ function controls() {
   connect.hidden = connected;
   connectHelp.hidden = !project || connected;
   disconnect.hidden = !connected;
+  reopenConversation.hidden = !project || !connected || !broken || !reconnectable;
+  reopenConversation.disabled = transitioning;
   newConversationChoice.hidden = connected || !project || !hasPreviousConversation;
   conversationPicker.hidden = !project || connected;
   if (connected) conversationPicker.open = false;
@@ -211,6 +215,7 @@ function controls() {
 }
 
 export function setProject(value) {
+  reconnectable = false;
   const previous = project ?? draftOrigin;
   if (previous) {
     const previousKey = projectKey(previous);
@@ -607,7 +612,7 @@ function receive(event) {
     interrupted: 'Interrompido. O que já foi feito não foi desfeito.',
     failed: 'A execução falhou. Confira o que já foi feito antes de tentar novamente.',
     update_required: 'O Codex usado pelo Forge não aceita o modelo solicitado. Confira se há uma versão mais nova do Forge Desktop em Início → Como funciona → Versão e atualizações. Se você configurou um Codex externo, atualize-o também. A conversa não foi apagada.',
-    disconnected: 'A conexão foi encerrada. Confira o que já foi feito antes de reconectar.',
+    disconnected: 'A conexão foi encerrada. Reabra a conversa para conferir o histórico; nada será reenviado.',
     interaction_required: 'O Codex pediu uma interação que esta tela ainda não oferece. Nada foi aprovado automaticamente.',
   };
   if (labels[event.kind] && !transitioning) {
@@ -618,6 +623,8 @@ function receive(event) {
   if (['completed', 'interrupted', 'failed', 'disconnected', 'update_required'].includes(event.kind)) busy = false;
   // Keep disconnect available after a connection failure to release the native session.
   if (['disconnected', 'update_required'].includes(event.kind)) broken = true;
+  if (event.kind === 'disconnected') reconnectable = true;
+  if (event.kind === 'update_required') reconnectable = false;
   controls();
 }
 
@@ -632,7 +639,7 @@ async function connectCurrent(explicitThreadId = null) {
   ++listGeneration;
   listPending = false;
   const current = ++generation;
-  transitioning = true; broken = false; controls();
+  transitioning = true; broken = false; reconnectable = false; controls();
   showStatus('Conectando ao Codex com seu login…', 'working');
   try {
     let threadId = explicitThreadId;
@@ -679,7 +686,9 @@ async function connectCurrent(explicitThreadId = null) {
     newConversation.checked = false;
     const latestReplyIncomplete = conversation.messages.at(-1)?.role === 'agent' && conversation.messages.at(-1).incomplete;
     showStatus(broken
-      ? 'A conexão foi encerrada. Desconecte antes de tentar novamente.'
+      ? reconnectable
+        ? 'A conexão foi encerrada. Use “Reabrir conversa” para conferir o histórico; nada será reenviado.'
+        : 'O Codex precisa ser atualizado antes de continuar. Sua conversa não foi apagada.'
       : `${reviewingSend ? 'Conversa retomada. O envio anterior ainda não foi confirmado. Confira as mensagens e o que foi feito; depois escolha “Já conferi o envio” para continuar. Nada foi reenviado.' : latestReplyIncomplete ? 'Conversa retomada. Última resposta incompleta: confira mensagens e arquivos antes de continuar. Mudanças podem permanecer; nada foi reenviado.' : conversation.resumed ? 'Conversa retomada. Você pode continuar de onde parou.' : `Codex conectado ao projeto ${projectDisplayName(project)}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}`, broken ? 'disconnected' : 'connected');
   } catch (error) {
     if (current !== generation) return;
@@ -789,6 +798,10 @@ resumeLastConversation.addEventListener('click', () => {
   if (!project || connected || transitioning || !hasResumableConversation) return;
   newConversation.checked = false;
   void connectCurrent();
+});
+reopenConversation.addEventListener('click', async () => {
+  if (!project || !connected || !broken || !reconnectable || transitioning) return;
+  if (await disconnectCurrent()) void connectCurrent();
 });
 
 confirmReviewedSend.addEventListener('click', () => {
@@ -918,7 +931,7 @@ async function disconnectCurrent() {
   try {
     await invoke('disconnect_agent');
     if (current !== generation) return false;
-    connected = false; busy = false; broken = false; channel = null;
+    connected = false; busy = false; broken = false; reconnectable = false; channel = null;
     activeThreadId = null;
     disconnected = true;
     showStatus('Desconectado. As alterações já feitas no projeto permanecem.', 'disconnected');

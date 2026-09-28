@@ -10053,3 +10053,29 @@ and a focused hidden-native project-preparation/Home-reopen pass without
 Codex Send. The downloaded copy was hash-verified but not installed a second
 time; no distinct real-Codex turn, broad suite or manual GH CI ran for this
 package. Continue the Desktop product goal; this alpha is not full completion.
+
+### Desktop 0.1.58 conversation-recovery candidate — 2026-09-28
+
+After a connection-loss notification, the conversation now offers a direct
+"Reabrir conversa" action. It releases the old native session and reconnects
+through the existing saved-thread path without sending the draft again. After a
+manual disconnect, "Continuar conversa anterior" remains visible even when
+old messages are still on screen; a previous real conversation is not replaced
+by a newly opened empty one. The update-required state deliberately does not
+offer a reconnect loop. Focused headless `tests/empty-conversation.cjs` passed
+both recovery actions and the no-resend assertions. The rebuilt debug app
+passed focused hidden-native `tests/native-empty-reopen.cjs`: an injected
+disconnect notification triggered the new control, which used real native
+disconnect/reconnect IPC without Codex Send; after restart, the unsent empty
+thread was not bookmarked or resumed. An actual unplanned Codex process loss
+was NOT_RUN. The source version is now 0.1.58. One NSIS candidate
+(`Forge_0.1.58_x64-setup.exe`, 123,118,485 bytes, SHA-256
+`402BCE522E39F7DF047997FFBC92EECE661FE71810ACF3E6E9FAF12D77C14DAB`)
+was installed silently over 0.1.57: exit 0, unchanged candidate bytes,
+installed ProductVersion 0.1.58 and executable SHA-256
+`0C6F276F46CD8971FCE435B5E341B451950D5245DF3CCC1E67AF8FE1DC4A8135`.
+The installed candidate passed the same focused hidden-native recovery check,
+with real native reconnect and zero Sends. No Rust tests, broad suite or
+manual GH CI ran. Next: review the diff, commit/push/tag and publish this
+exact candidate under standing alpha authorization, then verify the anonymous
+download against the candidate. Do not rebuild the candidate.

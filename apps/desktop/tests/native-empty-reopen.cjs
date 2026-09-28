@@ -9,11 +9,12 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 
 const executable = process.env.FORGE_DESKTOP_EXE;
-const projectRoot = process.env.FORGE_TEST_PROJECT;
-if (!executable || !projectRoot) throw new Error('Set FORGE_DESKTOP_EXE and FORGE_TEST_PROJECT');
+const suppliedProjectRoot = process.env.FORGE_TEST_PROJECT;
+if (!executable) throw new Error('Set FORGE_DESKTOP_EXE');
 
 (async () => {
   const profile = await mkdtemp(path.join(tmpdir(), 'forge-native-empty-reopen-'));
+  const projectRoot = suppliedProjectRoot || await mkdtemp(path.join(tmpdir(), 'forge-native-empty-project-'));
   const reservation = createServer();
   await new Promise(resolve => reservation.listen(0, '127.0.0.1', resolve));
   const port = reservation.address().port;
@@ -51,9 +52,32 @@ if (!executable || !projectRoot) throw new Error('Set FORGE_DESKTOP_EXE and FORG
     await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(projectRoot);
     await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 35000 });
+    await page.evaluate(() => {
+      window.reconnectCalls = { connect: 0, send: 0 };
+      const core = window.__TAURI__.core;
+      const facade = Object.create(core);
+      Object.defineProperty(facade, 'Channel', { value: new Proxy(core.Channel, {
+        construct(target, args) {
+          window.lastChannel = Reflect.construct(target, args);
+          return window.lastChannel;
+        },
+      }) });
+      Object.defineProperty(facade, 'invoke', { value: (command, args) => {
+        if (command === 'connect_agent') window.reconnectCalls.connect++;
+        if (command === 'send_message') window.reconnectCalls.send++;
+        return core.invoke(command, args);
+      } });
+      window.__TAURI__.core = facade;
+    });
     await page.locator('#conversation-picker summary').click();
     await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
     await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor({ timeout: 60000 });
+    // Inject only the disconnect notification; the button still uses real native IPC to shut down and reconnect.
+    await page.evaluate(() => window.lastChannel.onmessage({ kind: 'disconnected' }));
+    await page.getByRole('button', { name: 'Reabrir conversa' }).waitFor({ state: 'visible', timeout: 15000 });
+    await page.getByRole('button', { name: 'Reabrir conversa' }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor({ timeout: 60000 });
+    assert.deepEqual(await page.evaluate(() => window.reconnectCalls), { connect: 2, send: 0 }, 'Native reconnect must not send a turn');
     assert.equal(await page.evaluate(() => {
       const project = JSON.parse(localStorage.getItem('forge.projects.v1'))[0];
       return localStorage.getItem(`forge.conversation.v1:${JSON.stringify([project.project_id, project.project_root])}`);
@@ -75,17 +99,25 @@ if (!executable || !projectRoot) throw new Error('Set FORGE_DESKTOP_EXE and FORG
       } });
       window.__TAURI__.core = facade;
     });
-    await page.getByRole('link', { name: 'Meus projetos' }).click();
+    await page.getByRole('link', { name: 'Meus projetos', exact: true }).click();
     await page.locator('.recent-project').getByRole('button', { name: /^Abrir / }).click();
     await page.waitForFunction(() => document.getElementById('project-status').textContent.includes('Projeto pronto'), null, { timeout: 35000 });
     assert.equal(await page.locator('#confirmed-root').textContent(), projectRoot);
     assert.deepEqual(await page.evaluate(() => window.reopenCalls), { connect: 0, send: 0 });
     assert.equal(await page.locator('#messages article').count(), 0);
-    console.log('PASS: hidden native app opened an empty real Codex thread, restarted and reopened its project without trying to resume or send it.');
+    console.log('PASS: hidden native app handled an injected disconnect notice using real native reconnect without Send; an empty thread was not bookmarked or resumed after restart.');
   } finally {
     await stop();
     assert.equal(path.dirname(path.resolve(profile)), path.resolve(tmpdir()));
     assert.ok(path.basename(profile).startsWith('forge-native-empty-reopen-'));
     await rm(profile, { recursive: true, force: true, maxRetries: 12, retryDelay: 250 });
+    if (!suppliedProjectRoot) {
+      const forgeState = path.join(path.dirname(projectRoot), `forge-${path.basename(projectRoot)}`);
+      for (const [target, prefix] of [[projectRoot, 'forge-native-empty-project-'], [forgeState, 'forge-forge-native-empty-project-']]) {
+        assert.equal(path.dirname(path.resolve(target)), path.resolve(tmpdir()));
+        assert.ok(path.basename(target).startsWith(prefix));
+        await rm(target, { recursive: true, force: true, maxRetries: 12, retryDelay: 250 });
+      }
+    }
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -27,7 +27,7 @@ const server = createServer(async (request, response) => {
       window.connectCalls = [];
       window.sendCalls = 0;
       window.__TAURI__ = { core: {
-        Channel: class {},
+        Channel: class { constructor() { window.testEvents = this; } },
         invoke: async (command, args) => {
           if (command === 'app_info') return { name: 'Forge', version: 'test' };
           if (command === 'start_project') return { project_id: 'empty-project', project_root: args.projectRoot };
@@ -77,6 +77,14 @@ const server = createServer(async (request, response) => {
     assert.deepEqual(await page.evaluate(() => window.connectCalls), ['thread-1']);
     assert.equal(await page.locator('#messages article').count(), 2);
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Resume must not send another turn');
+    await page.evaluate(() => window.testEvents.onmessage({ kind: 'disconnected' }));
+    await page.getByRole('button', { name: 'Reabrir conversa' }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Reopening after disconnection must not replay a turn');
+    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await page.getByRole('button', { name: 'Continuar conversa anterior' }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Manual reconnect must not replay a turn');
     await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
     await page.locator('#conversation-picker summary').click();
     await page.getByRole('checkbox', { name: 'Começar outra conversa' }).check();
