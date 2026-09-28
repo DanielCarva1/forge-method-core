@@ -4,6 +4,8 @@ Independent Tauri application. Desktop `0.1.50` is the current source version
 and the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.50-alpha.1).
 Its installer was downloaded without authentication, hash-checked, installed
 and tested in the hidden native app.
+Later source edits described in the latest checkpoint are not yet in that
+installer.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -9484,3 +9486,35 @@ tokens, BRL cost and Pro quota attribution remain UNKNOWN.
 **Next smallest step:** use the published native app and remaining Desktop
 acceptance criteria to close the next concrete create/chat/result UI gap. Do
 not treat publication as whole-product completion.
+
+### Desktop post-0.1.50 continuation — 2026-09-28
+
+The published 0.1.50 was reopened headlessly using the preserved disposable
+0.1.49 real-Codex project and WebView profile. It restored 39 real messages,
+opened the exact `site/index.html` citation in the protected preview, and
+reopened in a second app process without Send or artifact changes. A first
+assertion only checked that the iframe was visible; a capture showed it could
+still be loading. The native readback test now waits for actual rendered page
+content before claiming preview success. The version-to-version readback passed
+after that stronger assertion, without consuming a real Codex turn.
+
+Visual review of that real journey showed the completed-work message repeated
+in the status, badge, and phase description. The source UI now leaves the
+phase description to explain the phase, while the status and badge retain the
+completion signal. The browser suite failed on the old copy and passed after
+the change. A debug native build and the same 39-message, two-process hidden
+readback passed; its real preview rendered, and the phase no longer repeats
+the completion sentence. Native screenshot:
+`D:/Temp/User/forge-progress-no-duplicate-debug.png`. No Rust source changed,
+so no Rust test suite or manual GitHub CI was run. No worker was delegated;
+per-model tokens, BRL cost and Pro quota attribution remain UNKNOWN.
+
+Changed since public 0.1.50: `ui/progress.mjs`, `tests/browser.cjs`,
+`tests/native-hidden.ps1`, new `tests/native-upgrade-readback.cjs`, and this
+checkpoint. The installed/public 0.1.50 does **not** contain the new UI copy.
+Clean-machine setup, real provider login completion, external-browser launch,
+physical mobile access and manual screen-reader acceptance remain NOT_RUN.
+
+**Next smallest step:** inspect the real create/chat/result journey for another
+user-facing friction point and close a coherent UI slice before preparing the
+next installer. Do not build or publish a package solely for this copy change.

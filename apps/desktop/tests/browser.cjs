@@ -1335,7 +1335,8 @@ async function openConversation(page) {
         assert.equal(await page.locator('#record-activity-label').textContent(), state === 'completed' ? 'Resultado registrado' : state === 'abandoned' ? 'Último registro' : 'Agora');
         if (state === 'completed') {
           assert.match(await page.locator('#progress-status').textContent(), /Esta parte do trabalho foi concluída. O projeto pode continuar/);
-          assert.match(await page.locator('#record-phase-help').textContent(), /Este trabalho foi concluído; a etapa geral pode continuar aqui/);
+          assert.doesNotMatch(await page.locator('#record-phase-help').textContent(), /Este trabalho foi concluído/,
+            'The phase description should not repeat the completed-work status already shown above');
         }
         assert.equal(await page.locator('#record-outcome').textContent(), 'Accepted outcome');
         assert.equal(await page.locator('#record-next').textContent(), 'Recorded next step');
