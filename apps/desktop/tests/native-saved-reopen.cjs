@@ -1,4 +1,4 @@
-// Focused hidden-native check: a clean saved Codex thread reopens with its project.
+// Focused hidden-native check: an idea written before folder setup reaches Codex once and reopens after restart.
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const { spawn } = require('node:child_process');
 const { createServer } = require('node:net');
@@ -49,14 +49,12 @@ if (!executable) throw new Error('Set FORGE_DESKTOP_EXE');
     let page = browser.contexts()[0].pages()[0] || await browser.contexts()[0].waitForEvent('page', { timeout: 5000 });
     await page.locator('#home').waitFor({ state: 'visible' });
     await page.locator('nav a[data-route="workspace"]').click();
+    const prompt = 'Sem usar ferramentas nem alterar arquivos, responda em português apenas: Retomada verificada.';
+    await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).fill(prompt);
     await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(projectRoot);
     await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 35000 });
-    await page.locator('#conversation-picker summary').click();
-    await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
-    await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor({ timeout: 60000 });
-    const prompt = 'Sem usar ferramentas nem alterar arquivos, responda em português apenas: Retomada verificada.';
-    await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).fill(prompt);
+    assert.equal(await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).inputValue(), prompt, 'Preparing the project must preserve the idea written first');
     await page.getByRole('button', { name: 'Enviar', exact: true }).click();
     await page.locator('#agent-status').filter({ hasText: 'Resposta recebida' }).waitFor({ timeout: 180000 });
     assert.equal(await page.locator('#messages article[data-role="user"]').count(), 1);
@@ -100,7 +98,7 @@ if (!executable) throw new Error('Set FORGE_DESKTOP_EXE');
     assert.equal(await page.locator('#messages article[data-role="user"]').count(), 1);
     assert.equal(await page.locator('#messages article[data-role="agent"]').count(), 1);
     assert.match(await page.locator('#messages').textContent(), /Retomada verificada/);
-    console.log('PASS: hidden native Home reopened a real saved Codex conversation with its reply and validated project, without a second Send.');
+    console.log('PASS: hidden native idea-first draft survived real project preparation, got one real Codex reply, and reopened after restart without a second Send.');
   } finally {
     await stop();
     assert.equal(path.dirname(path.resolve(profile)), path.resolve(tmpdir()));

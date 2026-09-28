@@ -10154,3 +10154,19 @@ downloaded copy was hash-verified but not installed a second time. No new
 real Codex turn, native generic composer folder-dialog choice, broad suite or
 manual GH CI ran. Continue the Desktop product goal; this alpha is not full
 completion.
+
+### Desktop 0.1.59 installed idea-to-reply continuity — 2026-09-28
+
+The installed 0.1.59 executable passed one focused hidden-native full path
+using a disposable real Forge project and clean WebView profile: type a
+read-only idea before choosing the project folder, prepare the folder through
+native `start_project`, confirm the draft is unchanged, click Send once, get a
+real Codex reply, close and reopen the app, use Home to resume the validated
+project and saved conversation, recover the user message and reply, and make
+no second Send. The prompt explicitly forbade tools and file changes. The
+updated `tests/native-saved-reopen.cjs` owns this assertion. This check did
+not exercise the Windows folder-picker dialog, result preview, or a change
+request; earlier focused proof for those paths remains separate. No broad
+suite, Rust tests, manual GH CI, installer rebuild or new release ran. Next:
+continue the remaining result/change UX and distribution gaps; do not repeat
+this real Codex turn merely to reassert the same path.
