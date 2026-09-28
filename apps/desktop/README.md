@@ -1,8 +1,7 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.28` is the published alpha
-prerelease; `0.1.29` is a tested local candidate, not yet public. The 0.1.28
-installer was downloaded back, hash-checked and installed.
+Independent Tauri application. Desktop `0.1.29` is the published alpha
+prerelease. Its exact installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -7397,3 +7396,36 @@ with the maintainer identity, tag the exact code state, publish the tested
 installer and sidecar under the standing alpha authorization, then download
 both unauthenticated and verify exact bytes and installed readback. Do not
 rebuild the candidate. Keep the larger Windows journey goal active.
+
+### Desktop 0.1.29 public release readback — 2026-09-28
+
+Package commit `4392865c` was pushed on `codex/desktop-shell` with the
+maintainer identity. Annotated tag `desktop-v0.1.29-alpha.1` resolves to
+that commit. Public prerelease:
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.29-alpha.1`.
+GitHub lists the exact installer and SHA-256 sidecar. Unauthenticated
+downloads to `C:/ForgeFast/forge-alpha-0129-public-20260928` matched the
+tested candidate: 123,071,538 bytes, SHA-256
+`299CCC8718241168318E9BCFA98A6AAC187573A01EEF44EA3FB3711F45DD14A1`,
+and matching sidecar text. Silent installation of those downloaded bytes
+returned exit 0 and left the file unchanged. The installed executable
+reports 0.1.29 and SHA-256
+`EF66C040BF1B4E86181F121388EE5A817EE2AF59CA356EA5F2EAECF8791A0959`.
+The downloaded installation again passed a hidden read-only real-result
+and full-process-restart check against the existing 33-message Codex chat,
+with no Send or file edit. No manual GitHub CI was run. This proves public
+byte continuity and same-machine update, not a clean-machine installation
+or real provider error recovery.
+
+**State:** 0.1.29 is public and installed. The broad Windows journey goal
+remains active; #91/#92 have not been declared complete. The earlier
+combined two-dialog timeout, positive external-browser launch, fresh-account
+sign-in completion, clean-machine install and manual accessibility acceptance
+remain unresolved or NOT_RUN. Mobile and offline self-contained distribution
+are later stages. No subagent was used in this package; per-task model
+tokens, API-equivalent BRL and Pro-quota impact remain UNKNOWN.
+**Next exact step:** audit remaining #91/#92 acceptance against the installed
+0.1.29 journey and prioritize the largest truthful user-facing gap. In
+particular, do not treat suggested decisions as agreements or fabricate
+missing historical wording. Avoid another release solely for copy or a
+repeat of the same real Codex turn without a specific new hypothesis.
