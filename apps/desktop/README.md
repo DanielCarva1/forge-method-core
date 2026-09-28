@@ -1,7 +1,8 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.51` is the current source version
-and the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.51-alpha.1).
+Independent Tauri application. Desktop `0.1.52` is the current source version;
+`0.1.51` is the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.51-alpha.1)
+until the tested 0.1.52 candidate is published and downloaded.
 Its installer was downloaded without authentication, hash-checked, installed
 and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
@@ -9642,3 +9643,33 @@ these two post-release UI slices.
 
 **Next smallest step:** continue the create/chat/result/restart journey and
 assemble a meaningful next alpha package from the accepted source slices.
+
+### Desktop 0.1.52 candidate — 2026-09-28
+
+The two post-0.1.51 source slices above are grouped into a single alpha
+package: clearer, cancellable in-app choices for external citations and
+busy project switching, plus consistent recent-project removal on storage
+failure. Changed package files: Desktop Cargo manifest/lock, Tauri config,
+`RELEASE_NOTES-0.1.52.md`, and this checkpoint. No engine or protocol changes.
+The complete browser suite passed, 52 Desktop Rust tests passed (one ignored),
+strict Desktop Clippy and five JS connection tests passed. A single release
+build produced the NSIS candidate. Silent upgrade from installed 0.1.51
+exited 0; installed ProductVersion is 0.1.52. The installed candidate passed
+the hidden native smoke with real Forge record/project readback, onboarding
+and protected preview. Real Codex Send, external-browser launch, clean-machine
+setup, fresh provider login and manual screen-reader acceptance were NOT_RUN
+for this candidate. The prior first-read record instability remains PARTIAL.
+No manual GitHub CI was run. No worker was delegated; model token attribution,
+BRL-equivalent cost and Pro allowance impact remain UNKNOWN.
+
+The one candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.52_x64-setup.exe`:
+123,119,675 bytes, SHA-256
+`4EC4CE228E19C76B02AC161FBD5493AB359FF50E5042666863FFB7CC7FEC6B37`.
+Its sidecar is 93 bytes. The installed executable SHA-256 is
+`1A3CE7FE741B14ED873791A49C138BDCB0D474F769B27EBDACD888ECE2AA3E39`.
+
+**Next exact step:** review diff, commit/push/tag, publish this exact candidate
+and sidecar, download anonymously and verify identical bytes and installation.
+Then continue the larger product UI goal; do not mark it complete from this
+incremental alpha package.
