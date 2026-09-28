@@ -304,6 +304,23 @@ async function operatePreviewDialog(page, file) {
         await page.evaluate(() => window.scrollTo(0, 0));
         await page.screenshot({ path: process.env.FORGE_NATIVE_VIEWPORT_SCREENSHOT });
       }
+      await page.setViewportSize({ width: 390, height: 844 });
+      assert.equal(await page.locator('#mobile-workspace-nav').isVisible(), true, 'Native narrow workspace exposes direct panel choices');
+      assert.equal(await page.locator('#project-conversation').isVisible(), true);
+      assert.equal(await page.locator('#project-record').isVisible(), false);
+      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Andamento' }).click();
+      assert.equal(await page.locator('#project-record').isVisible(), true, 'Native narrow workspace can inspect the real Forge record');
+      assert.equal(await page.locator('.workspace .project').isVisible(), true, 'The folder controls remain reachable with the record');
+      if (process.env.FORGE_MOBILE_PROGRESS_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_MOBILE_PROGRESS_SCREENSHOT, fullPage: true });
+      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+      assert.equal(await page.locator('#project-preview').isVisible(), true);
+      if (process.env.FORGE_MOBILE_PREVIEW_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_MOBILE_PREVIEW_SCREENSHOT, fullPage: true });
+      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Conversa' }).click();
+      assert.equal(await page.locator('#project-conversation').isVisible(), true);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      if (process.env.FORGE_MOBILE_WORKSPACE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_MOBILE_WORKSPACE_SCREENSHOT, fullPage: true });
+      await page.setViewportSize(initialViewport);
+      console.log('PASS: native narrow workspace switches conversation, real record and preview without changing the project.');
       await page.evaluate(() => window.restoreProgressInvoke());
       assert.ok((await page.locator('#record-state').textContent()).length > 0);
       assert.ok((await page.locator('#record-phase').textContent()).length > 0);
@@ -315,7 +332,7 @@ async function operatePreviewDialog(page, file) {
       }
       if (recordedPhase === 'Próximo passo ainda não registrado') {
         assert.equal(await page.locator('#record-empty-help').isVisible(), true);
-        assert.match(await page.locator('#record-empty-help').textContent(), /Comece pela conversa ao lado.*arquivos continuam na pasta escolhida/);
+        assert.match(await page.locator('#record-empty-help').textContent(), /Comece pela conversa\..*arquivos continuam na pasta escolhida/);
         assert.equal(await page.locator('.record-stage').isVisible(), false);
         assert.equal(await page.locator('#record-work').isVisible(), false);
         assert.equal(await page.locator('#record-direction').isVisible(), false);
@@ -724,6 +741,13 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('#preview-site').getAttribute('sandbox'), '');
       assert.equal(await page.evaluate(() => document.querySelector('#preview-site').contentDocument), null);
       if (process.env.FORGE_SITE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_SITE_SCREENSHOT, fullPage: true });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+      assert.equal(await page.locator('#preview-site').isVisible(), true, 'The loaded local site remains visible in the narrow preview');
+      assert.equal(await page.getByRole('button', { name: 'Pedir mudança neste arquivo' }).isVisible(), true);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'A loaded site must not overflow the narrow workspace');
+      if (process.env.FORGE_MOBILE_LOADED_PREVIEW_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_MOBILE_LOADED_PREVIEW_SCREENSHOT, fullPage: true });
+      await page.setViewportSize(initialViewport);
       await page.getByRole('button', { name: 'Ver código' }).click();
       assert.match(await page.locator('#preview-text').textContent(), /<script>parent.previewEscaped=true<\/script>/);
       await page.getByRole('button', { name: 'Ver prévia visual' }).click();

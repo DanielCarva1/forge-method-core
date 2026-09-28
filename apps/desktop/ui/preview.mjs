@@ -1,5 +1,6 @@
 // The selected path is transient UI state. Forge owns the project, not this preview.
 import { renderAgentMessage } from './message-format.mjs';
+import { setMobileWorkspaceProject, showWorkspacePane } from './mobile-workspace.mjs';
 const panel = document.getElementById('project-preview');
 const heading = document.getElementById('preview-heading');
 const workspace = document.querySelector('.workspace');
@@ -151,6 +152,7 @@ export function setPreviewProject(value) {
   workspace.classList.toggle('project-ready', !!value);
   workspace.classList.remove('preview-loaded');
   workspace.classList.remove('preview-engaged');
+  setMobileWorkspaceProject(value);
   status.hidden = true;
   status.textContent = '';
   controls();
@@ -295,6 +297,7 @@ export async function previewLinkedFile(candidate) {
   controls();
   await loadPreview();
   // Keep both the result and any validation error visible to the reader.
+  showWorkspacePane('preview', true);
   panel.scrollIntoView({ block: 'start' });
 }
 openPreview.addEventListener('click', () => {
@@ -360,6 +363,7 @@ function prepareChangeRequest() {
   const request = fileOnly ? `Sobre o arquivo ${pathLabel.textContent}: ` : `Quero mudar o arquivo ${pathLabel.textContent}: `;
   composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n${request}` : request;
   if (dialog.open) dialog.close();
+  showWorkspacePane('conversation');
   composer.focus();
   status.textContent = 'Pedido preparado na conversa. Revise e envie quando quiser.';
 }

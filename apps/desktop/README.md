@@ -1,8 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.32` is the current published and
-installed alpha. Its installer was downloaded back without authentication,
-hash-checked and installed over the prior 0.1.31 alpha.
+Independent Tauri application. Desktop `0.1.33` is the current source version
+and is installed locally from a tested candidate; `0.1.32` remains the
+published alpha until the next package is released. The 0.1.32 installer was
+downloaded back without authentication, hash-checked and installed first.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -7910,3 +7911,77 @@ API-equivalent BRL and Pro-quota impact remain UNKNOWN.
 **Next product step:** continue the broader connected, attractive UI journey
 from a concrete remaining gap and the approved design. Do not treat this
 alpha release as completion of the Forge Desktop goal.
+
+### Narrow workspace navigation in source — 2026-09-28
+
+After 0.1.32 public readback, the next uncommitted UI slice adds direct
+**Conversa**, **Prévia** and **Andamento** choices for confirmed projects at
+700px or narrower. They show existing panels rather than copying project or
+conversation state; folder controls remain with Andamento. Opening a cited
+file switches to Prévia; asking for a file change or a Forge-record explanation
+returns to the same conversation and focuses the unsent draft. At wider widths,
+all existing panels remain visible. This is a bounded responsive-shell part of
+#94, not a claim that a remote mobile client or full mobile acceptance exists.
+
+**Changed, uncommitted:** `ui/mobile-workspace.mjs`, `ui/index.html`,
+`ui/styles.css`, `ui/preview.mjs`, `ui/progress.mjs`,
+`tests/browser.cjs`, `tests/native.cjs`, `tests/native-auth.cjs`,
+`tests/artifact-resume.cjs`, `design/README.md` and this checkpoint.
+The browser UI suite passed, including state preservation, mobile result-open,
+change-request and record-explanation returns, desktop resize, 200% narrow
+text without document overflow, and keyboard activation of panel choices.
+The panel choices retain keyboard focus; programmatically opening a cited
+result can focus the preview heading. JavaScript
+syntax and `git diff --check` passed. An offline Desktop debug build passed;
+hidden native smoke on that debug build passed with real folder onboarding,
+real Forge record readback, 390px panel switching and the existing controlled
+preview/conversation checks. The native narrow screenshots were reviewed at
+`D:/Temp/User/forge-mobile-workspace-next.png`,
+`D:/Temp/User/forge-mobile-progress-revised.png` and
+`D:/Temp/User/forge-mobile-preview-next.png`. This review caught a desktop-
+only phrase ("conversation beside") and a duplicate phase badge at narrow
+width; both were corrected, and the browser suite, offline debug build and
+hidden native smoke passed again. No Rust source changed, no
+core workspace suite or manual GitHub CI ran, and the installed/public app is
+still 0.1.32 without these changes. A real Codex Send in this new narrow view,
+mobile-device access and manual screen-reader acceptance remain NOT_RUN. No
+subagent was used; attributable per-model tokens, BRL equivalent and Pro-quota
+impact remain UNKNOWN.
+
+**Next exact step:** assess the remaining #94 journey gap, especially manual
+screen-reader focus and a narrow project with a loaded result; then choose a
+coherent 0.1.33 package and validate its exact candidate before publication.
+Do not claim the installed app has these source edits yet.
+
+### Desktop 0.1.33 installed candidate — 2026-09-28
+
+The narrow workspace package now also has native visual proof with a loaded
+real local HTML file at `D:/Temp/User/forge-mobile-loaded-preview-next.png`.
+At 390px, the isolated page, **Pedir mudança neste arquivo**, file controls
+and safe-preview notice remained readable with no document overflow. This is
+not evidence of interactive site behavior or mobile-device distribution.
+The responsive changes, tests and wording above were reviewed as one package.
+
+The single NSIS candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.33_x64-setup.exe`,
+123,105,178 bytes, SHA-256
+`90D94DE8984F92BE810999A1B06F6EC523D60061490B28BF58288AC9959AE80B`.
+Silent installation over public 0.1.32 returned exit 0; the candidate hash
+stayed unchanged. The installed 0.1.33 executable reports 0.1.33 and has
+SHA-256
+`A9B072C9924EE8E55B9596810E69AF19D5BE43384ACD18A22B476390BDFFA188`.
+Installed-app hidden native smoke passed with real Windows folder choice,
+Forge onboarding and record readback, 390px panel switching, isolated local
+HTML preview and the existing controlled conversation/preview paths.
+The browser UI suite, JavaScript syntax, `git diff --check`, Desktop Cargo
+check, all 50 non-ignored Desktop tests, strict Desktop Clippy and one NSIS
+release build passed. The separate core workspace and manual GitHub CI were
+not run for this UI package. Real Codex Send in this exact narrow flow,
+clean-machine setup, mobile-device access and manual screen-reader acceptance
+remain NOT_RUN/PARTIAL. No subagent was used; attributable per-model tokens,
+BRL equivalent and Pro-quota impact remain UNKNOWN.
+
+**Next exact step:** selectively commit and push, tag the code, publish this
+same candidate plus SHA-256 sidecar as an alpha prerelease, then download both
+assets without authentication, compare bytes and install/test the public file.
+Do not rebuild the candidate. Continue the broader Forge UI goal afterward.

@@ -133,7 +133,12 @@
         <p class="intro">Escreva sua ideia e escolha onde guardar o projeto. Você decide quando enviar a mensagem.</p>
         <p id="idea-selection-status" class="idea-selection-status" role="status" aria-live="polite" hidden></p>
       </div>
-      <div class="workspace">
+      <nav id="mobile-workspace-nav" class="mobile-workspace-nav" aria-label="Áreas do projeto" hidden>
+        <button type="button" data-mobile-pane-button="conversation" aria-controls="project-conversation" aria-pressed="true">Conversa</button>
+        <button type="button" data-mobile-pane-button="preview" aria-controls="project-preview" aria-pressed="false">Prévia</button>
+        <button type="button" data-mobile-pane-button="progress" aria-controls="project-record" aria-pressed="false">Andamento</button>
+      </nav>
+      <div class="workspace" data-mobile-pane="conversation">
       <aside class="project panel" aria-labelledby="project-title">
         <p class="eyebrow" id="project-step">PASSO 1 · SEU PROJETO</p>
         <h2 id="project-title">Onde vamos criar?</h2>
@@ -164,8 +169,8 @@
           <p class="hint">O Codex guarda o histórico. Se você ainda não entrou no ChatGPT neste dispositivo, o Forge ajuda a fazer isso sem instalar outra ferramenta.</p>
         </details>
       </aside>
-      <section class="conversation panel" aria-labelledby="chat-title">
-        <div class="conversation-heading"><div><p class="eyebrow" id="conversation-step">PASSO 2 · SUA CONVERSA</p><h2 id="chat-title">Vamos criar juntos</h2><span class="agent-badge">Agente · Codex</span></div><div class="conversation-tools"><button id="resume-last-conversation" type="button" hidden>Continuar conversa anterior</button><button id="confirm-reviewed-send" type="button" hidden>Já conferi o envio</button><button id="message-view" type="button" hidden>Ver texto original</button><button id="disconnect-agent" disabled hidden>Desconectar</button></div></div>
+      <section class="conversation panel" id="project-conversation" aria-labelledby="chat-title">
+        <div class="conversation-heading"><div><p class="eyebrow" id="conversation-step">PASSO 2 · SUA CONVERSA</p><h2 id="chat-title" tabindex="-1">Vamos criar juntos</h2><span class="agent-badge">Agente · Codex</span></div><div class="conversation-tools"><button id="resume-last-conversation" type="button" hidden>Continuar conversa anterior</button><button id="confirm-reviewed-send" type="button" hidden>Já conferi o envio</button><button id="message-view" type="button" hidden>Ver texto original</button><button id="disconnect-agent" disabled hidden>Desconectar</button></div></div>
         <details id="conversation-picker" class="conversation-picker" hidden>
           <summary>Conversas e histórico</summary>
           <div class="chat-actions"><button id="connect-agent" disabled>Abrir conversa</button><span id="connect-help" class="hint">Opcional: abra agora sem enviar nada, ou escreva e envie sua ideia.</span></div>
@@ -234,7 +239,7 @@
         <div class="preview-actions"><button id="choose-preview" type="button">Escolher arquivo</button><button id="refresh-preview" type="button" disabled hidden>Atualizar prévia</button><button id="preview-source-toggle" type="button" hidden>Ver código</button></div>
       </section>
       <section class="record panel" id="project-record" aria-labelledby="record-heading" hidden>
-        <div class="record-heading-row"><div><p class="eyebrow">CONTEXTO DO PROJETO</p><h3 id="record-heading">Onde estamos</h3></div><button id="refresh-progress" type="button" disabled>Atualizar andamento</button></div>
+        <div class="record-heading-row"><div><p class="eyebrow">CONTEXTO DO PROJETO</p><h3 id="record-heading" tabindex="-1">Onde estamos</h3></div><button id="refresh-progress" type="button" disabled>Atualizar andamento</button></div>
         <p id="progress-status" role="status" aria-live="polite" tabindex="-1">Escolha uma pasta para ver o andamento do projeto.</p>
         <div id="progress-result" hidden>
           <p id="record-state" class="record-state"></p>
@@ -244,7 +249,7 @@
             <h4 id="record-phase"></h4>
             <p id="record-phase-help"></p>
           </div>
-          <p id="record-empty-help" class="hint" hidden>Comece pela conversa ao lado. Quando um próximo passo for registrado no Forge, ele aparecerá aqui. Seus arquivos continuam na pasta escolhida.</p>
+          <p id="record-empty-help" class="hint" hidden>Comece pela conversa. Quando um próximo passo for registrado no Forge, ele aparecerá aqui. Seus arquivos continuam na pasta escolhida.</p>
           <div id="record-work">
             <div class="record-timeline" role="group" aria-label="Atividade e próximo passo registrados">
               <div class="record-timeline-item"><strong id="record-activity-label">Agora</strong><p id="record-activity"></p></div>

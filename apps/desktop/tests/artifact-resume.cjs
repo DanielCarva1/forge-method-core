@@ -82,7 +82,7 @@ if (!profile || !project || !executable) throw new Error('Set FORGE_ARTIFACT_PRO
       await page.locator('#progress-status').filter({ hasText: 'Ainda não há um próximo passo registrado' }).waitFor({ timeout: 35000 });
       assert.equal(await page.locator('#workspace-phase').textContent(), 'Próximo passo ainda não registrado');
       assert.equal(await page.locator('.record-stage').isVisible(), false);
-      assert.match(await page.locator('#record-empty-help').textContent(), /Comece pela conversa ao lado/);
+      assert.match(await page.locator('#record-empty-help').textContent(), /Comece pela conversa/);
     }
     if (process.env.FORGE_ARTIFACT_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_ARTIFACT_SCREENSHOT, fullPage: true });
     await page.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();

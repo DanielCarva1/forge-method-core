@@ -22,6 +22,7 @@ const assets = new Map([
   ['/appearance.js', ['appearance.js', 'text/javascript']],
   ['/progress.mjs', ['progress.mjs', 'text/javascript']],
   ['/preview.mjs', ['preview.mjs', 'text/javascript']],
+  ['/mobile-workspace.mjs', ['mobile-workspace.mjs', 'text/javascript']],
 ]);
 async function openProjectSetup(page) {
   if (!await page.locator('#project-setup').evaluate(node => node.open)) await page.locator('#project-setup summary').click();
@@ -240,7 +241,7 @@ async function openConversation(page) {
     assert.match(await projectsPage.locator('#preview-intro').textContent(), /agente indicar um arquivo.*escolher um arquivo da pasta/);
     assert.equal(await projectsPage.locator('#preview-status').isVisible(), false, 'The untouched empty state does not repeat the same message');
     assert.equal(await projectsPage.evaluate(() => document.querySelector('#project-record').getBoundingClientRect().top < document.querySelector('.preview').getBoundingClientRect().top), true, 'The real record precedes an empty preview');
-    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['conversation', 'project-record', 'project-preview', 'project']);
+    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['project-conversation', 'project-record', 'project-preview', 'project']);
     assert.equal(await projectsPage.locator('#refresh-preview').isVisible(), false, 'No refresh action before choosing a file');
     assert.equal(await projectsPage.locator('#project-record').isVisible(), true);
     assert.equal(await projectsPage.locator('.project #project-record').count(), 0, 'Record is a separate panel, not folder setup');
@@ -248,7 +249,7 @@ async function openConversation(page) {
     await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
     await projectsPage.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await projectsPage.evaluate(() => document.activeElement?.id), 'preview-heading', 'Moving the preview above the record gives keyboard focus to its result heading');
-    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['conversation', 'project-preview', 'project-record', 'project']);
+    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['project-conversation', 'project-preview', 'project-record', 'project']);
     assert.equal(await projectsPage.locator('#refresh-preview').isVisible(), true);
     assert.equal(await projectsPage.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), true);
     assert.equal(await projectsPage.evaluate(() => {
@@ -290,6 +291,40 @@ async function openConversation(page) {
     assert.equal(await projectsPage.evaluate(() => document.activeElement?.id), 'message-text');
     assert.equal(await projectsPage.evaluate(() => window.previewRequestSubmits), 0);
     if (process.env.FORGE_PREVIEW_SCREENSHOT) await projectsPage.screenshot({ path: process.env.FORGE_PREVIEW_SCREENSHOT, fullPage: true });
+    const mobileDraft = await projectsPage.locator('#message-text').inputValue();
+    await projectsPage.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await projectsPage.locator('#mobile-workspace-nav').isVisible(), true);
+    await projectsPage.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
+    assert.equal(await projectsPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Large mobile text must not make the document scroll sideways');
+    assert.equal(await projectsPage.locator('#mobile-workspace-nav button').evaluateAll(nodes => nodes.every(node => node.getBoundingClientRect().height >= 48)), true);
+    await projectsPage.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    assert.equal(await projectsPage.locator('#project-conversation').isVisible(), true);
+    assert.equal(await projectsPage.locator('#project-preview').isVisible(), false);
+    assert.equal(await projectsPage.locator('#project-record').isVisible(), false);
+    await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+    assert.equal(await projectsPage.locator('#project-preview').isVisible(), true);
+    assert.equal(await projectsPage.evaluate(() => document.activeElement?.dataset.mobilePaneButton), 'preview', 'Panel buttons retain keyboard focus');
+    assert.equal(await projectsPage.locator('#preview-text').textContent(), '<script>primeiro</script>', 'Switching views must retain the actual loaded result');
+    assert.equal(await projectsPage.locator('#project-conversation').isVisible(), false);
+    assert.equal(await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).getAttribute('aria-pressed'), 'true');
+    await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Andamento' }).click();
+    assert.equal(await projectsPage.locator('#project-record').isVisible(), true);
+    assert.equal(await projectsPage.evaluate(() => document.activeElement?.dataset.mobilePaneButton), 'progress');
+    assert.equal(await projectsPage.locator('.project').isVisible(), true, 'The project folder remains reachable from mobile progress');
+    await projectsPage.keyboard.press('Shift+Tab');
+    assert.equal(await projectsPage.evaluate(() => document.activeElement?.dataset.mobilePaneButton), 'preview');
+    await projectsPage.keyboard.press('Enter');
+    assert.equal(await projectsPage.locator('#project-preview').isVisible(), true, 'Keyboard activation switches panels');
+    await projectsPage.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
+    assert.equal(await projectsPage.locator('#project-conversation').isVisible(), true, 'A change request must return to the same conversation');
+    assert.equal(await projectsPage.evaluate(() => document.activeElement?.id), 'message-text');
+    assert.match(await projectsPage.locator('#message-text').inputValue(), /Quero mudar o arquivo result\.txt: $/);
+    assert.equal(await projectsPage.evaluate(() => window.previewRequestSubmits), 0, 'Changing panes must not send a message');
+    await projectsPage.locator('#message-text').fill(mobileDraft);
+    await projectsPage.setViewportSize({ width: 1280, height: 720 });
+    assert.equal(await projectsPage.locator('#mobile-workspace-nav').isVisible(), false);
+    assert.equal(await projectsPage.locator('#project-preview').isVisible(), true);
+    assert.equal(await projectsPage.locator('#project-record').isVisible(), true);
     assert.equal(await projectsPage.locator('.workspace-screen .screen-heading .intro').isVisible(), false, 'Confirmed project omits repeated setup explanation');
     assert.equal(await projectsPage.evaluate(() => {
       const conversation = document.querySelector('.workspace.project-ready .conversation').getBoundingClientRect();
@@ -405,14 +440,10 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#preview-heading').textContent(), 'Prévia do resultado');
     assert.equal(await projectsPage.getByRole('button', { name: 'Pedir mudança neste arquivo' }).isVisible(), true);
     await projectsPage.setViewportSize({ width: 390, height: 844 });
-    assert.equal(await projectsPage.evaluate(() => {
-      const project = document.querySelector('.project').getBoundingClientRect();
-      const chat = document.querySelector('.conversation').getBoundingClientRect();
-      const preview = document.querySelector('.preview').getBoundingClientRect();
-      const record = document.querySelector('#project-record').getBoundingClientRect();
-      return chat.bottom < preview.top && preview.bottom < record.top && record.bottom < project.top;
-    }), true);
-    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['conversation', 'project-preview', 'project-record', 'project']);
+    assert.equal(await projectsPage.locator('#project-conversation').isVisible(), true);
+    assert.equal(await projectsPage.locator('#project-preview').isVisible(), false);
+    assert.equal(await projectsPage.locator('#project-record').isVisible(), false);
+    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['project-conversation', 'project-preview', 'project-record', 'project']);
     assert.equal(await projectsPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await projectsPage.setViewportSize({ width: 1280, height: 720 });
     assert.equal(await projectsPage.evaluate(() => {
@@ -547,7 +578,7 @@ async function openConversation(page) {
     assert.equal((await projectsPage.evaluate(() => window.startCalls)).length, startsBeforeNewIdea, 'Exploring an idea must not create a project');
     await projectsPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\home-fixture');
     await projectsPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
-    await projectsPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    await projectsPage.waitForFunction(() => document.getElementById('project-status').textContent.includes('Projeto pronto'));
     await projectsPage.getByRole('link', { name: 'Início', exact: true }).click();
     await projectsPage.getByRole('link', { name: 'Conversar sobre uma ideia' }).click();
     await projectsPage.locator('#workspace').waitFor({ state: 'visible' });
@@ -589,7 +620,7 @@ async function openConversation(page) {
     assert.equal(await manyProjectsPage.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'Project search must not overflow a narrow window');
     assert.equal(await manyProjectsPage.getByRole('searchbox', { name: 'Encontrar um projeto' }).isVisible(), true);
     await manyProjectsPage.getByRole('button', { name: 'Abrir Café na pasta D:\\Ideias\\Café' }).click();
-    await manyProjectsPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    await manyProjectsPage.waitForFunction(() => document.getElementById('project-status').textContent.includes('Projeto pronto'));
     assert.equal(await manyProjectsPage.locator('#confirmed-root').textContent(), 'D:\\Ideias\\Café');
     assert.equal(await manyProjectsPage.locator('#project-filter').inputValue(), '', 'Opening a project clears an old shortcut filter');
     assert.equal(await manyProjectsPage.evaluate(() => JSON.parse(localStorage.getItem('forge.projects.v1')).length), 50);
@@ -927,6 +958,13 @@ async function openConversation(page) {
     assert.match(await page.locator('#message-text').inputValue(), /^Minha ideia continua aqui\.\n\nExplique em linguagem simples/);
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'message-text');
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Explaining the record must not send a turn');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Andamento' }).click();
+    await page.getByRole('button', { name: 'Entender isto na conversa' }).click();
+    assert.equal(await page.locator('#project-conversation').isVisible(), true, 'A record explanation returns to the same mobile conversation');
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'message-text');
+    assert.equal(await page.evaluate(() => window.sendCalls), 0);
+    await page.setViewportSize({ width: 1280, height: 720 });
     await page.locator('#message-text').fill('');
     assert.equal(await page.locator('#record-pending').isVisible(), true);
     assert.equal(await page.locator('#record-questions-shortcut').isVisible(), true);
@@ -1043,7 +1081,7 @@ async function openConversation(page) {
     await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
     assert.match(await page.locator('#progress-status').textContent(), /Ainda não há um próximo passo registrado/);
     assert.equal(await page.locator('#workspace-phase').textContent(), 'Próximo passo ainda não registrado');
-    assert.match(await page.locator('#record-empty-help').textContent(), /Comece pela conversa ao lado.*arquivos continuam na pasta escolhida/);
+    assert.match(await page.locator('#record-empty-help').textContent(), /Comece pela conversa\..*arquivos continuam na pasta escolhida/);
     await page.evaluate(() => { window.progressState = 'current'; window.progressDecisionCount = 0; });
     await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     assert.match(await page.locator('#record-decisions').textContent(), /não mostra decisões em aberto/);
@@ -1320,6 +1358,8 @@ async function openConversation(page) {
     assert.equal(await page.evaluate(() => window.linkPreviewReads.length), readsAfterInvalidFile, 'A failed preview is not retried implicitly after a turn');
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    assert.equal(await page.locator('#project-preview').isVisible(), true, 'Opening a cited result switches to the preview on narrow screens');
+    await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Conversa' }).click();
     assert.ok(await formattedBubble.locator('.message-table-scroll').evaluate(node => node.scrollWidth > node.clientWidth), 'A wide response table should scroll within its message');
     assert.ok(await formattedBubble.locator('pre').evaluate(node => parseFloat(getComputedStyle(node).fontSize) >= 18));
     await page.setViewportSize({ width: 1280, height: 720 });

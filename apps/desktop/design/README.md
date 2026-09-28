@@ -103,6 +103,14 @@ loaded preview rises to the top as in the approved conversation reference.
 This fixes the previous giant project-setup panel without fabricating preview
 or stage data.
 
+In the next unpublished source slice, a confirmed project at 700px or narrower
+offers **Conversa**, **Prévia** and **Andamento** panel choices. The last choice
+also includes the real folder controls. The same DOM panels and data are reused;
+selecting a cited file shows its preview, and preparing a change or explanation
+returns to the same conversation without sending. This is responsive shell
+progress toward #94, not mobile-device distribution, remote agent access, or
+completion of manual mobile accessibility validation.
+
 In the later 0.1.8 hierarchy, a *still-empty* preview no longer outranks the
 real Forge record: the record comes first and the placeholder is compact.
 Choosing a real file moves its preview above the record, with DOM and visual

@@ -1,3 +1,4 @@
+import { showWorkspacePane } from './mobile-workspace.mjs';
 const button = document.getElementById('refresh-progress');
 const status = document.getElementById('progress-status');
 const result = document.getElementById('progress-result');
@@ -110,6 +111,7 @@ function prepareQuestion(request, current) {
   const composer = document.getElementById('message-text');
   if (current !== generation || !project || composer.disabled) return;
   composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n\n${request}` : request;
+  showWorkspacePane('conversation');
   composer.focus();
   status.textContent = 'Pergunta preparada na conversa. Revise e envie quando quiser; nenhuma decisão foi registrada.';
 }
@@ -215,7 +217,7 @@ async function loadProgress() {
     emptyHelp.hidden = data.status !== 'absent';
     emptyHelp.textContent = direction
       ? 'O objetivo está registrado. O próximo trabalho ainda não foi definido no Forge. Continue a conversa para combiná-lo com o agente.'
-      : 'Comece pela conversa ao lado. Quando um próximo passo for registrado no Forge, ele aparecerá aqui. Seus arquivos continuam na pasta escolhida.';
+      : 'Comece pela conversa. Quando um próximo passo for registrado no Forge, ele aparecerá aqui. Seus arquivos continuam na pasta escolhida.';
     document.getElementById('record-phase').textContent = phase[0];
     document.getElementById('record-phase-help').textContent = data.status === 'completed'
       ? `${phase[1]} Este trabalho foi concluído; a etapa geral pode continuar aqui.` : phase[1];
@@ -274,6 +276,7 @@ document.getElementById('explain-record').addEventListener('click', () => {
   }
   const request = 'Explique em linguagem simples a atividade atual e o próximo passo que constam no registro do Forge. Compare com a conversa mais recente antes de assumir que o registro está atualizado. Diga se precisa de alguma decisão minha.';
   composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n\n${request}` : request;
+  showWorkspacePane('conversation');
   composer.focus();
   status.textContent = 'Pedido preparado na conversa. Revise e envie quando quiser; nada foi enviado.';
 });
@@ -286,6 +289,7 @@ document.getElementById('explain-direction').addEventListener('click', () => {
   }
   const request = 'Explique em português claro a direção atual que consta no registro do Forge: o objetivo, o que foi combinado e o que devemos evitar. Compare com nossa conversa; se houver diferença, avise. Não trate perguntas sugeridas como decisões aprovadas e não altere o registro sem me consultar.';
   composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n\n${request}` : request;
+  showWorkspacePane('conversation');
   composer.focus();
   status.textContent = 'Pedido preparado na conversa. Revise e envie quando quiser; nada foi enviado ou alterado no registro.';
 });

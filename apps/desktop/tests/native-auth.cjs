@@ -53,7 +53,7 @@ const assert = require('node:assert/strict');
     assert.match(await page.locator('#project-status').textContent(), /começar ou continuar a conversa; nada foi enviado/);
     await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 35000 });
     assert.equal(await page.locator('#workspace-phase').textContent(), 'Próximo passo ainda não registrado');
-    assert.match(await page.locator('#record-empty-help').textContent(), /Comece pela conversa ao lado/);
+    assert.match(await page.locator('#record-empty-help').textContent(), /Comece pela conversa/);
     const draft = page.locator('#message-text');
     await draft.fill('Rascunho reservado durante o acesso');
     await page.locator('#send-message').click();
