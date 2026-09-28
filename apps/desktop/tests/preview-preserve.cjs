@@ -52,10 +52,13 @@ const server = createServer(async (request, response) => {
     assert.equal(await page.locator('#preview-path').textContent(), 'good.txt');
     assert.equal(await page.locator('#preview-text').textContent(), 'Conteúdo de good.txt');
     assert.equal(await page.locator('#preview-result').isVisible(), true);
+    assert.equal(await page.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), true);
+    assert.equal(await page.locator('.preview-empty').isVisible(), false);
 
     await page.evaluate(async () => (await import('/preview.mjs')).previewLinkedFile('D:\\outside.txt'));
     await page.locator('#preview-status').filter({ hasText: 'prévia anterior foi mantida' }).waitFor();
     assert.equal(await page.locator('#preview-path').textContent(), 'good.txt');
+    assert.equal(await page.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), true);
 
     await page.evaluate(async () => (await import('/preview.mjs')).previewLinkedFile('other.txt'));
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();

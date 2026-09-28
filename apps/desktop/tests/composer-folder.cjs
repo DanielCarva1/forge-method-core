@@ -72,6 +72,8 @@ const server = createServer(async (request, response) => {
     await page.getByRole('button', { name: 'Escolher pasta para continuar' }).click();
     assert.deepEqual(await page.evaluate(() => [window.folderChoices, window.projectStarts, window.sends]), [1, 0, 0]);
     assert.equal(await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).inputValue(), 'Quero fazer um jardim de ideias.');
+    assert.deepEqual(await page.evaluate(() => [...document.querySelector('.workspace').children].slice(0, 2).map(node => node.id)),
+      ['project-conversation', 'project-panel'], 'Choosing a folder must not move its form ahead of the idea');
     await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).fill('');
     await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('');
     await page.goto(`http://127.0.0.1:${server.address().port}/#explore`);
@@ -89,6 +91,8 @@ const server = createServer(async (request, response) => {
     assert.equal(await draft.inputValue(), idea);
     await page.getByRole('button', { name: 'Preparar projeto nesta pasta' }).click();
     await page.locator('#project-status').filter({ hasText: 'Não foi possível preparar esta pasta' }).waitFor();
+    assert.deepEqual(await page.evaluate(() => [...document.querySelector('.workspace').children].slice(0, 2).map(node => node.id)),
+      ['project-conversation', 'project-panel'], 'A failed preparation must keep the idea-first order');
     assert.match(await page.locator('#idea-selection-status').innerText(), /Não foi possível preparar esta pasta.*não foi enviada/);
     assert.deepEqual(await page.evaluate(() => [window.folderChoices, window.projectStarts, window.sends]), [1, 1, 0]);
     assert.equal(await draft.inputValue(), idea);

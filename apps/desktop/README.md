@@ -1,9 +1,11 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.53` is the current source version
-and the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.53-alpha.1).
-The exact installer was downloaded without authentication, hash-checked,
-installed and tested in the hidden native app.
+Independent Tauri application. Desktop `0.1.60` is the current source and
+installed candidate version; the latest published alpha is
+[0.1.59](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.59-alpha.1)
+until the 0.1.60 package is published and its download checked.
+The 0.1.60 candidate was installed over 0.1.59 and tested in the hidden native
+app.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -10170,3 +10172,40 @@ request; earlier focused proof for those paths remains separate. No broad
 suite, Rust tests, manual GH CI, installer rebuild or new release ran. Next:
 continue the remaining result/change UX and distribution gaps; do not repeat
 this real Codex turn merely to reassert the same path.
+
+### Desktop next UI package in source — 2026-09-28
+
+Two continuity defects were corrected after 0.1.59 publication. Selecting or
+editing a project folder before preparation now keeps the idea-first reading
+order, including after a failed preparation. If a new result file is rejected
+by native validation, the previous valid preview and its loaded layout remain
+visible instead of reverting to the empty layout. Focused headless browser
+checks `tests/composer-folder.cjs` and `tests/preview-preserve.cjs` passed.
+Focused hidden-native `tests/native-composer-folder.cjs` also passed at 360px
+using the actual Windows folder picker: it selected a disposable folder,
+prepared that project through native Forge, reopened it from Home through
+native inspection, preserved the draft, and sent zero Codex messages. The
+hidden-native check used a debug build of the current source, not the
+installed/public 0.1.59. No broad suite, Rust tests, manual GH CI or new
+Codex turn ran. These source changes are not yet in an installer; group them
+with a coherent next UI package rather than rebuilding 0.1.59.
+
+### Desktop 0.1.60 candidate — 2026-09-28
+
+The 0.1.60 UI package closes idea-first folder selection and rejected-result
+preview continuity. One NSIS candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.60_x64-setup.exe`
+has 123,044,511 bytes and SHA-256
+`62632B5B475C63C236F119B836E7E7A8D088D02298587DE335FAED1A3AD46103`;
+its 93-byte sidecar matches. Silent installation over public 0.1.59 exited
+0, preserved candidate bytes and installed ProductVersion 0.1.60 with
+executable SHA-256
+`D745E89BA2B7772655932F8C9164DB819867ECD67BE83CE44D882BB51BA07D51`.
+The installed app passed the focused hidden-native real Windows folder-picker
+and project/Home journey with zero Sends. It also passed a focused native
+result-preview test: native project-bound file read, outside-path rejection
+without loss of the previous result or layout, full app restart and prepared
+but unsent change request. That test used controlled Codex history, not a new
+real turn. No broad suite, Rust tests or manual GH CI ran. Next: review and
+publish this exact candidate under standing alpha authorization, then verify
+the anonymous download hash. Do not rebuild it.

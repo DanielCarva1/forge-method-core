@@ -11,6 +11,16 @@ const assert = require('node:assert/strict');
 const executable = process.env.FORGE_DESKTOP_EXE;
 if (!executable) throw new Error('Set FORGE_DESKTOP_EXE');
 
+async function chooseNativeFolder(page, folder) {
+  const helper = spawn('py', ['-3.12', path.join(__dirname, 'folder-dialog.py'), 'select', folder], { windowsHide: true });
+  let output = '';
+  helper.stdout.on('data', chunk => { output += chunk; });
+  helper.stderr.on('data', chunk => { output += chunk; });
+  await page.locator('#browse-project').click();
+  const [code] = await once(helper, 'exit');
+  assert.equal(code, 0, `Native folder picker failed: ${output}`);
+}
+
 (async () => {
   const profile = await mkdtemp(path.join(tmpdir(), 'forge-native-composer-profile-'));
   const project = await mkdtemp(path.join(tmpdir(), 'forge-native-composer-project-'));
@@ -63,7 +73,10 @@ if (!executable) throw new Error('Set FORGE_DESKTOP_EXE');
     const draft = page.locator('#message-text');
     const idea = await draft.inputValue();
     assert.match(idea, /artístico/);
-    await page.locator('#project-root').fill(project);
+    await chooseNativeFolder(page, project);
+    assert.equal(await page.locator('#project-root').inputValue(), project);
+    assert.deepEqual(await page.evaluate(() => [...document.querySelector('.workspace').children].slice(0, 2).map(node => node.id)),
+      ['project-conversation', 'project-panel'], 'Native folder entry must keep the idea-first reading order');
     await page.getByRole('button', { name: 'Preparar projeto nesta pasta' }).click();
     await page.waitForFunction(() => document.querySelector('#project-status').textContent.includes('Projeto pronto'), null, { timeout: 90000 });
     await page.locator('#idea-choose-folder').waitFor({ state: 'hidden' });
@@ -84,7 +97,7 @@ if (!executable) throw new Error('Set FORGE_DESKTOP_EXE');
     await page.locator('#updates h3').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#about').evaluate(node => node.open), true);
     assert.match(await page.locator('#app-version').textContent(), /Versão instalada:/);
-    console.log('PASS: hidden native 360px idea-first layout; Explore prepared and Home reopened a real project with native inspection and no Codex Send.');
+    console.log('PASS: hidden native 360px idea-first layout; real Windows folder selection, Explore preparation and Home reopen used native inspection with no Codex Send.');
   } finally {
     await browser?.close().catch(() => {});
     if (child?.pid && child.exitCode === null && child.signalCode === null) {

@@ -5,6 +5,7 @@ import { setMobileWorkspaceProject, showWorkspacePane } from './mobile-workspace
 const panel = document.getElementById('project-preview');
 const heading = document.getElementById('preview-heading');
 const workspace = document.querySelector('.workspace');
+const conversationPanel = workspace.querySelector('.conversation');
 const projectPanel = workspace.querySelector('.project');
 const recordPanel = workspace.querySelector('.record');
 const choose = document.getElementById('choose-preview');
@@ -184,7 +185,10 @@ export function setPreviewProject(value) {
     workspace.insertBefore(panel, recordPanel);
     if (workspace.lastElementChild !== projectPanel) workspace.append(projectPanel);
   }
-  if (!value && workspace.firstElementChild !== projectPanel) workspace.prepend(projectPanel);
+  if (!value) {
+    if (workspace.firstElementChild !== conversationPanel) workspace.prepend(conversationPanel);
+    if (conversationPanel.nextElementSibling !== projectPanel) conversationPanel.after(projectPanel);
+  }
   filePath = null;
   generation++;
   pending = false;
@@ -275,7 +279,9 @@ async function loadPreview(restored = false, candidate = filePath) {
     status.textContent = fileOnly ? 'Arquivo encontrado na pasta do projeto.' : 'Prévia local atualizada.';
   } catch (error) {
     if (current === generation) {
-      workspace.classList.remove('preview-loaded');
+      // A rejected replacement must not switch the layout back to the empty
+      // state while the previous validated result is still on screen.
+      if (result.hidden) workspace.classList.remove('preview-loaded');
       if (restored) {
         forgetPreview(root, selected);
         filePath = null;

@@ -109,6 +109,9 @@ async function resumeFixture(page, citation, interrupted = false) {
     await app.page.locator('#preview-status').filter({ hasText: 'prévia anterior foi mantida' }).waitFor();
     assert.equal(await app.page.locator('#preview-text').textContent(), 'Real local file from this project.');
     assert.equal(await app.page.locator('#preview-path').textContent(), 'result.txt');
+    assert.equal(await app.page.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), true,
+      'Rejected outside file must keep the validated preview layout');
+    assert.equal(await app.page.locator('.preview-empty').isVisible(), false);
     console.log('PASS: native path rejection kept the previously validated preview visible.');
     if (process.env.FORGE_RESULT_OPEN_SCREENSHOT) await app.page.screenshot({ path: process.env.FORGE_RESULT_OPEN_SCREENSHOT });
     await stop(app); app = null;
@@ -135,6 +138,7 @@ async function resumeFixture(page, citation, interrupted = false) {
     await resumeFixture(app.page, outside.replaceAll('\\', '/'));
     await app.page.locator('#preview-status').filter({ hasText: 'não pertence ao projeto' }).waitFor();
     assert.equal(await app.page.locator('#preview-path').textContent(), 'result.txt', 'The previously restored file stays visible after a rejected citation');
+    assert.equal(await app.page.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), true);
     console.log('PASS: the same shortcut refused an outside-project path while keeping the restored valid preview.');
 
     await app.page.reload();
