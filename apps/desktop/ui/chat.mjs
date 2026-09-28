@@ -24,6 +24,7 @@ const composerHelp = byId('composer-help');
 const accessNote = byId('agent-access-note');
 const messages = byId('messages');
 const conversationBody = document.querySelector('.conversation-body');
+const jumpLatest = byId('jump-latest');
 const messageView = byId('message-view');
 const newConversation = byId('new-conversation');
 const newConversationChoice = byId('new-conversation-choice');
@@ -179,6 +180,7 @@ export function setProject(value) {
   citedFilesMore.hidden = true;
   if (!project) {
     messages.replaceChildren(); items.clear(); latestItem = null;
+    jumpLatest.hidden = true;
     rawMessageView = false;
     messageView.hidden = true;
     messageView.textContent = 'Ver texto original';
@@ -405,7 +407,13 @@ function nearLatestMessage() {
   return conversationBody.scrollHeight - conversationBody.clientHeight - conversationBody.scrollTop <= 72;
 }
 
-function showLatestMessage() { conversationBody.scrollTop = conversationBody.scrollHeight; }
+function updateLatestAction() { jumpLatest.hidden = !messages.childElementCount || nearLatestMessage(); }
+function showLatestMessage() { conversationBody.scrollTop = conversationBody.scrollHeight; updateLatestAction(); }
+conversationBody.addEventListener('scroll', updateLatestAction);
+jumpLatest.addEventListener('click', () => {
+  showLatestMessage();
+  conversationBody.focus({ preventScroll: true });
+});
 
 messageView.addEventListener('click', () => {
   const followLatest = nearLatestMessage();
@@ -451,6 +459,7 @@ function message(id, role, text, append = false, complete = false) {
   if (!restoringHistory && (created || complete)) updateLastResultAction();
   if (complete && !item.isUser) messageView.hidden = false;
   if (followLatest) showLatestMessage();
+  else updateLatestAction();
   return item;
 }
 
@@ -516,6 +525,7 @@ async function connectCurrent(explicitThreadId = null) {
     loginPanel.hidden = true;
     conversationPicker.open = false;
     messages.replaceChildren(); items.clear(); latestItem = null; rawMessageView = false;
+    jumpLatest.hidden = true;
     updateLastResultAction();
     messageView.hidden = true; messageView.textContent = 'Ver texto original';
     restoringHistory = true;

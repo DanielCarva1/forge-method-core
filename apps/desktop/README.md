@@ -8835,3 +8835,45 @@ Next product work should prioritize a user-visible gap in the create/chat/
 result/return journey or the documented accessibility/distribution limits,
 not another copy-only release. Model-token, BRL and Pro-quota attribution
 remain UNKNOWN.
+
+### Desktop 0.1.42 long-conversation navigation — 2026-09-28
+
+At 390 x 420 in the controlled browser layout, focusing the composer kept
+both writing and Send reachable without horizontal overflow. This simulates
+reduced viewport height, not a physical keyboard. No CSS change was justified
+for that probe. The subsequent user-visible gap was long-history navigation:
+after scrolling up to read older messages, the conversation now offers
+**Ir para a mensagem mais recente**. It disappears at the end or when the
+conversation is empty. Activating it returns keyboard focus to the history
+region and does not send a message. Project switching clears it.
+
+Changed source: `ui/index.html`, `ui/chat.mjs`, `ui/styles.css`, browser and
+native tests, Desktop version files, and `RELEASE_NOTES-0.1.42.md`. The
+complete browser UI suite passed with a controlled 160-message history and
+project switching. Eleven JavaScript unit tests, Desktop `cargo check`, 51
+non-ignored Rust tests and strict Clippy passed. A hidden native debug smoke
+covered the controlled long-history button and real Forge readback. A separate
+hidden native test restored the existing disposable project's real 39-message
+Codex conversation, navigated from the oldest to newest message, opened its
+actual HTML result, prepared an unsent change request, and repeated the check
+after a full app process restart. No real Send or project-file edit occurred
+in this package. The source screenshot is
+`D:/Temp/User/forge-real-history-jump.png`.
+
+One NSIS candidate was built at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.42_x64-setup.exe`,
+123,059,821 bytes, SHA-256
+`5F8A94E180837CFA3FDD219F772ACE79C225661E9880E83E2690878A5106EAB0`.
+The adjacent sidecar records that hash. Silent installation over the public
+0.1.41 returned exit 0 without changing the candidate. The installed exe
+reports ProductVersion 0.1.42, SHA-256
+`08A50AF63DC1BFC6ECD116A465ED30E85BB7BE2BB7DD7455C3C4CA888B55263B`.
+Installed-candidate hidden native smoke and the same read-only real-Codex
+journey both passed. No manual GitHub CI, core workspace suite, or new Codex
+Send ran. The bundled core remains 0.13.2. Per-model tokens, BRL-equivalent
+cost and Pro quota attribution remain UNKNOWN; no savings claimed.
+
+**State:** candidate tested and installed locally; commit, push, tag,
+publication and anonymous downloaded-file verification remain. Keep the broad
+Desktop goal active after this package; physical mobile-device use, manual
+screen-reader acceptance and clean-machine setup remain NOT_RUN.

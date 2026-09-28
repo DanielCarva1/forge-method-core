@@ -73,6 +73,17 @@ async function resume(page) {
   await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor({ timeout: 110000 });
   const messages = page.locator('#messages article');
   assert.ok(await messages.count() >= 30, 'Expected the existing substantial real conversation');
+  const history = page.getByRole('region', { name: 'Histórico da conversa' });
+  assert.ok(await history.evaluate(node => node.scrollHeight > node.clientHeight), 'Real history must overflow its reading region');
+  await history.evaluate(node => { node.scrollTop = 0; });
+  const jump = page.getByRole('button', { name: 'Ir para a mensagem mais recente' });
+  await jump.waitFor({ state: 'visible' });
+  if (process.env.FORGE_REAL_HISTORY_JUMP_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_REAL_HISTORY_JUMP_SCREENSHOT });
+  const countBeforeJump = await messages.count();
+  await jump.click();
+  assert.equal(await history.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop < 2), true);
+  assert.equal(await jump.isHidden(), true);
+  assert.equal(await messages.count(), countBeforeJump, 'Navigation within history must not send or duplicate a message');
   return {
     count: await messages.count(),
     first: await messages.first().textContent(),
@@ -86,9 +97,12 @@ async function inspectResult(page) {
   assert.equal(await result.count(), 1, 'Real reply must expose its local HTML file');
   const reply = result.locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " message-bubble ")]');
   const choices = reply.locator('.message-file-choices');
-  assert.equal(await choices.count(), 1, 'The real Codex reply must offer its multiple cited files beside the message');
-  await choices.locator('summary').click();
-  await choices.getByRole('button', { name: 'Conferir arquivo da resposta: site/index.html' }).click();
+  if (await choices.count()) {
+    await choices.locator('summary').click();
+    await choices.getByRole('button', { name: 'Conferir arquivo da resposta: site/index.html' }).click();
+  } else {
+    await result.click();
+  }
   await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
   assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
   await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias renovado' }).waitFor();

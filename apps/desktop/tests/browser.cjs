@@ -988,6 +988,19 @@ async function openConversation(page) {
     await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\test-project');
     await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    await page.setViewportSize({ width: 390, height: 420 });
+    await page.locator('#message-text').focus();
+    const compactComposer = await page.evaluate(() => {
+      const input = document.getElementById('message-text').getBoundingClientRect();
+      const send = document.getElementById('send-message').getBoundingClientRect();
+      return { inputTop: input.top, inputBottom: input.bottom, sendTop: send.top,
+        sendBottom: send.bottom, viewportHeight: innerHeight,
+        horizontalOverflow: document.documentElement.scrollWidth > innerWidth };
+    });
+    assert.equal(compactComposer.horizontalOverflow, false, 'The compact conversation must not scroll horizontally');
+    assert.ok(compactComposer.inputTop >= 0 && compactComposer.inputBottom <= compactComposer.viewportHeight &&
+      compactComposer.sendTop >= 0 && compactComposer.sendBottom <= compactComposer.viewportHeight,
+    `Focused writing and Send should stay reachable together in a short viewport: ${JSON.stringify(compactComposer)}`);
     for (const [width, height] of [[1180, 820], [1280, 844]]) {
       await page.setViewportSize({ width, height });
       assert.equal(await page.evaluate(() => {
@@ -1551,6 +1564,8 @@ async function openConversation(page) {
     await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Conferir 3 arquivos da resposta');
     await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'jump-latest');
+    await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'interrupt-agent');
     await page.keyboard.press('Enter');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'agent-status');
@@ -2014,6 +2029,7 @@ async function openConversation(page) {
     const history = page.getByRole('region', { name: 'Histórico da conversa' });
     assert.equal(await page.locator('#messages article').count(), 160);
     assert.equal(await history.evaluate(node => node.scrollHeight > node.clientHeight && node.scrollHeight - node.clientHeight - node.scrollTop < 2), true);
+    assert.equal(await page.locator('#jump-latest').isHidden(), true);
     assert.equal(await composer.isVisible(), true);
     assert.equal(await composer.evaluate(node => {
       const box = node.getBoundingClientRect();
@@ -2030,6 +2046,14 @@ async function openConversation(page) {
     await history.evaluate(node => { node.scrollTop = 0; });
     await page.evaluate(() => window.agentEvents.onmessage({ kind: 'message', id: 'new-while-reading', text: 'Resposta posterior' }));
     assert.equal(await history.evaluate(node => node.scrollTop), 0);
+    await page.locator('#jump-latest').waitFor({ state: 'visible' });
+    if (process.env.FORGE_HISTORY_JUMP_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_HISTORY_JUMP_SCREENSHOT });
+    const sendsBeforeJump = await page.evaluate(() => window.sendCalls);
+    await page.locator('#jump-latest').click();
+    assert.equal(await history.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop < 2), true);
+    assert.equal(await page.locator('#jump-latest').isHidden(), true);
+    assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('conversation-body')), true);
+    assert.equal(await page.evaluate(() => window.sendCalls), sendsBeforeJump, 'Jumping to the latest message must never send');
     await history.evaluate(node => { node.scrollTop = node.scrollHeight; });
     await page.evaluate(() => window.agentEvents.onmessage({ kind: 'message', id: 'new-at-bottom', text: 'Outra resposta\n'.repeat(40) }));
     assert.equal(await history.evaluate(node => node.scrollHeight - node.clientHeight - node.scrollTop < 2), true);
@@ -2037,6 +2061,9 @@ async function openConversation(page) {
     assert.equal(await history.evaluate(node => document.activeElement === node), true);
     await page.setViewportSize({ width: 390, height: 844 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await history.evaluate(node => { node.scrollTop = 0; });
+    await page.locator('#jump-latest').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#jump-latest').evaluate(node => node.getBoundingClientRect().right <= innerWidth), true);
     const disconnectsBeforeExplore = await page.evaluate(() => window.disconnectCalls);
     await page.getByRole('link', { name: 'Explorar', exact: true }).click();
     await page.getByRole('link', { name: /Arte e criação/ }).click();
@@ -2046,6 +2073,7 @@ async function openConversation(page) {
     assert.equal(await page.locator('#project-result').isHidden(), true);
     assert.equal(await page.locator('#project-setup').evaluate(node => node.open), true);
     assert.equal(await page.locator('#messages article').count(), 0, 'Previous-project messages must not remain in the new-project view');
+    assert.equal(await page.locator('#jump-latest').isHidden(), true, 'The previous conversation jump must not remain on a new project');
     assert.equal(await page.locator('#preview-cited-files').getAttribute('hidden'), '', 'Previous-project file citations must be cleared on project switch');
     assert.equal(await page.getByRole('button', { name: 'Escolher pasta para continuar' }).isEnabled(), true, 'An Explore draft should lead to folder choice without sending');
     assert.match(await page.locator('#message-text').inputValue(), /artístico/i);

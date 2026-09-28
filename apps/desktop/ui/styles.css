@@ -327,6 +327,8 @@ summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 6
 .login-panel p { margin: 8px 0; }
 .login-code { display: inline-block; padding: 8px 14px; border-radius: 10px; background: var(--surface); font: 700 1.4rem ui-monospace, monospace; letter-spacing: .1em; user-select: all; }
 .conversation-body { min-height: 240px; max-height: min(60vh, 640px); overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+#jump-latest { align-self: flex-start; margin-top: 8px; border-color: var(--focus); background: var(--soft); font-weight: 700; }
+#jump-latest[hidden] { display: none; }
 #messages { display: grid; gap: 24px; margin-block: 28px; }
 #messages:empty { margin: 0; }
 #messages:not(:empty) + .empty-conversation { display: none; }

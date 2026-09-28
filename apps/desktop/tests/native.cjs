@@ -120,17 +120,25 @@ async function operatePreviewDialog(page, file) {
     const longHistoryLayout = await page.evaluate(() => {
       const body = document.querySelector('.conversation-body');
       const messages = document.getElementById('messages');
+      const jump = document.getElementById('jump-latest');
       for (let index = 0; index < 100; index++) {
         const article = document.createElement('article');
         article.textContent = `Controlled conversation line ${index}: ${'readable text '.repeat(20)}`;
         messages.append(article);
       }
-      const result = { bounded: body.scrollHeight > body.clientHeight, keyboard: body.tabIndex === 0, composerVisible: document.getElementById('message-form').getBoundingClientRect().height > 0 };
+      body.scrollTop = 0;
+      body.dispatchEvent(new Event('scroll'));
+      const result = { bounded: body.scrollHeight > body.clientHeight, keyboard: body.tabIndex === 0,
+        composerVisible: document.getElementById('message-form').getBoundingClientRect().height > 0,
+        jumpShown: !jump.hidden };
+      jump.click();
+      result.jumpScrolled = body.scrollHeight - body.clientHeight - body.scrollTop < 2 && jump.hidden;
       messages.replaceChildren();
+      body.dispatchEvent(new Event('scroll'));
       return result;
     });
-    assert.deepEqual(longHistoryLayout, { bounded: true, keyboard: true, composerVisible: true });
-    console.log('PASS: native WebView keeps a controlled long-history fixture in a keyboard-scrollable region above the composer.');
+    assert.deepEqual(longHistoryLayout, { bounded: true, keyboard: true, composerVisible: true, jumpShown: true, jumpScrolled: true });
+    console.log('PASS: native WebView keeps a controlled long-history fixture above the composer and returns to the latest message on request.');
     await page.locator('nav a[data-route="home"]').click();
     await page.getByRole('link', { name: 'Como funciona' }).click();
     await page.locator('#about .cards').waitFor({ state: 'visible' });
