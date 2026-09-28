@@ -89,6 +89,13 @@ async function operatePreviewDialog(page, file) {
       `Native ${route} heading must not sit behind appearance controls`);
     }
     await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.evaluate(() => {
+      const brand = document.querySelector('header .brand').getBoundingClientRect();
+      const alpha = document.querySelector('header .development').getBoundingClientRect();
+      const nav = document.querySelector('header > nav').getBoundingClientRect();
+      return alpha.top < brand.bottom && alpha.left >= brand.right && nav.top >= brand.bottom - 1;
+    }), true, 'Native narrow header should keep Alpha with the brand');
     await page.setViewportSize(initialViewport);
     await page.locator('nav a[data-route="home"]').click();
     console.log('PASS: native Home, Explore, Projects and Workspace headings reflow at 360px / 200% text without clipping or appearance overlap.');
@@ -357,13 +364,16 @@ async function operatePreviewDialog(page, file) {
         assert.ok((await page.locator('#record-outcome').textContent()).length > 0);
         assert.ok((await page.locator('#record-title').textContent()).length > 0);
         assert.ok((await page.locator('#record-next').textContent()).length > 0);
-        assert.equal(await page.locator('#record-activity').isVisible(), true, 'Recorded current activity must be visible without opening details');
+        assert.equal(await page.locator('#record-activity').isVisible(), false, 'Technical activity should start collapsed');
         if (await page.evaluate(() => innerWidth === 1180 && innerHeight === 820)) assert.equal(await page.evaluate(() => {
           window.scrollTo(0, 0);
-          const activity = document.getElementById('record-activity').getBoundingClientRect();
-          return activity.top >= 0 && activity.top < innerHeight;
-        }), true, 'Native real recorded activity should begin in the initial workspace viewport');
+          const next = document.getElementById('record-next').getBoundingClientRect();
+          return next.top >= 0 && next.top < innerHeight;
+        }), true, 'Native real recorded next step should begin in the initial workspace viewport');
         assert.equal(await page.locator('#record-next').isVisible(), true, 'Recorded next step must be visible without opening details');
+        await page.locator('#record-activity-details summary').click();
+        assert.equal(await page.locator('#record-activity').isVisible(), true, 'Original native Forge activity remains available on request');
+        await page.locator('#record-activity-details summary').click();
         assert.equal(await page.locator('#record-outcome').isVisible(), false, 'Supporting details begin collapsed');
         assert.match(await page.locator('#record-decisions').textContent(), /neste acompanhamento/);
         assert.equal(await page.locator('#record-direction-card').isVisible(), true);

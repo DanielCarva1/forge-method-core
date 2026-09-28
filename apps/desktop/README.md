@@ -8895,3 +8895,55 @@ also passed again with 39 restored messages and a full process restart; it
 did not send a turn or edit files. No manual GitHub CI or candidate rebuild
 followed publication. Continue the broader Desktop goal from a different
 user-visible gap; do not repeat this history-navigation slice.
+
+### Post-0.1.42 progress readability — 2026-09-28
+
+The installed 0.1.42 narrow progress view still put a long, often technical
+*current activity* above the recorded next step. The source now keeps the real
+stage and next step visible, but places the unmodified activity text behind
+**Ver atividade registrada**. The detail closes when the project changes,
+progress is invalidated, or a fresh record is read; no summary or new state is
+invented. A hidden native Windows WebView run read the real Forge record for
+this repository and exercised the disclosure. The before/after narrow images
+are `D:/Temp/User/forge-0140-installed-progress.png` and
+`D:/Temp/User/forge-progress-simplified-mobile.png` (different installed/source
+versions, same project record); a wide source capture is
+`D:/Temp/User/forge-progress-simplified-native.png`. Browser tests cover
+initially collapsed activity, original text on request, and closure after
+refresh; the full browser UI suite and hidden native smoke passed. No Rust
+source, Codex Send, installer, commit, push or publication occurred in this
+post-0.1.42 slice. Public 0.1.42 does not include this refinement. Keep it
+with the next coherent UI package rather than publishing another one-change
+alpha. Model-attributed tokens and BRL/Pro usage remain UNKNOWN.
+
+### Desktop 0.1.43 progress readability package — 2026-09-28
+
+The next coherent UI package keeps the actual Forge stage and recorded next
+step visible in **Andamento**, while placing the unchanged long activity text
+under **Ver atividade registrada**. Switching projects, invalidating progress
+or refreshing the record closes this optional detail. At 390px the Alpha badge
+shares the brand row, and at 360px with 200% text the header can reflow without
+overlapping navigation. No new backend state, inferred summary or Codex turn
+was introduced. The native narrow source screenshot is
+`D:/Temp/User/forge-progress-compact-header-mobile.png`.
+
+The complete browser UI suite, 11 JavaScript unit tests, Desktop `cargo check`,
+51 non-ignored Rust tests (one ignored), strict Clippy and hidden native debug
+smoke passed. One NSIS candidate was built at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.43_x64-setup.exe`,
+123,064,514 bytes, SHA-256
+`67C4CDEDCD7DE175AFB8553427301AB396780B414913898CD1D42A10233793C3`.
+Its adjacent SHA-256 sidecar records the same hash. Silent installation over
+public 0.1.42 exited 0 and preserved the candidate bytes. The installed exe
+reports ProductVersion 0.1.43, SHA-256
+`29123D1FFC2246F6AD8DBAD30C0FE2B82AB1CFC59B48C11B5174F96736225F62`.
+Hidden native smoke of that installed package passed, including actual Forge
+record readback; real Codex Send was NOT_RUN. The bundled core remains 0.13.2.
+No manual GitHub CI or core workspace suite ran. Clean-machine setup, physical
+mobile-device use and manual screen-reader acceptance remain NOT_RUN; per-model
+tokens, BRL cost and Pro quota attribution remain UNKNOWN.
+
+**State:** the candidate is installed and tested; commit, push, tag, public
+download and downloaded-file installation verification remain. No worker was
+delegated. After publication, continue the broad Desktop goal at the next
+user-visible gap rather than treating this refinement as product completion.

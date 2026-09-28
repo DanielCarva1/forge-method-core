@@ -154,6 +154,7 @@ export function setProgressProject(value) {
   workspacePhase.textContent = '';
   resetHistory();
   document.querySelector('.record-more').open = false;
+  document.getElementById('record-activity-details').open = false;
   recordPanel.hidden = !value;
   result.hidden = true;
   questionsShortcut.hidden = true;
@@ -169,6 +170,7 @@ export function invalidateProgress() {
   workspacePhase.hidden = true;
   workspacePhase.textContent = '';
   resetHistory();
+  document.getElementById('record-activity-details').open = false;
   if (!result.hidden || pending) {
     result.hidden = true;
     status.textContent = 'A conversa pode ter mudado o trabalho. Atualize o andamento para conferir.';
@@ -189,6 +191,7 @@ async function loadProgress() {
   workspacePhase.hidden = true;
   workspacePhase.textContent = '';
   resetHistory();
+  document.getElementById('record-activity-details').open = false;
   const hadFocus = document.activeElement === button;
   pending = true; controls(); result.hidden = true;
   questionsShortcut.hidden = true;

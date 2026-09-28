@@ -277,6 +277,9 @@ summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 6
 .record-timeline-item + .record-timeline-item { margin-top: 16px; }
 .record-timeline-item strong { display: block; }
 .record-timeline-item p { margin: 4px 0 0; }
+.record-activity-details { margin-top: 12px; }
+.record-activity-details summary { color: var(--muted); }
+.record-activity-details .record-timeline-item { padding-block: 4px 12px; }
 .record-detail { margin-top: 16px; }
 .record-outcome { margin-top: 0; }
 .record-detail p, .record-question p { margin: 6px 0 0; }
@@ -414,6 +417,9 @@ footer { color: var(--muted); padding-block: 8px 32px; }
   .workspace.project-ready .conversation-body { flex: 0 1 auto; min-height: 150px; max-height: min(50vh, 480px); }
 }
 @media (max-width: 700px) {
+  header .brand { order: 1; }
+  header .development { order: 2; margin-left: auto; }
+  header > nav { order: 3; flex: 1 0 100%; }
   .record-stage { grid-template-columns: 1fr; gap: 4px; }
   .workspace.project-ready:not(.preview-loaded) .preview { grid-template-columns: 1fr; }
   .workspace.project-ready:not(.preview-loaded) .preview-empty,

@@ -77,6 +77,13 @@ async function openConversation(page) {
       `${route} heading must not sit behind appearance controls at 360px and 200% text size`);
     }
     await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.equal(await page.evaluate(() => {
+      const brand = document.querySelector('header .brand').getBoundingClientRect();
+      const alpha = document.querySelector('header .development').getBoundingClientRect();
+      const nav = document.querySelector('header > nav').getBoundingClientRect();
+      return alpha.top < brand.bottom && alpha.left >= brand.right && nav.top >= brand.bottom - 1;
+    }), true, 'Narrow header should keep Alpha beside the brand and navigation below without overlap');
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.getByRole('link', { name: 'Início', exact: true }).click();
     await page.getByRole('link', { name: 'Continuar um projeto' }).click();
@@ -1024,9 +1031,9 @@ async function openConversation(page) {
       if (width === 1180) assert.equal(await page.evaluate(() => {
         window.scrollTo(0, 0);
         const preview = document.getElementById('project-preview').getBoundingClientRect();
-        const activity = document.getElementById('record-activity').getBoundingClientRect();
-        return preview.top >= 0 && preview.bottom < activity.top && activity.top < innerHeight;
-      }), true, 'Preview choice and real recorded activity should be discoverable alongside an empty conversation at 1180x820');
+        const next = document.getElementById('record-next').getBoundingClientRect();
+        return preview.top >= 0 && preview.bottom < next.top && next.top < innerHeight;
+      }), true, 'Preview choice and the recorded next step should be discoverable alongside an empty conversation at 1180x820');
     }
     await page.setViewportSize({ width: 1280, height: 720 });
     assert.equal(await page.locator('#project-record').isVisible(), true);
@@ -1044,8 +1051,11 @@ async function openConversation(page) {
     assert.equal(await page.locator('#workspace-phase').isVisible(), true);
     assert.equal(await page.locator('#record-activity').textContent(), 'Recorded activity');
     assert.equal(await page.getByRole('group', { name: 'Atividade e próximo passo registrados' }).isVisible(), true);
-    assert.equal(await page.locator('#record-activity').isVisible(), true, 'Current recorded activity is readable without opening details');
+    assert.equal(await page.locator('#record-activity').isVisible(), false, 'Technical activity should not dominate the first read');
     assert.equal(await page.locator('#record-next').isVisible(), true, 'The recorded next step is readable without opening details');
+    await page.locator('#record-activity-details summary').click();
+    assert.equal(await page.locator('#record-activity').isVisible(), true, 'Original recorded activity remains available on request');
+    await page.locator('#record-activity-details summary').click();
     assert.equal(await page.locator('#record-outcome').isVisible(), false, 'Supporting objective stays in optional details');
     assert.equal(await page.locator('#record-outcome').textContent(), 'Accepted outcome');
     await page.locator('#message-text').fill('Minha ideia continua aqui.');
@@ -1150,9 +1160,12 @@ async function openConversation(page) {
     assert.equal(await page.locator('#record-constraints-list').getByText('Which direction should we choose?').count(), 0);
     assert.match(await page.locator('#record-direction').textContent(), /não comprova aprovação humana independente/);
     if (process.env.FORGE_DIRECTION_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_DIRECTION_SCREENSHOT, fullPage: true });
+    await page.locator('#record-activity-details summary').click();
+    assert.equal(await page.locator('#record-activity').isVisible(), true);
     await page.evaluate(() => { window.progressRevision = 2; window.progressRevisionKind = 'material_supersession'; window.progressConstraint = '<script>changed</script>'; window.progressRecordedPending = 1; });
     await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
+    assert.equal(await page.locator('#record-activity-details').evaluate(node => node.open), false, 'Refreshing should close old activity details');
     assert.equal(await page.locator('#record-direction-card').evaluate(node => node.open), false, 'Refreshing returns long objective details to their quiet state');
     await page.locator('#record-direction-card > summary').click();
     await page.locator('#record-direction summary').click();
