@@ -1,11 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.51` is the current source version;
-`0.1.50` is the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.50-alpha.1).
+Independent Tauri application. Desktop `0.1.51` is the current source version
+and the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.51-alpha.1).
 Its installer was downloaded without authentication, hash-checked, installed
 and tested in the hidden native app.
-Later source edits described in the latest checkpoint are not yet in that
-installer.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -9565,3 +9563,30 @@ diff, commit/push/tag, publish the exact
 candidate and sidecar, verify anonymous download bytes and reinstall. Then
 continue closing substantial UI gaps; do not treat this alpha package as
 whole-product completion.
+
+### Desktop 0.1.51 public readback — 2026-09-28
+
+The package commit `9b9579ff` was pushed on `codex/desktop-shell`, tagged
+`desktop-v0.1.51-alpha.1`, and published as the
+[0.1.51 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.51-alpha.1).
+Unauthenticated downloads returned 123,047,917 bytes and SHA-256
+`9B069FD0561BD059719C3EF22159553ABFAA10EBF2CD6D3F35A9B5BE14351F91`,
+identical to the candidate and public sidecar. Silent installation of the
+downloaded file exited 0, preserved its hash and installed ProductVersion
+0.1.51, executable SHA-256
+`A7949DA7CF6B762C8824DEA14D279A00A2991CB28CB2F3B8E80072BC82668748`.
+The downloaded installation passed the hidden native smoke with real Forge
+record readback and native rejection of unsafe web addresses. The candidate's
+separate 39-message real-Codex conversation readback across two process starts
+also passed with protected preview and zero Send calls. One earlier candidate
+smoke had a first-attempt record lookup failure and succeeded on retry; the
+downloaded-install smoke passed that read on the first attempt. The cause of
+the intermittent occurrence was not isolated, so first-read stability remains
+PARTIAL. External-browser launch, clean-machine setup, new provider login and
+manual screen-reader acceptance remain NOT_RUN. No manual GitHub CI ran. No
+worker was delegated; per-model tokens, BRL cost and Pro quota attribution
+remain UNKNOWN.
+
+**Next smallest step:** continue the real-user create/chat/result/restart
+journey and close the next substantial UI or reliability gap. Do not infer
+whole-product completion from this alpha release.

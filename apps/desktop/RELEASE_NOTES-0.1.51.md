@@ -44,8 +44,13 @@ installed ProductVersion 0.1.51, executable SHA-256
 The installed candidate passed the hidden native smoke. It also restored the
 preserved 39-message real Codex conversation across two process launches,
 rendered its protected local page preview and made no Send call or artifact
-change. In the native smoke that checked unsafe-link rejection, the first
+change. In one native smoke that checked unsafe-link rejection, the first
 automatic Forge-record read returned the generic lookup error; the explicit
 retry succeeded. That occurrence was not traced to a root cause, so first-read
-stability is not claimed. Public download verification will be recorded only
-after publication.
+stability is not claimed. The public installer and sidecar were downloaded
+without authentication. The installer was byte-identical to the candidate;
+silent installation of the downloaded file passed with the same installed
+executable hash. The downloaded installation passed the hidden native smoke,
+including native rejection of unsafe addresses and first-attempt Forge-record
+readback. This is same-machine evidence, not clean-machine installation or an
+actual external-browser launch.
