@@ -222,11 +222,11 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.getByRole('heading', { name: 'Onde estamos' }).isVisible(), true);
       assert.equal(await page.locator('#project-record').isVisible(), true);
       assert.equal(await page.locator('.preview-empty').isVisible(), true);
-      assert.match(await page.locator('#preview-intro').textContent(), /agente indicar um arquivo.*escolher um arquivo da pasta/);
+      assert.match(await page.locator('#preview-intro').textContent(), /arquivos citados na conversa.*escolha um da pasta/);
       assert.equal(await page.locator('.project #project-record').count(), 0);
       if (await page.evaluate(() => innerWidth > 900)) {
         assert.equal(await page.evaluate(() => document.querySelector('#project-preview').getBoundingClientRect().top < document.querySelector('.project').getBoundingClientRect().top), true);
-        assert.equal(await page.evaluate(() => document.querySelector('#project-record').getBoundingClientRect().top < document.querySelector('#project-preview').getBoundingClientRect().top), true);
+        assert.equal(await page.evaluate(() => document.querySelector('#project-preview').getBoundingClientRect().top < document.querySelector('#project-record').getBoundingClientRect().top), true);
         const nativeViewport = await page.evaluate(() => {
           window.scrollTo(0, 0);
           const history = document.querySelector('.conversation-body').getBoundingClientRect();

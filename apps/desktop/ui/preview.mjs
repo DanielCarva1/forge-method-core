@@ -131,23 +131,15 @@ function clearResult() {
   pathLabel.textContent = '';
 }
 
-function promotePreview() {
-  if (workspace.classList.contains('preview-engaged')) return;
-  const focused = panel.contains(document.activeElement) ? document.activeElement : null;
-  workspace.insertBefore(panel, recordPanel);
-  workspace.classList.add('preview-engaged');
-  focused?.focus({ preventScroll: true });
-}
-
 export function setPreviewProject(value) {
   if (project && (!value || value.project_root !== project.project_root)) {
     try { void globalThis.__TAURI__?.core?.invoke('clear_preview_site').catch(() => {}); } catch { /* UI remains safe if native cleanup fails. */ }
   }
   project = value;
-  // A real record precedes an empty preview. Once the person opens a file,
-  // the result becomes primary; DOM and visual order change together.
+  // Keep the result entry point ahead of the record in both visual and
+  // keyboard order, including before any file has been selected.
   if (value) {
-    workspace.insertBefore(recordPanel, panel);
+    workspace.insertBefore(panel, recordPanel);
     if (workspace.lastElementChild !== projectPanel) workspace.append(projectPanel);
   }
   if (!value && workspace.firstElementChild !== projectPanel) workspace.prepend(projectPanel);
@@ -162,7 +154,6 @@ export function setPreviewProject(value) {
   panel.hidden = !value;
   workspace.classList.toggle('project-ready', !!value);
   workspace.classList.remove('preview-loaded');
-  workspace.classList.remove('preview-engaged');
   setMobileWorkspaceProject(value);
   status.hidden = true;
   status.textContent = '';
@@ -262,7 +253,6 @@ choose.addEventListener('click', async () => {
     }
     if (typeof selected !== 'string') throw new Error('Invalid path');
     filePath = selected;
-    promotePreview();
     clearResult();
     document.getElementById('preview-heading').focus({ preventScroll: true });
   } catch {
@@ -313,7 +303,6 @@ export async function previewLinkedFile(candidate) {
       : null;
   if (!rooted) return;
   filePath = rooted;
-  promotePreview();
   controls();
   await loadPreview();
   // Keep both the result and any validation error visible to the reader.

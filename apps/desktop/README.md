@@ -8453,3 +8453,42 @@ Only then make the decision history itself readable in the Desktop; do not
 solve the gap with desktop-owned history or inferred wording. Keep this
 tested source for a coherent future alpha package rather than publishing a
 new installer for one button.
+
+### Desktop 0.1.38 preview-first workspace — 2026-09-28
+
+Core historical decision audit was inspected: it retains references,
+digests and statuses, but not verified original question-and-choice prose.
+No new historical decision claim or Desktop-owned store was added. The
+pending-choice handoff above remains deliberately source-aware and unsent.
+
+The workspace now shows a compact empty **Prévia do resultado** and
+**Escolher arquivo** above the Forge record. The record's stage is compact
+without hiding its text; its activity and next step remain readable below.
+Loaded results stay in that position, so visual, DOM and keyboard order no
+longer swap after file selection. The short preview copy still distinguishes
+local preview from publication. At 1180px the installed native screenshot
+`D:/Temp/User/forge-0138-installed.png` was reviewed: preview choice, stage,
+start of activity, conversation and Send appear in the first window.
+
+Browser suite, JS syntax and `git diff --check` passed. Desktop `cargo check`,
+51 non-ignored Desktop tests and strict Clippy passed; there was no workspace
+Rust suite for this UI/version-only change. One release NSIS candidate was
+built at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.38_x64-setup.exe`,
+123,097,865 bytes, SHA-256
+`5506BA4E61DA833A8FA381559E22DA8D3F9F4C645212EB0D16B02A0B2AB05797`.
+Silent install over public 0.1.37 returned exit 0; candidate hash did not
+change. Installed executable reports 0.1.38, SHA-256
+`EDA191ACC39A624AF77EFC78CF1881D8751F0184879F819EC6F9B4CBC5B4AA82`.
+Installed hidden native smoke passed, including actual Windows folder/PDF
+selection, onboarding and Forge record readback. Actual Codex Send for the
+pending-choice action was NOT_RUN; its controlled IPC proof does not verify
+historical prose. No manual GitHub CI was run. Per-model token/BRL/Pro-quota
+metrics remain UNKNOWN.
+
+**Publication boundary:** selectively commit/push the reviewed 0.1.38 source,
+tag and publish this exact candidate under the standing alpha authorization,
+then download without authentication, verify size/hash, reinstall that
+download and repeat hidden native smoke. Do not rebuild the candidate.
+Afterward, keep progressing on meaningful remaining product journeys rather
+than treating this visual refinement as completion of the full Desktop goal.

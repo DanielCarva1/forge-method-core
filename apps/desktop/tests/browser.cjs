@@ -245,17 +245,17 @@ async function openConversation(page) {
     await projectsPage.locator('#project-location summary').click();
     assert.equal(await projectsPage.locator('#project-preview').isVisible(), true);
     assert.equal(await projectsPage.locator('.preview-empty').isVisible(), true, 'An actual empty state precedes any local result');
-    assert.match(await projectsPage.locator('#preview-intro').textContent(), /agente indicar um arquivo.*escolher um arquivo da pasta/);
+    assert.match(await projectsPage.locator('#preview-intro').textContent(), /arquivos citados na conversa.*escolha um da pasta/);
     assert.equal(await projectsPage.locator('#preview-status').isVisible(), false, 'The untouched empty state does not repeat the same message');
-    assert.equal(await projectsPage.evaluate(() => document.querySelector('#project-record').getBoundingClientRect().top < document.querySelector('.preview').getBoundingClientRect().top), true, 'The real record precedes an empty preview');
-    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['project-conversation', 'project-record', 'project-preview', 'project-panel']);
+    assert.equal(await projectsPage.evaluate(() => document.querySelector('#project-preview').getBoundingClientRect().top < document.querySelector('#project-record').getBoundingClientRect().top), true, 'The empty preview entry point is visible before the record');
+    assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['project-conversation', 'project-preview', 'project-record', 'project-panel']);
     assert.equal(await projectsPage.locator('#refresh-preview').isVisible(), false, 'No refresh action before choosing a file');
     assert.equal(await projectsPage.locator('#project-record').isVisible(), true);
     assert.equal(await projectsPage.locator('.project #project-record').count(), 0, 'Record is a separate panel, not folder setup');
     await projectsPage.evaluate(() => { window.previewChoice = 'D:\\one\\result.txt'; });
     await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
     await projectsPage.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
-    assert.equal(await projectsPage.evaluate(() => document.activeElement?.id), 'preview-heading', 'Moving the preview above the record gives keyboard focus to its result heading');
+    assert.equal(await projectsPage.evaluate(() => document.activeElement?.id), 'preview-heading', 'Choosing a result gives keyboard focus to its heading');
     assert.deepEqual(await projectsPage.locator('.workspace > .panel').evaluateAll(nodes => nodes.map(node => node.id || (node.classList.contains('conversation') ? 'conversation' : 'project'))), ['project-conversation', 'project-preview', 'project-record', 'project-panel']);
     assert.equal(await projectsPage.locator('#refresh-preview').isVisible(), true);
     assert.equal(await projectsPage.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), true);
@@ -993,9 +993,10 @@ async function openConversation(page) {
       if (width === 1180 && process.env.FORGE_COMPOSER_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_COMPOSER_SCREENSHOT });
       if (width === 1180) assert.equal(await page.evaluate(() => {
         window.scrollTo(0, 0);
+        const preview = document.getElementById('project-preview').getBoundingClientRect();
         const activity = document.getElementById('record-activity').getBoundingClientRect();
-        return activity.top >= 0 && activity.bottom <= innerHeight;
-      }), true, 'The real recorded activity should be readable alongside an empty conversation at 1180x820');
+        return preview.top >= 0 && preview.bottom < activity.top && activity.top < innerHeight;
+      }), true, 'Preview choice and real recorded activity should be discoverable alongside an empty conversation at 1180x820');
     }
     await page.setViewportSize({ width: 1280, height: 720 });
     assert.equal(await page.locator('#project-record').isVisible(), true);
@@ -1007,7 +1008,7 @@ async function openConversation(page) {
       window.scrollTo(0, 0);
       const record = document.getElementById('project-record').getBoundingClientRect();
       return record.top >= 0 && record.top < innerHeight;
-    }), true, 'The empty preview must leave the project record visible in the initial desktop viewport');
+    }), true, 'The compact empty preview must leave the project record visible in the initial desktop viewport');
     assert.equal(await page.evaluate(() => window.progressCalls || 0), 1);
     assert.equal(await page.locator('#workspace-phase').textContent(), 'Etapa do projeto: Descoberta');
     assert.equal(await page.locator('#workspace-phase').isVisible(), true);
