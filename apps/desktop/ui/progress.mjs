@@ -11,6 +11,7 @@ const workspacePhase = document.getElementById('workspace-phase');
 const historyPanel = document.getElementById('direction-history');
 const historyButton = document.getElementById('refresh-direction-history');
 const historyStatus = document.getElementById('direction-history-status');
+const explainHistory = document.getElementById('explain-direction-history');
 const historyList = document.getElementById('direction-history-list');
 let project;
 let generation = 0;
@@ -44,6 +45,7 @@ function resetHistory() {
   historyPending = false;
   historyPanel.open = false;
   historyList.replaceChildren();
+  explainHistory.hidden = true;
   historyStatus.textContent = 'Abra esta seção para consultar o histórico.';
 }
 function showList(sectionId, listId, values) {
@@ -260,12 +262,16 @@ async function loadProgress() {
     const pendingPanel = document.getElementById('record-pending');
     pendingPanel.hidden = data.recorded_pending_count === 0 && data.suggested_questions.length === 0;
     questionsShortcut.hidden = pendingPanel.hidden;
+    questionsShortcut.textContent = data.recorded_pending_count
+      ? data.suggested_questions.length ? 'Ver escolhas e perguntas' : 'Ver escolhas'
+      : 'Ver perguntas';
     explainPending.hidden = data.recorded_pending_count === 0;
+    document.getElementById('record-suggestion-note').hidden = data.recorded_pending_count === 0 || data.suggested_questions.length === 0;
     document.getElementById('record-pending-heading').textContent = data.recorded_pending_count
       ? 'Escolhas em aberto' : 'Perguntas para explorar';
     document.getElementById('record-pending-count').textContent = data.recorded_pending_count === 0
-      ? 'O Forge não recuperou o texto de uma escolha pendente. As perguntas abaixo são sugestões, não decisões suas.'
-      : `${data.recorded_pending_count} ${data.recorded_pending_count === 1 ? 'decisão pendente foi recuperada' : 'decisões pendentes foram recuperadas'} do registro. O texto original da escolha não está disponível aqui. Peça ao agente para consultar a origem antes de decidir.`;
+      ? 'O Forge sugeriu perguntas para explorar nesta etapa. Elas não são decisões suas nem interrompem a conversa.'
+      : `O Forge indica ${data.recorded_pending_count} ${data.recorded_pending_count === 1 ? 'escolha pendente' : 'escolhas pendentes'} no registro, mas não mostra aqui ${data.recorded_pending_count === 1 ? 'a pergunta original' : 'as perguntas originais'}. Peça ao agente para consultar a origem antes de decidir.`;
     showSuggestedQuestions(data.suggested_questions);
     result.hidden = false;
     status.textContent = `${data.status === 'absent' && direction ? 'A direção foi registrada no Forge, mas o próximo trabalho ainda não.' : labels[data.status]} Consultado às ${new Date().toLocaleTimeString('pt-BR')}.`;
@@ -392,6 +398,7 @@ function renderHistory(data) {
     return card;
   });
   historyList.replaceChildren(...rows);
+  explainHistory.hidden = data.revisions.length === 0;
   historyStatus.textContent = data.revisions.length
     ? `${data.revisions.length} ${data.revisions.length === 1 ? 'direção registrada' : 'direções registradas'}${data.earlier_count ? `; ${data.earlier_count} anterior(es) não exibida(s) neste limite de leitura` : ''}. As versões anteriores não são a direção atual.`
     : 'Nenhuma direção anterior foi recuperada deste registro.';
@@ -426,3 +433,7 @@ historyPanel.addEventListener('toggle', () => {
   if (historyPanel.open && !historyLoaded) void loadHistory();
 });
 historyButton.addEventListener('click', loadHistory);
+explainHistory.addEventListener('click', () => {
+  if (!project || !historyLoaded || explainHistory.hidden) return;
+  prepareQuestion('Consulte no Forge o histórico do objetivo registrado deste projeto. Explique em português claro o que mudou entre a direção atual e as anteriores e identifique a origem que o Forge informa. Não presuma minha aprovação, não trate perguntas sugeridas como acordos e não altere o registro.', generation);
+});

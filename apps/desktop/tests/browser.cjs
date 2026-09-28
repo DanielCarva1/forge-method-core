@@ -1049,14 +1049,17 @@ async function openConversation(page) {
     await page.locator('#message-text').fill('');
     assert.equal(await page.locator('#record-pending').isVisible(), true);
     assert.equal(await page.locator('#record-questions-shortcut').isVisible(), true);
+    assert.equal(await page.locator('#record-questions-shortcut').textContent(), 'Ver perguntas');
     assert.equal(await page.locator('#explain-pending').isVisible(), false, 'A suggestion alone is not a recovered pending decision');
     assert.equal(await page.locator('#record-pending').evaluate(node => !!(node.compareDocumentPosition(document.getElementById('record-direction-card')) & Node.DOCUMENT_POSITION_FOLLOWING)), true,
       'Unresolved questions should precede the optional technical direction and history');
     await page.locator('#record-questions-shortcut').click();
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'record-pending-heading');
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'The questions shortcut must not choose or send anything');
-    assert.match(await page.locator('#record-pending').textContent(), /não são acordos/);
+    assert.equal(await page.locator('#record-suggestion-note').isVisible(), false, 'Suggestion-only copy should not repeat the same warning');
     assert.equal(await page.locator('#record-pending-heading').textContent(), 'Perguntas para explorar');
+    assert.match(await page.locator('#record-pending-count').textContent(), /sugeriu perguntas para explorar/);
+    assert.doesNotMatch(await page.locator('#record-pending-count').textContent(), /escolha pendente/);
     assert.equal(await page.locator('#record-suggested').evaluate(node => node.open), false,
       'Technical Forge suggestions should not fill the default project view');
     assert.equal(await page.locator('#record-suggestions').isVisible(), false);
@@ -1073,9 +1076,16 @@ async function openConversation(page) {
     assert.match(await page.locator('#record-suggestions').textContent(), /sugestão do Forge, não uma decisão sua/);
     assert.equal(await page.locator('#record-suggestions script').count(), 0);
     assert.equal(await page.evaluate(() => window.historyCalls || 0), 0, 'History must be opt-in');
+    assert.equal(await page.locator('#explain-direction-history').isVisible(), false);
     await page.locator('#direction-history summary').click();
     await page.locator('#direction-history-status').filter({ hasText: '2 direções registradas' }).waitFor();
     assert.equal(await page.evaluate(() => window.historyCalls), 1);
+    assert.equal(await page.locator('#explain-direction-history').isVisible(), true);
+    await page.getByRole('button', { name: 'Entender mudanças na conversa' }).click();
+    assert.match(await page.locator('#message-text').inputValue(), /histórico do objetivo registrado deste projeto/);
+    assert.match(await page.locator('#message-text').inputValue(), /Não presuma minha aprovação/);
+    assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Explaining objective history must remain an unsent draft');
+    await page.locator('#message-text').fill('');
     assert.match(await page.locator('#direction-history-list article').first().textContent(), /Direção atual/);
     assert.match(await page.locator('#direction-history-list article').last().textContent(), /Direção anterior/);
     await page.locator('#direction-history-list article').first().locator('summary').click();
@@ -1125,8 +1135,8 @@ async function openConversation(page) {
     assert.match(await page.locator('#record-revision').textContent(), /Direção revista.*revisão 2/);
     assert.equal(await page.locator('#record-constraints-list li').textContent(), '<script>changed</script>');
     assert.equal(await page.locator('#record-direction script').count(), 0);
-    assert.match(await page.locator('#record-pending-count').textContent(), /1 decisão pendente foi recuperada/);
-    assert.match(await page.locator('#record-pending-count').textContent(), /texto original da escolha não está disponível aqui/);
+    assert.match(await page.locator('#record-pending-count').textContent(), /indica 1 escolha pendente/);
+    assert.match(await page.locator('#record-pending-count').textContent(), /não mostra aqui a pergunta original/);
     const stateNames = { current: 'Em andamento', stale: 'Acompanhamento desatualizado', blocked: 'Há uma pendência', completed: 'Esta parte foi concluída', abandoned: 'Encerrado sem concluir' };
     for (const state of ['current', 'stale', 'blocked', 'completed', 'abandoned', 'absent']) {
       await page.evaluate(state => { window.progressState = state; }, state);
@@ -1204,6 +1214,9 @@ async function openConversation(page) {
     assert.equal(await page.locator('#explain-pending').isVisible(), true);
     assert.equal(await page.locator('#explain-suggestions').isVisible(), false);
     assert.equal(await page.locator('#record-pending-heading').textContent(), 'Escolhas em aberto');
+    assert.equal(await page.locator('#record-questions-shortcut').textContent(), 'Ver escolhas');
+    assert.equal(await page.locator('#record-suggestion-note').isVisible(), false);
+    assert.match(await page.locator('#record-pending-count').textContent(), /indica 1 escolha pendente/);
     await page.locator('#message-text').fill('Minha pergunta original.');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Andamento' }).click();
@@ -1230,7 +1243,9 @@ async function openConversation(page) {
     assert.equal(await page.locator('#record-direction').isVisible(), false, 'A suggestion must not become an accepted direction');
     assert.equal(await page.locator('#record-direction-card').isVisible(), false, 'No recorded direction means no visible agreement card');
     assert.equal(await page.locator('#record-pending').isVisible(), true);
-    assert.match(await page.locator('#record-pending-count').textContent(), /1 decisão pendente foi recuperada/);
+    assert.match(await page.locator('#record-pending-count').textContent(), /indica 1 escolha pendente/);
+    assert.equal(await page.locator('#record-questions-shortcut').textContent(), 'Ver escolhas e perguntas');
+    assert.equal(await page.locator('#record-suggestion-note').isVisible(), true);
     assert.equal(await page.locator('#record-suggested').evaluate(node => node.open), false);
     assert.match(await page.locator('#record-suggestions').textContent(), /sugestão do Forge, não uma decisão sua/);
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Reading a suggestion must not send or decide');

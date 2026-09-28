@@ -431,6 +431,13 @@ async function operatePreviewDialog(page, file) {
         assert.ok(count >= 1, 'Expected at least one real accepted objective revision');
         assert.match(await page.locator('#direction-history-list article').first().textContent(), /Direção atual/);
         assert.equal(await page.locator('#direction-history-list script').count(), 0);
+        const draft = page.locator('#message-text');
+        const originalDraft = await draft.inputValue();
+        await page.getByRole('button', { name: 'Entender mudanças na conversa' }).click();
+        assert.match(await draft.inputValue(), /histórico do objetivo registrado deste projeto/);
+        assert.match(await draft.inputValue(), /Não presuma minha aprovação/);
+        assert.equal(await page.locator('#messages article').count(), 0, 'Objective-history explanation only prepares a draft');
+        await draft.fill(originalDraft);
         console.log(`PASS: native read-only Forge report projected ${count} real direction revision(s) on demand.`);
       }
       if (process.env.FORGE_TEST_RESUME_THREAD_ID) {

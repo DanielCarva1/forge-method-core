@@ -1,9 +1,10 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.33` is the current source version
-and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.33-alpha.1).
-Its installer was downloaded without authentication, hash-checked, installed
-over `0.1.32` and tested in the hidden native app.
+Independent Tauri application. Desktop `0.1.40` is the current source version.
+The [0.1.39 alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.39-alpha.1)
+is the latest published installer until the 0.1.40 candidate is verified and
+published. Its installer was downloaded without authentication, hash-checked,
+installed over `0.1.38` and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -8641,3 +8642,74 @@ Pro-quota impact remain UNKNOWN.
 real app journeys, prioritizing concrete gaps over another visual-only alpha.
 Keep the installed 0.1.39 distinct from future source work. Preserve the
 pending-choice/historical-prose boundary and the one existing Codex history.
+
+### Desktop record wording and real Codex activation — 2026-09-28
+
+The unbounded Desktop goal remains active; this is one source-only UI slice,
+not a new installed alpha. A hidden installed-0.1.39 run sent a first message
+in a disposable project, received a real Codex reply, then reloaded the
+WebView and recovered the same conversation without resending. Its Codex
+thread `01a0e800-fae9-7350-aa80-1d6c78b8e662` shows actual bundled Forge
+`start`, `workflow resume` and `guide` calls. The reply asked the user to
+choose an audience for a recipe-site idea; it did not write or publish files.
+The disposable WebView/project profile was removed by the native harness.
+This proves the general first-Send/reply/recovery path, **not** a real Send
+from the suggestion-explanation action; that exact prompt remains NOT_RUN.
+
+Visual review of the installed record exposed misleading wording when Forge
+returned suggested questions but no recorded pending choice: the UI claimed
+it had failed to recover a pending choice that did not exist. Source now says
+the questions are suggestions. For an actual pending choice without suggestion
+text, the shortcut says **Ver escolhas** and says the Forge provided a count
+but not the original question. The suggestion-only view avoids repeating its
+warning; the extra distinction appears only when both kinds are present.
+When both kinds are present, the shortcut says **Ver escolhas e perguntas**.
+No human decision is inferred or recorded. The Desktop README introduction
+was also corrected from the stale 0.1.33 claim to the published 0.1.39.
+
+Changed locally: `ui/index.html`, `ui/progress.mjs`, `tests/browser.cjs` and
+this README. `node --check` for both JavaScript files, the complete browser
+UI suite, one cached Desktop debug build and a hidden native smoke with real
+Forge readback passed. No Rust source or core changed; no workspace-wide
+Rust tests, manual GitHub CI, commit, push, installer or publication in this
+slice. The installed public app remains 0.1.39 and does **not** have this
+wording. Per-model tokens, BRL-equivalent cost and Pro-quota impact remain
+UNKNOWN; no claimed savings. No worker is active.
+
+**Next smallest step:** keep dogfooding the nontechnical create/chat/result
+journey in the hidden native app and fix a concrete UI/BE gap, then group
+these source changes with that larger slice for a single package boundary.
+Do not rebuild/publish an installer solely for this copy adjustment.
+
+### Desktop 0.1.40 installed candidate — 2026-09-28
+
+The record-clarity slice now includes a useful objective-history action:
+**Entender mudanças na conversa** prepares, without sending, a plain-language
+question about existing objective revisions and their recorded origin. It
+does not infer human approval or reconstruct historical decision wording.
+`ui/index.html`, `ui/progress.mjs`, browser/native tests, the Desktop
+version/lock/config and `RELEASE_NOTES-0.1.40.md` are in this package.
+
+Browser UI suite, eight JS unit tests, Desktop `cargo check`, 51 non-ignored
+Rust tests, strict Clippy and one release build passed. A debug and then the
+installed candidate passed hidden native Windows smoke. The candidate run
+read four real Forge objective revisions and prepared the new request in the
+same unsent composer. The installed narrow record screenshot is
+`D:/Temp/User/forge-0140-installed-progress.png`. No manual GitHub CI, core
+workspace suite or actual Codex Send for this exact history request ran.
+
+One NSIS candidate was built at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.40_x64-setup.exe`,
+123,058,432 bytes, SHA-256
+`44B1DC739437C6C8E2E9B363674C9CB1DE5EBF44289477FD3437BE5B0D06A13A`.
+The adjacent `.sha256` sidecar contains that hash. Silent installation over
+public 0.1.39 returned exit 0 without changing the candidate. The installed
+executable reports Windows ProductVersion 0.1.40, SHA-256
+`53823B2296F733CC45472FFF3EDD7F2A5E241B447CADE56825ECB28ECCD170A6`.
+The public release and downloaded-file readback are still pending. Per-model
+tokens, BRL-equivalent cost and Pro-quota impact remain UNKNOWN.
+
+**Next exact step:** review the local diff, selectively commit/push the
+0.1.40 source, publish exactly this tested candidate under the standing alpha
+authorization, download anonymously to compare size/hash, reinstall those
+bytes and repeat hidden native smoke. Do not rebuild the candidate.
