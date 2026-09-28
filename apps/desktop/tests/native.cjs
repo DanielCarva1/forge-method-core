@@ -486,6 +486,34 @@ async function operatePreviewDialog(page, file) {
       console.log('PASS: one folder action initialized a new project and its Forge record without a second setup command.');
       assert.equal(await page.locator('#connect-agent').isEnabled(), true);
       assert.equal(await page.locator('#send-message').isEnabled(), true);
+      if (process.env.FORGE_TEST_NARROW_ZOOM === '1') {
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Conversa' }).click();
+        await page.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
+        const zoomLayout = await page.evaluate(() => ({
+          documentWidth: document.documentElement.scrollWidth,
+          viewportWidth: innerWidth,
+          pane: document.querySelector('.workspace')?.dataset.mobilePane,
+        }));
+        assert.equal(zoomLayout.pane, 'conversation');
+        assert.ok(zoomLayout.documentWidth <= zoomLayout.viewportWidth, `Narrow enlarged conversation overflows horizontally: ${JSON.stringify(zoomLayout)}`);
+        const enlargedComposer = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
+        await enlargedComposer.fill('Minha ideia tem detalhes. '.repeat(25));
+        await enlargedComposer.focus();
+        await page.keyboard.press('Tab');
+        assert.equal(await page.evaluate(() => document.activeElement?.id), 'send-message');
+        const sendBounds = await page.locator('#send-message').evaluate(node => {
+          const bounds = node.getBoundingClientRect();
+          return { top: bounds.top, bottom: bounds.bottom, height: bounds.height, width: bounds.width, viewportHeight: innerHeight };
+        });
+        assert.ok(sendBounds.top >= 0 && sendBounds.bottom <= sendBounds.viewportHeight && sendBounds.height >= 44 && sendBounds.width >= 44,
+          `Keyboard focus must reveal the enlarged Send target: ${JSON.stringify(sendBounds)}`);
+        if (process.env.FORGE_NARROW_ZOOM_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_NARROW_ZOOM_SCREENSHOT, fullPage: false });
+        await enlargedComposer.fill('');
+        await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+        await page.setViewportSize(initialViewport);
+        console.log('PASS: native 390px enlarged conversation keeps the composer and Send reachable by keyboard without horizontal overflow.');
+      }
       if (process.env.FORGE_TEST_TERMINAL_RECORD === '1') {
         await page.evaluate(() => {
           const originalCore = window.__TAURI__.core;

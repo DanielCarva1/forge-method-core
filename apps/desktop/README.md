@@ -8042,3 +8042,25 @@ not free and are included as rework, not hidden as one successful attempt.
 **Next product step:** work on a remaining user-visible gap rather than
 repeating the now-proven real-Codex narrow journey. Keep the Forge Desktop
 goal active; no new release is needed for this test-only change.
+
+### Desktop narrow enlarged-text check — 2026-09-28
+
+The installed public 0.1.33 binary was checked again on an isolated hidden
+Windows desktop at 390 x 844 with the root text enlarged to 36px. In a
+confirmed disposable project, a long unsent draft remained in the composer,
+the document had no horizontal overflow, and keyboard Tab from the composer
+focused a fully visible **Enviar** target at least 44px in both dimensions.
+The native screenshot at `D:/Temp/User/forge-0133-narrow-zoom.png` was reviewed:
+text wraps without clipping, although the always-visible Codex access warning
+and long draft require vertical scrolling at this large size. No Send was made
+and no model usage was incurred by this check. The focused hidden native smoke
+and JavaScript syntax passed. This is Windows WebView zoom evidence, not an
+actual mobile-device virtual-keyboard, safe-area or screen-reader test; those
+parts of #95 remain NOT_RUN. No product CSS/Rust change or new installer was
+needed because this check found no lost control or clipping. The only changed
+source is the optional native zoom assertion in `tests/native.cjs`; no
+subagent was used and per-model cost attribution remains UNKNOWN.
+
+**Next product step:** inspect a different remaining user-visible journey or
+accessibility gap; do not turn this passing zoom probe into a claim that #95 or
+mobile access is complete.
