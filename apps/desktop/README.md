@@ -1,10 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.40` is the current source version.
-The [0.1.39 alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.39-alpha.1)
-is the latest published installer until the 0.1.40 candidate is verified and
-published. Its installer was downloaded without authentication, hash-checked,
-installed over `0.1.38` and tested in the hidden native app.
+Independent Tauri application. Desktop `0.1.40` is the current source version
+and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.40-alpha.1).
+Its installer was downloaded without authentication, hash-checked, installed
+over `0.1.39` and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -8713,3 +8712,26 @@ tokens, BRL-equivalent cost and Pro-quota impact remain UNKNOWN.
 0.1.40 source, publish exactly this tested candidate under the standing alpha
 authorization, download anonymously to compare size/hash, reinstall those
 bytes and repeat hidden native smoke. Do not rebuild the candidate.
+
+### Desktop 0.1.40 public readback — 2026-09-28
+
+Package commit `740a926f` was pushed on `codex/desktop-shell`; annotated tag
+`desktop-v0.1.40-alpha.1` points to it. The exact candidate and its SHA-256
+sidecar were published in the [0.1.40 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.40-alpha.1).
+Unauthenticated downloads returned 123,058,432 bytes and SHA-256
+`44B1DC739437C6C8E2E9B363674C9CB1DE5EBF44289477FD3437BE5B0D06A13A`,
+identical to the tested candidate and sidecar. Silent installation of those
+downloaded bytes returned exit 0 without changing the installer hash. The
+installed executable reports ProductVersion 0.1.40 and SHA-256
+`53823B2296F733CC45472FFF3EDD7F2A5E241B447CADE56825ECB28ECCD170A6`.
+Downloaded-installation hidden native smoke passed, including four real
+objective revisions and the unsent history-explanation action. No manual
+GitHub CI. The bundled core remains 0.13.2. Clean-machine setup, physical
+mobile-device use, manual screen-reader acceptance and actual Codex replies
+to the new explanation prompts remain NOT_RUN. Per-model tokens,
+BRL-equivalent cost and Pro-quota impact remain UNKNOWN.
+
+**Next product slice:** continue testing and improving the complete
+first-use/create/chat/result/return journey, not another isolated copy polish.
+Keep the published 0.1.40 distinct from future source work. Preserve the
+one existing Codex history and do not fabricate historical decision prose.
