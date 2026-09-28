@@ -1032,6 +1032,7 @@ async function openConversation(page) {
     await page.locator('#message-text').fill('');
     assert.equal(await page.locator('#record-pending').isVisible(), true);
     assert.equal(await page.locator('#record-questions-shortcut').isVisible(), true);
+    assert.equal(await page.locator('#explain-pending').isVisible(), false, 'A suggestion alone is not a recovered pending decision');
     assert.equal(await page.locator('#record-pending').evaluate(node => !!(node.compareDocumentPosition(document.getElementById('record-direction-card')) & Node.DOCUMENT_POSITION_FOLLOWING)), true,
       'Unresolved questions should precede the optional technical direction and history');
     await page.locator('#record-questions-shortcut').click();
@@ -1165,6 +1166,23 @@ async function openConversation(page) {
     assert.equal(await page.locator('#record-direction').isVisible(), false);
     assert.equal(await page.locator('#record-pending').isVisible(), false);
     assert.equal(await page.locator('#record-questions-shortcut').isVisible(), false);
+    assert.equal(await page.locator('#explain-pending').isVisible(), false);
+    await page.evaluate(() => { window.progressRecordedPending = 1; });
+    await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
+    await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
+    assert.equal(await page.locator('#record-pending').isVisible(), true, 'A recorded pending decision remains visible without a current suggestion');
+    assert.equal(await page.locator('#explain-pending').isVisible(), true);
+    await page.locator('#message-text').fill('Minha pergunta original.');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Andamento' }).click();
+    await page.getByRole('button', { name: 'Entender escolhas em aberto' }).click();
+    assert.equal(await page.locator('#project-conversation').isVisible(), true, 'Pending-decision explanation opens the same narrow conversation');
+    assert.match(await page.locator('#message-text').inputValue(), /^Minha pergunta original\.\n\nConsulte o registro do Forge/);
+    assert.match(await page.locator('#message-text').inputValue(), /Se não conseguir recuperá-lo, diga isso claramente/);
+    assert.match(await page.locator('#message-text').inputValue(), /não registre uma decisão/);
+    assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Explaining a pending decision must not send or record a choice');
+    await page.locator('#message-text').fill('');
+    await page.setViewportSize({ width: 1280, height: 720 });
     await page.evaluate(() => {
       window.progressRecordedPending = 1;
       window.progressSuggestedQuestions = [{
@@ -1191,6 +1209,7 @@ async function openConversation(page) {
     await page.locator('#progress-status').filter({ hasText: 'Não foi possível atualizar' }).waitFor();
     assert.equal(await page.locator('#progress-result').isVisible(), false);
     assert.equal(await page.locator('#record-questions-shortcut').isVisible(), false);
+    assert.equal(await page.locator('#explain-pending').isVisible(), false, 'A failed refresh must not leave a stale decision action available');
     await page.evaluate(() => { window.progressMissingFocus = false; window.progressDecisionCount = 1; });
     await page.evaluate(() => { window.progressFailure = true; });
     await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();

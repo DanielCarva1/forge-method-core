@@ -8410,3 +8410,46 @@ the stage/decision view more understandable from authoritative data without
 fabricating historical accepted wording; inspect #92's core-owned readback
 before changing contracts. Keep real-agent continuation evidence distinct
 from the release's earlier smoke checks.
+
+### Pending-choice handoff after 0.1.37 — 2026-09-28
+
+The full Desktop goal remains active. For #92, the current record already
+shows the authoritative current stage, Work Focus, suggested questions and
+versioned accepted objective. The core's workflow decision audit, however,
+retains policy/decision references, status, selected alternative reference
+and digests; `DecisionNeedRaisedEvent.question_digest` is not the original
+question. The Desktop's pinned core 0.13.2 exposes no verified historical
+question/choice prose. Do not label these references as human-approved
+agreements or reconstruct text from current policy material.
+
+The source now offers **Entender escolhas em aberto** only when the Forge
+readback reports at least one recovered pending decision. It appends an
+unsent request to the existing conversation asking the agent to consult the
+original source, report inability to recover it honestly, and avoid treating
+suggestions as chosen. It preserves the user's draft, switches from the
+narrow progress pane to the conversation, and never records a decision.
+Suggestions without a recovered pending decision do not expose this action;
+failed/invalid refresh hides it. No core write, extra project store or
+automatic provider turn was introduced.
+
+Changed locally from public 0.1.37: `ui/index.html`, `ui/progress.mjs`,
+`ui/styles.css`, `tests/browser.cjs`, `tests/native.cjs`, and this checkpoint.
+The browser suite passed the pending-only, suggestion-only, narrow-pane,
+draft-preservation and failure paths. Rebuilt debug UI passed hidden native
+Windows smoke with actual project/Forge readback. A separate **controlled**
+native IPC response with one pending decision exercised the new action,
+confirmed no Send and restored actual IPC afterward; screenshot
+`D:/Temp/User/forge-0138-pending-action.png` was reviewed. This controlled
+response does not prove the real project has a recovered pending decision,
+nor that a historical question can be recovered. Actual Codex Send for the
+new action was NOT_RUN. No Rust source changed; no Rust test loop was needed
+for this UI-only slice. The installed/public 0.1.37 is unchanged. No subagent
+was used; per-model tokens, API-equivalent BRL and Pro allowance impact are
+UNKNOWN.
+
+**Next exact step:** inspect the core-owned historical decision readback and
+its release/pinning path for a verifiable question-and-choice projection.
+Only then make the decision history itself readable in the Desktop; do not
+solve the gap with desktop-owned history or inferred wording. Keep this
+tested source for a coherent future alpha package rather than publishing a
+new installer for one button.

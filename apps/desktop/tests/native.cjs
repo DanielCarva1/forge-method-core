@@ -384,6 +384,35 @@ async function operatePreviewDialog(page, file) {
           await draft.fill(originalDraft);
         }
       } else assert.equal(await page.locator('#record-questions-shortcut').isVisible(), false);
+      if (process.env.FORGE_TEST_PENDING_ACTION === '1') {
+        await page.evaluate(() => {
+          const core = window.__TAURI__.core;
+          const facade = Object.create(core);
+          window.pendingActionCore = core;
+          Object.defineProperty(facade, 'invoke', { value: async (command, args) => {
+            const data = await core.invoke(command, args);
+            return command === 'inspect_progress'
+              ? { ...data, recorded_pending_count: 1, suggested_questions: [] }
+              : data;
+          } });
+          window.__TAURI__.core = facade;
+        });
+        await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
+        await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
+        assert.equal(await page.getByRole('button', { name: 'Entender escolhas em aberto' }).isVisible(), true);
+        if (process.env.FORGE_PENDING_SCREENSHOT) await page.locator('#project-record').screenshot({ path: process.env.FORGE_PENDING_SCREENSHOT });
+        const draft = page.locator('#message-text');
+        const originalDraft = await draft.inputValue();
+        const messageCount = await page.locator('#messages article').count();
+        await page.getByRole('button', { name: 'Entender escolhas em aberto' }).click();
+        assert.match(await draft.inputValue(), /Se não conseguir recuperá-lo, diga isso claramente/);
+        assert.equal(await page.locator('#messages article').count(), messageCount, 'A controlled pending decision must prepare a draft, not send a turn');
+        await draft.fill(originalDraft);
+        await page.evaluate(() => { window.__TAURI__.core = window.pendingActionCore; delete window.pendingActionCore; });
+        await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
+        await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
+        console.log('PASS: native WebView prepares a pending-decision explanation from controlled readback without sending or recording a choice.');
+      }
       if (process.env.FORGE_RECORD_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_RECORD_SCREENSHOT, fullPage: true });
       console.log(`PASS: actual bounded Forge workflow readback displayed ${recordedPhase === 'Próximo passo ainda não registrado' ? 'its honest empty state' : 'separately from agent activity'}.`);
       if (process.env.FORGE_TEST_DIRECTION_HISTORY === '1') {

@@ -3,6 +3,7 @@ const button = document.getElementById('refresh-progress');
 const status = document.getElementById('progress-status');
 const result = document.getElementById('progress-result');
 const questionsShortcut = document.getElementById('record-questions-shortcut');
+const explainPending = document.getElementById('explain-pending');
 const startConversation = document.getElementById('record-start-conversation');
 const recordPanel = document.getElementById('project-record');
 const workspacePhase = document.getElementById('workspace-phase');
@@ -151,6 +152,7 @@ export function setProgressProject(value) {
   recordPanel.hidden = !value;
   result.hidden = true;
   questionsShortcut.hidden = true;
+  explainPending.hidden = true;
   status.textContent = value ? 'Atualizando o andamento pelo Forge…' : 'Escolha uma pasta para ver o andamento do projeto.';
   controls();
   if (value) void loadProgress();
@@ -166,6 +168,7 @@ export function invalidateProgress() {
     status.textContent = 'A conversa pode ter mudado o trabalho. Atualize o andamento para conferir.';
   }
   questionsShortcut.hidden = true;
+  explainPending.hidden = true;
   pending = false;
   controls();
 }
@@ -182,6 +185,7 @@ async function loadProgress() {
   const hadFocus = document.activeElement === button;
   pending = true; controls(); result.hidden = true;
   questionsShortcut.hidden = true;
+  explainPending.hidden = true;
   if (hadFocus) status.focus();
   status.textContent = 'Atualizando o andamento pelo Forge…';
   const notice = setTimeout(() => {
@@ -250,6 +254,7 @@ async function loadProgress() {
     const pendingPanel = document.getElementById('record-pending');
     pendingPanel.hidden = data.recorded_pending_count === 0 && data.suggested_questions.length === 0;
     questionsShortcut.hidden = pendingPanel.hidden;
+    explainPending.hidden = data.recorded_pending_count === 0;
     document.getElementById('record-pending-count').textContent = data.recorded_pending_count === 0
       ? 'Nenhuma decisão pendente foi recuperada do registro.'
       : `${data.recorded_pending_count} ${data.recorded_pending_count === 1 ? 'decisão pendente foi recuperada' : 'decisões pendentes foram recuperadas'} do registro. O texto original da escolha não está disponível aqui. Peça ao agente para consultar a origem antes de decidir.`;
@@ -275,6 +280,19 @@ questionsShortcut.addEventListener('click', () => {
   const heading = document.getElementById('record-pending-heading');
   heading.focus({ preventScroll: true });
   heading.scrollIntoView({ block: 'start', behavior: 'smooth' });
+});
+explainPending.addEventListener('click', () => {
+  if (!project || result.hidden || explainPending.hidden) return;
+  const composer = document.getElementById('message-text');
+  if (composer.disabled) {
+    status.textContent = 'Aguarde a conversa ficar pronta para pedir uma explicação.';
+    return;
+  }
+  const request = 'Consulte o registro do Forge deste projeto e explique quais decisões ainda estão pendentes e por quê. Mostre a pergunta e as opções somente se conseguir verificar o texto na fonte original. Se não conseguir recuperá-lo, diga isso claramente. Não trate sugestões como escolhas minhas e não registre uma decisão.';
+  composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n\n${request}` : request;
+  showWorkspacePane('conversation');
+  composer.focus();
+  status.textContent = 'Pedido preparado na conversa. Revise e envie quando quiser; nenhuma decisão foi registrada.';
 });
 document.getElementById('explain-record').addEventListener('click', () => {
   if (!project || result.hidden || document.getElementById('record-work').hidden) return;
