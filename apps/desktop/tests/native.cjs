@@ -1143,9 +1143,14 @@ async function operatePreviewDialog(page, file) {
       const projectForNewIdea = path.join(profile, 'new-project');
       await access(path.join(projectForNewIdea, '.forge-method.yaml'));
       await page.locator('nav a[data-route="workspace"]').click();
+      if (process.env.FORGE_TEST_PROCESS_RESTART === '1') {
+        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await page.locator('#agent-status').filter({ hasText: 'Desconectado' }).waitFor({ timeout: 10000 });
+      }
+      if (!await page.locator('#project-setup').evaluate(node => node.open)) await page.locator('#project-setup summary').click();
       await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(projectForNewIdea);
       await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
-      await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 25000 });
+      await page.waitForFunction(() => document.querySelector('#project-status')?.textContent?.includes('Projeto pronto'), null, { timeout: 25000 });
       await page.locator('nav a[data-route="explore"]').click();
       await page.getByRole('link', { name: /Arte e criação/ }).click();
       await page.locator('#workspace').waitFor({ state: 'visible' });

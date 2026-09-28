@@ -8377,3 +8377,36 @@ hierarchy/accessibility. Prioritize a user-visible path not yet proven with
 real Codex on the installed version, then a truthful UI for historical
 project decisions only after a core-owned historical readback exists. Keep
 the installed 0.1.37 release distinct from future source-only work.
+
+### Installed 0.1.37 real-Codex continuation — 2026-09-28
+
+Two opt-in hidden native runs exercised a narrow 390px window and a fresh
+disposable Forge project against the installed, publicly downloaded 0.1.37
+executable. In both, **Enviar** delivered one actual Codex reply and WebView
+reload recovered both user and reply without a second Send. The second run
+also passed a full native process restart: the same conversation reopened in
+order, with `send_message` invocation count zero during restoration. These
+are same-machine, existing-auth proof of conversation continuity; they do
+not repeat the older file-creation/change journey or prove clean-machine
+sign-in. No real user project was modified.
+
+Both broad runs finished with a **test-harness FAIL after the real journey**,
+not a demonstrated product failure. The first waited for `#project-status`
+to be visually displayed after a project was ready, although the narrow UI
+intentionally hides that status node. The second reached the full-restart
+PASS, then tried to fill the project-folder field while the project setup
+was collapsed. `tests/native.cjs` now waits for authoritative status text
+and opens setup (disconnecting the resumed agent first) when combining
+restart with the separate new-idea check. Syntax, diff check and the ordinary
+hidden native new-idea journey passed after this harness edit. The combined
+restart + new-idea tail was **NOT_RUN after correction**; do not count the
+whole broad script as PASS. A third real Codex turn was intentionally not
+spent merely to rerun that low-return test tail. The two earlier turns and
+test retries are rework; model-attributed token/BRL/quota data remain UNKNOWN.
+
+Changed after publication: `tests/native.cjs` and this checkpoint only.
+The installed/public 0.1.37 bytes are unchanged. Next product slice: make
+the stage/decision view more understandable from authoritative data without
+fabricating historical accepted wording; inspect #92's core-owned readback
+before changing contracts. Keep real-agent continuation evidence distinct
+from the release's earlier smoke checks.
