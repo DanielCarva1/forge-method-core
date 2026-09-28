@@ -267,7 +267,7 @@ summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 6
 #record-start-conversation { margin-top: 4px; }
 #record-questions-shortcut { margin: 8px 0 0 10px; }
 #record-questions-shortcut[hidden] { display: none; }
-#explain-pending[hidden] { display: none; }
+#explain-pending[hidden], #explain-suggestions[hidden] { display: none; }
 .record-stage { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 0 12px; margin: 12px 0; padding: 10px 16px; border-radius: 18px; background: var(--soft); }
 .record-stage[hidden] { display: none; }
 .record-stage .eyebrow { grid-column: 1 / -1; margin: 0; }
@@ -299,6 +299,9 @@ summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 6
 .record-direction p, .record-pending p { overflow-wrap: anywhere; }
 .record-pending { padding: 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--canvas); }
 .record-pending h4 { margin: 0 0 8px; }
+.record-pending > button:not([hidden]) { margin: 0 8px 8px 0; }
+.record-pending #record-suggested { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+.record-pending #record-suggested[hidden] { display: none; }
 .direction-history-list { display: grid; gap: 12px; margin-top: 16px; }
 .direction-entry { padding: 8px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--canvas); overflow-wrap: anywhere; }
 .direction-entry summary { display: list-item; }

@@ -4,6 +4,7 @@ const status = document.getElementById('progress-status');
 const result = document.getElementById('progress-result');
 const questionsShortcut = document.getElementById('record-questions-shortcut');
 const explainPending = document.getElementById('explain-pending');
+const explainSuggestions = document.getElementById('explain-suggestions');
 const startConversation = document.getElementById('record-start-conversation');
 const recordPanel = document.getElementById('project-record');
 const workspacePhase = document.getElementById('workspace-phase');
@@ -59,6 +60,7 @@ function showSuggestedQuestions(values) {
   const section = document.getElementById('record-suggested');
   const list = document.getElementById('record-suggestions');
   const current = generation;
+  section.open = false;
   list.replaceChildren(...values.map(suggestion => {
     const question = suggestion.question;
     const item = document.createElement('li');
@@ -108,6 +110,7 @@ function showSuggestedQuestions(values) {
     return item;
   }));
   section.hidden = values.length === 0;
+  explainSuggestions.hidden = values.length === 0;
 }
 function prepareQuestion(request, current) {
   const composer = document.getElementById('message-text');
@@ -153,6 +156,7 @@ export function setProgressProject(value) {
   result.hidden = true;
   questionsShortcut.hidden = true;
   explainPending.hidden = true;
+  explainSuggestions.hidden = true;
   status.textContent = value ? 'Atualizando o andamento pelo Forge…' : 'Escolha uma pasta para ver o andamento do projeto.';
   controls();
   if (value) void loadProgress();
@@ -169,6 +173,7 @@ export function invalidateProgress() {
   }
   questionsShortcut.hidden = true;
   explainPending.hidden = true;
+  explainSuggestions.hidden = true;
   pending = false;
   controls();
 }
@@ -186,6 +191,7 @@ async function loadProgress() {
   pending = true; controls(); result.hidden = true;
   questionsShortcut.hidden = true;
   explainPending.hidden = true;
+  explainSuggestions.hidden = true;
   if (hadFocus) status.focus();
   status.textContent = 'Atualizando o andamento pelo Forge…';
   const notice = setTimeout(() => {
@@ -255,8 +261,10 @@ async function loadProgress() {
     pendingPanel.hidden = data.recorded_pending_count === 0 && data.suggested_questions.length === 0;
     questionsShortcut.hidden = pendingPanel.hidden;
     explainPending.hidden = data.recorded_pending_count === 0;
+    document.getElementById('record-pending-heading').textContent = data.recorded_pending_count
+      ? 'Escolhas em aberto' : 'Perguntas para explorar';
     document.getElementById('record-pending-count').textContent = data.recorded_pending_count === 0
-      ? 'Nenhuma decisão pendente foi recuperada do registro.'
+      ? 'O Forge não recuperou o texto de uma escolha pendente. As perguntas abaixo são sugestões, não decisões suas.'
       : `${data.recorded_pending_count} ${data.recorded_pending_count === 1 ? 'decisão pendente foi recuperada' : 'decisões pendentes foram recuperadas'} do registro. O texto original da escolha não está disponível aqui. Peça ao agente para consultar a origem antes de decidir.`;
     showSuggestedQuestions(data.suggested_questions);
     result.hidden = false;
@@ -289,6 +297,19 @@ explainPending.addEventListener('click', () => {
     return;
   }
   const request = 'Consulte o registro do Forge deste projeto e explique quais decisões ainda estão pendentes e por quê. Mostre a pergunta e as opções somente se conseguir verificar o texto na fonte original. Se não conseguir recuperá-lo, diga isso claramente. Não trate sugestões como escolhas minhas e não registre uma decisão.';
+  composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n\n${request}` : request;
+  showWorkspacePane('conversation');
+  composer.focus();
+  status.textContent = 'Pedido preparado na conversa. Revise e envie quando quiser; nenhuma decisão foi registrada.';
+});
+explainSuggestions.addEventListener('click', () => {
+  if (!project || result.hidden || explainSuggestions.hidden) return;
+  const composer = document.getElementById('message-text');
+  if (composer.disabled) {
+    status.textContent = 'Aguarde a conversa ficar pronta para pedir uma explicação.';
+    return;
+  }
+  const request = 'Consulte as perguntas que o Forge sugere agora para este projeto e explique em português claro o que elas significam e se alguma escolha minha é necessária. Não trate sugestões como decisões minhas e não registre uma escolha.';
   composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n\n${request}` : request;
   showWorkspacePane('conversation');
   composer.focus();

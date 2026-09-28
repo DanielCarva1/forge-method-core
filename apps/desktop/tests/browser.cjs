@@ -1056,6 +1056,19 @@ async function openConversation(page) {
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'record-pending-heading');
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'The questions shortcut must not choose or send anything');
     assert.match(await page.locator('#record-pending').textContent(), /não são acordos/);
+    assert.equal(await page.locator('#record-pending-heading').textContent(), 'Perguntas para explorar');
+    assert.equal(await page.locator('#record-suggested').evaluate(node => node.open), false,
+      'Technical Forge suggestions should not fill the default project view');
+    assert.equal(await page.locator('#record-suggestions').isVisible(), false);
+    assert.equal(await page.getByRole('button', { name: 'Entender sugestões na conversa' }).isVisible(), true);
+    await page.locator('#message-text').fill('Quero entender meu projeto.');
+    await page.getByRole('button', { name: 'Entender sugestões na conversa' }).click();
+    assert.match(await page.locator('#message-text').inputValue(), /^Quero entender meu projeto\.\n\nConsulte as perguntas que o Forge sugere/);
+    assert.match(await page.locator('#message-text').inputValue(), /Não trate sugestões como decisões minhas/);
+    assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Explaining suggestions must not send or register a decision');
+    await page.locator('#message-text').fill('');
+    await page.locator('#record-suggested summary').click();
+    assert.equal(await page.locator('#record-suggestions').isVisible(), true);
     assert.match(await page.locator('#record-suggestions').textContent(), /Can test sooner/);
     assert.match(await page.locator('#record-suggestions').textContent(), /sugestão do Forge, não uma decisão sua/);
     assert.equal(await page.locator('#record-suggestions script').count(), 0);
@@ -1189,6 +1202,8 @@ async function openConversation(page) {
     await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
     assert.equal(await page.locator('#record-pending').isVisible(), true, 'A recorded pending decision remains visible without a current suggestion');
     assert.equal(await page.locator('#explain-pending').isVisible(), true);
+    assert.equal(await page.locator('#explain-suggestions').isVisible(), false);
+    assert.equal(await page.locator('#record-pending-heading').textContent(), 'Escolhas em aberto');
     await page.locator('#message-text').fill('Minha pergunta original.');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Andamento' }).click();
@@ -1216,6 +1231,7 @@ async function openConversation(page) {
     assert.equal(await page.locator('#record-direction-card').isVisible(), false, 'No recorded direction means no visible agreement card');
     assert.equal(await page.locator('#record-pending').isVisible(), true);
     assert.match(await page.locator('#record-pending-count').textContent(), /1 decisão pendente foi recuperada/);
+    assert.equal(await page.locator('#record-suggested').evaluate(node => node.open), false);
     assert.match(await page.locator('#record-suggestions').textContent(), /sugestão do Forge, não uma decisão sua/);
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Reading a suggestion must not send or decide');
     await page.setViewportSize({ width: 390, height: 844 });

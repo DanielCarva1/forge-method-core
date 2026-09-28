@@ -8573,3 +8573,46 @@ BRL-equivalent cost and Pro-quota impact remain UNKNOWN.
 Next: continue closing concrete UI/BE journeys rather than treating this layout
 refinement as completion. Bundle it with a coherent future desktop alpha,
 validate that installer, and only then describe the new layout as installed.
+
+### Desktop 0.1.39 candidate — 2026-09-28
+
+The Explore alignment above is bundled with a concrete project-record UX fix.
+On a real Forge readback, current suggested questions were verbose, technical
+and sometimes in English; at 390px they made the default progress view several
+screens long even when no historical pending-choice text was recovered. The
+source now titles suggestion-only material **Perguntas para explorar**, shows
+an unsent **Entender sugestões na conversa** action, and keeps the exact Forge
+question/alternative wording under **Ver perguntas e opções originais**. A
+recovered pending choice remains separately identified as **Escolhas em
+aberto**. Refresh or project change collapses the original suggestions; no
+suggestion is turned into a human decision.
+
+Changed for this package: `ui/index.html`, `ui/progress.mjs`,
+`ui/styles.css`, `tests/browser.cjs`, `tests/native.cjs`, the Desktop
+version/lock/config and `RELEASE_NOTES-0.1.39.md`. The prior Explore change is
+commit `7c010dbc`. Browser suite, JS syntax, Desktop `cargo check`, 51
+non-ignored Rust tests, strict Clippy and one release build passed. Hidden
+native Windows smoke passed on the installed candidate with a real Forge
+record, original question action, the new unsent explanation action and
+mobile screenshot `D:/Temp/User/forge-0139-installed-mobile-progress.png`.
+Another installed run used actual Windows folder, file and PDF dialogs. A
+controlled pending-choice readback passed without Send. Actual Codex Send for
+the new suggestion action is NOT_RUN. The pinned core remains 0.13.2; no
+core or independent historical-question persistence was added.
+
+One NSIS candidate was built at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.39_x64-setup.exe`,
+123,163,988 bytes, SHA-256
+`E221914913EBA0C2FADFB4567CFFEC4D5FB8A107F36B596B3D0389BAA0C7D1A3`.
+Silent installation over public 0.1.38 returned exit 0; the candidate hash
+did not change. Installed executable reports 0.1.39, SHA-256
+`542CE6A62A62AD437291EB1D96CDD3F18602C873D07B3D7F6C856AA3A823D9BC`.
+The public release and downloaded-file readback are still pending. No manual
+GitHub CI was run. Per-model tokens, BRL-equivalent cost and Pro-quota impact
+remain UNKNOWN.
+
+**Next:** selectively commit/push the reviewed source, publish this exact
+tested candidate under the standing alpha authorization, download without
+authentication and compare size/hash; install those bytes and repeat hidden
+native smoke. Do not rebuild the candidate. Then continue the wider Desktop
+goal; do not call this alpha the finished product.
