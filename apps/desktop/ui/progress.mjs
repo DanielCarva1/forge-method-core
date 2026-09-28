@@ -399,8 +399,9 @@ function renderHistory(data) {
   });
   historyList.replaceChildren(...rows);
   explainHistory.hidden = data.revisions.length === 0;
+  explainHistory.textContent = data.revisions.length + data.earlier_count === 1 ? 'Entender esta direção na conversa' : 'Entender mudanças na conversa';
   historyStatus.textContent = data.revisions.length
-    ? `${data.revisions.length} ${data.revisions.length === 1 ? 'direção registrada' : 'direções registradas'}${data.earlier_count ? `; ${data.earlier_count} anterior(es) não exibida(s) neste limite de leitura` : ''}. As versões anteriores não são a direção atual.`
+    ? `${data.revisions.length} ${data.revisions.length === 1 ? 'direção registrada' : 'direções registradas'}${data.earlier_count ? `; ${data.earlier_count} anterior(es) não exibida(s) neste limite de leitura` : ''}.${data.revisions.length + data.earlier_count > 1 ? ' As versões anteriores não são a direção atual.' : ''}`
     : 'Nenhuma direção anterior foi recuperada deste registro.';
 }
 async function loadHistory() {
@@ -435,5 +436,5 @@ historyPanel.addEventListener('toggle', () => {
 historyButton.addEventListener('click', loadHistory);
 explainHistory.addEventListener('click', () => {
   if (!project || !historyLoaded || explainHistory.hidden) return;
-  prepareQuestion('Consulte no Forge o histórico do objetivo registrado deste projeto. Explique em português claro o que mudou entre a direção atual e as anteriores e identifique a origem que o Forge informa. Não presuma minha aprovação, não trate perguntas sugeridas como acordos e não altere o registro.', generation);
+  prepareQuestion('Consulte no Forge o histórico do objetivo registrado deste projeto. Explique em português claro a direção atual e sua origem. Se houver versões anteriores, explique o que mudou; se não houver, diga isso sem inventar mudanças. Não presuma minha aprovação, não trate perguntas sugeridas como acordos e não altere o registro.', generation);
 });

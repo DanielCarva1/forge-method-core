@@ -967,10 +967,11 @@ async function openConversation(page) {
         }
         if (command === 'inspect_direction_history') {
           window.historyCalls = (window.historyCalls || 0) + 1;
-          return { earlier_count: 0, revisions: [
+          const revisions = [
             { active: false, origin: 'forge_cooperative_record', revision: 1, revision_kind: 'initial', outcome: 'Earlier direction', constraints: ['Keep files'], unacceptable_outcomes: [], accepted_at_unix: 1780000000 },
             { active: true, origin: 'forge_cooperative_record', revision: 2, revision_kind: 'material_supersession', outcome: '<script>Current direction</script>', constraints: [], unacceptable_outcomes: ['No deletion'], accepted_at_unix: 1781000000 },
-          ] };
+          ];
+          return { earlier_count: 0, revisions: window.historyOneRevision ? revisions.slice(1) : revisions };
         }
         if (command === 'start_project' || command === 'inspect_project') return { project_id: 'test-project', project_root: args.projectRoot };
           if (command === 'connect_agent') { window.agentEvents = args.events; window.connectedThread = args.threadId; return { thread_id: 'test-thread', messages: args.threadId ? window.resumeMessages || [{ id: 'saved-user', role: 'user', text: 'Saved decision' }, { id: 'saved-agent', role: 'agent', text: '## Partial reply\n- Saved item' }, { id: 'saved-incomplete', role: 'agent', text: '## Still incomplete', incomplete: true }] : [], resumed: !!args.threadId }; }
@@ -1083,6 +1084,7 @@ async function openConversation(page) {
     assert.equal(await page.locator('#explain-direction-history').isVisible(), true);
     await page.getByRole('button', { name: 'Entender mudanças na conversa' }).click();
     assert.match(await page.locator('#message-text').inputValue(), /histórico do objetivo registrado deste projeto/);
+    assert.match(await page.locator('#message-text').inputValue(), /Se houver versões anteriores/);
     assert.match(await page.locator('#message-text').inputValue(), /Não presuma minha aprovação/);
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Explaining objective history must remain an unsent draft');
     await page.locator('#message-text').fill('');
@@ -1092,6 +1094,15 @@ async function openConversation(page) {
     assert.equal(await page.locator('#direction-history-list article').first().locator('details').evaluate(node => node.open), true);
     assert.equal(await page.locator('#direction-history-list script').count(), 0, 'Recorded text must be literal');
     assert.match(await page.locator('#direction-history-list').textContent(), /não prova aprovação humana independente/);
+    await page.evaluate(() => { window.historyOneRevision = true; });
+    await page.getByRole('button', { name: 'Consultar histórico' }).click();
+    await page.locator('#direction-history-status').filter({ hasText: '1 direção registrada' }).waitFor();
+    assert.doesNotMatch(await page.locator('#direction-history-status').textContent(), /As versões anteriores/);
+    assert.equal(await page.locator('#direction-history-list article').count(), 1);
+    await page.locator('#message-text').fill('');
+    await page.getByRole('button', { name: 'Entender esta direção na conversa' }).click();
+    assert.match(await page.locator('#message-text').inputValue(), /se não houver, diga isso sem inventar mudanças/);
+    assert.equal(await page.evaluate(() => window.sendCalls), 0);
     if (process.env.FORGE_HISTORY_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_HISTORY_SCREENSHOT, fullPage: true });
     const questionDraft = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
     await questionDraft.fill('Minha ideia original.');

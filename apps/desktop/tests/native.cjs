@@ -433,7 +433,7 @@ async function operatePreviewDialog(page, file) {
         assert.equal(await page.locator('#direction-history-list script').count(), 0);
         const draft = page.locator('#message-text');
         const originalDraft = await draft.inputValue();
-        await page.getByRole('button', { name: 'Entender mudanças na conversa' }).click();
+        await page.getByRole('button', { name: count === 1 ? 'Entender esta direção na conversa' : 'Entender mudanças na conversa' }).click();
         assert.match(await draft.inputValue(), /histórico do objetivo registrado deste projeto/);
         assert.match(await draft.inputValue(), /Não presuma minha aprovação/);
         assert.equal(await page.locator('#messages article').count(), 0, 'Objective-history explanation only prepares a draft');

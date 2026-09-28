@@ -5,7 +5,7 @@ $temp = [System.IO.Path]::GetTempPath()
 $id = [guid]::NewGuid().ToString('N')
 $runner = Join-Path $temp "forge-native-hidden-$id.ps1"
 $log = Join-Path $temp "forge-native-hidden-$id.log"
-$testScript = if ($env:FORGE_NATIVE_TEST_SCRIPT -in @('upgrade-continuity.cjs', 'native-restart-guard.cjs', 'native-real-inflight.cjs', 'artifact-resume.cjs', 'native-real-change.cjs', 'native-forge-decision.cjs', 'native-personal-ideas.cjs', 'native-result-shortcut.cjs', 'native-real-result-readonly.cjs', 'native-auth.cjs', 'native-project-search.cjs')) { $env:FORGE_NATIVE_TEST_SCRIPT } else { 'native.cjs' }
+$testScript = if ($env:FORGE_NATIVE_TEST_SCRIPT -in @('upgrade-continuity.cjs', 'native-restart-guard.cjs', 'native-real-inflight.cjs', 'artifact-resume.cjs', 'native-real-change.cjs', 'native-real-prefilled-change.cjs', 'native-forge-decision.cjs', 'native-personal-ideas.cjs', 'native-result-shortcut.cjs', 'native-real-result-readonly.cjs', 'native-real-history-explanation.cjs', 'native-auth.cjs', 'native-project-search.cjs')) { $env:FORGE_NATIVE_TEST_SCRIPT } else { 'native.cjs' }
 $runnerBody = @'
 Set-Location '__REPO__'
 & node apps/desktop/tests/__SCRIPT__ *> '__LOG__'
@@ -62,7 +62,7 @@ public static class ForgeHiddenNativeTest {
 
 try {
   $powershell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
-  $timeoutMs = if ($testScript -eq 'native-personal-ideas.cjs') { [uint32]1380000 } elseif ($testScript -eq 'native-forge-decision.cjs' -and $env:FORGE_DECISION_CONTINUE -eq '1') { [uint32]720000 } elseif ($env:FORGE_TEST_ARTIFACT_JOURNEY -eq '1' -or $testScript -in @('native-real-inflight.cjs', 'native-forge-decision.cjs')) { [uint32]480000 } else { [uint32]300000 }
+  $timeoutMs = if ($testScript -eq 'native-personal-ideas.cjs') { [uint32]1380000 } elseif ($testScript -eq 'native-forge-decision.cjs' -and $env:FORGE_DECISION_CONTINUE -eq '1') { [uint32]720000 } elseif ($env:FORGE_TEST_ARTIFACT_JOURNEY -eq '1' -or $testScript -in @('native-real-inflight.cjs', 'native-forge-decision.cjs', 'native-real-history-explanation.cjs', 'native-real-prefilled-change.cjs')) { [uint32]480000 } else { [uint32]300000 }
   try { $code = [ForgeHiddenNativeTest]::Run($powershell, $runner, $timeoutMs) }
   catch {
     if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log }

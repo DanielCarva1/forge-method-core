@@ -1,7 +1,7 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.40` is the current source version
-and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.40-alpha.1).
+Independent Tauri application. Desktop `0.1.41` is the current source version;
+the latest [published alpha is 0.1.40](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.40-alpha.1).
 Its installer was downloaded without authentication, hash-checked, installed
 over `0.1.39` and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
@@ -8735,3 +8735,80 @@ BRL-equivalent cost and Pro-quota impact remain UNKNOWN.
 first-use/create/chat/result/return journey, not another isolated copy polish.
 Keep the published 0.1.40 distinct from future source work. Preserve the
 one existing Codex history and do not fabricate historical decision prose.
+
+### Post-0.1.40 native history explanation — 2026-09-28
+
+The first real Codex reply to the history-explanation action was verified in
+the hidden native debug app, using the existing disposable Jardim de ideias
+project and its existing Codex conversation. That Forge record has exactly one
+objective revision. The 0.1.40 action incorrectly promised to explain
+"changes" even when no previous revision existed. The source UI now labels
+this case **Entender esta direção na conversa**, omits the misleading
+previous-version sentence, and asks the agent to say plainly when there is no
+earlier version. Records with earlier revisions keep the changes label.
+
+The one-shot native test sent the request exactly once in the existing thread
+(`01a0e25f-27b4-7f73-b3e8-9298bccdde2f`). Codex replied that the current
+Jardim de ideias objective is for personal use without accounts or sharing,
+that its history contains only revision 1, and that the later local search is
+work under that direction rather than a replacement objective. It did not
+claim a new human approval or promote suggested questions into agreements.
+The app restored 36 ordered messages after a full native process restart;
+project-file hashes and Forge objective/decision history were unchanged.
+This is real Codex behavior through the native Desktop app, not a browser
+simulation. It proves this one bounded journey, not every possible chat or
+objective history.
+
+Changed source: `ui/progress.mjs`, `tests/browser.cjs`,
+`tests/native-hidden.ps1`, `tests/native-real-history-explanation.cjs` and this
+checkpoint. The complete browser UI suite, JavaScript syntax checks, cached
+Desktop debug build and hidden native one-shot test passed. No Rust source or
+core changed; no workspace-wide Rust test, manual GitHub CI, installer,
+commit, push or publication was performed in this slice. Public 0.1.40 and
+the installed copy do **not** include this correction. Model tokens,
+BRL-equivalent cost and Pro-quota effect are still UNKNOWN; no savings are
+claimed. The broader goal remains active: continue the first-use, create,
+chat, result and return journey, then package a coherent next alpha.
+
+### Desktop 0.1.41 installed candidate — 2026-09-28
+
+The real result-and-change journey was repeated in the hidden native debug
+app on the same disposable project after the history explanation. It opened
+an actual cited HTML result, clicked **Pedir mudança neste arquivo**, kept the
+button's prepared text and appended a concrete request. Codex received one
+Send, added the requested visible paragraph to `site/index.html`, returned a
+working file link, and the protected local preview displayed the new text.
+The full native process restart restored 39 ordered conversation messages
+without replay; all other project files stayed byte-identical. The visual
+capture is `D:/Temp/User/forge-next-prefilled-change.png`. This is a single
+real-provider disposable-fixture test, not a general guarantee of model edits.
+
+The 0.1.41 package includes the one-revision history-copy correction, the
+browser regression, native readback for one/four revisions, and the one-shot
+real-provider history and prefilled-change tests. The Desktop version is
+0.1.41 in Cargo manifest/lock and Tauri config. Release details and limits
+are in `RELEASE_NOTES-0.1.41.md`.
+
+Desktop `cargo check`, 51 non-ignored Rust tests, strict Clippy, eight JS unit
+tests, the complete browser UI suite and one NSIS release build passed.
+One candidate was built at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.41_x64-setup.exe`,
+123,095,229 bytes, SHA-256
+`3E35663AC600714476DB7737C8A585DA693D0DFAB8D02EE5159E995593B66A6E`.
+An adjacent SHA-256 sidecar records the same bytes. Silent installation over
+the published 0.1.40 returned exit 0 and left the candidate hash unchanged.
+The installed executable reports ProductVersion 0.1.41, SHA-256
+`8EB032BB93F2B9D38AF4B50AB9291EE1F912ECCEB8B515080E07E2DF69472550`.
+Hidden native installed-candidate smoke passed with real Forge readback for
+one and four objective revisions, onboarding, previews and responsive UI;
+it did not send another Codex turn. The real provider turns described above
+were run on the source debug build with the same packaged frontend, not yet
+on the installed candidate. The bundled core remains 0.13.2.
+
+**State:** candidate installed and tested; commit, push, tag and public
+download verification remain. No manual GitHub CI or core workspace suite
+was run. No worker was delegated. Per-model usage, BRL-equivalent cost and
+Pro quota attribution remain UNKNOWN; no savings claimed. After publication,
+keep the broad Desktop goal active for remaining visual, accessibility and
+supported-platform/distribution gaps rather than treating this alpha as the
+finished product.
