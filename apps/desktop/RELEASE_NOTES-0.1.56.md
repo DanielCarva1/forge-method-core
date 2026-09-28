@@ -34,5 +34,12 @@ Its 93-byte `.sha256` sidecar records the same hash. Silent installation over
 reports ProductVersion 0.1.56, SHA-256
 `D8E62767536AB93932540B901CEB098DA1BBD617B74A266524D776E31CD92F83`.
 The installed candidate passed the focused hidden-native real Codex
-reply/restart/Home-resume check without a second Send. Publication, anonymous
-download verification, and downloaded-installer readback remain pending.
+reply/restart/Home-resume check without a second Send. The exact candidate and
+sidecar were published as the
+[0.1.56 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.56-alpha.1).
+An unauthenticated download matched the candidate's 123,061,847 bytes and
+SHA-256. Silent installation of that download exited 0 and installed the same
+executable SHA-256. The downloaded installation passed the focused hidden-native
+real Forge project preparation/Home-reopen check without a Codex Send. This is
+same-machine evidence, not clean-machine setup or a second real Codex turn in
+the downloaded build.

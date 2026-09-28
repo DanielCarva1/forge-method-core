@@ -9993,3 +9993,20 @@ read-only Codex reply, app restart, Home resume, recovered reply, no second
 Send. No broad suite or manual GH CI ran. Next: commit/push/tag and publish
 this exact candidate under standing alpha authorization, then verify an
 anonymous download and installed readback. Do not rebuild the candidate.
+
+### Desktop 0.1.56 public readback — 2026-09-28
+
+Package commit `6ff1353c` and tag `desktop-v0.1.56-alpha.1` were pushed.
+The [0.1.56 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.56-alpha.1)
+contains the exact candidate and sidecar. Unauthenticated downloads matched
+the 123,061,847-byte installer, 93-byte sidecar, and SHA-256
+`9FE5E9A87E0D7A8642C83BA4E3E63B9CBE4374771C079A0575273D0E444D775C`.
+Silent installation of the downloaded file exited 0, preserved its bytes,
+installed ProductVersion 0.1.56 and the same executable SHA-256
+`D8E62767536AB93932540B901CEB098DA1BBD617B74A266524D776E31CD92F83`.
+The downloaded installation passed the focused hidden-native real Forge
+project-preparation/Home-reopen check without a Codex Send. The installed
+candidate had already passed one real Codex reply/restart/Home-resume check;
+that exact real exchange was NOT_RUN again after downloading. No broad suite
+or manual GH CI ran. Continue product UI and distribution work; this alpha is
+not completion.
