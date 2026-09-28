@@ -1,6 +1,6 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.29` is the published alpha
+Independent Tauri application. Desktop `0.1.30` is the published alpha
 prerelease. Its exact installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
@@ -7561,3 +7561,31 @@ tag the exact code, publish the already tested installer and matching sidecar
 as an alpha prerelease, then download the public bytes unauthenticated,
 compare hashes, and test installation/readback without rebuilding the
 candidate. Keep the broad journey goal active.
+
+### Desktop 0.1.30 public readback — 2026-09-28
+
+Code commit `4f50e5b3` was pushed on `codex/desktop-shell` and tagged
+`desktop-v0.1.30-alpha.1`. The tested installer and matching sidecar were
+published as the [0.1.30 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.30-alpha.1).
+No installer rebuild or manual GitHub CI run occurred after local tests.
+
+An unauthenticated download of both public assets returned a 123,098,780-byte
+installer with SHA-256
+`204A103BB2D78E82816DD6A93A6E7DEC0E7FD6048681C79CEBF1E8EAA010B92D`,
+matching the sidecar and the originally tested candidate. Silent installation
+of the downloaded bytes returned exit 0; the file stayed unchanged and the
+installed 0.1.30 executable hash matched
+`C1F01E9E3612DF2D8B14EA0C669073E8F26FFA3F51952AF0685CBA0B6CB17F79`.
+The downloaded installation passed the hidden read-only real 33-message
+conversation/restart check and the full hidden native smoke, including the
+two preview overlap tests. Real Codex Send was NOT_RUN in these public-byte
+checks. This proves same-machine public-byte continuity and installed readback,
+not clean-machine setup or the remaining #91/#92 acceptance. No subagent was
+used; model-attributed tokens, API-equivalent BRL and subscription-quota
+impact remain UNKNOWN.
+
+**State:** 0.1.30 is public and installed. The broad Windows journey goal
+remains active. Next, prioritize a remaining #91 user-facing gap with a
+safe, specific native test hypothesis, then tackle the core-authority design
+needed for readable decision history in #92 only if the product genuinely
+needs it. Do not invent missing decision wording in the Desktop UI.
