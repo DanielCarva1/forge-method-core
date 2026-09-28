@@ -8877,3 +8877,21 @@ cost and Pro quota attribution remain UNKNOWN; no savings claimed.
 publication and anonymous downloaded-file verification remain. Keep the broad
 Desktop goal active after this package; physical mobile-device use, manual
 screen-reader acceptance and clean-machine setup remain NOT_RUN.
+
+### Desktop 0.1.42 public readback — 2026-09-28
+
+Package commit `463f0fcd` was pushed on `codex/desktop-shell`; annotated tag
+`desktop-v0.1.42-alpha.1` points to it. The exact tested installer and SHA-256
+sidecar were published in the [0.1.42 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.42-alpha.1).
+Unauthenticated downloads returned 123,059,821 bytes and SHA-256
+`5F8A94E180837CFA3FDD219F772ACE79C225661E9880E83E2690878A5106EAB0`,
+identical to the candidate and public sidecar. Silent installation of the
+downloaded bytes over the candidate returned exit 0; the downloaded file was
+unchanged. The installed executable reports ProductVersion 0.1.42 and SHA-256
+`08A50AF63DC1BFC6ECD116A465ED30E85BB7BE2BB7DD7455C3C4CA888B55263B`.
+Downloaded-installation hidden native smoke passed, including the controlled
+long-history action and real Forge readback. The read-only real-Codex journey
+also passed again with 39 restored messages and a full process restart; it
+did not send a turn or edit files. No manual GitHub CI or candidate rebuild
+followed publication. Continue the broader Desktop goal from a different
+user-visible gap; do not repeat this history-navigation slice.

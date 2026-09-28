@@ -34,5 +34,11 @@ candidate hash. The installed executable reports Windows ProductVersion
 0.1.42 and SHA-256
 `08A50AF63DC1BFC6ECD116A465ED30E85BB7BE2BB7DD7455C3C4CA888B55263B`.
 Hidden native installed-candidate smoke and the read-only 39-message Codex
-history journey passed. Public download verification remains pending until
-publication; a commit or tag alone does not make this version available.
+history journey passed. The [alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.42-alpha.1)
+then served the same installer and SHA-256 sidecar without authentication.
+The downloaded file was exactly 123,059,821 bytes with the candidate hash
+above. Silent installation of those downloaded bytes returned exit 0 without
+changing the installer and produced the same installed executable hash.
+Hidden native smoke and the read-only real-Codex journey passed again after
+this downloaded-file installation. No candidate rebuild or manual GitHub CI
+run followed publication.
