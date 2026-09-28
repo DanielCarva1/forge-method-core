@@ -1,9 +1,8 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.32` is the current source version
-and is installed locally from a tested candidate; `0.1.31` remains the
-published alpha until the next package is released. The 0.1.31 installer was
-downloaded back, hash-checked and installed before this candidate.
+Independent Tauri application. Desktop `0.1.32` is the current published and
+installed alpha. Its installer was downloaded back without authentication,
+hash-checked and installed over the prior 0.1.31 alpha.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -7886,3 +7885,28 @@ alpha prerelease, then download both assets without authentication, verify
 the bytes and reinstall/test the downloaded file. Do not rebuild or run
 manual GitHub CI for this frontend package. Continue the broader UI journey
 after the package; the goal is not blocked by the real-provider timeout.
+
+### Desktop 0.1.32 public readback — 2026-09-28
+
+Code commit `7b41137e` was pushed on `codex/desktop-shell` and tagged
+`desktop-v0.1.32-alpha.1`. The same tested candidate and SHA-256 sidecar were
+published as the [0.1.32 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.32-alpha.1).
+An unauthenticated download of both assets returned a 123,103,870-byte
+installer with SHA-256
+`8FB546E59839952143148D4A4C27C38C747EAB6DE522CDB91BBB36BB86D6522E`,
+matching the sidecar and tested candidate. Installing the downloaded bytes
+silently returned exit 0; their hash remained unchanged, and the installed
+executable retained SHA-256
+`4E5F6C9A21F041978641786E9DFBFF62F2C5FE8B8EB0CBC1ED849256939F08D8`.
+The downloaded installation passed hidden native result/restart smoke,
+including distinct choices for two restored citations, outside-project
+rejection and no Send. The installed candidate had already passed the full
+hidden native folder/onboarding smoke. No rebuild or manual GitHub CI run
+occurred after package validation. This is same-machine public-byte and
+installed-app proof, not clean-machine setup or a real Codex Send in this
+exact result-flow. No subagent was used; attributable per-model tokens,
+API-equivalent BRL and Pro-quota impact remain UNKNOWN.
+
+**Next product step:** continue the broader connected, attractive UI journey
+from a concrete remaining gap and the approved design. Do not treat this
+alpha release as completion of the Forge Desktop goal.

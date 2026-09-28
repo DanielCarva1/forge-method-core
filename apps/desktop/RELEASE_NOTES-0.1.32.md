@@ -50,5 +50,8 @@ bytes, SHA-256
 Silent installation over 0.1.31 returned exit 0. The installed executable
 reports 0.1.32 and has SHA-256
 `4E5F6C9A21F041978641786E9DFBFF62F2C5FE8B8EB0CBC1ED849256939F08D8`.
-Public download readback remains pending; this note does not itself claim
-publication.
+An unauthenticated download of the published installer and sidecar returned
+the same size and SHA-256. Installing those public bytes silently returned
+exit 0, retained the installed executable hash above, and passed the hidden
+native result/restart smoke. This proves same-machine public-byte continuity,
+not clean-machine setup.
