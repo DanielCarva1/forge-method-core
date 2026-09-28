@@ -10136,3 +10136,21 @@ final wide layout was browser-checked, not native rechecked. Next: review
 the diff, commit/push/tag and publish this exact candidate under standing
 alpha authorization, then verify the anonymous download against the
 candidate. Do not rebuild it.
+
+### Desktop 0.1.59 public readback — 2026-09-28
+
+Package commit `fe206942` and tag `desktop-v0.1.59-alpha.1` were pushed.
+The [0.1.59 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.59-alpha.1)
+contains the exact tested installer and 93-byte sidecar. Unauthenticated
+downloads matched the candidate's 123,091,571 bytes and SHA-256
+`36EE2AEA005AF68EFA3488149A01DE0651270AA3674D5160D5AA52EA1C71A661`;
+the downloaded sidecar text matched exactly. The exact candidate bytes had
+already installed over 0.1.58, with exit 0, ProductVersion 0.1.59 and
+installed executable SHA-256
+`D5AA8AB443B1262677AB988101F9E608B2884649362A191CC59E1A7823C131E7`.
+That installed candidate passed the focused hidden-native 360px idea-first,
+real project preparation and Home reopen check with zero Codex Sends. The
+downloaded copy was hash-verified but not installed a second time. No new
+real Codex turn, native generic composer folder-dialog choice, broad suite or
+manual GH CI ran. Continue the Desktop product goal; this alpha is not full
+completion.
