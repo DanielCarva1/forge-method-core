@@ -1,4 +1,5 @@
-// The selected path is transient UI state. Forge owns the project, not this preview.
+// Only the last selected file path is a local shortcut. Forge still owns the
+// project, and every resumed preview is read and validated by native code.
 import { renderAgentMessage } from './message-format.mjs';
 import { setMobileWorkspaceProject, showWorkspacePane } from './mobile-workspace.mjs';
 const panel = document.getElementById('project-preview');
@@ -38,6 +39,8 @@ const dialogSiteNote = document.getElementById('preview-dialog-site-note');
 const dialogRequestChange = document.getElementById('request-preview-change-large');
 const requestChange = document.getElementById('request-preview-change');
 const composer = document.getElementById('message-text');
+const rememberedPreviewKey = 'forge.preview-files.v1';
+const maxRememberedPreviews = 50;
 let project = null;
 let filePath = null;
 let generation = 0;
@@ -53,6 +56,45 @@ let dialogSiteHeight = 560;
 let refreshAfterDialog = false;
 let refreshAfterPendingRead = false;
 let refreshAfterPicker = false;
+
+function rememberedPreviews() {
+  try {
+    const raw = localStorage.getItem(rememberedPreviewKey);
+    if (!raw || raw.length > 110000) return [];
+    const entries = JSON.parse(raw);
+    if (!Array.isArray(entries)) return [];
+    return entries.filter(entry => entry && typeof entry.projectRoot === 'string'
+      && entry.projectRoot.length > 0 && entry.projectRoot.length <= 1024
+      && typeof entry.filePath === 'string' && entry.filePath.length > 0
+      && entry.filePath.length <= 1024).slice(0, maxRememberedPreviews);
+  } catch { return []; } // Losing an optional shortcut must not prevent opening a project.
+}
+
+function rememberPreview(root, path) {
+  if (root.length > 1024 || path.length > 1024) return;
+  try {
+    const entries = [{ projectRoot: root, filePath: path },
+      ...rememberedPreviews().filter(entry => entry.projectRoot !== root)]
+      .slice(0, maxRememberedPreviews);
+    localStorage.setItem(rememberedPreviewKey, JSON.stringify(entries));
+  } catch { /* Preview remains available for this session. */ }
+}
+
+function forgetPreview(root, path) {
+  try {
+    const entries = rememberedPreviews();
+    if (entries.some(entry => entry.projectRoot === root && entry.filePath === path)) {
+      localStorage.setItem(rememberedPreviewKey, JSON.stringify(entries.filter(entry => entry.projectRoot !== root)));
+    }
+  } catch { /* A failed shortcut still cannot bypass native validation. */ }
+}
+
+export function forgetPreviewProject(root) {
+  try {
+    const entries = rememberedPreviews();
+    localStorage.setItem(rememberedPreviewKey, JSON.stringify(entries.filter(entry => entry.projectRoot !== root)));
+  } catch { /* Removing the project shortcut still succeeds if storage is unavailable. */ }
+}
 
 function showSource(value) {
   sourceVisible = value;
@@ -158,9 +200,16 @@ export function setPreviewProject(value) {
   status.hidden = true;
   status.textContent = '';
   controls();
+  if (value) {
+    const remembered = rememberedPreviews().find(entry => entry.projectRoot === value.project_root);
+    if (remembered) {
+      filePath = remembered.filePath;
+      void loadPreview(true);
+    }
+  }
 }
 
-async function loadPreview() {
+async function loadPreview(restored = false) {
   if (!project || !filePath || pending) return;
   const current = ++generation;
   const root = project.project_root;
@@ -216,11 +265,16 @@ async function loadPreview() {
     openPreview.hidden = fileOnly;
     browserAction.hidden = !renderUrl && !pdfFile;
     workspace.classList.add('preview-loaded');
+    rememberPreview(root, selected);
     status.textContent = fileOnly ? 'Arquivo encontrado na pasta do projeto.' : 'Prévia local atualizada.';
   } catch (error) {
     if (current === generation) {
       workspace.classList.remove('preview-loaded');
-      status.textContent = typeof error === 'string' ? error : 'Não foi possível mostrar este arquivo. Ele não foi alterado; escolha outro ou tente atualizar.';
+      if (restored) {
+        forgetPreview(root, selected);
+        filePath = null;
+        status.textContent = 'A última prévia não está mais disponível. Escolha um arquivo do projeto para continuar.';
+      } else status.textContent = typeof error === 'string' ? error : 'Não foi possível mostrar este arquivo. Ele não foi alterado; escolha outro ou tente atualizar.';
     }
   } finally {
     if (current === generation) {
@@ -272,7 +326,7 @@ choose.addEventListener('click', async () => {
   }
   if (current === generation) void loadPreview();
 });
-refresh.addEventListener('click', loadPreview);
+refresh.addEventListener('click', () => void loadPreview());
 export async function refreshPreviewAfterTurn() {
   // A stopped Codex turn may already have changed the selected file. Reuse the
   // native project-bound read; never infer another file from reply text.

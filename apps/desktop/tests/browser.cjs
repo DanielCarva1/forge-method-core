@@ -296,6 +296,45 @@ async function openConversation(page) {
     assert.equal(await projectsPage.evaluate(() => document.querySelector('.preview').getBoundingClientRect().top < document.querySelector('.project').getBoundingClientRect().top), true);
     assert.equal(await projectsPage.evaluate(() => document.querySelector('#project-record').getBoundingClientRect().bottom < document.querySelector('.project').getBoundingClientRect().top), true);
     assert.equal(await projectsPage.locator('#preview-text').textContent(), '<script>primeiro</script>');
+    assert.deepEqual(await projectsPage.evaluate(() => JSON.parse(localStorage.getItem('forge.preview-files.v1'))),
+      [{ projectRoot: 'D:\\one', filePath: 'D:\\one\\result.txt' }], 'Only the selected file path, not result content, is remembered');
+    const returnContext = await browser.newContext({ storageState: await projectsPage.context().storageState() });
+    const returnPage = await returnContext.newPage();
+    await returnPage.addInitScript(() => {
+      window.returnPreviewReads = [];
+      window.__TAURI__ = { core: { invoke: async (command, args) => {
+        if (command === 'app_info') return { name: 'Forge', version: '0.1.0' };
+        if (command === 'inspect_project') return { project_id: 'first-project', project_root: args.projectRoot };
+        if (command === 'inspect_preview') {
+          window.returnPreviewReads.push(args);
+          if (args.filePath.includes('outside')) throw 'Este arquivo não pertence ao projeto aberto.';
+          return { kind: 'text', relative_path: 'result.txt', size_bytes: 16, content: 'Result read again after reopening' };
+        }
+      } } };
+    });
+    await returnPage.goto(`${url}#projects`);
+    await returnPage.locator('#recent-projects .recent-project').getByRole('button', { name: /Abrir one na pasta/ }).click();
+    await returnPage.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.equal(await returnPage.locator('#preview-text').textContent(), 'Result read again after reopening');
+    assert.deepEqual(await returnPage.evaluate(() => window.returnPreviewReads),
+      [{ projectRoot: 'D:\\one', filePath: 'D:\\one\\result.txt' }], 'Returning to a project must revalidate its last file through native IPC');
+    await returnPage.evaluate(async () => {
+      const { setPreviewProject } = await import('./preview.mjs');
+      setPreviewProject({ project_root: 'D:\\two' });
+    });
+    assert.equal(await returnPage.locator('#preview-result').isHidden(), true, 'Another project must not show the prior result');
+    assert.equal(await returnPage.evaluate(() => window.returnPreviewReads.length), 1, 'Another project must not read the prior file');
+    await returnPage.evaluate(() => localStorage.setItem('forge.preview-files.v1', JSON.stringify([
+      { projectRoot: 'D:\\one', filePath: 'D:\\outside.txt' },
+    ])));
+    await returnPage.reload();
+    await returnPage.locator('nav a[data-route="projects"]').click();
+    await returnPage.locator('#recent-projects .recent-project').getByRole('button', { name: /Abrir one na pasta/ }).click();
+    await returnPage.locator('#preview-status').filter({ hasText: 'última prévia não está mais disponível' }).waitFor();
+    assert.equal(await returnPage.locator('#preview-result').isHidden(), true, 'A rejected remembered path must never show a stale result');
+    assert.equal(await returnPage.evaluate(() => JSON.parse(localStorage.getItem('forge.preview-files.v1')).length), 0,
+      'A failed remembered shortcut should be removed rather than retried forever');
+    await returnContext.close();
     assert.equal(await projectsPage.evaluate(() => !!(document.getElementById('request-preview-change').compareDocumentPosition(document.querySelector('.preview-origin')) & Node.DOCUMENT_POSITION_FOLLOWING)), true, 'Change request appears before result metadata and optional browser controls');
     assert.equal(await projectsPage.locator('#preview-result script').count(), 0);
     assert.match(await projectsPage.locator('#preview-result').textContent(), /Isso não confirma publicação na internet/);
@@ -611,6 +650,8 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#connect-agent').isDisabled(), true);
     await projectsPage.getByRole('link', { name: 'Meus projetos' }).click();
     await projectsPage.getByRole('button', { name: 'Remover one da lista de projetos' }).click();
+    assert.equal(await projectsPage.evaluate(() => JSON.parse(localStorage.getItem('forge.preview-files.v1')).some(entry => entry.projectRoot === 'D:\\one')), false,
+      'Removing a local project shortcut must also forget its last preview path');
     await projectsPage.getByRole('button', { name: 'Remover two da lista de projetos' }).click();
     assert.equal(await projectsPage.locator('#projects-empty').isVisible(), true);
     assert.equal(await projectsPage.locator('#projects-open-folder-label').textContent(), 'Escolher uma pasta');

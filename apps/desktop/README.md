@@ -8965,3 +8965,41 @@ No manual GitHub CI or candidate rebuild followed publication. The broad
 Desktop goal remains active for the next user-visible gap and the documented
 accessibility/distribution limitations; model-attributed tokens, BRL cost and
 Pro quota attribution remain UNKNOWN.
+
+### Desktop 0.1.44 selected-result continuity — 2026-09-28
+
+The last successfully previewed file is now a small local shortcut keyed by
+the Forge-confirmed project root. Only its path is saved, never the result
+content. Reopening the project calls native `inspect_preview` again, so a
+missing, outside or changed file cannot silently display stale data. A failed
+remembered path is forgotten and shown as a clear empty state. Switching
+projects does not show another project's result; removing a project from the
+local shortcut list also removes its preview shortcut. Forge remains the
+project authority; no second project registry or backend state was added.
+
+Changed source: `ui/preview.mjs`, `ui/recent-projects.mjs`, browser/native
+tests, Desktop version files, and `RELEASE_NOTES-0.1.44.md`. The full browser
+UI suite passed with a fresh-page return, project switch, rejected stored
+path and removal. Hidden native debug WebView smoke passed after both reload
+and full process restart, re-reading a temporary project's real selected
+file. JavaScript syntax, Desktop `cargo check`, 51 non-ignored Rust tests
+(one ignored) and strict Clippy passed. The native package smoke was run
+without a real Codex Send; no user's project file was edited.
+
+One NSIS candidate was built at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.44_x64-setup.exe`,
+123,091,825 bytes, SHA-256
+`60873230D44C0D04A71C3E6BF46E265BF2F591D6104FC2E79516BE124344D83D`.
+The adjacent sidecar records that hash. Silent installation over public
+0.1.43 returned exit 0 and preserved the candidate bytes. The installed exe
+reports ProductVersion 0.1.44, SHA-256
+`72BFB98A1EEC5432E61CD7E455BDBB7DA5112A76BCE33ECFC14D57C1D4F91C9D`.
+Hidden native smoke of the installed package passed, including the full
+process-restart preview read. No manual GitHub CI or core workspace suite
+ran; bundled Forge core remains 0.13.2. Clean-machine setup, physical mobile
+use and manual screen-reader acceptance remain NOT_RUN; per-model tokens,
+BRL cost and Pro quota attribution remain UNKNOWN.
+
+**State:** candidate installed and tested; commit, push, tag, public download
+and downloaded-file install/readback remain. No worker was delegated. After
+publication, continue the broad Desktop goal at another user-visible gap.

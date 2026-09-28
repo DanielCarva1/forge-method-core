@@ -1,6 +1,7 @@
 // Local shortcuts only. Forge remains the authority for project identity and state.
 import { prepareProjectSwitch } from './chat.mjs';
 import { projectDisplayName } from './project-display.mjs';
+import { forgetPreviewProject } from './preview.mjs';
 const storageKey = 'forge.projects.v1';
 const maxRecent = 50;
 const list = document.querySelector('#recent-projects');
@@ -102,6 +103,7 @@ function renderProjects() {
     remove.setAttribute('aria-label', `Remover ${name} da lista de projetos`);
     remove.addEventListener('click', () => {
       projects = projects.filter(item => item.project_root !== project.project_root);
+      forgetPreviewProject(project.project_root);
       saveProjects();
       renderProjects();
     });

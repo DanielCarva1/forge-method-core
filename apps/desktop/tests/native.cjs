@@ -939,6 +939,14 @@ async function operatePreviewDialog(page, file) {
       await page.locator('#preview-status').filter({ hasText: 'não pertence ao projeto' }).waitFor({ timeout: 20000 });
       console.log('PASS: native completed-message file action opens a project file and rejects an outside path.');
       console.log(`PASS: native read-only text/image preview, update and outside-path rejection; file picker ${process.env.FORGE_TEST_PREVIEW_DIALOG === 'select' ? 'used the actual Windows dialog' : 'response was simulated'}.`);
+      await page.reload();
+      await page.locator('nav a[data-route="projects"]').click();
+      await page.locator('#recent-projects .recent-project').first().getByRole('button', { name: /Abrir new-project na pasta/ }).click();
+      await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
+      assert.equal(await page.locator('#preview-path').textContent(), 'result.txt');
+      assert.equal(await page.locator('#preview-text').textContent(), 'updated while enlarged', 'Native reopening must read the selected file again rather than restore cached contents');
+      assert.equal(await page.locator('#preview-result').isVisible(), true);
+      console.log('PASS: native project reopening restores its last selected result through a fresh project-bound file read.');
       await page.locator('nav a[data-route="projects"]').click();
       assert.equal(await page.locator('#recent-projects .recent-project h2').first().textContent(), 'new-project');
       await page.locator('nav a[data-route="workspace"]').click();
@@ -1150,8 +1158,9 @@ async function operatePreviewDialog(page, file) {
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
     assert.equal(await page.getByLabel('Reforçar contraste').isChecked(), true);
     console.log('PASS: native WebView appearance preference survives reload.');
-    if (process.env.FORGE_TEST_PROCESS_RESTART === '1') {
-      assert.ok(restartProject && restartHistory, 'Process restart requires the real-agent smoke journey');
+    if (process.env.FORGE_TEST_PROCESS_RESTART === '1' || process.env.FORGE_TEST_PREVIEW_PROCESS_RESTART === '1') {
+      if (process.env.FORGE_TEST_PROCESS_RESTART === '1') assert.ok(restartProject && restartHistory, 'Process restart requires the real-agent smoke journey');
+      if (process.env.FORGE_TEST_PREVIEW_PROCESS_RESTART === '1') assert.ok(process.env.FORGE_TEST_PROJECT, 'Preview restart requires the native project fixture');
       await browser.close();
       browser = null;
       const exited = once(child, 'exit');
@@ -1178,28 +1187,38 @@ async function operatePreviewDialog(page, file) {
       const restartedContext = browser.contexts()[0];
       page = restartedContext.pages()[0] || await restartedContext.waitForEvent('page', { timeout: 5000 });
       await page.locator('#home').waitFor({ state: 'visible' });
-      await page.locator('nav a[data-route="workspace"]').click();
-      await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(restartProject);
-      await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
-      await page.waitForFunction(() => document.querySelector('#project-status')?.textContent?.includes('Projeto pronto'), null, { timeout: 25000 });
-      await page.evaluate(() => {
-        window.restartSendCount = 0;
-        const originalCore = window.__TAURI__.core;
-        const invoke = originalCore.invoke;
-        const facade = Object.create(originalCore);
-        Object.defineProperty(facade, 'invoke', { value: (command, args) => {
-          if (command === 'send_message') window.restartSendCount++;
-          return invoke(command, args);
-        } });
-        window.__TAURI__.core = facade;
-      });
-      await openConversation(page);
-      await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor({ timeout: 110000 });
-      assert.equal(await page.locator('#messages article').count(), restartHistory.count);
-      assert.equal(await page.locator('#messages article').first().textContent(), restartHistory.first);
-      assert.equal(await page.locator('#messages article').last().textContent(), restartHistory.last);
-      assert.equal(await page.evaluate(() => window.restartSendCount), 0);
-      console.log('PASS: full native process restart restored the real Codex conversation in order without resending a turn.');
+      if (process.env.FORGE_TEST_PREVIEW_PROCESS_RESTART === '1') {
+        await page.locator('nav a[data-route="projects"]').click();
+        await page.locator('#recent-projects .recent-project').first().getByRole('button', { name: /Abrir new-project na pasta/ }).click();
+        await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 25000 });
+        assert.equal(await page.locator('#preview-path').textContent(), 'result.txt');
+        assert.equal(await page.locator('#preview-text').textContent(), 'updated while enlarged');
+        console.log('PASS: full native process restart reopened the project and re-read its last selected result without cached file content.');
+      }
+      if (process.env.FORGE_TEST_PROCESS_RESTART === '1') {
+        await page.locator('nav a[data-route="workspace"]').click();
+        await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(restartProject);
+        await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+        await page.waitForFunction(() => document.querySelector('#project-status')?.textContent?.includes('Projeto pronto'), null, { timeout: 25000 });
+        await page.evaluate(() => {
+          window.restartSendCount = 0;
+          const originalCore = window.__TAURI__.core;
+          const invoke = originalCore.invoke;
+          const facade = Object.create(originalCore);
+          Object.defineProperty(facade, 'invoke', { value: (command, args) => {
+            if (command === 'send_message') window.restartSendCount++;
+            return invoke(command, args);
+          } });
+          window.__TAURI__.core = facade;
+        });
+        await openConversation(page);
+        await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor({ timeout: 110000 });
+        assert.equal(await page.locator('#messages article').count(), restartHistory.count);
+        assert.equal(await page.locator('#messages article').first().textContent(), restartHistory.first);
+        assert.equal(await page.locator('#messages article').last().textContent(), restartHistory.last);
+        assert.equal(await page.evaluate(() => window.restartSendCount), 0);
+        console.log('PASS: full native process restart restored the real Codex conversation in order without resending a turn.');
+      }
     }
     if (process.env.FORGE_TEST_NEW_IDEA_PROJECT === '1') {
       assert.ok(process.env.FORGE_TEST_PROJECT, 'The new-idea check requires FORGE_TEST_PROJECT');
