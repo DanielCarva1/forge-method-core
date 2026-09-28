@@ -77,12 +77,14 @@ async function resumeFixture(page, citation, interrupted = false) {
   await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
   await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
   if (citation === 'result.txt' && process.env.FORGE_RESULT_SHORTCUT_SCREENSHOT) {
+    await page.locator('#messages .message-result-action').scrollIntoViewIfNeeded();
     await page.screenshot({ path: process.env.FORGE_RESULT_SHORTCUT_SCREENSHOT });
   }
   if (Array.isArray(citation)) {
-    await page.locator('#preview-cited-files summary').click();
-    await page.getByRole('button', { name: `Conferir arquivo citado: ${citation[1]}` }).click();
-  } else await page.getByRole('button', { name: 'Conferir arquivo citado' }).click();
+    assert.equal(await page.locator('#messages .message-result-action').count(), 0, 'Two citations must not create a guessed inline choice');
+    await page.locator('#messages .message-file-choices summary').click();
+    await page.getByRole('button', { name: `Conferir arquivo da resposta: ${citation[1]}` }).click();
+  } else await page.getByRole('button', { name: `Conferir arquivo citado na resposta: ${citation}` }).click();
 }
 
 (async () => {
@@ -103,6 +105,7 @@ async function resumeFixture(page, citation, interrupted = false) {
     await resumeFixture(app.page, 'result.txt');
     await app.page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await app.page.locator('#preview-text').textContent(), 'Real local file from this project.');
+    if (process.env.FORGE_RESULT_OPEN_SCREENSHOT) await app.page.screenshot({ path: process.env.FORGE_RESULT_OPEN_SCREENSHOT });
     await stop(app); app = null;
 
     // The WebView and desktop process are new; no preview path was persisted.

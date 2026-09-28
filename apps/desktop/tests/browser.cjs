@@ -1200,6 +1200,11 @@ async function openConversation(page) {
     assert.equal(await formattedBubble.locator('script, a[href^="javascript:"]').count(), 0);
     assert.equal(await formattedBubble.locator('.message-file-link').count(), 4, 'Only project-file candidates become actions');
     assert.equal(await page.locator('#preview-last-result').getAttribute('hidden'), '', 'Several distinct files must not be guessed as one result');
+    assert.equal(await formattedBubble.locator('.message-result-action').count(), 0, 'Several cited files must not produce one guessed action beside the reply');
+    assert.equal(await formattedBubble.locator('.message-file-choices summary').textContent(), 'Conferir 3 arquivos da resposta');
+    await formattedBubble.locator('.message-file-choices summary').click();
+    assert.equal(await formattedBubble.locator('.message-file-choices-list button').count(), 3, 'The reply must offer each cited file without guessing one');
+    await formattedBubble.locator('.message-file-choices summary').click();
     assert.equal(await page.locator('#preview-cited-files').isVisible(), true, 'Several cited files should remain individually available beside the preview');
     await page.locator('#preview-cited-files summary').click();
     assert.equal(await page.locator('#preview-cited-files-list button').count(), 3, 'Repeated citations should not duplicate a choice');
@@ -1351,6 +1356,8 @@ async function openConversation(page) {
     await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Ver arquivo local: fora');
     await page.keyboard.press('Tab');
+    assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Conferir 3 arquivos da resposta');
+    await page.keyboard.press('Tab');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'interrupt-agent');
     await page.keyboard.press('Enter');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'agent-status');
@@ -1376,7 +1383,7 @@ async function openConversation(page) {
     await page.evaluate(() => { window.delayDisconnect = false; });
     await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
-    assert.match(await page.locator('#agent-status').textContent(), /última resposta foi interrompida.*Confira a conversa e os arquivos.*Nada foi reenviado/);
+    assert.match(await page.locator('#agent-status').textContent(), /Última resposta incompleta.*confira mensagens e arquivos.*Mudanças podem permanecer; nada foi reenviado/);
     assert.equal(await page.evaluate(() => window.connectedThread), 'test-thread');
     assert.match(await page.locator('#messages').textContent(), /Saved decision/);
     assert.match(await page.locator('#messages').textContent(), /Partial reply/);
@@ -1395,12 +1402,22 @@ async function openConversation(page) {
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
     assert.match(await page.locator('#agent-status').textContent(), /Você pode continuar de onde parou/);
     assert.equal(await page.locator('#preview-last-result').isVisible(), true, 'A single file in the restored completed reply should be easy to reopen');
+    const resultAction = page.getByRole('button', { name: 'Conferir arquivo citado na resposta: site/index.html' });
+    assert.equal(await resultAction.isVisible(), true, 'The completed reply should offer its project file without requiring a search in the side panel');
     assert.match(await page.locator('#preview-intro').textContent(), /resposta cita um arquivo/);
     await page.getByRole('button', { name: 'Ver texto original' }).click();
     assert.equal(await page.locator('#preview-last-result').isVisible(), true, 'Reading the original answer must not lose its file shortcut');
-    await page.getByRole('button', { name: 'Conferir arquivo citado' }).click();
+    assert.equal(await resultAction.isVisible(), true, 'The file shortcut must remain available in original-text mode');
+    await resultAction.click();
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.deepEqual(await page.evaluate(() => window.linkPreviewReads.at(-1)), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\site\\index.html' });
+    await page.evaluate(() => window.agentEvents.onmessage({ kind: 'message', id: 'next-result', text: 'Nova versão: [ver arquivo](site/updated.html).' }));
+    assert.equal(await page.locator('.preview-empty').isVisible(), false, 'The old side-panel shortcut is hidden while a preview is loaded');
+    await page.getByRole('button', { name: 'Conferir arquivo citado na resposta: site/updated.html' }).click();
+    await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.linkPreviewReads.at(-1)), { projectRoot: 'D:\\another-project', filePath: 'D:\\another-project\\site\\updated.html' }, 'A later reply can open its new file even when another preview was already loaded');
+    await resultAction.click();
+    await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     await page.evaluate(() => { window.resumeMessages = [
       { id: 'result-user', role: 'user', text: 'Crie uma página simples.' },
       { id: 'result-agent', role: 'agent', text: 'Pronto: [Ver página](site/index.html).' },
@@ -1428,7 +1445,7 @@ async function openConversation(page) {
     await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
     await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
-    assert.match(await page.locator('#agent-status').textContent(), /última resposta foi interrompida.*Nada foi reenviado/);
+    assert.match(await page.locator('#agent-status').textContent(), /Última resposta incompleta.*nada foi reenviado/);
     assert.equal(await page.evaluate(() => window.sendCalls), sendsBeforeInterruptedResume, 'An interrupted readback must not resend the previous request');
     assert.equal(await page.locator('#preview-last-result').getAttribute('hidden'), null, 'An interrupted reply must keep an earlier completed result available');
     assert.equal(await page.locator('#preview-result').isVisible(), true, 'An already open result must remain visible after an interrupted reply');

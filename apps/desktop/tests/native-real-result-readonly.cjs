@@ -84,7 +84,11 @@ async function inspectResult(page) {
   const messagesBefore = await page.locator('#messages article').count();
   const result = page.locator('#messages article[data-role="agent"] .message-file-link[data-preview-path="site/index.html"]').last();
   assert.equal(await result.count(), 1, 'Real reply must expose its local HTML file');
-  await result.click();
+  const reply = result.locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " message-bubble ")]');
+  const choices = reply.locator('.message-file-choices');
+  assert.equal(await choices.count(), 1, 'The real Codex reply must offer its multiple cited files beside the message');
+  await choices.locator('summary').click();
+  await choices.getByRole('button', { name: 'Conferir arquivo da resposta: site/index.html' }).click();
   await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
   assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
   await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias renovado' }).waitFor();

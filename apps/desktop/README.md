@@ -1,7 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.31` is the published alpha
-prerelease. Its exact installer was downloaded back, hash-checked and installed.
+Independent Tauri application. Desktop `0.1.32` is the current source version
+and is installed locally from a tested candidate; `0.1.31` remains the
+published alpha until the next package is released. The 0.1.31 installer was
+downloaded back, hash-checked and installed before this candidate.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -7812,3 +7814,75 @@ close it. Continue with a concrete, high-impact UI coverage gap from the
 existing backend and approved design, using native screenshots and a user
 journey rather than revisiting #92 wording feasibility or other low-return
 contract speculation first. Keep releases as coherent building blocks.
+
+### Desktop conversation result follow-through — 2026-09-28
+
+The broad friendly-UI objective is **not blocked** by an unresolved release
+question. Current uncommitted work makes a completed Codex reply with exactly
+one explicitly cited project file offer **Conferir arquivo citado** directly
+beside that reply. This matters after a different preview is already loaded:
+the old side-panel shortcut then disappears, but the new reply's action still
+opens the new file. Several cited files remain separate choices; the UI never
+guesses one. Raw-message mode keeps the action. Clicking uses the existing
+native project-bound preview and does not send a message.
+The interruption-resume notice is shorter while still saying that the last
+reply is incomplete, prior changes may remain, and nothing was resent; the
+native screenshot now leaves more room for the conversation.
+
+**Changed files:** `ui/chat.mjs`, `ui/styles.css`, `tests/browser.cjs`,
+`tests/native-result-shortcut.cjs`, and this checkpoint. Browser UI suite,
+JavaScript syntax, `git diff --check`, debug Desktop build, and hidden native
+result-shortcut/restart smoke passed. The native smoke read a real project file,
+rejected an outside-project path, kept multiple citations distinct, and
+prepared a change without sending. Visual readback was captured at
+`D:/Temp/User/forge-inline-result-20260928.png` and
+`D:/Temp/User/forge-result-open-20260928.png` (native preview). The app currently installed
+for the user remains public 0.1.31; these source edits are **not** installed or
+published. No Rust source changed; no workspace-wide Rust suite or GitHub CI
+was run. A real Codex response in this exact new UI path is NOT_RUN. No
+subagent was used; model-attributed tokens, BRL equivalent and Pro-quota impact
+remain UNKNOWN.
+
+**Next exact step:** continue a substantial UI journey gap from the approved
+design, integrating this change into a coherent next alpha package rather than
+publishing it alone. Keep the native run hidden. At the package boundary,
+review the combined diff, run focused checks then final applicable gates,
+build/install/test one candidate and publish under the maintainer's standing
+authorization. Do not mark the broad goal blocked for a minor NOT_RUN path.
+
+### Desktop 0.1.32 installed candidate — 2026-09-28
+
+The conversation now offers an inline list when a completed Codex reply cites
+several distinct project files. The user chooses an explicit file; the app
+does not guess, send a turn, or bypass the existing project-bound native
+preview. The one-file shortcut, raw-message mode, reopened conversation,
+keyboard navigation and already-open preview are covered by browser tests.
+The same two-file choice and process restart passed hidden native smoke on
+the installed app. A read-only attempt against a pre-existing real 33-message
+Codex thread identified three cited files, but the subsequent provider resume
+timed out before reaching the new chooser. That exact real-thread validation
+is **NOT_RUN**, not a product failure or a pass. No real Send occurred.
+
+The single NSIS candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.32_x64-setup.exe`,
+123,103,870 bytes, SHA-256
+`8FB546E59839952143148D4A4C27C38C747EAB6DE522CDB91BBB36BB86D6522E`.
+Silent installation over public 0.1.31 returned exit 0; the candidate hash
+stayed unchanged. The installed 0.1.32 executable has SHA-256
+`4E5F6C9A21F041978641786E9DFBFF62F2C5FE8B8EB0CBC1ED849256939F08D8`.
+The installed app passed hidden focused result/restart smoke and the full
+hidden native smoke, including a real Windows folder choice and real Forge
+onboarding. Browser UI suite, frontend tests, Desktop `cargo check`, all 50
+non-ignored Desktop tests, strict Desktop Clippy, NSIS release build and
+`git diff --check` passed. The separate core workspace and manual GitHub CI
+were not run for this frontend package. Clean-machine setup, fresh-account
+login, manual accessibility acceptance and real Codex Send in this precise
+flow remain NOT_RUN/PARTIAL. No subagent was used; attributable per-model
+tokens, BRL equivalent and Pro-quota impact remain UNKNOWN.
+
+**Next exact step:** review the combined diff, selectively commit and push,
+tag the source, publish the same tested candidate and SHA-256 sidecar as an
+alpha prerelease, then download both assets without authentication, verify
+the bytes and reinstall/test the downloaded file. Do not rebuild or run
+manual GitHub CI for this frontend package. Continue the broader UI journey
+after the package; the goal is not blocked by the real-provider timeout.

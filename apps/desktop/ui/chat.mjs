@@ -308,10 +308,56 @@ previousConversations.addEventListener('click', () => loadConversationChoices(pa
 moreConversations.addEventListener('click', () => loadConversationChoices(pageNumber + 1, listCursor));
 
 function paintMessage(item) {
-  if (item.isUser || !item.complete) { item.previewPaths = []; item.content.textContent = item.raw; return; }
+  if (item.isUser || !item.complete) {
+    item.previewPaths = [];
+    if (item.fileAction) item.fileAction.hidden = true;
+    if (item.fileChoices) item.fileChoices.hidden = true;
+    item.content.textContent = item.raw;
+    return;
+  }
   const formatted = document.createElement('div');
   renderAgentMessage(formatted, item.raw, previewLinkedFile);
   item.previewPaths = [...new Set([...formatted.querySelectorAll('.message-file-link')].map(button => button.dataset.previewPath))];
+  const distinctPaths = [...new Map(item.previewPaths.map(path => [path.replace(/\\/g, '/').toLowerCase(), path])).values()];
+  if (distinctPaths.length === 1) {
+    if (!item.fileAction) {
+      item.fileAction = document.createElement('button');
+      item.fileAction.type = 'button';
+      item.fileAction.className = 'message-result-action';
+      item.fileAction.addEventListener('click', () => { void previewLinkedFile(item.fileAction.dataset.previewPath); });
+      item.content.after(item.fileAction);
+    }
+    item.fileAction.dataset.previewPath = distinctPaths[0];
+    item.fileAction.textContent = 'Conferir arquivo citado →';
+    item.fileAction.setAttribute('aria-label', `Conferir arquivo citado na resposta: ${distinctPaths[0]}`);
+    item.fileAction.hidden = false;
+  } else if (item.fileAction) item.fileAction.hidden = true;
+  if (distinctPaths.length > 1) {
+    if (!item.fileChoices) {
+      const choices = document.createElement('details');
+      choices.className = 'message-file-choices';
+      const summary = document.createElement('summary');
+      const list = document.createElement('div');
+      list.className = 'message-file-choices-list';
+      const more = document.createElement('p');
+      more.className = 'hint';
+      more.textContent = 'Outros arquivos continuam disponíveis no texto da resposta.';
+      choices.append(summary, list, more);
+      item.content.after(choices);
+      item.fileChoices = choices;
+    }
+    item.fileChoices.hidden = false;
+    item.fileChoices.querySelector('summary').textContent = `Conferir ${distinctPaths.length} arquivos da resposta`;
+    item.fileChoices.querySelector('.message-file-choices-list').replaceChildren(...distinctPaths.slice(0, 20).map(path => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = path;
+      button.setAttribute('aria-label', `Conferir arquivo da resposta: ${path}`);
+      button.addEventListener('click', () => { void previewLinkedFile(path); });
+      return button;
+    }));
+    item.fileChoices.querySelector('.hint').hidden = distinctPaths.length <= 20;
+  } else if (item.fileChoices) item.fileChoices.hidden = true;
   if (rawMessageView) {
     const raw = document.createElement('pre');
     raw.className = 'message-raw';
@@ -481,7 +527,7 @@ async function connectCurrent(explicitThreadId = null) {
     const latestReplyIncomplete = conversation.messages.at(-1)?.role === 'agent' && conversation.messages.at(-1).incomplete;
     showStatus(broken
       ? 'A conexão foi encerrada. Desconecte antes de tentar novamente.'
-      : `${reviewingSend ? 'Conversa retomada. O envio anterior ainda não foi confirmado. Confira as mensagens e o que foi feito; depois escolha “Já conferi o envio” para continuar. Nada foi reenviado.' : latestReplyIncomplete ? 'Conversa retomada. A última resposta foi interrompida. Confira a conversa e os arquivos do projeto antes de pedir continuação; mudanças já feitas podem permanecer. Nada foi reenviado.' : conversation.resumed ? 'Conversa retomada. Você pode continuar de onde parou.' : `Codex conectado ao projeto ${projectDisplayName(project)}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}`, broken ? 'disconnected' : 'connected');
+      : `${reviewingSend ? 'Conversa retomada. O envio anterior ainda não foi confirmado. Confira as mensagens e o que foi feito; depois escolha “Já conferi o envio” para continuar. Nada foi reenviado.' : latestReplyIncomplete ? 'Conversa retomada. Última resposta incompleta: confira mensagens e arquivos antes de continuar. Mudanças podem permanecer; nada foi reenviado.' : conversation.resumed ? 'Conversa retomada. Você pode continuar de onde parou.' : `Codex conectado ao projeto ${projectDisplayName(project)}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}`, broken ? 'disconnected' : 'connected');
   } catch (error) {
     if (current !== generation) return;
     ++generation;
