@@ -209,14 +209,15 @@ export function setPreviewProject(value) {
   }
 }
 
-async function loadPreview(restored = false) {
-  if (!project || !filePath || pending) return;
+async function loadPreview(restored = false, candidate = filePath) {
+  if (!project || !candidate || pending) return;
   const current = ++generation;
   const root = project.project_root;
-  const selected = filePath;
+  const selected = candidate;
+  const keepPrevious = selected !== filePath && !result.hidden;
   pending = true;
   previewReadPending = true;
-  clearResult();
+  if (!keepPrevious) clearResult();
   controls();
   status.hidden = false;
   status.textContent = 'Conferindo o arquivo local…';
@@ -225,6 +226,9 @@ async function loadPreview(restored = false) {
     if (current !== generation) return;
     if (!preview || !['image', 'text', 'file'].includes(preview.kind) || typeof preview.content !== 'string' || (preview.kind === 'file' && preview.content !== '') || typeof preview.relative_path !== 'string' || !preview.relative_path || !Number.isSafeInteger(preview.size_bytes) || preview.size_bytes < 0) throw new Error('Invalid preview');
     if (preview.render_url !== undefined && (preview.kind !== 'text' || !/^http:\/\/forgepreview\.localhost\/[a-f0-9]{32}\/[A-Za-z0-9%._~-]+$/.test(preview.render_url))) throw new Error('Invalid site preview');
+    if (preview.kind === 'image' && !/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(preview.content)) throw new Error('Invalid image');
+    if (keepPrevious) clearResult();
+    filePath = selected;
     pathLabel.textContent = preview.relative_path;
     if (preview.kind === 'file') {
       fileOnly = true;
@@ -242,7 +246,6 @@ async function loadPreview(restored = false) {
       refresh.textContent = 'Atualizar informações';
       requestChange.textContent = 'Conversar sobre este arquivo';
     } else if (preview.kind === 'image') {
-      if (!/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(preview.content)) throw new Error('Invalid image');
       image.src = preview.content;
       image.alt = `Prévia local de ${preview.relative_path}`;
       image.hidden = false;
@@ -277,7 +280,7 @@ async function loadPreview(restored = false) {
         forgetPreview(root, selected);
         filePath = null;
         status.textContent = 'A última prévia não está mais disponível. Escolha um arquivo do projeto para continuar.';
-      } else status.textContent = typeof error === 'string' ? error : 'Não foi possível mostrar este arquivo. Ele não foi alterado; escolha outro ou tente atualizar.';
+      } else status.textContent = `${typeof error === 'string' ? error : 'Não foi possível mostrar este arquivo.'} ${keepPrevious ? 'A prévia anterior foi mantida.' : 'Ele não foi alterado; escolha outro ou tente atualizar.'}`;
     }
   } finally {
     if (current === generation) {
@@ -301,6 +304,7 @@ choose.addEventListener('click', async () => {
   controls();
   status.hidden = false;
   status.textContent = 'Escolhendo um arquivo do projeto…';
+  let selectedForRead = null;
   try {
     const selected = await globalThis.__TAURI__.core.invoke('choose_preview_file');
     if (current !== generation) return;
@@ -309,8 +313,7 @@ choose.addEventListener('click', async () => {
       return;
     }
     if (typeof selected !== 'string') throw new Error('Invalid path');
-    filePath = selected;
-    clearResult();
+    selectedForRead = selected;
     document.getElementById('preview-heading').focus({ preventScroll: true });
   } catch {
     if (current === generation) status.textContent = 'Não foi possível escolher um arquivo. Tente novamente.';
@@ -323,11 +326,11 @@ choose.addEventListener('click', async () => {
         refreshAfterPicker = false;
         // A canceled picker preserves the prior file. A newly selected file
         // already receives its own read below.
-        if (!result.hidden) void loadPreview();
+        if (!selectedForRead && !result.hidden) void loadPreview();
       }
     }
   }
-  if (current === generation) void loadPreview();
+  if (current === generation && selectedForRead) void loadPreview(false, selectedForRead);
 });
 refresh.addEventListener('click', () => void loadPreview());
 export async function refreshPreviewAfterTurn() {
@@ -359,9 +362,8 @@ export async function previewLinkedFile(candidate) {
       ? `${project.project_root.replace(/[\\/]+$/, '')}\\${path}`
       : null;
   if (!rooted) return;
-  filePath = rooted;
   controls();
-  await loadPreview();
+  await loadPreview(false, rooted);
   // Keep both the result and any validation error visible to the reader.
   showWorkspacePane('preview', true);
   panel.scrollIntoView({ block: 'start' });

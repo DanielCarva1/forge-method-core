@@ -5,7 +5,7 @@ $temp = [System.IO.Path]::GetTempPath()
 $id = [guid]::NewGuid().ToString('N')
 $runner = Join-Path $temp "forge-native-hidden-$id.ps1"
 $log = Join-Path $temp "forge-native-hidden-$id.log"
-$testScript = if ($env:FORGE_NATIVE_TEST_SCRIPT -in @('upgrade-continuity.cjs', 'native-upgrade-readback.cjs', 'native-restart-guard.cjs', 'native-real-inflight.cjs', 'artifact-resume.cjs', 'native-real-change.cjs', 'native-real-prefilled-change.cjs', 'native-forge-decision.cjs', 'native-personal-ideas.cjs', 'native-result-shortcut.cjs', 'native-real-result-readonly.cjs', 'native-real-history-explanation.cjs', 'native-auth.cjs', 'native-project-search.cjs', 'native-saved-reopen.cjs')) { $env:FORGE_NATIVE_TEST_SCRIPT } else { 'native.cjs' }
+$testScript = if ($env:FORGE_NATIVE_TEST_SCRIPT -in @('upgrade-continuity.cjs', 'native-upgrade-readback.cjs', 'native-restart-guard.cjs', 'native-real-inflight.cjs', 'artifact-resume.cjs', 'native-real-change.cjs', 'native-real-prefilled-change.cjs', 'native-forge-decision.cjs', 'native-personal-ideas.cjs', 'native-result-shortcut.cjs', 'native-real-result-readonly.cjs', 'native-real-history-explanation.cjs', 'native-auth.cjs', 'native-project-search.cjs', 'native-saved-reopen.cjs', 'native-empty-reopen.cjs')) { $env:FORGE_NATIVE_TEST_SCRIPT } else { 'native.cjs' }
 $runnerBody = @'
 Set-Location '__REPO__'
 & node apps/desktop/tests/__SCRIPT__ *> '__LOG__'

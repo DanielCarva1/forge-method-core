@@ -105,13 +105,20 @@ async function resumeFixture(page, citation, interrupted = false) {
     await resumeFixture(app.page, 'result.txt');
     await app.page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await app.page.locator('#preview-text').textContent(), 'Real local file from this project.');
+    await app.page.evaluate(async file => (await import('./preview.mjs')).previewLinkedFile(file), outside);
+    await app.page.locator('#preview-status').filter({ hasText: 'prévia anterior foi mantida' }).waitFor();
+    assert.equal(await app.page.locator('#preview-text').textContent(), 'Real local file from this project.');
+    assert.equal(await app.page.locator('#preview-path').textContent(), 'result.txt');
+    console.log('PASS: native path rejection kept the previously validated preview visible.');
     if (process.env.FORGE_RESULT_OPEN_SCREENSHOT) await app.page.screenshot({ path: process.env.FORGE_RESULT_OPEN_SCREENSHOT });
     await stop(app); app = null;
 
-    // The WebView and desktop process are new; no preview path was persisted.
+    // The WebView and desktop process are new; the local preview shortcut is
+    // revalidated by native code rather than assumed to remain safe.
     app = await launch(process.env.FORGE_DESKTOP_EXE, profile, port);
     await openProject(app.page, project);
-    assert.equal(await app.page.locator('#preview-result').isHidden(), true);
+    await app.page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.equal(await app.page.locator('#preview-path').textContent(), 'result.txt');
     await resumeFixture(app.page, 'result.txt', true);
     await app.page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await app.page.locator('#preview-text').textContent(), 'Real local file from this project.');
@@ -127,8 +134,8 @@ async function resumeFixture(page, citation, interrupted = false) {
     await openProject(app.page, project);
     await resumeFixture(app.page, outside.replaceAll('\\', '/'));
     await app.page.locator('#preview-status').filter({ hasText: 'não pertence ao projeto' }).waitFor();
-    assert.equal(await app.page.locator('#preview-result').isHidden(), true);
-    console.log('PASS: the same shortcut refused an outside-project path through native validation.');
+    assert.equal(await app.page.locator('#preview-path').textContent(), 'result.txt', 'The previously restored file stays visible after a rejected citation');
+    console.log('PASS: the same shortcut refused an outside-project path while keeping the restored valid preview.');
 
     await app.page.reload();
     await openProject(app.page, project);

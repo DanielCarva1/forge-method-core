@@ -57,6 +57,7 @@ let loginCompletedEarly = false;
 let broken = false;
 let generation = 0;
 let channel;
+let activeThreadId = null; // A new empty thread is not yet durable Codex history.
 const items = new Map();
 let latestItem = null;
 let lastResultPath = null;
@@ -223,6 +224,7 @@ export function setProject(value) {
     }
   }
   project = value;
+  if (!connected) activeThreadId = null;
   if (project) {
     draftOrigin = project;
     if (!input.value) {
@@ -655,11 +657,19 @@ async function connectCurrent(explicitThreadId = null) {
     try {
       for (const item of conversation.messages) message(item.id, item.role === 'user' ? 'Você' : item.incomplete ? 'Codex · resposta incompleta' : 'Codex', item.text, false, item.role === 'agent' && !item.incomplete);
     } finally { restoringHistory = false; updateLastResultAction(); }
-    sessionReferences.set(referenceKey(), conversation.thread_id);
-    hasPreviousConversation = true;
-    hasResumableConversation = true;
+    activeThreadId = conversation.thread_id;
+    // Codex may not persist a thread until it receives a turn. Do not replace
+    // a real bookmark with a newly opened, empty conversation.
+    const durableHistory = conversation.resumed || conversation.messages.length > 0;
+    if (durableHistory) {
+      sessionReferences.set(referenceKey(), conversation.thread_id);
+      hasPreviousConversation = true;
+      hasResumableConversation = true;
+    }
     let saved = true;
-    try { saveReference(localStorage, project, conversation.thread_id); } catch { saved = false; }
+    if (durableHistory) {
+      try { saveReference(localStorage, project, conversation.thread_id); } catch { saved = false; }
+    }
     newConversation.checked = false;
     const latestReplyIncomplete = conversation.messages.at(-1)?.role === 'agent' && conversation.messages.at(-1).incomplete;
     showStatus(broken
@@ -667,6 +677,7 @@ async function connectCurrent(explicitThreadId = null) {
       : `${reviewingSend ? 'Conversa retomada. O envio anterior ainda não foi confirmado. Confira as mensagens e o que foi feito; depois escolha “Já conferi o envio” para continuar. Nada foi reenviado.' : latestReplyIncomplete ? 'Conversa retomada. Última resposta incompleta: confira mensagens e arquivos antes de continuar. Mudanças podem permanecer; nada foi reenviado.' : conversation.resumed ? 'Conversa retomada. Você pode continuar de onde parou.' : `Codex conectado ao projeto ${projectDisplayName(project)}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}`, broken ? 'disconnected' : 'connected');
   } catch (error) {
     if (current !== generation) return;
+    activeThreadId = null;
     ++generation;
     const needsLogin = offerLogin(error);
     showStatus(needsLogin ? 'Entre no ChatGPT para continuar. Sua mensagem não foi enviada.'
@@ -809,7 +820,7 @@ byId('message-form').addEventListener('submit', async event => {
   }
   if (!connected && !await connectCurrent()) return;
   const current = generation;
-  const currentThread = sessionReferences.get(referenceKey());
+  const currentThread = activeThreadId;
   if (!currentThread) {
     showStatus('Não foi possível identificar a conversa atual. Abra o histórico antes de enviar.', 'error');
     return;
@@ -833,6 +844,15 @@ byId('message-form').addEventListener('submit', async event => {
     if (current !== generation) return;
     local.article.dataset.delivery = 'accepted';
     local.title.textContent = 'Você';
+    sessionReferences.set(referenceKey(), currentThread);
+    hasPreviousConversation = true;
+    hasResumableConversation = true;
+    try { saveReference(localStorage, project, currentThread); }
+    catch {
+      showStatus('Mensagem enviada, mas não foi possível guardar a conversa neste dispositivo. Confira o histórico antes de tentar outra mensagem.', 'error');
+      controls();
+      return;
+    }
     if (!storeDraft(project, '')) {
       showStatus('Envio confirmado, mas não foi possível remover o rascunho salvo. Confira esta conversa antes de tentar enviar novamente.', 'error');
       controls();
@@ -891,6 +911,7 @@ async function disconnectCurrent() {
     await invoke('disconnect_agent');
     if (current !== generation) return false;
     connected = false; busy = false; broken = false; channel = null;
+    activeThreadId = null;
     disconnected = true;
     showStatus('Desconectado. As alterações já feitas no projeto permanecem.', 'disconnected');
   } catch { if (current !== generation) return false; showStatus('Não foi possível desconectar. Tente novamente.', 'error'); }

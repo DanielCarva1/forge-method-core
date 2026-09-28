@@ -9846,3 +9846,47 @@ and manual screen-reader acceptance remain NOT_RUN. No manual GH CI ran.
 
 **Next product step:** continue the approachable UI and end-to-end gaps; do
 not mistake this coherent alpha package for full Forge Desktop completion.
+
+### Unpublished empty-conversation fix — 2026-09-28
+
+The UI now keeps a newly opened Codex thread separate from a resumable
+bookmark until its first Send is acknowledged. Opening an empty conversation
+no longer overwrites a prior real conversation or causes a failed automatic
+resume after restart. An uncertain Send still keeps its thread ID guard.
+Focused browser-double coverage in `tests/empty-conversation.cjs` passed for
+empty/reopen, first Send/reopen and preserving the earlier bookmark. The rebuilt
+debug app passed hidden native checks with the real Codex bridge for both an
+empty thread/restart (`native-empty-reopen.cjs`, no Send) and one read-only
+reply/restart (`native-saved-reopen.cjs`, no replay). JavaScript syntax and diff
+checks passed. No Rust source changed, no broad suite or manual GH CI ran.
+This is **source/debug only**; installed/public 0.1.53 does not include it.
+The next coherent UI package still needs a candidate build and installed
+readback before claiming availability.
+
+The local-result preview now retains its last native-validated file when a
+different file picked from the dialog or a Codex citation fails validation.
+The failed candidate is not made the active preview or saved shortcut; the
+error is visible beside the still-readable result. A valid replacement updates
+both preview and shortcut. Focused `preview-preserve.cjs` browser-double
+coverage passed, and the rebuilt debug app passed `native-result-shortcut.cjs`
+hidden with real native path rejection, restart and another valid citation.
+An older test assumption that every restart initially has no preview was
+corrected: a saved preview shortcut is revalidated on reopen. No Rust source,
+backend suite, broad browser suite or manual GH CI ran for this UI change.
+This remains source/debug-only until an installed alpha package is verified.
+
+### Desktop 0.1.54 candidate — 2026-09-28
+
+The empty-conversation and preview-retention fixes are grouped in one alpha.
+One 0.1.54 NSIS candidate was built and silently installed over 0.1.53; exit
+was 0, candidate bytes were unchanged and installed ProductVersion is 0.1.54.
+Candidate SHA-256:
+`732E915472785745FFAE2D260110760448881E75222F52EBF2F76CD0239E5FFC`.
+Installed executable SHA-256:
+`6D09B50E2FDED316885F099F0E2792016B2A6D55F12A1BD0C59B6273630B87F3`.
+The installed candidate passed three focused hidden-native checks: real Codex
+empty thread/restart without a spurious resume, real read-only reply/restart
+without another Send, and native preview path rejection preserving a validated
+result. Full Rust/browser suites and manual GH CI were not run. The candidate
+is installed locally but **not yet public**; publication/download readback
+remains next. No model-specific token or BRL cost attribution is available.
