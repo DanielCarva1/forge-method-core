@@ -42,4 +42,6 @@ successfully without changing the candidate. The installed app reports
 ProductVersion 0.1.62 (executable SHA-256
 `CC384B7FD2C16CC546DF05C7975AE16569574380ED1F9479F5F0F5E524829FBE`)
 and passed the focused hidden-native result and conversation check. The
-published download has not yet been checked; publication is a separate step.
+published installer was downloaded without authentication and matched the
+candidate's size and SHA-256; its sidecar matched byte-for-byte. The
+downloaded copy was hash-checked but not installed a second time.

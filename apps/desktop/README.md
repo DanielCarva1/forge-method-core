@@ -1,9 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.62` is current source and locally
-installed; `0.1.61` remains the latest
-[published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.61-alpha.1)
-until the 0.1.62 candidate is published and checked.
+Independent Tauri application. Desktop `0.1.62` is current source, locally
+installed and latest
+[published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.62-alpha.1).
+The exact installed candidate matched an anonymous download and sidecar.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -10331,3 +10331,16 @@ secondary conversation actions and nonvisual-result layout. Focused browser
 Rust tests, manual GitHub CI or new real Codex Send ran. Next: commit and push
 this package, publish this exact candidate under standing alpha authorization,
 then verify the anonymous download hash and sidecar. Do not rebuild it.
+
+### Desktop 0.1.62 public readback — 2026-09-28
+
+Package commit `a2c9e30e` and tag `desktop-v0.1.62-alpha.1` were pushed.
+The [0.1.62 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.62-alpha.1)
+contains the tested installer and 93-byte sidecar. Anonymous downloads
+matched the candidate's 123,146,772 bytes and SHA-256
+`F8693C2A4E05518530F95F26B93920D27BED81B362E5B31E83CED1B4CBE5ACCC`;
+the sidecar matched byte-for-byte. The downloaded copy was hash-verified but
+not installed a second time. The same exact candidate bytes had already been
+installed over 0.1.61 and passed the focused hidden-native result/conversation
+check. No broad suite, new real Codex turn or manual GH CI ran. Continue the
+Desktop product goal; this alpha is not full completion.
