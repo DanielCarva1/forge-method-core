@@ -10038,3 +10038,18 @@ preparation/Home-reopen check with no Codex Send. No broad suite or manual GH
 CI ran. Next: review the diff, commit/push/tag and publish this exact candidate
 under standing alpha authorization, then verify the anonymous download and
 installed readback. Do not rebuild the candidate.
+
+### Desktop 0.1.57 public readback — 2026-09-28
+
+Package commit `530cc0a2` and tag `desktop-v0.1.57-alpha.1` were pushed.
+The [0.1.57 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.57-alpha.1)
+contains the tested installer and 93-byte sidecar. Anonymous downloads
+matched the candidate's 123,050,785 bytes and SHA-256
+`F8C85C18EBF0EED265C826B8E438B1B500E9E0C505CF1B887B9385C4DF85B43E`.
+The exact candidate bytes had already installed over 0.1.56 with exit 0,
+ProductVersion 0.1.57, executable SHA-256
+`0CC10EBB0F8C81DD7863AB9894C412C5339B0C7379D115265C615DB5336BABE3`,
+and a focused hidden-native project-preparation/Home-reopen pass without
+Codex Send. The downloaded copy was hash-verified but not installed a second
+time; no distinct real-Codex turn, broad suite or manual GH CI ran for this
+package. Continue the Desktop product goal; this alpha is not full completion.
