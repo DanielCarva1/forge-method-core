@@ -38,4 +38,6 @@ The single Windows x64 NSIS candidate is `Forge_0.1.61_x64-setup.exe`
 Its 93-byte SHA-256 sidecar matches. Silent installation over 0.1.60 exited
 successfully without changing the candidate. The installed app reports
 ProductVersion 0.1.61 and passed the focused hidden-native result-access test.
-Anonymous download readback remains pending until publication.
+The published installer was downloaded without authentication and matched
+the candidate's size and SHA-256; its sidecar matched byte-for-byte. The
+downloaded copy was hash-checked but not installed a second time.

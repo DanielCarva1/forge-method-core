@@ -1,10 +1,10 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.61` is the current source and
-installed candidate; `0.1.60` remains the latest
-[published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.60-alpha.1)
-until publication and download readback. The exact 0.1.61 candidate was
-installed over 0.1.60 and passed focused hidden-native result-access checks.
+Independent Tauri application. Desktop `0.1.61` is the current source,
+installed and latest
+[published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.61-alpha.1).
+The exact 0.1.61 candidate was installed over 0.1.60, passed focused
+hidden-native result-access checks, then matched an anonymous download.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -10270,3 +10270,16 @@ turn or native clipboard modification occurred. Focused Desktop Cargo check,
 before packaging. No broad suite or manual GitHub CI ran. Next: publish this
 exact candidate under standing alpha authorization, then verify anonymous
 download bytes and sidecar. Do not rebuild it.
+
+### Desktop 0.1.61 public readback — 2026-09-28
+
+Package commit `aca62dc2` and tag `desktop-v0.1.61-alpha.1` were pushed.
+The [0.1.61 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.61-alpha.1)
+contains the tested installer and 93-byte sidecar. Anonymous downloads
+matched the candidate's 123,165,896 bytes and SHA-256
+`D0C3CBC16716BBCF8B7690891BF42002E5CD866C297C3266908EB5154070F3D2`;
+the sidecar matched byte-for-byte. The downloaded copy was hash-verified but
+not installed a second time. The same exact candidate bytes had already been
+installed over 0.1.60 and passed the focused hidden-native result-access
+test. No broad suite, new real Codex turn or manual GH CI ran. Continue the
+Desktop product goal; this alpha is not full completion.
