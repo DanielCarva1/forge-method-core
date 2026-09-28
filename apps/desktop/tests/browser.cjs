@@ -1037,7 +1037,7 @@ async function openConversation(page) {
     await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
     await page.setViewportSize({ width: 390, height: 420 });
-    await page.locator('#message-text').focus();
+    await page.locator('#message-text').click();
     const compactComposer = await page.evaluate(() => {
       const input = document.getElementById('message-text').getBoundingClientRect();
       const send = document.getElementById('send-message').getBoundingClientRect();
@@ -1049,6 +1049,30 @@ async function openConversation(page) {
     assert.ok(compactComposer.inputTop >= 0 && compactComposer.inputBottom <= compactComposer.viewportHeight &&
       compactComposer.sendTop >= 0 && compactComposer.sendBottom <= compactComposer.viewportHeight,
     `Focused writing and Send should stay reachable together in a short viewport: ${JSON.stringify(compactComposer)}`);
+    await page.setViewportSize({ width: 360, height: 720 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
+    await page.locator('#message-text').click();
+    const enlargedComposer = await page.evaluate(() => {
+      const input = document.getElementById('message-text').getBoundingClientRect();
+      const send = document.getElementById('send-message').getBoundingClientRect();
+      return { inputTop: input.top, inputBottom: input.bottom, sendTop: send.top,
+        sendBottom: send.bottom, viewportHeight: innerHeight, documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: innerWidth };
+    });
+    assert.equal(enlargedComposer.documentWidth <= enlargedComposer.viewportWidth && enlargedComposer.inputTop >= 0 &&
+      enlargedComposer.inputBottom <= enlargedComposer.viewportHeight && enlargedComposer.sendTop >= 0 &&
+      enlargedComposer.sendBottom <= enlargedComposer.viewportHeight, true,
+    `At 360px and 200% text, empty writing and Send must remain reachable: ${JSON.stringify(enlargedComposer)}`);
+    const enlargedDraft = 'Uma ideia com detalhes.\n'.repeat(12);
+    await page.locator('#message-text').fill(enlargedDraft);
+    await page.locator('#send-message').focus();
+    assert.equal(await page.evaluate(() => {
+      const send = document.getElementById('send-message').getBoundingClientRect();
+      return document.documentElement.scrollWidth <= innerWidth && send.top >= 0 && send.bottom <= innerHeight;
+    }), true, 'Send must remain keyboard-reachable after a long enlarged draft');
+    assert.equal(await page.locator('#message-text').inputValue(), enlargedDraft, 'Navigating to Send must not lose the long draft');
+    await page.locator('#message-text').fill('');
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
     for (const [width, height] of [[1180, 820], [1280, 844]]) {
       await page.setViewportSize({ width, height });
       assert.equal(await page.evaluate(() => {

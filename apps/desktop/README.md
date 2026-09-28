@@ -9024,3 +9024,25 @@ broad Desktop goal at the next user-visible gap; clean-machine setup,
 physical mobile access and manual screen-reader acceptance remain separate
 unverified work. Model-attributed tokens, BRL cost and Pro quota attribution
 remain UNKNOWN.
+
+### Post-0.1.44 enlarged writing probe — 2026-09-28
+
+The browser UI suite now checks the actual click-to-write journey at 360px
+and 200% text size: the empty composer and Send fit after the user navigates
+to the field, a long draft remains intact, and keyboard focus can reach Send
+without horizontal overflow. The initially attempted programmatic `focus()`
+on an already-focused field did not scroll after the viewport/text-size
+change; that was a test-action mismatch, not a product failure. The final
+click-and-keyboard test passed with the complete browser suite.
+
+Separately, the publicly installed 0.1.44 passed its hidden native
+`FORGE_TEST_NARROW_ZOOM=1` journey at 390px with enlarged text, long draft,
+keyboard Tab to Send, and no horizontal overflow. The native capture
+`D:/Temp/User/forge-0144-enlarged-composer.png` was visually reviewed: the
+long text scrolls within the field and Send remains visible. No source UI
+fix, backend change, installer rebuild, Codex Send or manual GitHub CI was
+needed. A physical mobile keyboard and manual screen-reader acceptance
+remain NOT_RUN. Next smallest action: use the installed app to examine the
+remaining screen-reader/keyboard journey before changing accessibility code;
+do not infer a defect from viewport emulation alone. Per-model token, BRL
+and Pro-quota attribution remain UNKNOWN.
