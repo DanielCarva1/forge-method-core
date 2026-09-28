@@ -41,5 +41,10 @@ installation over public 0.1.46 returned exit 0 without changing the
 candidate bytes. The installed executable reports ProductVersion 0.1.47,
 SHA-256
 `660DE983355AD29DDC72467E59B7053C6317A0D43A254810077C2C215694DF34`.
-The public download verification will be recorded after publication. A
-source commit alone does not update the installed app.
+Package commit `87a3ec9b` was pushed and tagged
+`desktop-v0.1.47-alpha.1`. The unauthenticated public download and sidecar
+returned the same 123,092,052 bytes and SHA-256 as the tested candidate.
+Silent installation of that downloaded file returned exit 0, preserved its
+hash and installed the same 0.1.47 executable hash. The downloaded
+installation passed the hidden native project-switch/draft smoke. A source
+commit alone does not update the installed app.

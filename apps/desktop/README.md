@@ -1,9 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.47` is the current source version.
-The previous [0.1.46 alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.46-alpha.1)
-was downloaded without authentication, hash-checked, installed over `0.1.45`
-and tested in the hidden native app. The 0.1.47 package is being prepared.
+Independent Tauri application. Desktop `0.1.47` is the current source version
+and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.47-alpha.1).
+Its installer was downloaded without authentication, hash-checked, installed
+over the 0.1.47 candidate and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -9239,3 +9239,25 @@ remain NOT_RUN.
 **State:** candidate installed and tested. Next exact step: review diff,
 commit/push/tag, publish this exact candidate and sidecar, verify anonymous
 download bytes and reinstall, then continue the broad Desktop goal.
+
+### Desktop 0.1.47 public readback — 2026-09-28
+
+Package commit `87a3ec9b` was pushed on `codex/desktop-shell` and tagged
+`desktop-v0.1.47-alpha.1`. The exact tested candidate and sidecar are in the
+[0.1.47 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.47-alpha.1).
+Unauthenticated downloads returned 123,092,052 bytes and SHA-256
+`E397A974F81419C409D17F58B75A06323487BD75A90423FF2A2DE3F7704E6DF8`,
+identical to the candidate and public sidecar. Silent installation of those
+downloaded bytes returned exit 0, preserved the file hash, and installed
+ProductVersion 0.1.47, executable SHA-256
+`660DE983355AD29DDC72467E59B7053C6317A0D43A254810077C2C215694DF34`.
+The downloaded installation passed the hidden native project-switch/draft
+smoke. This is same-machine package proof, not clean-machine setup, real
+provider login completion, external-browser launch or manual accessibility
+acceptance. No manual GitHub CI ran. The broad Desktop goal stays active;
+per-model tokens, BRL cost and Pro quota attribution remain UNKNOWN.
+
+**Next smallest step:** continue the real-user journey, prioritize a concrete
+remaining UI/backend or accessibility gap with an observable acceptance test,
+then make another coherent alpha package rather than polishing this isolated
+draft behavior indefinitely.
