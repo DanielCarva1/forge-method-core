@@ -34,15 +34,16 @@
         <p class="intro">Uma ideia pequena já basta. Escolha um caminho, converse com seu agente e construa no seu ritmo.</p>
         <div class="home-actions">
           <a class="action-link primary" href="#explore">Descobrir ideias <span aria-hidden="true">→</span></a>
-          <a class="action-link" href="#projects">Continuar um projeto</a>
+          <a class="action-link" id="home-hero-project-action" href="#projects">Continuar um projeto</a>
         </div>
+        <p id="home-hero-project-status" role="status" aria-live="polite" hidden></p>
         <p class="hero-note">Não precisa saber programar. Você decide o que quer fazer; o Forge ajuda a manter o caminho claro.</p>
       </div>
       <section id="start-ideas" class="starter-section" aria-labelledby="starter-title">
         <p class="eyebrow">COMECE DO SEU JEITO</p>
         <h2 id="starter-title">Você não precisa chegar com tudo planejado.</h2>
         <div class="starter-grid">
-          <article class="starter-card"><span class="step">01</span><h3>Continuar algo existente</h3><p>Escolha a pasta do seu trabalho. Se ela ainda não usa Forge, vamos prepará-la sem apagar seus arquivos.</p><a href="#projects">Abrir meu projeto</a></article>
+          <article class="starter-card"><span class="step">01</span><h3 id="home-project-title">Continuar algo existente</h3><p id="home-project-copy">Escolha a pasta do seu trabalho. Se ela ainda não usa Forge, vamos prepará-la sem apagar seus arquivos.</p><a id="home-project-action" href="#projects">Abrir meu projeto</a><a id="home-project-list" href="#projects" hidden>Ver meus projetos</a><p id="home-project-status" role="status" aria-live="polite" hidden></p></article>
           <article class="starter-card"><span class="step">02</span><h3>Melhorar uma ideia</h3><p>Leve uma dúvida, um problema ou uma vontade de mudança para a conversa.</p><a href="#workspace" data-project-mode="new" data-new-project>Conversar sobre uma ideia</a></article>
           <article class="starter-card"><span class="step">03</span><h3>Entender o próximo passo</h3><p>Consulte o que ficou registrado e converse com seu agente sem decifrar arquivos técnicos.</p><a href="#workspace" data-project-mode="existing">Ver meu trabalho</a></article>
         </div>

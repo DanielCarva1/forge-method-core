@@ -9960,3 +9960,36 @@ project-preparation and update-help check without a Codex Send. Existing real
 conversation continuity across this upgrade was NOT_RUN; earlier 0.1.54
 readbacks remain separate evidence. No manual GH CI or broad suite ran.
 Continue the Desktop product goal; this alpha is not completion.
+
+### Unpublished Home project shortcut — 2026-09-28
+
+Home now offers one-click return to the latest local project shortcut from the
+hero action and first starter card, with its name and folder visible in the
+card. Both actions reuse the existing native project
+inspection; it does not trust local storage, create a second project registry,
+or send a message. Removing the shortcut restores the original folder-opening
+card. Focused headless `tests/home-recent-project.cjs` passed for an invalid
+shortcut and removal without Send. The rebuilt debug app passed the focused
+hidden-native `native-composer-folder.cjs`: it prepared a real disposable Forge
+project, reopened it from Home through native `inspect_project`, and made no
+Codex Send. A second focused hidden-native run, `native-saved-reopen.cjs`,
+sent one real read-only Codex message, closed/reopened the app, used the Home
+hero action, and recovered the validated project and reply without another
+Send. No broad suite, CI, commit, push, or publication ran. Next: package this
+retake journey as the next coherent alpha, or combine it with another concrete
+UI fix if one is found before candidate creation.
+
+### Desktop 0.1.56 candidate — 2026-09-28
+
+The Home retake journey is packaged in one NSIS candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.56_x64-setup.exe`:
+123,061,847 bytes, SHA-256
+`9FE5E9A87E0D7A8642C83BA4E3E63B9CBE4374771C079A0575273D0E444D775C`.
+The 93-byte sidecar matches. Silent installation over 0.1.55 exited 0 and
+preserved the candidate bytes. Installed ProductVersion is 0.1.56, executable
+SHA-256 `D8E62767536AB93932540B901CEB098DA1BBD617B74A266524D776E31CD92F83`.
+The installed candidate passed `native-saved-reopen.cjs` hidden: one real
+read-only Codex reply, app restart, Home resume, recovered reply, no second
+Send. No broad suite or manual GH CI ran. Next: commit/push/tag and publish
+this exact candidate under standing alpha authorization, then verify an
+anonymous download and installed readback. Do not rebuild the candidate.

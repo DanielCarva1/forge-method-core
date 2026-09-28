@@ -46,6 +46,8 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 .starter-card h3 { margin-bottom: 0; }
 .starter-card p { color: var(--muted); flex: 1; }
 .starter-card a { font-weight: 700; }
+.starter-card a[hidden], .starter-card p[hidden] { display: none; }
+#home-project-list { margin-top: 8px; font-size: .9rem; }
 .screen-heading { margin-block: 24px; max-width: 900px; }
 .screen-heading h1 { font-size: clamp(2rem, 4vw, 2.6rem); }
 .back-link { display: inline-flex; gap: 8px; align-items: center; min-height: 48px; font-weight: 650; }

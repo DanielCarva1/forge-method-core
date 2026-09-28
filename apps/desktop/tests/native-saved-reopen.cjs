@@ -9,11 +9,12 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 
 const executable = process.env.FORGE_DESKTOP_EXE;
-const projectRoot = process.env.FORGE_TEST_PROJECT;
-if (!executable || !projectRoot) throw new Error('Set FORGE_DESKTOP_EXE and FORGE_TEST_PROJECT');
+const suppliedProjectRoot = process.env.FORGE_TEST_PROJECT;
+if (!executable) throw new Error('Set FORGE_DESKTOP_EXE');
 
 (async () => {
   const profile = await mkdtemp(path.join(tmpdir(), 'forge-native-saved-reopen-'));
+  const projectRoot = suppliedProjectRoot || await mkdtemp(path.join(tmpdir(), 'forge-native-saved-project-'));
   const reservation = createServer();
   await new Promise(resolve => reservation.listen(0, '127.0.0.1', resolve));
   const port = reservation.address().port;
@@ -82,8 +83,8 @@ if (!executable || !projectRoot) throw new Error('Set FORGE_DESKTOP_EXE and FORG
       } });
       window.__TAURI__.core = facade;
     });
-    await page.getByRole('link', { name: 'Meus projetos' }).click();
-    await page.locator('.recent-project').getByRole('button', { name: /^Abrir / }).click();
+    assert.equal(await page.locator('#home-hero-project-action').textContent(), 'Continuar último projeto');
+    await page.locator('#home-hero-project-action').click();
     try {
       await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor({ timeout: 20000 });
     } catch (error) {
@@ -99,11 +100,19 @@ if (!executable || !projectRoot) throw new Error('Set FORGE_DESKTOP_EXE and FORG
     assert.equal(await page.locator('#messages article[data-role="user"]').count(), 1);
     assert.equal(await page.locator('#messages article[data-role="agent"]').count(), 1);
     assert.match(await page.locator('#messages').textContent(), /Retomada verificada/);
-    console.log('PASS: hidden native app reopened a real saved Codex conversation with its reply and validated project, without a second Send.');
+    console.log('PASS: hidden native Home reopened a real saved Codex conversation with its reply and validated project, without a second Send.');
   } finally {
     await stop();
     assert.equal(path.dirname(path.resolve(profile)), path.resolve(tmpdir()));
     assert.ok(path.basename(profile).startsWith('forge-native-saved-reopen-'));
     await rm(profile, { recursive: true, force: true, maxRetries: 12, retryDelay: 250 });
+    if (!suppliedProjectRoot) {
+      const forgeState = path.join(path.dirname(projectRoot), `forge-${path.basename(projectRoot)}`);
+      for (const [target, prefix] of [[projectRoot, 'forge-native-saved-project-'], [forgeState, 'forge-forge-native-saved-project-']]) {
+        assert.equal(path.dirname(path.resolve(target)), path.resolve(tmpdir()));
+        assert.ok(path.basename(target).startsWith(prefix));
+        await rm(target, { recursive: true, force: true, maxRetries: 12, retryDelay: 250 });
+      }
+    }
   }
 })().catch(error => { console.error(error); process.exitCode = 1; });

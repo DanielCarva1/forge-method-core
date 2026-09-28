@@ -14,6 +14,13 @@ const openFolderLabel = document.querySelector('#projects-open-folder-label');
 const status = document.querySelector('#projects-status');
 const projectRoot = document.querySelector('#project-root');
 const projectForm = document.querySelector('#project-form');
+const homeTitle = document.querySelector('#home-project-title');
+const homeCopy = document.querySelector('#home-project-copy');
+const homeAction = document.querySelector('#home-project-action');
+const homeList = document.querySelector('#home-project-list');
+const homeStatus = document.querySelector('#home-project-status');
+const homeHeroAction = document.querySelector('#home-hero-project-action');
+const homeHeroStatus = document.querySelector('#home-hero-project-status');
 
 function validProject(value) {
   return value && typeof value === 'object'
@@ -48,7 +55,59 @@ function saveProjects(next = projects) {
   }
 }
 
+async function openRecentProject(project) {
+  if (projectRoot.disabled && projectRoot.value === project.project_root) {
+    location.hash = '#workspace';
+    return true;
+  }
+  if (projectRoot.disabled && (!await prepareProjectSwitch() || projectRoot.disabled)) return false;
+  projectRoot.value = project.project_root;
+  projectRoot.dispatchEvent(new Event('input', { bubbles: true }));
+  document.querySelector('#project-setup').open = true;
+  location.hash = '#workspace';
+  projectForm.requestSubmit(document.querySelector('#inspect-project')); // The native resolver validates the shortcut again.
+  return true;
+}
+
+function renderHomeProject() {
+  const recent = projects[0];
+  homeStatus.hidden = true;
+  homeStatus.textContent = '';
+  homeHeroStatus.hidden = true;
+  homeHeroStatus.textContent = '';
+  if (!recent) {
+    homeTitle.textContent = 'Continuar algo existente';
+    homeCopy.textContent = 'Escolha a pasta do seu trabalho. Se ela ainda não usa Forge, vamos prepará-la sem apagar seus arquivos.';
+    homeAction.textContent = 'Abrir meu projeto';
+    homeAction.href = '#projects';
+    homeList.hidden = true;
+    homeHeroAction.textContent = 'Continuar um projeto';
+    homeHeroAction.href = '#projects';
+    return;
+  }
+  homeTitle.textContent = 'Seu último projeto';
+  homeCopy.textContent = `${projectDisplayName(recent)} — ${recent.project_root}`;
+  homeAction.textContent = 'Continuar este projeto';
+  homeAction.href = '#workspace';
+  homeList.hidden = false;
+  homeHeroAction.textContent = 'Continuar último projeto';
+  homeHeroAction.href = '#workspace';
+}
+
+async function openHomeProject(event, errorStatus) {
+  const recent = projects[0];
+  if (!recent) return;
+  event.preventDefault();
+  if (await openRecentProject(recent)) return;
+  errorStatus.textContent = 'Não foi possível trocar de projeto agora. Confira a conversa atual e tente novamente.';
+  errorStatus.hidden = false;
+}
+
+homeAction.addEventListener('click', event => openHomeProject(event, homeStatus));
+homeHeroAction.addEventListener('click', event => openHomeProject(event, homeHeroStatus));
+
 function renderProjects() {
+  renderHomeProject();
   list.replaceChildren();
   empty.hidden = projects.length > 0;
   filterBox.hidden = projects.length === 0;
@@ -85,19 +144,9 @@ function renderProjects() {
     open.textContent = 'Abrir';
     open.setAttribute('aria-label', `Abrir ${name} na pasta ${project.project_root}`);
     open.addEventListener('click', async () => {
-      if (projectRoot.disabled && projectRoot.value === project.project_root) {
-        location.hash = '#workspace';
-        return;
-      }
-      if (projectRoot.disabled && (!await prepareProjectSwitch() || projectRoot.disabled)) {
+      if (!await openRecentProject(project)) {
         status.textContent = 'Não foi possível trocar de projeto agora. Confira a conversa atual e tente novamente.';
-        return;
       }
-      projectRoot.value = project.project_root;
-      projectRoot.dispatchEvent(new Event('input', { bubbles: true }));
-      document.querySelector('#project-setup').open = true;
-      location.hash = '#workspace';
-      projectForm.requestSubmit(document.querySelector('#inspect-project')); // The native resolver validates the shortcut again.
     });
     const remove = document.createElement('button');
     remove.type = 'button';

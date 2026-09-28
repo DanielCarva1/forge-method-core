@@ -36,11 +36,12 @@ if (!executable) throw new Error('Set FORGE_DESKTOP_EXE');
     const page = browser.contexts()[0].pages()[0] || await browser.contexts()[0].waitForEvent('page', { timeout: 5000 });
     await page.locator('#home').waitFor({ state: 'visible' });
     await page.evaluate(() => {
-      window.nativeCalls = { start: 0, send: 0 };
+      window.nativeCalls = { start: 0, inspect: 0, send: 0 };
       const core = window.__TAURI__.core;
       const facade = Object.create(core);
       Object.defineProperty(facade, 'invoke', { value: (command, args) => {
         if (command === 'start_project') window.nativeCalls.start++;
+        if (command === 'inspect_project') window.nativeCalls.inspect++;
         if (command === 'send_message') window.nativeCalls.send++;
         return core.invoke(command, args);
       } });
@@ -56,13 +57,22 @@ if (!executable) throw new Error('Set FORGE_DESKTOP_EXE');
     await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 90000 });
     assert.equal(await page.locator('#confirmed-root').textContent(), project);
     assert.equal(await draft.inputValue(), idea);
-    assert.deepEqual(await page.evaluate(() => window.nativeCalls), { start: 1, send: 0 });
+    assert.deepEqual(await page.evaluate(() => window.nativeCalls), { start: 1, inspect: 0, send: 0 });
     assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isEnabled(), true);
+    await page.evaluate(() => { location.hash = '#home'; });
+    await page.locator('#home-project-action').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#home-project-action').textContent(), 'Continuar este projeto');
+    assert.match(await page.locator('#home-project-copy').textContent(), new RegExp(path.basename(project)));
+    assert.equal(await page.locator('#home-hero-project-action').textContent(), 'Continuar último projeto');
+    await page.locator('#home-hero-project-action').click();
+    await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 30000 });
+    assert.deepEqual(await page.evaluate(() => window.nativeCalls), { start: 1, inspect: 1, send: 0 });
+    assert.equal(await page.locator('#confirmed-root').textContent(), project);
     await page.evaluate(() => { location.hash = '#updates'; });
     await page.locator('#updates h3').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#about').evaluate(node => node.open), true);
     assert.match(await page.locator('#app-version').textContent(), /Versão instalada:/);
-    console.log('PASS: hidden native Forge prepared one real project from an Explore draft without Codex Send; update help is reachable.');
+    console.log('PASS: hidden native Forge prepared and reopened one real project from Home with native inspection and no Codex Send; update help is reachable.');
   } finally {
     await browser?.close().catch(() => {});
     if (child?.pid && child.exitCode === null && child.signalCode === null) {
