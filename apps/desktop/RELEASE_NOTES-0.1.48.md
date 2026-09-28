@@ -40,6 +40,12 @@ Its adjacent 93-byte `.sha256` sidecar records the same hash. Silent
 installation over 0.1.47 returned exit 0, preserved the candidate bytes and
 installed ProductVersion 0.1.48, executable SHA-256
 `544070E31102467A1F741CC091A46BD25B8504CDF17C216F70BC69596143EDB1`.
-The installed candidate passed the hidden native process-restart smoke. Public
-download verification is pending publication. A source commit alone does not
-update the installed app.
+The installed candidate passed the hidden native process-restart smoke.
+Package commit `7e6f4e4b` was pushed and tagged
+`desktop-v0.1.48-alpha.1`. Unauthenticated public downloads of the installer
+and sidecar returned identical bytes and hash to the tested candidate.
+Installing those downloaded bytes silently returned exit 0, preserved the
+installer hash and installed the same 0.1.48 executable hash. The downloaded
+installation passed the hidden native process-restart smoke. This is
+same-machine package proof, not clean-machine installation. A source commit
+alone does not update the installed app.

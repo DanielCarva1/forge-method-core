@@ -1,9 +1,9 @@
 # Forge desktop shell
 
 Independent Tauri application. Desktop `0.1.48` is the current source version
-and installed candidate; the latest verified [published alpha is 0.1.47](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.47-alpha.1).
-The 0.1.48 candidate has been hash-checked and tested in the hidden native
-app. Public readback remains pending.
+and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.48-alpha.1).
+Its installer was downloaded without authentication, hash-checked, installed
+and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -9302,3 +9302,25 @@ remain NOT_RUN.
 **State:** candidate installed and tested. Next exact step: review the diff,
 commit/push/tag, publish this exact candidate and sidecar, verify anonymous
 download bytes and reinstall, then continue the broad Desktop product goal.
+
+### Desktop 0.1.48 public readback — 2026-09-28
+
+Package commit `7e6f4e4b` was pushed on `codex/desktop-shell` and tagged
+`desktop-v0.1.48-alpha.1`. The exact tested candidate and sidecar are in the
+[0.1.48 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.48-alpha.1).
+Unauthenticated downloads returned 123,052,041 bytes and SHA-256
+`24FBBD30420DCB5340E29B9CA743BD4BDC98BE0E86027BC3CE9C056A17E2174F`,
+identical to the candidate and public sidecar. Silent installation of those
+downloaded bytes returned exit 0, preserved the file hash, and installed
+ProductVersion 0.1.48, executable SHA-256
+`544070E31102467A1F741CC091A46BD25B8504CDF17C216F70BC69596143EDB1`.
+The downloaded installation passed the hidden native full-process draft
+restart smoke: exact unsent text returned and no Send was invoked. This is
+same-machine package proof, not clean-machine setup, real provider login
+completion, external-browser launch or manual accessibility acceptance. No
+manual GitHub CI ran. The broad Desktop goal stays active; per-model tokens,
+BRL cost and Pro quota attribution remain UNKNOWN.
+
+**Next smallest step:** inspect the next concrete real-user UI/backend gap and
+deliver a coherent package. Do not infer full product readiness from draft
+persistence alone.
