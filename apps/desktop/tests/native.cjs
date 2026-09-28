@@ -1024,16 +1024,17 @@ async function operatePreviewDialog(page, file) {
           const generated = await readFile(generatedFile, 'utf8');
           assert.match(generated, /Jardim de ideias/);
           const result = page.locator('#messages article[data-role="agent"]').last();
-          const directFileAction = result.getByRole('button', { name: /Ver arquivo local:/ }).filter({ hasText: /site\/index\.html|página|arquivo/i }).first();
-          if (await directFileAction.count() === 1) {
-            await directFileAction.click();
+          const directPaths = await result.locator('.message-file-link').evaluateAll(nodes => nodes.map(node => node.dataset.previewPath));
+          const directIndex = directPaths.findIndex(value => /(?:^|[\\/])site[\\/]index\.html$/i.test(value));
+          if (directIndex >= 0) {
+            await result.locator('.message-file-link').nth(directIndex).click();
           } else {
             const choices = result.locator('.message-file-choices');
-            assert.equal(await choices.count(), 1, 'The reply must expose generated files even when the agent omits a Markdown link');
-            await choices.locator('summary').click();
-            const indexFile = choices.getByRole('button', { name: /Conferir arquivo da resposta: site[\\/]index\.html/ });
-            assert.equal(await indexFile.count(), 1, 'The generated index file must be individually selectable');
-            await indexFile.click();
+            const choicePaths = await choices.locator('button').evaluateAll(nodes => nodes.map(node => node.textContent));
+            const choiceIndex = choicePaths.findIndex(value => /(?:^|[\\/])site[\\/]index\.html$/i.test(value));
+            assert.ok(choiceIndex >= 0, `The generated index file must be individually selectable; reply=${JSON.stringify((await result.innerText()).slice(-1400))}; paths=${JSON.stringify({ directPaths, choicePaths })}`);
+            if (!await choices.evaluate(node => node.open)) await choices.locator('summary').click();
+            await choices.locator('button').nth(choiceIndex).click();
           }
           await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
           assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');

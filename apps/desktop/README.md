@@ -9387,3 +9387,34 @@ per-model tokens, BRL cost and Pro quota attribution remain UNKNOWN.
 **Next smallest step:** examine the installed app for another real-user gap in
 the full create/chat/result/restart journey. Close and verify a coherent slice;
 do not infer whole-product completion from this shortcut fix.
+
+### Desktop 0.1.49 installed end-to-end readback — 2026-09-28
+
+The already-published, already-installed 0.1.49 was exercised headlessly in
+the real native WebView with the real Codex backend. In a temporary onboarded
+project, Codex created `site/index.html`; the app selected that exact file,
+rendered its protected local preview, accepted a follow-up change request in
+the same conversation, and refreshed the visible title after Codex changed the
+file. WebView reload restored the conversation without resending. A separate
+hidden run restarted the entire app process and recovered a real Codex
+conversation in order, again with zero resend calls. A separate activation
+probe read back the actual Codex turn (`01a0e907-f771-7a72-9940-1d63753b0de1`):
+it loaded the bundled Start Forge skill and ran `forge-core start`,
+`workflow resume`, `guide status`, and `guide detail` against the opened temporary
+project before answering a product-discovery question. This is real-agent
+integration evidence, not a simulated browser claim.
+
+An artifact-journey run failed because its test selected a generic
+“arquivo” link to `result.txt` instead of the generated `site/index.html`;
+the file and native preview mechanism were intact. `tests/native.cjs` now
+selects the result by its exact project-relative suffix, with a diagnostic
+for missing links. The revised journey passed. No Desktop product code or
+installer bytes changed in this slice; 0.1.49 remains the published version.
+No manual GitHub CI or Rust suite ran because only the JavaScript native test
+changed. Clean-machine setup, real provider login completion, external-browser
+launch and manual screen-reader acceptance remain NOT_RUN. No worker was
+delegated; per-model tokens, BRL cost and Pro quota attribution remain UNKNOWN.
+
+**Next smallest step:** use the real journey screenshot and remaining Desktop
+acceptance criteria to choose and close the next concrete user-facing UI gap;
+do not claim the entire Forge product finished from this bounded proof.
