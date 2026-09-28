@@ -1,6 +1,6 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.30` is the published alpha
+Independent Tauri application. Desktop `0.1.31` is the published alpha
 prerelease. Its exact installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
@@ -7784,3 +7784,31 @@ BRL equivalent and Pro-quota impact remain UNKNOWN.
 the code, publish this same tested installer and matching hash sidecar as an
 alpha prerelease, download both public files without authentication, compare
 bytes and test the downloaded installer. Do not rebuild the candidate.
+
+### Desktop 0.1.31 public readback — 2026-09-28
+
+Code commit `da947c78` was pushed on `codex/desktop-shell` and tagged
+`desktop-v0.1.31-alpha.1`. The tested installer and matching SHA-256 sidecar
+were published as the [0.1.31 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.31-alpha.1).
+No installer rebuild or manual GitHub CI run occurred after the local package
+checks. An unauthenticated download of both assets returned a 123,079,445-byte
+installer with SHA-256
+`A167B06A826B52D9FDCD544D5CA07D41F7356F81ADC2442CF868B2D171EED887`,
+matching the sidecar and the originally tested candidate. Installing those
+downloaded bytes silently returned exit 0; the public file hash stayed
+unchanged and the installed 0.1.31 executable retained SHA-256
+`49713D34D8EF62382B7A68AEEEF617DEF6160D36FEF18D82CCA3A288218F92CB`.
+The downloaded installation passed hidden native smoke, including the real
+folder-dialog cancel through the new idea action, real Forge onboarding,
+record readback, and controlled preview-refresh checks. This proves
+same-machine public-byte continuity and installed readback, not a clean
+machine or real Codex Send in the precise new flow. No subagent was used;
+model-attributed tokens, API-equivalent BRL and Pro-quota impact remain
+UNKNOWN.
+
+**State and next product step:** 0.1.31 is public and installed. The broad
+friendly-UI/connected-backend journey remains active; this alpha does not
+close it. Continue with a concrete, high-impact UI coverage gap from the
+existing backend and approved design, using native screenshots and a user
+journey rather than revisiting #92 wording feasibility or other low-return
+contract speculation first. Keep releases as coherent building blocks.
