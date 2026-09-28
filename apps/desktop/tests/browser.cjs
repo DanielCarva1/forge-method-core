@@ -180,6 +180,8 @@ async function openConversation(page) {
           if (args.filePath.includes('outside')) throw 'Este arquivo não pertence ao projeto aberto.';
           return window.previewKind === 'image'
             ? { kind: 'image', relative_path: 'result.png', size_bytes: 100, content: window.previewImage }
+            : window.previewKind === 'file'
+              ? { kind: 'file', relative_path: 'output/report.pdf', size_bytes: 2084, content: '' }
             : window.previewKind === 'html'
               ? { kind: 'text', relative_path: 'site/index.html', size_bytes: 100, content: '<h1>Site local</h1>', render_url: 'http://forgepreview.localhost/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/index%2Ehtml' }
             : window.previewKind === 'markdown'
@@ -265,7 +267,7 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#preview-text').textContent(), '<script>primeiro</script>');
     assert.equal(await projectsPage.evaluate(() => !!(document.getElementById('request-preview-change').compareDocumentPosition(document.querySelector('.preview-origin')) & Node.DOCUMENT_POSITION_FOLLOWING)), true, 'Change request appears before result metadata and optional browser controls');
     assert.equal(await projectsPage.locator('#preview-result script').count(), 0);
-    assert.match(await projectsPage.locator('#preview-result').textContent(), /Esta prévia não confirma publicação na internet/);
+    assert.match(await projectsPage.locator('#preview-result').textContent(), /Isso não confirma publicação na internet/);
     await projectsPage.getByRole('button', { name: 'Abrir prévia' }).click();
     assert.equal(await projectsPage.locator('#preview-dialog').isVisible(), true);
     assert.equal(await projectsPage.locator('#preview-dialog-site-note').isVisible(), false, 'A text file must not show site-only limitations');
@@ -379,6 +381,29 @@ async function openConversation(page) {
     await projectsPage.getByRole('button', { name: 'Ver código' }).last().click();
     assert.equal(await projectsPage.locator('#preview-dialog-more').isVisible(), false);
     await projectsPage.getByRole('button', { name: 'Fechar prévia' }).click();
+    await projectsPage.evaluate(() => { window.previewKind = 'file'; window.previewChoice = 'D:\\one\\output\\report.pdf'; });
+    await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
+    await projectsPage.locator('#preview-status').filter({ hasText: 'Arquivo encontrado na pasta do projeto' }).waitFor();
+    assert.equal(await projectsPage.evaluate(async () => {
+      const { renderAgentMessage } = await import('./message-format.mjs');
+      const target = document.createElement('div');
+      renderAgentMessage(target, '[relatório](output/report.pdf)', () => {});
+      return target.querySelector('button')?.dataset.previewPath;
+    }), 'output/report.pdf', 'A cited PDF should be selectable from the conversation');
+    assert.equal(await projectsPage.locator('#preview-file-note').isVisible(), true);
+    assert.equal(await projectsPage.locator('#preview-heading').textContent(), 'Arquivo do projeto');
+    assert.equal(await projectsPage.getByRole('button', { name: 'Atualizar informações' }).isVisible(), true);
+    assert.equal(await projectsPage.locator('#preview-path').textContent(), 'output/report.pdf');
+    assert.equal(await projectsPage.locator('#open-preview').isHidden(), true);
+    assert.equal(await projectsPage.locator('#preview-text').isVisible(), false);
+    await projectsPage.getByRole('button', { name: 'Conversar sobre este arquivo' }).click();
+    assert.match(await projectsPage.locator('#message-text').inputValue(), /Sobre o arquivo output\/report\.pdf:/);
+    await projectsPage.evaluate(() => { window.previewKind = 'html'; window.previewChoice = 'D:\\one\\site\\index.html'; });
+    await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
+    await projectsPage.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.equal(await projectsPage.locator('#preview-file-note').isVisible(), false);
+    assert.equal(await projectsPage.locator('#preview-heading').textContent(), 'Prévia do resultado');
+    assert.equal(await projectsPage.getByRole('button', { name: 'Pedir mudança neste arquivo' }).isVisible(), true);
     await projectsPage.setViewportSize({ width: 390, height: 844 });
     assert.equal(await projectsPage.evaluate(() => {
       const project = document.querySelector('.project').getBoundingClientRect();
@@ -409,7 +434,7 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#preview-result').isVisible(), false);
     assert.equal(await projectsPage.locator('#open-preview').isHidden(), true);
     assert.equal(await projectsPage.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), false);
-    assert.deepEqual(await projectsPage.evaluate(() => window.previewReads.map(read => read.projectRoot)), ['D:\\one', 'D:\\one', 'D:\\one', 'D:\\one', 'D:\\one', 'D:\\one']);
+    assert.deepEqual(await projectsPage.evaluate(() => window.previewReads.map(read => read.projectRoot)), Array(8).fill('D:\\one'));
     if (process.env.FORGE_CONFIRMED_SCREENSHOT) await projectsPage.screenshot({ path: process.env.FORGE_CONFIRMED_SCREENSHOT, fullPage: true });
     await openProjectSetup(projectsPage);
     await projectsPage.evaluate(() => { window.folderChoice = null; });

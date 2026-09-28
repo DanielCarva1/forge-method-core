@@ -137,6 +137,7 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 .preview-markdown { max-width: 100%; margin: 14px 0; padding: 4px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--canvas); overflow-wrap: anywhere; }
 .preview-markdown > :first-child { margin-top: 12px; }
 .preview-markdown > :last-child { margin-bottom: 12px; }
+.preview-file-note { margin: 14px 0; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--canvas); line-height: 1.5; }
 .preview iframe, .preview-dialog iframe { display: block; width: 100%; min-height: 290px; aspect-ratio: 16 / 10; margin: 14px 0; border: 1px solid var(--line); border-radius: 16px; background: white; pointer-events: none; }
 .preview #preview-result > :first-child:not([hidden]) { margin-top: 6px; }
 .preview #request-preview-change { margin: 12px 0 8px; }

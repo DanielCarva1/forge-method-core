@@ -1,5 +1,5 @@
 // Readable structure for completed Codex text. Agent URLs never navigate the app.
-const previewExtension = /\.(?:txt|md|json|csv|html?|css|js|mjs|ts|rs|py|ya?ml|toml|png|jpe?g|gif|webp)$/i;
+const previewExtension = /\.(?:txt|md|json|csv|html?|css|js|mjs|ts|rs|py|ya?ml|toml|png|jpe?g|gif|webp|pdf|docx?|xlsx?|pptx?|zip|mp[34]|wav)$/i;
 function localPreviewPath(value) {
   const path = value.trim();
   if (!path || path.length > 1024 || /[\0<>"|?*#]/.test(path) || !previewExtension.test(path)) return null;

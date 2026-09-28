@@ -1,6 +1,7 @@
 // The selected path is transient UI state. Forge owns the project, not this preview.
 import { renderAgentMessage } from './message-format.mjs';
 const panel = document.getElementById('project-preview');
+const heading = document.getElementById('preview-heading');
 const workspace = document.querySelector('.workspace');
 const projectPanel = workspace.querySelector('.project');
 const recordPanel = workspace.querySelector('.record');
@@ -13,6 +14,7 @@ const image = document.getElementById('preview-image');
 const site = document.getElementById('preview-site');
 const siteNote = document.getElementById('preview-site-note');
 const text = document.getElementById('preview-text');
+const fileNote = document.getElementById('preview-file-note');
 const markdown = document.getElementById('preview-markdown');
 const openPreview = document.getElementById('open-preview');
 const browserAction = document.getElementById('preview-browser-action');
@@ -39,6 +41,7 @@ let pending = false;
 let browserOpening = false;
 let renderUrl = null;
 let formattedMarkdown = false;
+let fileOnly = false;
 let sourceVisible = false;
 let dialogSiteHeight = 560;
 let refreshAfterDialog = false;
@@ -89,6 +92,7 @@ function clearResult() {
   clearExpanded();
   renderUrl = null;
   formattedMarkdown = false;
+  fileOnly = false;
   sourceVisible = false;
   result.hidden = true;
   openPreview.hidden = true;
@@ -99,6 +103,10 @@ function clearResult() {
   image.alt = '';
   text.hidden = true;
   text.textContent = '';
+  fileNote.hidden = true;
+  heading.textContent = 'Prévia do resultado';
+  refresh.textContent = 'Atualizar prévia';
+  requestChange.textContent = 'Pedir mudança neste arquivo';
   markdown.replaceChildren();
   markdown.hidden = true;
   site.removeAttribute('src');
@@ -155,10 +163,16 @@ async function loadPreview() {
   try {
     const preview = await globalThis.__TAURI__.core.invoke('inspect_preview', { projectRoot: root, filePath: selected });
     if (current !== generation) return;
-    if (!preview || !['image', 'text'].includes(preview.kind) || typeof preview.content !== 'string' || typeof preview.relative_path !== 'string' || !preview.relative_path || !Number.isSafeInteger(preview.size_bytes)) throw new Error('Invalid preview');
+    if (!preview || !['image', 'text', 'file'].includes(preview.kind) || typeof preview.content !== 'string' || (preview.kind === 'file' && preview.content !== '') || typeof preview.relative_path !== 'string' || !preview.relative_path || !Number.isSafeInteger(preview.size_bytes) || preview.size_bytes < 0) throw new Error('Invalid preview');
     if (preview.render_url !== undefined && (preview.kind !== 'text' || !/^http:\/\/forgepreview\.localhost\/[a-f0-9]{32}\/[A-Za-z0-9%._~-]+$/.test(preview.render_url))) throw new Error('Invalid site preview');
     pathLabel.textContent = preview.relative_path;
-    if (preview.kind === 'image') {
+    if (preview.kind === 'file') {
+      fileOnly = true;
+      fileNote.hidden = false;
+      heading.textContent = 'Arquivo do projeto';
+      refresh.textContent = 'Atualizar informações';
+      requestChange.textContent = 'Conversar sobre este arquivo';
+    } else if (preview.kind === 'image') {
       if (!/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(preview.content)) throw new Error('Invalid image');
       image.src = preview.content;
       image.alt = `Prévia local de ${preview.relative_path}`;
@@ -179,10 +193,10 @@ async function loadPreview() {
       } else text.hidden = false;
     }
     result.hidden = false;
-    openPreview.hidden = false;
+    openPreview.hidden = fileOnly;
     browserAction.hidden = !renderUrl;
     workspace.classList.add('preview-loaded');
-    status.textContent = 'Prévia local atualizada.';
+    status.textContent = fileOnly ? 'Arquivo encontrado na pasta do projeto.' : 'Prévia local atualizada.';
   } catch (error) {
     if (current === generation) {
       workspace.classList.remove('preview-loaded');
@@ -308,7 +322,7 @@ function prepareChangeRequest() {
     dialogStatus.textContent = message;
     return;
   }
-  const request = `Quero mudar o arquivo ${pathLabel.textContent}: `;
+  const request = fileOnly ? `Sobre o arquivo ${pathLabel.textContent}: ` : `Quero mudar o arquivo ${pathLabel.textContent}: `;
   composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n${request}` : request;
   if (dialog.open) dialog.close();
   composer.focus();

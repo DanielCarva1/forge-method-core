@@ -67,7 +67,7 @@ if (!profile || !project || !executable) throw new Error('Set FORGE_ARTIFACT_PRO
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
     assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
     await page.frameLocator('#preview-site').getByRole('heading', { name: heading, exact: true }).waitFor({ timeout: 20000 });
-    assert.match(await page.locator('.preview-origin').first().textContent(), /Esta prévia não confirma publicação na internet/);
+    assert.match(await page.locator('.preview-origin').first().textContent(), /Isso não confirma publicação na internet/);
     if (process.env.FORGE_EXPECT_RECORDED_OBJECTIVE === '1') {
       const recordedObjective = page.locator('#record-direction-card');
       assert.equal(await recordedObjective.isVisible(), true, 'The real Forge objective remains available');

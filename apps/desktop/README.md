@@ -7206,3 +7206,89 @@ high-impact remaining gap; do not repeat the same real provider conversation
 without a new hypothesis. If the combined hidden-dialog timeout recurs,
 use `FORGE_NATIVE_DIAGNOSTICS=1` and the runner's printed log to identify
 the exact stalled step before attributing it to product behavior.
+
+### Desktop nonvisual result card — 2026-09-27
+
+Active objective: complete the approachable Windows journey from folder and
+Forge onboarding through Codex conversation, real result, change request and
+restart. This slice addresses #91's nonvisual-result alternative; it does
+not close the whole issue or the objective. A project-bound file that cannot
+be rendered (for example PDF) now returns only its validated relative path
+and size, without reading its bytes or launching another app. The screen
+shows a plain-language file card and can prepare a same-conversation request.
+Common document, archive and media references in an agent reply can lead to
+that card. Out-of-project paths remain rejected, and unsupported content
+does not become executable preview content. No Forge or Codex state was
+invented or changed.
+
+**Changed files, uncommitted:** `src-tauri/src/preview.rs`,
+`ui/index.html`, `ui/preview.mjs`, `ui/message-format.mjs`,
+`ui/styles.css`, `tests/browser.cjs`, `tests/native.cjs`,
+`tests/artifact-resume.cjs`, and this README. Desktop 0.1.27 public/installed
+is unchanged; only the source debug build contains this work.
+
+**PASS:** focused Desktop `cargo check` and five preview tests (one optional
+browser-association test ignored); complete Desktop crate (50 pass, one
+ignored); eight frontend unit tests; complete mocked-IPC browser suite;
+source-built hidden native smoke on an isolated Windows desktop. The native
+test used a real Forge-onboarded temporary project and the real Rust preview
+command for a controlled local PDF fixture; it found the file, showed no
+document bytes, and prepared a draft without sending. A visual screenshot was
+inspected at `C:/ForgeFast/forge-nonvisual-result-source-20260927.png`.
+`git diff --check` passed after the final wording/heading refinement.
+The file-picker response for this
+PDF was simulated; the native picker for other files passed in the prior
+0.1.27 package. A real Codex reply citing a PDF, actual PDF rendering,
+external viewer launch, provider Send, and clean-machine install are NOT_RUN.
+The existing combined two-dialog timeout remains unexplained. No subagent
+was used; requested/observed model for this direct parent slice is the
+current parent only, without accessible per-task token counters. API-equivalent
+BRL and Pro quota impact are UNKNOWN, not zero.
+
+**Next exact step:** continue the #91 acceptance audit with the installed
+0.1.27 journey and this source build, identify the next high-impact gap
+without manufacturing historical decisions for #92, then consolidate a
+coherent alpha package only after that gap is addressed and its native
+evidence is collected. Do not publish this single slice as a release.
+
+### Desktop 0.1.28 installed candidate — 2026-09-27
+
+The nonvisual-result path is now an end-to-end alpha building block: the
+source-built native app passed the actual Windows PDF file-picker flow on an
+isolated desktop, without opening or executing the PDF. The same source
+build also resumed the existing 33-message real Codex conversation, opened
+its actual HTML result, drafted a change request and survived a full
+process restart without Send or file change. This extends #91 but does
+not close #91/#92 or the larger Windows objective.
+
+Desktop version is 0.1.28 in Cargo manifest/lock and Tauri config.
+`RELEASE_NOTES-0.1.28.md` describes the scope and limits. At the package
+boundary, focused `cargo check` and preview tests, all 50 Desktop crate
+tests (one ignored), strict Desktop Clippy, eight frontend unit tests,
+the full mocked-IPC browser suite, and `git diff --check` passed. An
+additional `cargo fmt --check` did not pass because it requests formatting
+across pre-existing, untouched Desktop Rust code; no crate-wide rewrite
+was made for this alpha. This is formatting debt, not a test failure in
+the new behavior.
+
+One NSIS candidate was built with the pinned Forge core 0.13.2:
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.28_x64-setup.exe`,
+123,102,085 bytes, SHA-256
+`C8ED4DD0F4B87027FA3C66DCD2715E44C7CEA8D0390A6D58E107ED2B66DDC5B5`.
+Its adjacent `.sha256` sidecar names the same file/hash. Silent
+installation of this exact candidate over public 0.1.27 exited 0; the
+candidate bytes remained unchanged. The installed 0.1.28 executable is
+SHA-256 `F03422B1172DE05AE433BF9FEDD5FE6FFC5C40AAEE2CCF557C0751D0EB71750B`.
+The installed app passed hidden native onboarding, actual PDF picker,
+nonvisual card and read-only real-result/restart checks. No new provider
+turn, external file launch, GitHub CI or core-workspace tests were run.
+The previous combined two-dialog timeout remains without a known cause.
+
+**State:** source edits and release notes are local, uncommitted; the
+candidate is installed locally but not yet public. No subagent was used;
+task-level model token attribution, API-equivalent BRL and Pro quota
+impact remain UNKNOWN. **Next exact step:** selectively commit/push this
+package with the maintainer Git identity, tag the exact code state, publish
+the already tested installer and sidecar under the standing alpha
+authorization, then download both unauthenticated and verify size/hash and
+installed readback. Do not rebuild the candidate.

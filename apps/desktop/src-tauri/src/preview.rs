@@ -104,7 +104,13 @@ fn read_preview(root: &Path, requested: &Path) -> Result<Preview, &'static str> 
             | "toml"
     );
     if !is_image && !is_text {
-        return Err("Ainda não há prévia deste formato. Peça ao agente para explicar o resultado na conversa.");
+        return Ok(Preview {
+            kind: "file",
+            content: String::new(),
+            relative_path: relative.to_string_lossy().into_owned(),
+            size_bytes: metadata.len(),
+            render_url: None,
+        });
     }
     let limit = if is_image {
         MAX_IMAGE_BYTES
@@ -325,7 +331,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_outside_files_and_unsupported_formats() {
+    fn rejects_outside_files_and_describes_unsupported_formats_without_reading_them() {
         let base = std::env::temp_dir().join(format!("forge-preview-scope-{}", std::process::id()));
         let root = base.join("project");
         fs::create_dir_all(&root).unwrap();
@@ -334,7 +340,11 @@ mod tests {
         assert!(read_preview(&root, &outside).is_err());
         let svg = root.join("active.svg");
         fs::write(&svg, "<svg onload='alert(1)'></svg>").unwrap();
-        assert!(read_preview(&root, &svg).is_err());
+        let file = read_preview(&root, &svg).unwrap();
+        assert_eq!(file.kind, "file");
+        assert_eq!(file.relative_path, "active.svg");
+        assert!(file.content.is_empty());
+        assert_eq!(file.size_bytes, fs::metadata(&svg).unwrap().len());
         fs::remove_dir_all(&base).unwrap();
     }
 

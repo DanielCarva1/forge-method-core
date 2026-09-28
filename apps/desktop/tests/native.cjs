@@ -566,6 +566,25 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('#preview-dialog-markdown h3').textContent(), 'Resultado');
       await page.getByRole('button', { name: 'Fechar prévia' }).click();
       console.log('PASS: native Markdown file reads as safe formatted text with original content one click away.');
+      const nonvisualFile = path.join(newProject, 'report.pdf');
+      await writeFile(nonvisualFile, '%PDF-1.4\nlocal fixture; not a rendered document');
+      if (process.env.FORGE_TEST_NONVISUAL_DIALOG === 'select') {
+        await page.evaluate(() => { window.__TAURI__ = { ...window.__TAURI__, core: window.nativePreviewCore }; });
+        await operatePreviewDialog(page, nonvisualFile);
+      } else {
+        await page.evaluate(file => { window.__TAURI__ = { ...window.__TAURI__, core: { ...window.nativePreviewCore, invoke: (command, args) => command === 'choose_preview_file' ? Promise.resolve(file) : window.nativePreviewInvoke(command, args) } }; }, nonvisualFile);
+        await page.getByRole('button', { name: 'Escolher arquivo' }).click();
+      }
+      await page.locator('#preview-status').filter({ hasText: 'Arquivo encontrado na pasta do projeto' }).waitFor({ timeout: 20000 });
+      assert.equal(await page.locator('#preview-file-note').isVisible(), true);
+      assert.equal(await page.locator('#preview-heading').textContent(), 'Arquivo do projeto');
+      assert.equal(await page.locator('#preview-path').textContent(), 'report.pdf');
+      assert.equal(await page.locator('#open-preview').isHidden(), true);
+      if (process.env.FORGE_NONVISUAL_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_NONVISUAL_SCREENSHOT });
+      await page.getByRole('button', { name: 'Conversar sobre este arquivo' }).click();
+      assert.match(await page.locator('#message-text').inputValue(), /Sobre o arquivo report\.pdf:/);
+      await page.locator('#message-text').fill('');
+      console.log('PASS: native unsupported project file shows a safe local card and prepares a conversation draft without opening the file; PDF picker ' + (process.env.FORGE_TEST_NONVISUAL_DIALOG === 'select' ? 'used the actual Windows dialog.' : 'response was simulated.'));
       const siteRoot = path.join(newProject, 'site');
       await mkdir(path.join(siteRoot, 'assets'), { recursive: true });
       const siteFile = path.join(siteRoot, 'index.html');
@@ -713,7 +732,7 @@ async function operatePreviewDialog(page, file) {
           await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
           assert.equal(await page.locator('#preview-path').textContent(), 'site\\index.html');
           await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias' }).waitFor({ timeout: 20000 });
-          assert.match(await page.locator('.preview-origin').first().textContent(), /Esta prévia não confirma publicação na internet/);
+          assert.match(await page.locator('.preview-origin').first().textContent(), /Isso não confirma publicação na internet/);
           if (process.env.FORGE_ARTIFACT_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_ARTIFACT_SCREENSHOT, fullPage: true });
           await page.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
           assert.match(await composer.inputValue(), /site\\index\.html/);
