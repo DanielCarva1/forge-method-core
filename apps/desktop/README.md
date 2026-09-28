@@ -1,6 +1,6 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.23` is the published alpha
+Independent Tauri application. Desktop `0.1.24` is the published alpha
 prerelease. Its exact installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
@@ -6691,3 +6691,26 @@ used. Per-task BRL and Pro-quota impact remain UNKNOWN. **Next exact step:**
 review and selectively commit/push this package, publish only the already
 tested candidate under the maintainer's standing alpha authorization, then
 download anonymously and compare exact bytes before calling it available.
+
+### Desktop 0.1.24 public release readback — 2026-09-27
+
+Package commit `49104d05` was pushed. Annotated tag
+`desktop-v0.1.24-alpha.1` resolves to that commit and was pushed. The public
+prerelease is
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.24-alpha.1`.
+GitHub lists the single 123,068,738-byte installer and its checksum sidecar.
+An unauthenticated download to
+`C:/ForgeFast/forge-alpha-0124-public-20260927/Forge_0.1.24_x64-setup.exe`
+matched the tested candidate SHA-256
+`EC12F1AC8347FD54163716EDDC91455772EA83003E9CFA4835C60E6CE967B803`;
+the downloaded sidecar matched. Silent installation of those downloaded
+bytes returned exit 0. Installed app version is 0.1.24 and executable SHA-256
+is `13E7E514C1741D6F95E1254BCB50062896A2E87FA3FB0FC848B2243CAA739EAF`.
+No manual GitHub CI was run. The release is available, but this is not proof
+of clean-machine setup or first-login completion.
+
+**Next exact step:** continue the full nontechnical journey with a read-only
+installed-app pass on a real persistent conversation and its project record;
+then select the highest-impact remaining gap (fresh-account login,
+external-browser opening, or accessible navigation) from actual evidence.
+Do not repeat provider turns solely to reprove the unchanged chat path.

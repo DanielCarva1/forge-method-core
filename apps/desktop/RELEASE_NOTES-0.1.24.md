@@ -47,5 +47,8 @@ onboarding/readback and an idle authenticated Codex connection. No provider
 message was sent by this installed-candidate smoke; the full creation/change
 journey was verified in the corresponding source debug build.
 
-Public download readback is still pending. Do not call the installer available
-until its downloaded bytes match the candidate above.
+The public prerelease contains that one installer and its checksum sidecar.
+An unauthenticated download matched the candidate size and SHA-256 exactly;
+the downloaded bytes installed silently with exit 0 and produced the same
+installed executable hash above. This proves availability and byte continuity
+on the tested Windows machine, not a clean-machine installation.
