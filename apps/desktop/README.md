@@ -1,9 +1,9 @@
 # Forge desktop shell
 
 Independent Tauri application. Desktop `0.1.49` is the current source version
-and installed candidate; the latest verified [published alpha is 0.1.48](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.48-alpha.1).
-The 0.1.49 candidate has been hash-checked and tested in the hidden native app.
-Public readback remains pending.
+and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.49-alpha.1).
+Its installer was downloaded without authentication, hash-checked, installed
+and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -9365,3 +9365,25 @@ remain NOT_RUN.
 **State:** candidate installed and tested. Next exact step: review the diff,
 commit/push/tag, publish this exact candidate and sidecar, verify anonymous
 download bytes and reinstall, then continue the broad Desktop product goal.
+
+### Desktop 0.1.49 public readback — 2026-09-28
+
+Package commit `b8a878a5` was pushed on `codex/desktop-shell` and tagged
+`desktop-v0.1.49-alpha.1`. The exact tested candidate and sidecar are in the
+[0.1.49 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.49-alpha.1).
+Unauthenticated downloads returned 123,160,487 bytes and SHA-256
+`537C7D80780EFB52A6957ED54CDA7CC2E32F0ED329D3084B5EA2CB6022AA87D6`,
+identical to the candidate and public sidecar. Silent installation of those
+downloaded bytes returned exit 0, preserved the file hash, and installed
+ProductVersion 0.1.49, executable SHA-256
+`59CAC58759BAB28A6994FC8D0DB91E37947B87657E0EE5677F6EFE23132E4CFD`.
+The downloaded installation passed the hidden native full-process preview
+change-request restart smoke: the unsent request returned and no Send was
+invoked. This is same-machine package proof, not clean-machine setup, real
+provider login completion, external-browser launch or manual accessibility
+acceptance. No manual GitHub CI ran. The broad Desktop goal stays active;
+per-model tokens, BRL cost and Pro quota attribution remain UNKNOWN.
+
+**Next smallest step:** examine the installed app for another real-user gap in
+the full create/chat/result/restart journey. Close and verify a coherent slice;
+do not infer whole-product completion from this shortcut fix.

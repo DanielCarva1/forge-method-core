@@ -40,5 +40,11 @@ installation over public 0.1.48 returned exit 0, preserved the candidate
 bytes and installed ProductVersion 0.1.49, executable SHA-256
 `59CAC58759BAB28A6994FC8D0DB91E37947B87657E0EE5677F6EFE23132E4CFD`.
 The installed candidate passed the hidden native shortcut-restart smoke.
-Public-download verification is pending publication. A source commit alone
-does not update the installed app.
+Package commit `b8a878a5` was pushed and tagged
+`desktop-v0.1.49-alpha.1`. Unauthenticated public downloads of the installer
+and sidecar returned identical bytes and hash to the tested candidate.
+Installing those downloaded bytes silently returned exit 0, preserved the
+installer hash and installed the same 0.1.49 executable hash. The downloaded
+installation passed the hidden native shortcut-restart smoke. This is
+same-machine package proof, not clean-machine installation. A source commit
+alone does not update the installed app.
