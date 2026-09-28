@@ -1,6 +1,6 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.25` is the published alpha
+Independent Tauri application. Desktop `0.1.26` is the published alpha
 prerelease. Its exact installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
@@ -7021,3 +7021,27 @@ remain UNKNOWN. **Next exact step:** review/selectively commit and push the
 0.1.26 package, publish the exact tested installer under standing alpha
 publication authorization, and check an unauthenticated download's size/hash
 before calling it available. Do not rebuild the candidate.
+
+### Desktop 0.1.26 public release readback — 2026-09-27
+
+Package commit `7c268b0e` was pushed on `codex/desktop-shell`; annotated tag
+`desktop-v0.1.26-alpha.1` points to it and was pushed. Public prerelease:
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.26-alpha.1`.
+Unauthenticated download of installer and `.sha256` sidecar to
+`C:/ForgeFast/forge-alpha-0126-public-20260927` matched the locally tested
+candidate: 123,088,230 bytes and SHA-256
+`A5739B90347393B2F44F53D358622E9E5E0AF8E3A7D15248F32B95F257267DBA`.
+Silent installation of the downloaded bytes returned exit 0; installed version
+is 0.1.26 and executable SHA-256 is
+`AAC88FEAE37B81E6ACCBBAFC07B142E0B69DBEA0645F115BBBF50E2F8DEB85A9`.
+No manual GitHub CI was run. This proves public byte continuity and successful
+update on this machine, not a clean-machine installation.
+
+**State:** 0.1.26 is public and installed. Actual external-browser-button
+launch, real fresh-account login, clean-machine setup, manual accessibility
+acceptance, mobile and self-contained distribution remain NOT_RUN/unfinished.
+No subagent was used; per-task BRL and Pro-quota impact remain UNKNOWN.
+**Next exact step:** continue the full nontechnical journey, focusing on the
+remaining high-impact first-use/preview and conversation gaps rather than
+repeating already proved browser or read-only history tests. Avoid publishing
+another alpha for test-only changes; collect a coherent user-visible package.

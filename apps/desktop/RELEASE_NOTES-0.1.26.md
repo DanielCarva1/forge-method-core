@@ -45,4 +45,8 @@ Silent installation over 0.1.25 returned exit code 0 and did not change the
 candidate bytes. The installed executable reports 0.1.26 with SHA-256
 `AAC88FEAE37B81E6ACCBBAFC07B142E0B69DBEA0645F115BBBF50E2F8DEB85A9`.
 The installed app passed the hidden native first-use/layout smoke; no real
-provider turn was sent. A public download has not yet been checked.
+provider turn was sent. The public installer and checksum sidecar were
+downloaded without authentication. The downloaded installer matched the
+tested candidate's exact byte count and SHA-256; installing those downloaded
+bytes silently returned exit 0, reported version 0.1.26, and produced the
+same installed executable hash. This is not a clean-machine test.
