@@ -23,12 +23,22 @@ pub struct Preview {
 #[tauri::command]
 pub async fn choose_preview_file(
     window: tauri::WebviewWindow,
+    project_root: String,
 ) -> Result<Option<String>, &'static str> {
+    // This is only the dialog's starting point. inspect_preview remains the
+    // authority for Forge project identity and file containment.
+    let directory = Path::new(&project_root)
+        .canonicalize()
+        .map_err(|_| "A pasta do projeto não está mais disponível.")?;
+    if !directory.is_dir() {
+        return Err("A pasta do projeto não está mais disponível.");
+    }
     let (sender, receiver) = tokio::sync::oneshot::channel();
     window
         .dialog()
         .file()
         .set_title("Escolha um arquivo deste projeto")
+        .set_directory(directory)
         .set_parent(&window)
         .pick_file(move |selection| {
             let _ = sender.send(selection);

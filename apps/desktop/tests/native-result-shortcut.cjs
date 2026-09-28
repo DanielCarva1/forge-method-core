@@ -4,6 +4,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const { spawn } = require('node:child_process');
 const { createServer } = require('node:net');
 const { mkdtemp, mkdir, rm, writeFile } = require('node:fs/promises');
+const { once } = require('node:events');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
 const assert = require('node:assert/strict');
@@ -57,6 +58,16 @@ async function openProject(page, root) {
   await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 90000 });
 }
 
+async function chooseFileFromProject(page, name) {
+  const helper = spawn('py', ['-3.12', path.join(__dirname, 'folder-dialog.py'), 'file-select', name], { windowsHide: true });
+  let output = '';
+  helper.stdout.on('data', chunk => { output += chunk; });
+  helper.stderr.on('data', chunk => { output += chunk; });
+  await page.getByRole('button', { name: 'Escolher arquivo' }).click();
+  const [code] = await once(helper, 'exit');
+  assert.equal(code, 0, `Native file picker failed: ${output}`);
+}
+
 async function resumeFixture(page, citation, interrupted = false) {
   await page.evaluate(({ file, interrupted }) => {
     const native = window.__TAURI__.core;
@@ -100,7 +111,13 @@ async function resumeFixture(page, citation, interrupted = false) {
     await openProject(app.page, project);
     await writeFile(path.join(project, 'result.txt'), 'Real local file from this project.');
     await writeFile(path.join(project, 'second.txt'), 'Second real local file from this project.');
+    await writeFile(path.join(project, 'archive.zip'), 'Not a visual preview');
     await writeFile(outside, 'This file is outside the project.');
+    await chooseFileFromProject(app.page, 'result.txt');
+    await app.page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.equal(await app.page.locator('#preview-path').textContent(), 'result.txt',
+      'Relative filename must resolve from the opened project folder');
+    console.log('PASS: hidden native file picker started in the real project folder and opened a validated local file.');
     // First process establishes the project and a resumable bookmark only.
     await resumeFixture(app.page, 'result.txt');
     await app.page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
@@ -147,6 +164,11 @@ async function resumeFixture(page, citation, interrupted = false) {
     await app.page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await app.page.locator('#preview-text').textContent(), 'Second real local file from this project.');
     assert.equal(await app.page.locator('#preview-cited-files').isVisible(), true, 'The other cited file remains available after opening one');
+    await app.page.evaluate(async file => (await import('./preview.mjs')).previewLinkedFile(file), path.join(project, 'archive.zip'));
+    await app.page.locator('#preview-status').filter({ hasText: 'Arquivo encontrado' }).waitFor();
+    assert.equal(await app.page.locator('#preview-path').textContent(), 'archive.zip');
+    assert.equal(await app.page.getByRole('button', { name: 'Copiar caminho do arquivo' }).isVisible(), true,
+      'A nonvisual deliverable needs a direct route to its real project file');
     if (process.env.FORGE_MULTI_CITATIONS_SCREENSHOT) await app.page.screenshot({ path: process.env.FORGE_MULTI_CITATIONS_SCREENSHOT, fullPage: true });
     console.log('PASS: two restored citations remain distinct and the selected file passes native project-bound preview.');
   } finally {

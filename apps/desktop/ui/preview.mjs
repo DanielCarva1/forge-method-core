@@ -18,6 +18,7 @@ const site = document.getElementById('preview-site');
 const siteNote = document.getElementById('preview-site-note');
 const text = document.getElementById('preview-text');
 const fileNote = document.getElementById('preview-file-note');
+const copyPath = document.getElementById('copy-preview-path');
 const markdown = document.getElementById('preview-markdown');
 const openPreview = document.getElementById('open-preview');
 const browserAction = document.getElementById('preview-browser-action');
@@ -154,7 +155,7 @@ function clearResult() {
   openSiteBrowser.classList.remove('primary');
   browserLabel.textContent = 'Usar no navegador';
   browserHint.textContent = 'Fora da prévia protegida, a página pode executar código e acessar a internet. Abra apenas projetos de confiança.';
-  fileNote.textContent = 'Este arquivo está na pasta do projeto, mas não pode ser mostrado aqui. Peça ao agente para explicar o resultado ou diga o que gostaria de mudar.';
+  fileNote.textContent = 'Este arquivo está na pasta do projeto, mas não pode ser mostrado aqui. Copie o caminho para encontrá-lo ou peça ao agente para explicar o resultado.';
   sourceToggle.hidden = true;
   image.hidden = true;
   image.removeAttribute('src');
@@ -162,6 +163,7 @@ function clearResult() {
   text.hidden = true;
   text.textContent = '';
   fileNote.hidden = true;
+  copyPath.hidden = true;
   heading.textContent = 'Prévia do resultado';
   refresh.textContent = 'Atualizar prévia';
   requestChange.textContent = 'Pedir mudança neste arquivo';
@@ -238,6 +240,7 @@ async function loadPreview(restored = false, candidate = filePath) {
       fileOnly = true;
       pdfFile = /\.pdf$/i.test(preview.relative_path);
       fileNote.hidden = false;
+      copyPath.hidden = false;
       if (pdfFile) {
         fileNote.textContent = 'Este PDF não aparece na prévia protegida.';
         browserLabel.textContent = 'Abrir PDF no navegador';
@@ -312,7 +315,7 @@ choose.addEventListener('click', async () => {
   status.textContent = 'Escolhendo um arquivo do projeto…';
   let selectedForRead = null;
   try {
-    const selected = await globalThis.__TAURI__.core.invoke('choose_preview_file');
+    const selected = await globalThis.__TAURI__.core.invoke('choose_preview_file', { projectRoot: project.project_root });
     if (current !== generation) return;
     if (!selected) {
       status.textContent = filePath ? 'Seleção cancelada. A prévia anterior não foi alterada.' : 'Seleção cancelada. Nenhum arquivo escolhido.';
@@ -321,8 +324,9 @@ choose.addEventListener('click', async () => {
     if (typeof selected !== 'string') throw new Error('Invalid path');
     selectedForRead = selected;
     document.getElementById('preview-heading').focus({ preventScroll: true });
-  } catch {
-    if (current === generation) status.textContent = 'Não foi possível escolher um arquivo. Tente novamente.';
+  } catch (error) {
+    if (current === generation) status.textContent = typeof error === 'string'
+      ? error : 'Não foi possível escolher um arquivo. Tente novamente.';
     return;
   } finally {
     if (current === generation) {
@@ -449,3 +453,12 @@ function prepareChangeRequest() {
 }
 requestChange.addEventListener('click', prepareChangeRequest);
 dialogRequestChange.addEventListener('click', prepareChangeRequest);
+copyPath.addEventListener('click', async () => {
+  if (!project || !fileOnly || !filePath || result.hidden || pending) return;
+  try {
+    await navigator.clipboard.writeText(filePath);
+    status.textContent = 'Caminho copiado. Cole no Explorador de Arquivos para encontrar este arquivo.';
+  } catch {
+    status.textContent = 'Não foi possível copiar o caminho. Abra a pasta confirmada em “Seu projeto” e procure pelo arquivo indicado acima.';
+  }
+});

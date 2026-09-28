@@ -1,10 +1,10 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.60` is the current source,
-installed and latest
-[published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.60-alpha.1).
-The exact 0.1.60 installer was installed over 0.1.59, tested in the hidden
-native app, then downloaded anonymously and hash-checked after publication.
+Independent Tauri application. Desktop `0.1.61` is the current source and
+installed candidate; `0.1.60` remains the latest
+[published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.60-alpha.1)
+until publication and download readback. The exact 0.1.61 candidate was
+installed over 0.1.60 and passed focused hidden-native result-access checks.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -10222,3 +10222,51 @@ installed over 0.1.59 and passed both focused hidden-native folder/project
 and result-preview/restart checks. No broad suite, Rust tests, new real Codex
 turn or manual GH CI ran. Continue the Desktop product goal; this alpha is
 not full completion.
+
+### Desktop result picker in source — 2026-09-28
+
+The existing **Escolher arquivo** dialog now starts in the opened project
+folder instead of an unrelated last-used directory. This is navigation help,
+not a new authority: native `inspect_preview` still validates the selected
+file against the Forge project before showing it. An unavailable project
+folder produces an actionable picker error without discarding a prior valid
+preview. Focused `cargo check -p forge-desktop` and
+`cargo test -p forge-desktop preview::tests` passed (six tests, one ignored);
+`tests/preview-preserve.cjs` passed the project-root argument and unavailable
+folder path. A debug build passed hidden-native
+`tests/native-result-shortcut.cjs`: entering only `result.txt` into the real
+Windows file picker selected the file from the project folder, and the native
+project-bound preview read succeeded. The same run covered restart and an
+unsent change request with controlled Codex history. No new real Codex turn,
+broad suite, manual GH CI, installer or publication ran for this source-only
+improvement. The installed/public 0.1.60 does not include it.
+
+The same result-access package also gives nonvisual local files a
+**Copiar caminho do arquivo** action, without opening or executing them.
+The full path becomes copyable only after native project-bound inspection;
+the UI reports clipboard failure and keeps the previous result visible.
+Focused `tests/preview-preserve.cjs` passed successful and failed clipboard
+paths with a controlled browser double. The updated hidden-native
+`tests/native-result-shortcut.cjs` verified that a real ZIP-like file from
+the disposable project produces the nonvisual state and the copy action;
+it did not alter the user's global clipboard. No package was rebuilt after
+the public 0.1.60 candidate; the combined change remains source-only.
+
+### Desktop 0.1.61 tested candidate — 2026-09-28
+
+The result-access package has one NSIS candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.61_x64-setup.exe`:
+123,165,896 bytes, SHA-256
+`D0C3CBC16716BBCF8B7690891BF42002E5CD866C297C3266908EB5154070F3D2`.
+The 93-byte sidecar matches. Silent installation over public 0.1.60 exited 0,
+left the candidate unchanged, and installed ProductVersion 0.1.61 with exe
+SHA-256 `26E30160F3B0D1F4795438910D0217D5CD06412F5847F79CFF4D387BAF9A2BF3`.
+One focused hidden-native test against that installed executable passed the
+real Windows file picker starting in the project folder, native project-bound
+read, outside-path rejection preserving the prior result, restart and an
+unsent change request. Controlled Codex history was used; no new real Codex
+turn or native clipboard modification occurred. Focused Desktop Cargo check,
+`preview::tests`, browser clipboard tests and the debug native run passed
+before packaging. No broad suite or manual GitHub CI ran. Next: publish this
+exact candidate under standing alpha authorization, then verify anonymous
+download bytes and sidecar. Do not rebuild it.

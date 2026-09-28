@@ -25,14 +25,26 @@ const server = createServer(async (request, response) => {
     await page.addInitScript(() => {
       window.nextFile = 'D:\\project\\good.txt';
       window.reads = [];
+      window.previewPickRoots = [];
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {
+        writeText: async text => {
+          if (window.failClipboard) throw new Error('Clipboard unavailable');
+          window.copiedPreviewPath = text;
+        },
+      } });
       window.__TAURI__ = { core: {
         invoke: async (command, args) => {
           if (command === 'app_info') return { name: 'Forge', version: 'test' };
           if (command === 'start_project') return { project_id: 'preview-project', project_root: args.projectRoot };
-          if (command === 'choose_preview_file') return window.nextFile;
+          if (command === 'choose_preview_file') {
+            window.previewPickRoots.push(args?.projectRoot);
+            if (window.rejectPicker) throw 'A pasta do projeto não está mais disponível.';
+            return window.nextFile;
+          }
           if (command === 'inspect_preview') {
             window.reads.push(args.filePath);
             if (args.filePath.includes('outside')) throw 'Este arquivo não pertence ao projeto aberto.';
+            if (args.filePath.endsWith('.zip')) return { kind: 'file', relative_path: 'archive.zip', content: '', size_bytes: 20 };
             return { kind: 'text', relative_path: args.filePath.split('\\').at(-1), content: `Conteúdo de ${args.filePath.split('\\').at(-1)}`, size_bytes: 20 };
           }
         },
@@ -44,7 +56,14 @@ const server = createServer(async (request, response) => {
     await page.waitForFunction(() => document.getElementById('project-status').textContent.includes('Projeto pronto'));
     await page.getByRole('button', { name: 'Escolher arquivo' }).click();
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
+    assert.deepEqual(await page.evaluate(() => window.previewPickRoots), ['D:\\project']);
     assert.equal(await page.locator('#preview-path').textContent(), 'good.txt');
+
+    await page.evaluate(() => { window.rejectPicker = true; });
+    await page.getByRole('button', { name: 'Escolher arquivo' }).click();
+    await page.locator('#preview-status').filter({ hasText: 'A pasta do projeto não está mais disponível.' }).waitFor();
+    assert.equal(await page.locator('#preview-path').textContent(), 'good.txt');
+    await page.evaluate(() => { window.rejectPicker = false; });
 
     await page.evaluate(() => { window.nextFile = 'D:\\outside.txt'; });
     await page.getByRole('button', { name: 'Escolher arquivo' }).click();
@@ -64,6 +83,18 @@ const server = createServer(async (request, response) => {
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await page.locator('#preview-path').textContent(), 'other.txt');
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('forge.preview-files.v1'))[0].filePath), 'D:\\project\\other.txt');
+
+    await page.evaluate(() => { window.nextFile = 'D:\\project\\archive.zip'; });
+    await page.getByRole('button', { name: 'Escolher arquivo' }).click();
+    await page.locator('#preview-status').filter({ hasText: 'Arquivo encontrado' }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Copiar caminho do arquivo' }).isVisible(), true);
+    await page.getByRole('button', { name: 'Copiar caminho do arquivo' }).click();
+    assert.equal(await page.evaluate(() => window.copiedPreviewPath), 'D:\\project\\archive.zip');
+    assert.match(await page.locator('#preview-status').textContent(), /Caminho copiado/);
+    await page.evaluate(() => { window.failClipboard = true; });
+    await page.getByRole('button', { name: 'Copiar caminho do arquivo' }).click();
+    assert.match(await page.locator('#preview-status').textContent(), /Não foi possível copiar/);
+    assert.equal(await page.locator('#preview-path').textContent(), 'archive.zip');
     console.log('PASS: failed picker and cited-file replacements preserve the validated preview; valid replacement updates it.');
   } finally {
     await browser.close();
