@@ -356,7 +356,9 @@ async function operatePreviewDialog(page, file) {
         assert.match(status, /Conversa retomada/, `Real-history resume status: ${status}`);
         const count = await page.locator('#messages article').count();
         const initialElapsed = Date.now() - started;
-        assert.ok(count >= 50, `Expected a substantial real conversation, got ${count} messages`);
+        const minimumHistoryMessages = Number(process.env.FORGE_TEST_MIN_HISTORY_MESSAGES || 50);
+        assert.ok(Number.isSafeInteger(minimumHistoryMessages) && minimumHistoryMessages > 0, 'Real-history minimum must be a positive integer');
+        assert.ok(count >= minimumHistoryMessages, `Expected at least ${minimumHistoryMessages} real conversation messages, got ${count}`);
         const scroll = await page.locator('.conversation-body').evaluate(node => ({ bounded: node.scrollHeight > node.clientHeight, nearEnd: node.scrollHeight - node.clientHeight - node.scrollTop < 2 }));
         assert.deepEqual(scroll, { bounded: true, nearEnd: true });
         assert.equal(await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).isEnabled(), true);

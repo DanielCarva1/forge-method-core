@@ -6714,3 +6714,28 @@ installed-app pass on a real persistent conversation and its project record;
 then select the highest-impact remaining gap (fresh-account login,
 external-browser opening, or accessible navigation) from actual evidence.
 Do not repeat provider turns solely to reprove the unchanged chat path.
+
+### Installed 0.1.24 real-history readback — 2026-09-27
+
+The installed public 0.1.24 opened the existing disposable personal-ideas
+project and its real 33-message Codex conversation. The first attempt stopped
+at a **test-fixture assumption** requiring at least 50 messages; this chat has
+33. No app failure or duplicate provider turn was inferred. `tests/native.cjs`
+now permits an explicitly supplied positive minimum while retaining 50 as the
+default, and the same installed-app test passed with a minimum of 30. It
+displayed the actual Forge record, resumed the conversation in about 4.6 s,
+kept the composer and Send visible, then reloaded the WebView and preserved
+message count plus first/last order. No Send action was invoked. Native
+screenshots are `C:/ForgeFast/forge-0124-installed-record-20260927.png` and
+`C:/ForgeFast/forge-0124-installed-history-20260927.png`.
+
+**PASS:** `node --check tests/native.cjs` and hidden native installed-app
+readback/reload with the actual project and thread. **NOT_RUN:** a fresh
+account's login completion, clean-machine installation, positive launch in
+the default browser, manual accessibility acceptance, mobile and offline
+self-contained distribution. This post-release change touches only the test
+harness and checkpoint, not the installed product. No subagent or provider
+turn was used; task-level BRL and Pro-quota impact remain UNKNOWN.
+**Next exact step:** exercise a fresh-account login completion or a safely
+isolated positive external-browser launch, whichever can be verified without
+taking the maintainer's active desktop, then address any concrete failure.
