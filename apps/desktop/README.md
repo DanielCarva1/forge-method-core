@@ -9905,3 +9905,42 @@ A focused hidden-native real-Codex empty-thread/restart check passed again.
 No manual GH CI or broad suite ran. Clean-machine installation and the other
 limitations in `RELEASE_NOTES-0.1.54.md` remain NOT_RUN. Continue product UI
 work; do not treat this alpha package as completion of the Desktop goal.
+
+### Unpublished Desktop update guidance — 2026-09-28
+
+The Home update action now opens GitHub releases filtered to Desktop results,
+explains which Windows installer to choose, and offers an in-app route from a
+Codex model-version error to those instructions. A focused headless browser
+check passed for version text, narrow/enlarged layout, browser-launch request,
+fallback URL and the error-to-update route. Desktop `cargo check -p
+forge-desktop --locked --offline -j2` passed; no full suite, native browser
+launch, installer build or publication was attempted. The working tree holds
+this source-only change. Next: continue a substantive UI/product slice, then
+package and validate the combined changes once rather than releasing this
+copy/navigation adjustment alone.
+
+### Desktop 0.1.55 candidate — 2026-09-28
+
+The update guidance is now bundled with a primary-journey fix: after an
+Explore draft and folder choice, the composer offers **Preparar projeto**
+instead of reopening the picker. It validates the folder via the existing
+native `start_project` command and keeps the draft unsent; **Enviar** remains
+an explicit later action. Focused browser tests passed for failed preparation,
+retry and one Send. A rebuilt debug app and the installed NSIS candidate each
+passed the same focused hidden-native check with a disposable real Forge
+project, no Codex Send, and the update-help route. No full suite or manual GH
+CI ran; external browser launch remains NOT_RUN so the user's desktop was not
+interrupted.
+
+One 0.1.55 candidate was built at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.55_x64-setup.exe`:
+123,128,502 bytes, SHA-256
+`BE0FC873A0286820B62299909E4D99D79926F97155BDEA499BD77FF67370C402`.
+Its 93-byte sidecar records that hash. Silent upgrade from installed 0.1.54
+exited 0; candidate bytes were unchanged. Installed ProductVersion is 0.1.55,
+executable SHA-256
+`9B86D0921FD5DACD892851790557FD9D4CE0C2A9C8320B6FCC8390FF219A91AE`.
+This is a tested local candidate, not yet a public release. Next: review the
+diff, commit/push/tag this candidate and publish it under the standing alpha
+authorization, then download anonymously, verify exact bytes and repeat the
+focused installed readback. Do not rebuild the candidate.

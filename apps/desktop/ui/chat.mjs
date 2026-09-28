@@ -5,6 +5,7 @@ import { previewLinkedFile, refreshPreviewAfterTurn } from './preview.mjs';
 import { projectDisplayName } from './project-display.mjs';
 const byId = id => document.getElementById(id);
 const status = byId('agent-status');
+const updateAction = byId('agent-update-action');
 const loginPanel = byId('login-panel');
 const loginChallenge = byId('login-challenge');
 const loginStatus = byId('login-status');
@@ -158,7 +159,8 @@ function updateResumeAction() {
 }
 
 function updateSendControl() {
-  byId('send-label').textContent = project ? 'Enviar' : 'Escolher pasta para continuar';
+  byId('send-label').textContent = project ? 'Enviar'
+    : byId('project-root').value.trim() ? 'Preparar projeto' : 'Escolher pasta para continuar';
   send.disabled = transitioning || loginPending || !loginPanel.hidden || busy || broken ||
     !input.value.trim() || (connected && unconfirmedSends.has(referenceKey()));
 }
@@ -250,6 +252,7 @@ export function setProject(value) {
   citedFilesList.replaceChildren();
   citedFilesMore.hidden = true;
   if (!project) {
+    updateAction.hidden = true;
     messages.replaceChildren(); items.clear(); latestItem = null;
     jumpLatest.hidden = true;
     rawMessageView = false;
@@ -589,6 +592,8 @@ function message(id, role, text, append = false, complete = false) {
 }
 
 function receive(event) {
+  if (event.kind === 'update_required') updateAction.hidden = false;
+  else if (['running', 'completed', 'interrupted', 'failed'].includes(event.kind)) updateAction.hidden = true;
   if (['running', 'completed', 'interrupted', 'failed', 'disconnected', 'update_required'].includes(event.kind)) invalidateProgress();
   if (['completed', 'interrupted', 'failed', 'disconnected', 'update_required'].includes(event.kind)) refreshProgressAfterTurn();
   if (['completed', 'interrupted', 'failed', 'disconnected', 'update_required'].includes(event.kind)) void refreshPreviewAfterTurn();
@@ -601,7 +606,7 @@ function receive(event) {
     completed: 'Resposta recebida. Confira o resultado e as mudanças feitas.',
     interrupted: 'Interrompido. O que já foi feito não foi desfeito.',
     failed: 'A execução falhou. Confira o que já foi feito antes de tentar novamente.',
-    update_required: 'Atualize o Codex CLI: a versão instalada ainda não suporta o modelo escolhido. Depois, desconecte e conecte novamente.',
+    update_required: 'O Codex usado pelo Forge não aceita o modelo solicitado. Confira se há uma versão mais nova do Forge Desktop em Início → Como funciona → Versão e atualizações. Se você configurou um Codex externo, atualize-o também. A conversa não foi apagada.',
     disconnected: 'A conexão foi encerrada. Confira o que já foi feito antes de reconectar.',
     interaction_required: 'O Codex pediu uma interação que esta tela ainda não oferece. Nada foi aprovado automaticamente.',
   };
@@ -618,6 +623,7 @@ function receive(event) {
 
 async function connectCurrent(explicitThreadId = null) {
   if (!project || connected || transitioning || !loginPanel.hidden) return false;
+  updateAction.hidden = true;
   const reviewingSend = unconfirmedSends.has(referenceKey());
   if (reviewingSend && newConversation.checked) {
     showStatus('Retome a conversa anterior e confira o envio não confirmado antes de começar outra.', 'error');
@@ -805,7 +811,9 @@ byId('message-form').addEventListener('submit', async event => {
     const setup = byId('project-setup');
     setup.open = true;
     setup.scrollIntoView({ block: 'start' });
-    byId('browse-project').click(); // Reuse the normal picker; folder choice alone never starts a project.
+    if (byId('project-root').value.trim()) {
+      byId('project-form').requestSubmit(byId('start-project')); // Prepare the chosen folder; keep the draft unsent.
+    } else byId('browse-project').click(); // Folder choice alone never starts a project.
     return;
   }
   if (unconfirmedSends.has(referenceKey())) {

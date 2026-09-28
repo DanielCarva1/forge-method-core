@@ -54,13 +54,13 @@
           <article><span class="step">02</span><h3>Encontre um caminho</h3><p>Seu agente ajuda a pesquisar e planejar. O Forge mantém por perto o que vocês combinaram.</p></article>
           <article><span class="step">03</span><h3>Confira o resultado</h3><p>Peça mudanças e decida os próximos passos. Uma resposta do agente não significa que o trabalho terminou.</p></article>
         </div>
-        <div class="updates">
-          <h3>Versão e atualizações</h3>
+        <div class="updates" id="updates">
+          <h3 tabindex="-1">Versão e atualizações</h3>
           <p id="app-version">Verificando a versão instalada…</p>
-          <p>Esta versão alpha não se atualiza sozinha. Se houver uma versão Forge Desktop mais nova, você pode baixar o instalador na página de releases e instalá-lo por cima.</p>
-          <button id="open-updates" type="button">Ver versões disponíveis</button>
+          <p>Esta versão alpha não se atualiza sozinha. Na página de versões, procure a versão mais recente chamada <strong>Forge Desktop</strong> com número maior que o instalado acima. Baixe o instalador de Windows <strong>Forge_…_x64-setup.exe</strong>, feche o aplicativo e instale por cima. Não escolha “Source code” nem uma versão do Forge Core.</p>
+          <button id="open-updates" type="button">Encontrar atualização do Forge Desktop</button>
           <p id="updates-status" role="status" aria-live="polite"></p>
-          <p id="updates-url" class="hint" hidden>Se o navegador não abrir, copie este endereço: https://github.com/DanielCarva1/forge-method-core/releases</p>
+          <p id="updates-url" class="hint" hidden>Se o navegador não abrir, copie este endereço: https://github.com/DanielCarva1/forge-method-core/releases?q=desktop</p>
         </div>
       </details>
     </section>
@@ -191,6 +191,7 @@
           <div class="conversation-pages"><button id="previous-conversations" type="button" hidden>← Página anterior</button><button id="more-conversations" type="button" hidden>Próxima página →</button></div>
         </details>
         <p id="agent-status" class="status" role="status" aria-live="polite" tabindex="-1">Escolha uma pasta para começar. A conversa será aberta quando você enviar sua ideia.</p>
+        <a id="agent-update-action" href="#updates" hidden>Ver como atualizar o Forge</a>
         <section id="login-panel" class="login-panel" aria-labelledby="login-title" hidden>
           <h3 id="login-title">Entre no ChatGPT para continuar</h3>
           <p>Seu texto continua aqui. Depois de entrar, você decide quando enviar.</p>

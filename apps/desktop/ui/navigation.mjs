@@ -2,7 +2,7 @@ const screens = new Map(
   [...document.querySelectorAll('[data-screen]')].map(screen => [screen.dataset.screen, screen]),
 );
 
-const homeFragments = new Set(['', 'home', 'about', 'start-ideas']);
+const homeFragments = new Set(['', 'home', 'about', 'start-ideas', 'updates']);
 
 function routeForHash() {
   const fragment = location.hash.slice(1);
@@ -20,13 +20,14 @@ function renderRoute(moveFocus) {
 
   const fragment = location.hash.slice(1);
   const target = document.getElementById(fragment);
-  if (fragment === 'about' && target) target.open = true;
+  if ((fragment === 'about' || fragment === 'updates') && document.getElementById('about')) document.getElementById('about').open = true;
   if (!moveFocus) return;
   const heading = screens.get(route)?.querySelector('h1');
   requestAnimationFrame(() => {
     if (target && target !== screens.get(route)) {
       target.scrollIntoView({ block: 'start' });
       if (fragment === 'about') target.querySelector('summary')?.focus({ preventScroll: true });
+      if (fragment === 'updates') target.querySelector('h3')?.focus({ preventScroll: true });
     }
     else heading?.focus({ preventScroll: false });
   });

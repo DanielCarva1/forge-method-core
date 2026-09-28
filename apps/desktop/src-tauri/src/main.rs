@@ -27,7 +27,7 @@ fn app_info() -> AppInfo {
 #[tauri::command]
 fn open_updates_page() -> Result<(), &'static str> {
     // Fixed project URL, not a WebView-supplied destination.
-    open_browser_url("https://github.com/DanielCarva1/forge-method-core/releases")
+    open_browser_url("https://github.com/DanielCarva1/forge-method-core/releases?q=desktop")
 }
 
 fn validated_external_url(value: &str) -> Result<tauri::Url, &'static str> {
