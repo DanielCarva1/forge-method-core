@@ -23,6 +23,7 @@ const send = byId('send-message');
 const stop = byId('interrupt-agent');
 const input = byId('message-text');
 const composerHelp = byId('composer-help');
+const draftNote = byId('draft-note');
 const accessNote = byId('agent-access-note');
 const messages = byId('messages');
 const conversationBody = document.querySelector('.conversation-body');
@@ -74,10 +75,34 @@ let hasPreviousConversation = false;
 let hasResumableConversation = false;
 const sessionReferences = new Map();
 const unconfirmedSends = new Map(); // Project key -> Codex thread ID; no message copy.
-const projectDrafts = new Map(); // Unsent text stays in this app session, never in a different project.
+const projectDrafts = new Map(); // Immediate in-session copy; persisted drafts stay local to this device.
+let draftOrigin = null; // Survives a same-folder validation attempt that temporarily clears `project`.
+let draftStorageFailed = false;
 const projectKey = value => JSON.stringify([value.project_id, value.project_root]);
+const draftKey = value => `forge.draft.v1:${projectKey(value)}`;
 const referenceKey = () => JSON.stringify([project.project_id, project.project_root]);
 const invoke = (command, args) => globalThis.__TAURI__.core.invoke(command, args);
+function readStoredDraft(value) {
+  const text = localStorage.getItem(draftKey(value));
+  if (text !== null && text.length > 100000) throw new Error('Stored draft is too large');
+  return text;
+}
+function storeDraft(value, text) {
+  try {
+    if (text.length > 100000) {
+      localStorage.removeItem(draftKey(value));
+      draftStorageFailed = true;
+      return false;
+    }
+    if (text) localStorage.setItem(draftKey(value), text);
+    else localStorage.removeItem(draftKey(value));
+    draftStorageFailed = false;
+    return true;
+  } catch {
+    draftStorageFailed = true;
+    return false;
+  }
+}
 
 // Icons supplement readable text; these are connection/turn states, not workflow progress.
 const statusIcons = { idle: '○', working: '◷', connected: '↔', completed: '✓', interrupted: 'Ⅱ', error: '!', disconnected: '○' };
@@ -101,8 +126,8 @@ function offerLogin(error) {
 }
 
 function updateComposerHelp() {
-  composerHelp.textContent = !project
-    ? 'Sua ideia fica aqui. Nada é enviado antes de confirmar a pasta.'
+  const help = !project
+    ? 'Sua ideia fica aqui nesta sessão. Nada é enviado antes de confirmar a pasta.'
     : unconfirmedSends.has(referenceKey())
       ? connected
         ? 'O último envio não foi confirmado. Confira as mensagens e escolha “Já conferi o envio” antes de enviar outra.'
@@ -114,6 +139,14 @@ function updateComposerHelp() {
         : broken
           ? 'A conexão foi encerrada. Desconecte e tente novamente.'
           : 'Pronto para conversar. Você continua no controle das mudanças.';
+  if (composerHelp.textContent !== help) composerHelp.textContent = help;
+  const note = project && draftStorageFailed
+    ? 'Não foi possível guardar este rascunho. Ele pode se perder ou reaparecer ao fechar o aplicativo.'
+    : project && input.value
+      ? 'Rascunho salvo neste dispositivo. Nada foi enviado.'
+      : '';
+  draftNote.hidden = !note;
+  if (draftNote.textContent !== note) draftNote.textContent = note;
 }
 
 function updateResumeAction() {
@@ -175,20 +208,37 @@ function controls() {
 }
 
 export function setProject(value) {
-  if (project) {
-    const previousKey = projectKey(project);
+  const previous = project ?? draftOrigin;
+  if (previous) {
+    const previousKey = projectKey(previous);
     const leavingProject = value
       ? projectKey(value) !== previousKey
-      : byId('project-root').value.trim() !== project.project_root;
+      : byId('project-root').value.trim() !== previous.project_root;
     if (leavingProject) {
       if (input.value) projectDrafts.set(previousKey, input.value);
       else projectDrafts.delete(previousKey);
+      storeDraft(previous, input.value);
       input.value = '';
+      draftOrigin = null;
     }
   }
   project = value;
-  if (project && !input.value && projectDrafts.has(projectKey(project))) {
-    input.value = projectDrafts.get(projectKey(project));
+  if (project) {
+    draftOrigin = project;
+    if (!input.value) {
+      const key = projectKey(project);
+      if (projectDrafts.has(key)) input.value = projectDrafts.get(key);
+      else {
+        try {
+          input.value = readStoredDraft(project) ?? '';
+          draftStorageFailed = false;
+        } catch { draftStorageFailed = true; }
+      }
+    }
+    if (input.value) {
+      projectDrafts.set(projectKey(project), input.value);
+      storeDraft(project, input.value);
+    }
   }
   lastResultPath = null;
   previewLastResult.hidden = true;
@@ -724,10 +774,15 @@ byId('message-form').addEventListener('submit', async event => {
     if (current !== generation) return;
     local.article.dataset.delivery = 'accepted';
     local.title.textContent = 'Você';
-    unconfirmedSends.delete(referenceKey());
-    try { clearUnconfirmedSend(localStorage, project); } catch {
-      showStatus('Envio confirmado, mas não foi possível atualizar o aviso local. Ao reabrir, talvez você precise conferir esta conversa novamente.', 'error');
+    if (!storeDraft(project, '')) {
+      showStatus('Envio confirmado, mas não foi possível remover o rascunho salvo. Confira esta conversa antes de tentar enviar novamente.', 'error');
+      controls();
+      return;
     }
+    try {
+      clearUnconfirmedSend(localStorage, project);
+      unconfirmedSends.delete(referenceKey());
+    } catch { showStatus('Envio confirmado, mas não foi possível atualizar o aviso local. Confira esta conversa antes de tentar enviar novamente.', 'error'); }
     controls();
   } catch (error) {
     if (current !== generation) return;
@@ -740,6 +795,7 @@ byId('message-form').addEventListener('submit', async event => {
     if (!input.value) {
       input.value = text;
       projectDrafts.set(referenceKey(), text);
+      storeDraft(project, text);
     }
     showStatus(`${typeof error === 'string' ? error : 'Falha ao enviar.'} Abra a conversa e confira o histórico antes de reenviar.`, 'error');
     controls();
@@ -747,9 +803,11 @@ byId('message-form').addEventListener('submit', async event => {
 });
 
 input.addEventListener('input', () => {
-  if (project) {
-    if (input.value) projectDrafts.set(referenceKey(), input.value);
-    else projectDrafts.delete(referenceKey());
+  const owner = project ?? draftOrigin;
+  if (owner) {
+    if (input.value) projectDrafts.set(projectKey(owner), input.value);
+    else projectDrafts.delete(projectKey(owner));
+    storeDraft(owner, input.value);
   }
   controls();
 });

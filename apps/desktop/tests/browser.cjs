@@ -2210,6 +2210,154 @@ async function openConversation(page) {
     assert.equal(await page.getByRole('button', { name: 'Escolher pasta para continuar' }).isEnabled(), true, 'An Explore draft should lead to folder choice without sending');
     assert.match(await page.locator('#message-text').inputValue(), /artístico/i);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    const draftPage = await browser.newPage();
+    await draftPage.addInitScript(() => {
+      window.draftSendCalls = 0;
+      window.__TAURI__ = { core: {
+        Channel: class {},
+        invoke: async (command, args) => {
+          if (command === 'start_project' || command === 'inspect_project') return { project_id: 'draft-project', project_root: args.projectRoot };
+          if (command === 'connect_agent') return { thread_id: 'draft-thread', messages: [], resumed: false };
+          if (command === 'send_message') { window.draftSendCalls++; return {}; }
+          return null;
+        },
+      } };
+    });
+    await draftPage.goto(workspaceUrl);
+    await draftPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\draft-project');
+    await draftPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await draftPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    await draftPage.locator('#message-text').fill('Minha ideia ainda não enviada');
+    await draftPage.evaluate(() => {
+      window.originalDraftInvoke = window.__TAURI__.core.invoke;
+      window.__TAURI__.core.invoke = (command, args) => command === 'start_project'
+        ? Promise.reject('Validação indisponível') : window.originalDraftInvoke(command, args);
+    });
+    await draftPage.locator('#project-setup summary').click();
+    await draftPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await draftPage.locator('#project-status').filter({ hasText: 'Validação indisponível' }).waitFor();
+    assert.equal(await draftPage.locator('#message-text').inputValue(), 'Minha ideia ainda não enviada', 'A failed same-folder check must keep the draft');
+    await draftPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\other-after-failure');
+    assert.equal(await draftPage.locator('#message-text').inputValue(), '', 'Changing folders after a failed check must not leak the old draft');
+    await draftPage.evaluate(() => { window.__TAURI__.core.invoke = window.originalDraftInvoke; });
+    await draftPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\draft-project');
+    await draftPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await draftPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await draftPage.locator('#message-text').inputValue(), 'Minha ideia ainda não enviada', 'Returning after a failed check restores the original project draft');
+    await draftPage.reload();
+    await draftPage.getByRole('link', { name: 'Meus projetos' }).click();
+    await draftPage.locator('#recent-projects .recent-project').filter({ hasText: 'D:\\draft-project' }).getByRole('button', { name: /^Abrir / }).click();
+    await draftPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await draftPage.locator('#message-text').inputValue(), 'Minha ideia ainda não enviada', 'Reopening the app must restore the confirmed project draft without sending it');
+    assert.match(await draftPage.locator('#draft-note').textContent(), /Rascunho salvo neste dispositivo/);
+    assert.equal(await draftPage.locator('#draft-note').isVisible(), true, 'The restored draft must be explained beside the composer');
+    await draftPage.setViewportSize({ width: 360, height: 720 });
+    await draftPage.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
+    assert.equal(await draftPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Saved-draft notice must wrap at 360px and 200% text');
+    assert.equal(await draftPage.getByRole('button', { name: 'Enviar', exact: true }).isVisible(), true);
+    await draftPage.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await draftPage.setViewportSize({ width: 1280, height: 720 });
+    assert.equal(await draftPage.evaluate(() => window.draftSendCalls), 0, 'Restoring a draft must never send it');
+    const savedDraftKey = 'forge.draft.v1:' + JSON.stringify(['draft-project', 'D:\\draft-project']);
+    assert.equal(await draftPage.evaluate(key => localStorage.getItem(key), savedDraftKey), 'Minha ideia ainda não enviada');
+    await draftPage.getByRole('link', { name: 'Meus projetos' }).click();
+    await draftPage.getByRole('link', { name: 'Abrir outro projeto' }).click();
+    assert.equal(await draftPage.locator('#message-text').inputValue(), '', 'Another project must not inherit a saved draft');
+    await draftPage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\second-draft-project');
+    await draftPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await draftPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    await draftPage.locator('#message-text').fill('Outro texto não enviado');
+    await draftPage.reload();
+    await draftPage.getByRole('link', { name: 'Meus projetos' }).click();
+    await draftPage.locator('#recent-projects .recent-project').filter({ hasText: 'D:\\draft-project' }).getByRole('button', { name: /^Abrir / }).click();
+    await draftPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await draftPage.locator('#message-text').inputValue(), 'Minha ideia ainda não enviada', 'The original project restores only its own saved draft');
+    await draftPage.getByRole('link', { name: 'Meus projetos' }).click();
+    await draftPage.locator('#recent-projects .recent-project').filter({ hasText: 'D:\\second-draft-project' }).getByRole('button', { name: /^Abrir / }).click();
+    await draftPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await draftPage.locator('#message-text').inputValue(), 'Outro texto não enviado', 'The second project restores only its own saved draft');
+    await draftPage.getByRole('link', { name: 'Meus projetos' }).click();
+    await draftPage.locator('#recent-projects .recent-project').filter({ hasText: 'D:\\draft-project' }).getByRole('button', { name: /^Abrir / }).click();
+    await draftPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    await draftPage.getByRole('button', { name: 'Enviar', exact: true }).click();
+    await draftPage.waitForFunction(() => window.draftSendCalls === 1);
+    await draftPage.waitForFunction(key => localStorage.getItem(key) === null, savedDraftKey);
+    await draftPage.reload();
+    await draftPage.getByRole('link', { name: 'Meus projetos' }).click();
+    await draftPage.locator('#recent-projects .recent-project').filter({ hasText: 'D:\\draft-project' }).getByRole('button', { name: /^Abrir / }).click();
+    await draftPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await draftPage.locator('#message-text').inputValue(), '', 'An accepted send must not reappear as an unsent draft after restart');
+    assert.equal(await draftPage.evaluate(() => window.draftSendCalls), 0, 'Reopening after accepted send must not resend it');
+    await draftPage.evaluate(() => {
+      const invoke = window.__TAURI__.core.invoke;
+      window.__TAURI__.core.invoke = (command, args) => command === 'send_message'
+        ? Promise.reject('Delivery uncertain') : invoke(command, args);
+    });
+    await draftPage.locator('#message-text').fill('Texto de envio incerto');
+    await draftPage.getByRole('button', { name: 'Enviar', exact: true }).click();
+    await draftPage.locator('#agent-status').filter({ hasText: 'Delivery uncertain' }).waitFor();
+    assert.equal(await draftPage.evaluate(key => localStorage.getItem(key), savedDraftKey), 'Texto de envio incerto', 'Uncertain send retains its draft for careful review');
+    await draftPage.reload();
+    await draftPage.getByRole('link', { name: 'Meus projetos' }).click();
+    await draftPage.locator('#recent-projects .recent-project').filter({ hasText: 'D:\\draft-project' }).getByRole('button', { name: /^Abrir / }).click();
+    await draftPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await draftPage.locator('#message-text').inputValue(), 'Texto de envio incerto');
+    assert.match(await draftPage.locator('#composer-help').textContent(), /último envio não foi confirmado/);
+    assert.equal(await draftPage.evaluate(() => window.draftSendCalls), 0, 'Uncertain draft restoration must not resend it');
+    await draftPage.close();
+    const draftFailurePage = await browser.newPage();
+    await draftFailurePage.addInitScript(() => {
+      window.failureSendCalls = 0;
+      window.__TAURI__ = { core: {
+        Channel: class {},
+        invoke: async (command, args) => {
+          if (command === 'start_project' || command === 'inspect_project') return { project_id: 'failure-project', project_root: args.projectRoot };
+          if (command === 'connect_agent') return { thread_id: 'failure-thread', messages: [], resumed: false };
+          if (command === 'send_message') { window.failureSendCalls++; return {}; }
+          return null;
+        },
+      } };
+    });
+    await draftFailurePage.goto(workspaceUrl);
+    await draftFailurePage.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\failure-project');
+    await draftFailurePage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+    await draftFailurePage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    await draftFailurePage.evaluate(() => {
+      window.originalSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key.startsWith('forge.draft.v1:')) throw new Error('draft storage unavailable');
+        return window.originalSetItem.call(this, key, value);
+      };
+    });
+    await draftFailurePage.locator('#message-text').fill('Texto que não foi salvo');
+    assert.match(await draftFailurePage.locator('#draft-note').textContent(), /não foi possível guardar este rascunho/i);
+    assert.equal(await draftFailurePage.locator('#draft-note').isVisible(), true);
+    await draftFailurePage.evaluate(() => { Storage.prototype.setItem = window.originalSetItem; });
+    await draftFailurePage.locator('#message-text').fill('Texto salvo com proteção');
+    const failureDraftKey = 'forge.draft.v1:' + JSON.stringify(['failure-project', 'D:\\failure-project']);
+    const failureMarkerKey = 'forge.send-unconfirmed.v1:' + JSON.stringify(['failure-project', 'D:\\failure-project']);
+    assert.equal(await draftFailurePage.evaluate(key => localStorage.getItem(key), failureDraftKey), 'Texto salvo com proteção');
+    await draftFailurePage.evaluate(() => {
+      window.originalRemoveItem = Storage.prototype.removeItem;
+      Storage.prototype.removeItem = function (key) {
+        if (key.startsWith('forge.draft.v1:')) throw new Error('draft removal unavailable');
+        return window.originalRemoveItem.call(this, key);
+      };
+    });
+    await draftFailurePage.getByRole('button', { name: 'Enviar', exact: true }).click();
+    await draftFailurePage.locator('#agent-status').filter({ hasText: 'Envio confirmado, mas não foi possível remover o rascunho' }).waitFor();
+    assert.match(await draftFailurePage.locator('#draft-note').textContent(), /não foi possível guardar este rascunho/i);
+    assert.equal(await draftFailurePage.evaluate(() => window.failureSendCalls), 1);
+    assert.equal(await draftFailurePage.evaluate(key => localStorage.getItem(key), failureMarkerKey), 'failure-thread', 'The uncertain-send guard must remain until stale saved text can be removed');
+    await draftFailurePage.evaluate(() => { Storage.prototype.removeItem = window.originalRemoveItem; });
+    await draftFailurePage.reload();
+    await draftFailurePage.getByRole('link', { name: 'Meus projetos' }).click();
+    await draftFailurePage.locator('#recent-projects .recent-project').filter({ hasText: 'D:\\failure-project' }).getByRole('button', { name: /^Abrir / }).click();
+    await draftFailurePage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    assert.equal(await draftFailurePage.locator('#message-text').inputValue(), 'Texto salvo com proteção');
+    assert.match(await draftFailurePage.locator('#composer-help').textContent(), /último envio não foi confirmado/);
+    assert.equal(await draftFailurePage.evaluate(() => window.failureSendCalls), 0, 'A stale saved draft must not be sent on restart');
+    await draftFailurePage.close();
     console.log('PASS: controlled long history stays scrollable in the conversation, resumes at latest, preserves earlier reading position, and follows new replies near the end.');
     console.log('PASS: project switching closes an idle connection; a running turn needs confirmation and does not switch when declined. Explore opens a fresh folder without showing the old transcript.');
     console.log('PASS: appearance survives reload, overrides OS, follows OS, supports keyboard and tolerates storage failure.');

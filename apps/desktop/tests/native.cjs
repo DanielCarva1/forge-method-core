@@ -1169,9 +1169,17 @@ async function operatePreviewDialog(page, file) {
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
     assert.equal(await page.getByLabel('Reforçar contraste').isChecked(), true);
     console.log('PASS: native WebView appearance preference survives reload.');
-    if (process.env.FORGE_TEST_PROCESS_RESTART === '1' || process.env.FORGE_TEST_PREVIEW_PROCESS_RESTART === '1') {
+    if (process.env.FORGE_TEST_PROCESS_RESTART === '1' || process.env.FORGE_TEST_PREVIEW_PROCESS_RESTART === '1' || process.env.FORGE_TEST_DRAFT_PROCESS_RESTART === '1') {
       if (process.env.FORGE_TEST_PROCESS_RESTART === '1') assert.ok(restartProject && restartHistory, 'Process restart requires the real-agent smoke journey');
       if (process.env.FORGE_TEST_PREVIEW_PROCESS_RESTART === '1') assert.ok(process.env.FORGE_TEST_PROJECT, 'Preview restart requires the native project fixture');
+      if (process.env.FORGE_TEST_DRAFT_PROCESS_RESTART === '1') {
+        assert.ok(process.env.FORGE_TEST_PROJECT, 'Draft restart requires the native project fixture');
+        await page.locator('nav a[data-route="workspace"]').click();
+        await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(process.env.FORGE_TEST_PROJECT);
+        await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+        await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 35000 });
+        await page.locator('#message-text').fill('Rascunho preservado após reiniciar o aplicativo');
+      }
       await browser.close();
       browser = null;
       const exited = once(child, 'exit');
@@ -1198,6 +1206,24 @@ async function operatePreviewDialog(page, file) {
       const restartedContext = browser.contexts()[0];
       page = restartedContext.pages()[0] || await restartedContext.waitForEvent('page', { timeout: 5000 });
       await page.locator('#home').waitFor({ state: 'visible' });
+      if (process.env.FORGE_TEST_DRAFT_PROCESS_RESTART === '1') {
+        await page.evaluate(() => {
+          window.draftRestartSendCount = 0;
+          const core = window.__TAURI__.core;
+          const facade = Object.create(core);
+          Object.defineProperty(facade, 'invoke', { value: (command, args) => {
+            if (command === 'send_message') window.draftRestartSendCount++;
+            return core.invoke(command, args);
+          } });
+          window.__TAURI__.core = facade;
+        });
+        await page.locator('nav a[data-route="projects"]').click();
+        await page.locator('#recent-projects .recent-project').filter({ hasText: process.env.FORGE_TEST_PROJECT }).getByRole('button', { name: /^Abrir / }).click();
+        await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 35000 });
+        assert.equal(await page.locator('#message-text').inputValue(), 'Rascunho preservado após reiniciar o aplicativo');
+        assert.equal(await page.evaluate(() => window.draftRestartSendCount), 0, 'Restored native draft must never be sent automatically');
+        console.log('PASS: full native process restart restored the unsent project draft without sending a turn.');
+      }
       if (process.env.FORGE_TEST_PREVIEW_PROCESS_RESTART === '1') {
         await page.locator('nav a[data-route="projects"]').click();
         await page.locator('#recent-projects .recent-project').first().getByRole('button', { name: /Abrir new-project na pasta/ }).click();

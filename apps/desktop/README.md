@@ -1,9 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.47` is the current source version
-and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.47-alpha.1).
-Its installer was downloaded without authentication, hash-checked, installed
-over the 0.1.47 candidate and tested in the hidden native app.
+Independent Tauri application. Desktop `0.1.48` is the current source version
+and installed candidate; the latest verified [published alpha is 0.1.47](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.47-alpha.1).
+The 0.1.48 candidate has been hash-checked and tested in the hidden native
+app. Public readback remains pending.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -9261,3 +9261,44 @@ per-model tokens, BRL cost and Pro quota attribution remain UNKNOWN.
 remaining UI/backend or accessibility gap with an observable acceptance test,
 then make another coherent alpha package rather than polishing this isolated
 draft behavior indefinitely.
+
+### Desktop 0.1.48 persistent draft candidate — 2026-09-28
+
+The previous alpha isolated drafts between projects but lost them after a full
+app restart. The browser suite first reproduced that loss on 0.1.47. The UI
+now keeps an unsent draft in the Windows WebView app profile, keyed by the
+confirmed Forge project ID and root. It restores only after that project is
+confirmed again; it neither connects nor sends automatically. A draft typed
+before folder confirmation is session-only. Accepted Send removes the saved
+text; uncertain Send and storage failures retain the existing explicit-review
+protection and show a visible warning. The draft note says it is saved on this
+device. Draft text is not app-encrypted and should not contain secrets.
+
+Changed: `ui/chat.mjs`, `ui/index.html`, `ui/styles.css`, browser/native tests,
+Desktop version files, `RELEASE_NOTES-0.1.48.md`, and this checkpoint. The
+complete browser UI suite passed isolation, reload, failed validation,
+accepted/uncertain Send, storage failure and narrow/200% cases. JavaScript
+syntax and diff checks passed. Desktop `cargo check`, two focused identity
+tests, 51 non-ignored crate tests (one ignored), and strict Clippy passed. The
+hidden native debug and installed 0.1.48 WebView passed a full process restart
+with the exact unsent text restored and no Send call. The debug native
+screenshot `D:/Temp/User/forge-draft-restart-debug.png` was visually reviewed.
+The test harness does not claim a real Codex turn in this draft test. No core
+workspace suite or manual GitHub CI ran.
+
+One NSIS candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.48_x64-setup.exe`
+has 123,052,041 bytes, SHA-256
+`24FBBD30420DCB5340E29B9CA743BD4BDC98BE0E86027BC3CE9C056A17E2174F`.
+Its sidecar has 93 bytes. Silent installation over 0.1.47 exited 0,
+preserved candidate bytes and installed ProductVersion 0.1.48, executable
+SHA-256
+`544070E31102467A1F741CC091A46BD25B8504CDF17C216F70BC69596143EDB1`.
+No worker was delegated; per-model tokens, BRL cost and Pro quota attribution
+remain UNKNOWN. Clean-machine setup, external-browser launch, real provider
+login completion, physical mobile access and manual screen-reader acceptance
+remain NOT_RUN.
+
+**State:** candidate installed and tested. Next exact step: review the diff,
+commit/push/tag, publish this exact candidate and sidecar, verify anonymous
+download bytes and reinstall, then continue the broad Desktop product goal.
