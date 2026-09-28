@@ -1,8 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.52` is the current source version;
-`0.1.51` is the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.51-alpha.1)
-until the tested 0.1.52 candidate is published and downloaded.
+Independent Tauri application. Desktop `0.1.52` is the current source version
+and the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.52-alpha.1).
+The exact installer was downloaded without authentication, hash-checked,
+installed and tested in the hidden native app.
 Its installer was downloaded without authentication, hash-checked, installed
 and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
@@ -9673,3 +9674,26 @@ Its sidecar is 93 bytes. The installed executable SHA-256 is
 and sidecar, download anonymously and verify identical bytes and installation.
 Then continue the larger product UI goal; do not mark it complete from this
 incremental alpha package.
+
+### Desktop 0.1.52 public readback — 2026-09-28
+
+Package commit `5c03d26d` was pushed on `codex/desktop-shell`, tagged
+`desktop-v0.1.52-alpha.1`, and published as the
+[0.1.52 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.52-alpha.1).
+Unauthenticated downloads returned 123,119,675 bytes and SHA-256
+`4EC4CE228E19C76B02AC161FBD5493AB359FF50E5042666863FFB7CC7FEC6B37`,
+identical to the one tested candidate and public sidecar. Silent installation
+of the downloaded file exited 0, preserved its hash and installed
+ProductVersion 0.1.52. The installed executable SHA-256 is
+`1A3CE7FE741B14ED873791A49C138BDCB0D474F769B27EBDACD888ECE2AA3E39`.
+The downloaded installation passed the hidden native smoke, including real
+Forge project/record readback. Actual browser launch, new real Codex Send,
+clean-machine setup, fresh provider login and manual screen-reader acceptance
+remain NOT_RUN in this release check. Prior record first-read instability
+remains PARTIAL; no root cause was established. No manual GitHub CI ran. No
+worker was delegated; per-model tokens, BRL-equivalent cost and Pro quota
+attribution remain UNKNOWN.
+
+**Next smallest step:** continue closing substantial create/chat/result/restart
+UI gaps against real user journeys. Alpha publication is not full-product
+completion; keep the overarching Forge goal active.

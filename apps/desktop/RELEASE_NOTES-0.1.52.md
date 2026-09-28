@@ -38,5 +38,10 @@ Its adjacent 93-byte `.sha256` sidecar records the same hash. Silent
 installation over 0.1.51 returned exit 0 without changing candidate bytes.
 The installed executable reports ProductVersion 0.1.52, SHA-256
 `1A3CE7FE741B14ED873791A49C138BDCB0D474F769B27EBDACD888ECE2AA3E39`,
-and passed the hidden native smoke. Public download and reinstall verification
-are still pending; this candidate is not yet a downloadable update.
+and passed the hidden native smoke. The prerelease was published at
+https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.52-alpha.1.
+An unauthenticated download of the installer and sidecar matched the exact
+candidate size and SHA-256. Silent installation of the downloaded file exited
+0, preserved its bytes, installed ProductVersion 0.1.52 with the same
+executable hash, and passed the hidden native smoke. This is same-machine
+evidence, not clean-machine installation.
