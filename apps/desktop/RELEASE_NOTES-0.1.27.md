@@ -56,6 +56,9 @@ Silent installation over public 0.1.26 returned exit code 0 without changing
 candidate bytes. The installed executable reports 0.1.27 with SHA-256
 `410C0208EADD831DD3622BE24628F8025C1FAC3BCEDE57F583CF5764805C418A`.
 The installed app passed hidden native first-use and real-result/restart
-checks on this machine. This is not a clean-machine test. Do not call this
-release publicly available until the downloaded installer matches the tested
-candidate's exact bytes.
+checks on this machine. This is not a clean-machine test. The public installer
+and checksum sidecar were downloaded without authentication. The downloaded
+installer matched the tested candidate's exact byte count and SHA-256;
+installing those downloaded bytes silently returned exit code 0, reported
+version 0.1.27, and produced the same installed executable SHA-256. A
+read-only real-result/restart check passed after the downloaded install.

@@ -1,6 +1,6 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.26` is the published alpha
+Independent Tauri application. Desktop `0.1.27` is the published alpha
 prerelease. Its exact installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
@@ -7175,3 +7175,34 @@ and selectively commit/push this package, tag/release the exact tested
 installer under the maintainer's standing alpha publication authorization,
 then download unauthenticated bytes and verify size/hash and installed
 readback. Do not rebuild this candidate.
+
+### Desktop 0.1.27 public release readback — 2026-09-27
+
+Package commit `53d88b6a` was pushed on `codex/desktop-shell` with the
+maintainer's Git identity; annotated tag `desktop-v0.1.27-alpha.1` resolves to that
+commit and was pushed. Public prerelease:
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.27-alpha.1`.
+It contains the exact tested installer and `.sha256` sidecar. Unauthenticated
+download to `C:/ForgeFast/forge-alpha-0127-public-20260927` matched the
+candidate: 123,106,078 bytes and SHA-256
+`F25D5B43D28D0FCD7E01B3D1ABE093E21D7AB49A61A59C3B6897AB894D83C724`.
+Silent installation of those downloaded bytes returned exit 0, left them
+unchanged, and produced installed 0.1.27 executable SHA-256
+`410C0208EADD831DD3622BE24628F8025C1FAC3BCEDE57F583CF5764805C418A`.
+The downloaded installation passed the hidden read-only real-result/restart
+test again with the existing 33-message Codex chat and no Send. No manual
+GitHub CI was run. This proves public byte continuity and an update on this
+machine, not a clean-machine install or a fresh provider reply.
+
+**State:** 0.1.27 is public and installed. The combined two-dialog native
+timeout remains an unresolved intermittent test observation despite separate
+and retry PASS. External-browser launch, fresh-account login,
+clean-machine installation, manual accessibility acceptance, mobile, and
+offline self-contained distribution remain NOT_RUN or unfinished. No
+subagent was used; per-task BRL and Pro-quota impact remain UNKNOWN.
+**Next exact step:** return to the larger journey, not another wording-only
+release. Inspect #91/#92 acceptance and the actual installed UI for a
+high-impact remaining gap; do not repeat the same real provider conversation
+without a new hypothesis. If the combined hidden-dialog timeout recurs,
+use `FORGE_NATIVE_DIAGNOSTICS=1` and the runner's printed log to identify
+the exact stalled step before attributing it to product behavior.
