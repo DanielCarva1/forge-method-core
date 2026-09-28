@@ -168,6 +168,28 @@ async function openConversation(page) {
     await page.waitForFunction(() => document.activeElement === document.querySelector('#about summary'));
     await page.goto(`${url}#about`);
     assert.equal(await page.locator('#about').evaluate(node => node.open), true);
+    await page.getByRole('button', { name: 'Ver versões disponíveis' }).click();
+    await page.locator('#updates-status').filter({ hasText: 'Não foi possível abrir' }).waitFor();
+    assert.match(await page.locator('#updates-url').textContent(), /github\.com\/DanielCarva1\/forge-method-core\/releases/);
+    const updatesPage = await browser.newPage();
+    await updatesPage.addInitScript(() => {
+      window.updatesCalls = 0;
+      window.__TAURI__ = { core: { invoke: async command => {
+        if (command === 'app_info') return { name: 'Forge', version: '0.1.45' };
+        if (command === 'open_updates_page') { window.updatesCalls++; if (window.updatesFail) throw new Error('browser unavailable'); }
+      } } };
+    });
+    await updatesPage.goto(`${url}#about`);
+    await updatesPage.locator('#app-version').filter({ hasText: 'Versão instalada: 0.1.45' }).waitFor();
+    await updatesPage.getByRole('button', { name: 'Ver versões disponíveis' }).click();
+    await updatesPage.locator('#updates-status').filter({ hasText: 'solicitada ao navegador' }).waitFor();
+    assert.equal(await updatesPage.evaluate(() => window.updatesCalls), 1);
+    assert.equal(await updatesPage.locator('#updates-url').isHidden(), true);
+    await updatesPage.evaluate(() => { window.updatesFail = true; });
+    await updatesPage.getByRole('button', { name: 'Ver versões disponíveis' }).click();
+    await updatesPage.locator('#updates-status').filter({ hasText: 'Não foi possível abrir' }).waitFor();
+    assert.equal(await updatesPage.locator('#updates-url').isVisible(), true);
+    await updatesPage.close();
     await page.getByRole('link', { name: 'Minha conversa', exact: true }).click();
     await page.locator('#workspace').waitFor({ state: 'visible' });
     assert.equal(await page.getByRole('button', { name: 'Continuar nesta pasta' }).isVisible(), true);

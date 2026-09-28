@@ -9,6 +9,10 @@ import { chooseStarter } from './explore.mjs';
 
 const status = document.querySelector('#native-status');
 const retry = document.querySelector('#retry');
+const appVersion = document.querySelector('#app-version');
+const openUpdates = document.querySelector('#open-updates');
+const updatesStatus = document.querySelector('#updates-status');
+const updatesUrl = document.querySelector('#updates-url');
 
 async function refresh() {
   retry.disabled = true;
@@ -17,10 +21,27 @@ async function refresh() {
   status.textContent = result.state === 'ready'
     ? `Aplicativo iniciado · versão ${result.version}`
     : 'Não foi possível acessar a parte nativa. Abra esta tela pelo aplicativo Forge.';
+  appVersion.textContent = result.state === 'ready'
+    ? `Versão instalada: ${result.version}`
+    : 'Não foi possível consultar a versão instalada.';
   retry.disabled = false;
 }
 
 retry.addEventListener('click', refresh);
+openUpdates.addEventListener('click', async () => {
+  openUpdates.disabled = true;
+  updatesStatus.textContent = 'Abrindo a página de versões no navegador…';
+  updatesUrl.hidden = true;
+  try {
+    const invoke = globalThis.__TAURI__?.core?.invoke;
+    if (typeof invoke !== 'function') throw new Error('Native bridge unavailable');
+    await invoke('open_updates_page');
+    updatesStatus.textContent = 'Página de versões solicitada ao navegador.';
+  } catch {
+    updatesStatus.textContent = 'Não foi possível abrir o navegador.';
+    updatesUrl.hidden = false;
+  } finally { openUpdates.disabled = false; }
+});
 refresh();
 
 const form = document.querySelector('#project-form');

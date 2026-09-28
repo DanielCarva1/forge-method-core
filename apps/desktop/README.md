@@ -1,7 +1,8 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.45` is the current source version
-and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.45-alpha.1).
+Independent Tauri application. Desktop `0.1.46` is the current source version;
+`0.1.45` is the latest published and publicly verified
+[alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.45-alpha.1).
 Its installer was downloaded without authentication, hash-checked, installed
 over `0.1.44` and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
@@ -9135,3 +9136,44 @@ feedback correction with the next coherent Desktop package, and validate its
 installed native behavior before public release. Real provider login
 completion, physical mobile access and manual screen-reader acceptance
 remain NOT_RUN.
+
+### Desktop 0.1.46 update-discovery candidate — 2026-09-28
+
+The first-use copy confirmation is now beside its device code, as described
+above. The Home **Como funciona** section now displays the native installed
+Desktop version and a **Ver versões disponíveis** action. The native command
+accepts no URL from the WebView: it can only ask Windows to open this
+repository's public releases page. If that request fails, a copyable URL is
+shown. This is manual update discovery, not an auto-updater, background
+network check or installation. It addresses an actual distribution UX gap:
+the prior version number was buried in the project connection disclosure.
+
+Changed: `ui/index.html`, `ui/main.mjs`, `ui/chat.mjs`, `ui/styles.css`,
+`src-tauri/src/main.rs`, browser/native tests, Desktop version files,
+`RELEASE_NOTES-0.1.46.md`, and this checkpoint. The complete browser UI suite
+passed success/failure simulated update requests and missing native bridge;
+the native debug and installed Windows WebView showed the real version and
+button without horizontal overflow at 360px/200%. The native screenshot
+`D:/Temp/User/forge-updates-about-debug.png` was visually reviewed. Desktop
+`cargo check`, focused identity test, 51 non-ignored Rust tests (one ignored),
+strict Clippy, JavaScript syntax, release build, and installed hidden native
+general/auth/real-result smokes passed. The native tests did not open the
+external browser or modify the system clipboard. No core workspace suite or
+manual GitHub CI ran; bundled core remains pinned to 0.13.2.
+
+One NSIS candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.46_x64-setup.exe`
+has 123,117,912 bytes, SHA-256
+`98CFE23151DD7D93D1A3871612380EC7A4D20AE4B40AEBB3F123BAB102DDF98D`.
+Silent installation over public 0.1.45 returned exit 0 and preserved the
+candidate bytes. Installed ProductVersion is 0.1.46, executable SHA-256
+`DA5C1E8960BE7E6F9E2070BF048F45AEEB8001A97728B1DAA103206A4C876FF7`.
+No worker was delegated; per-model tokens, BRL cost and Pro quota impact
+remain UNKNOWN. External-browser opening, clean-machine setup, real provider
+login completion, physical mobile access and manual screen-reader acceptance
+remain NOT_RUN.
+
+**State:** candidate installed and tested; commit, push, tag, public download
+and downloaded-file install/readback remain. Next exact step: publish this
+candidate and verify the public bytes and installed app, then continue the
+broader Desktop UI/product goal.

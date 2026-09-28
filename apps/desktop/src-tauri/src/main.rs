@@ -24,6 +24,40 @@ fn app_info() -> AppInfo {
     }
 }
 
+#[tauri::command]
+fn open_updates_page() -> Result<(), &'static str> {
+    // No URL from the WebView is accepted here: only the project's public releases page.
+    #[cfg(windows)]
+    {
+        #[link(name = "shell32")]
+        unsafe extern "system" {
+            fn ShellExecuteW(
+                window: isize,
+                operation: *const u16,
+                file: *const u16,
+                parameters: *const u16,
+                directory: *const u16,
+                show: i32,
+            ) -> isize;
+        }
+        let operation: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+        let url: Vec<u16> = "https://github.com/DanielCarva1/forge-method-core/releases"
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let result = unsafe {
+            ShellExecuteW(0, operation.as_ptr(), url.as_ptr(), std::ptr::null(), std::ptr::null(), 1)
+        };
+        if result <= 32 {
+            Err("Não foi possível abrir o navegador. Copie o endereço mostrado na tela.")
+        } else {
+            Ok(())
+        }
+    }
+    #[cfg(not(windows))]
+    { Err("Abra o endereço mostrado na tela em seu navegador.") }
+}
+
 fn main() {
     let preview_site = std::sync::Arc::new(preview_site::PreviewSiteState::default());
     let preview_site_protocol = preview_site.clone();
@@ -49,6 +83,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             app_info,
+            open_updates_page,
             project::choose_project_folder,
             project::inspect_project,
             project::start_project,

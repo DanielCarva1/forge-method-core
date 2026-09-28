@@ -388,6 +388,8 @@ summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 6
 .agent-access-note { margin: 8px 0; padding: 12px 16px; border-left: 3px solid var(--accent); border-radius: 0 12px 12px 0; background: var(--canvas); font-size: .9rem; }
 #message-form .agent-access-note { margin: 0; }
 .about { margin-block: 28px; }
+.updates { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+.updates h3 { margin: 0 0 8px; }
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
 .cards article { padding-top: 24px; }
 .cards p { color: var(--muted); }

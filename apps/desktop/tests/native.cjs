@@ -150,6 +150,17 @@ async function operatePreviewDialog(page, file) {
     await page.getByRole('link', { name: 'Como funciona' }).click();
     await page.locator('#about .cards').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#about').evaluate(node => node.open), true);
+    const nativeInfo = await page.evaluate(() => window.__TAURI__.core.invoke('app_info'));
+    await page.locator('#app-version').filter({ hasText: `Versão instalada: ${nativeInfo.version}` }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Ver versões disponíveis' }).isVisible(), true);
+    assert.equal(await page.locator('#updates-url').isHidden(), true);
+    if (process.env.FORGE_UPDATES_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_UPDATES_SCREENSHOT, fullPage: true });
+    await page.setViewportSize({ width: 360, height: 720 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
+    await page.getByRole('button', { name: 'Ver versões disponíveis' }).scrollIntoViewIfNeeded();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Enlarged updates help must not scroll sideways');
+    await page.evaluate(() => { document.documentElement.style.removeProperty('font-size'); });
+    await page.setViewportSize(initialViewport);
     await page.getByRole('link', { name: 'Explorar', exact: true }).click();
     await page.getByRole('link', { name: /Arte e criação/ }).click();
     const draft = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
