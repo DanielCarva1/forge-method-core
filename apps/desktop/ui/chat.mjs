@@ -159,7 +159,7 @@ function updateResumeAction() {
 function updateSendControl() {
   byId('send-label').textContent = project ? 'Enviar' : 'Escolher pasta para continuar';
   send.disabled = transitioning || loginPending || !loginPanel.hidden || busy || broken ||
-    (!project && !input.value.trim()) || (connected && unconfirmedSends.has(referenceKey()));
+    !input.value.trim() || (connected && unconfirmedSends.has(referenceKey()));
 }
 
 function controls() {

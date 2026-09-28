@@ -576,7 +576,7 @@ async function operatePreviewDialog(page, file) {
       await page.setViewportSize(initialViewport);
       console.log('PASS: one folder action initialized a new project and its Forge record without a second setup command.');
       assert.equal(await page.locator('#connect-agent').isEnabled(), true);
-      assert.equal(await page.locator('#send-message').isEnabled(), true);
+      assert.equal(await page.locator('#send-message').isDisabled(), true, 'No-op Send is unavailable with an empty new-project composer');
       if (process.env.FORGE_TEST_NARROW_ZOOM === '1') {
         await page.setViewportSize({ width: 390, height: 844 });
         await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Conversa' }).click();
@@ -836,6 +836,14 @@ async function operatePreviewDialog(page, file) {
       if (process.env.FORGE_NONVISUAL_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_NONVISUAL_SCREENSHOT });
       await page.getByRole('button', { name: 'Conversar sobre este arquivo' }).click();
       assert.match(await page.locator('#message-text').inputValue(), /Sobre o arquivo report\.pdf:/);
+      assert.equal(await page.evaluate(() => {
+        const key = `forge.draft.v1:${JSON.stringify([
+          document.getElementById('confirmed-project-id').textContent,
+          document.getElementById('confirmed-root').textContent,
+        ])}`;
+        return localStorage.getItem(key);
+      }), await page.locator('#message-text').inputValue(), 'The native file shortcut must persist its complete unsent draft');
+      assert.equal(await page.locator('#draft-note').isVisible(), true);
       await page.locator('#message-text').fill('');
       console.log('PASS: native unsupported project file shows a safe local card and prepares a conversation draft without opening the file; PDF picker ' + (process.env.FORGE_TEST_NONVISUAL_DIALOG === 'select' ? 'used the actual Windows dialog.' : 'response was simulated.'));
       const siteRoot = path.join(newProject, 'site');
@@ -1084,7 +1092,7 @@ async function operatePreviewDialog(page, file) {
         const connectionStatus = await page.locator('#agent-status').textContent();
         assert.match(connectionStatus, /Codex conectado/, `New-project connection status: ${connectionStatus}`);
         assert.equal(await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).isEnabled(), true);
-        assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isEnabled(), true);
+        assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true, 'Native Send stays disabled until there is text');
         assert.equal(await page.locator('#project-status').isHidden(), true);
         assert.equal(await page.locator('#project-setup').isVisible(), true);
         assert.equal(await page.locator('#project-result').isVisible(), true);
@@ -1154,7 +1162,7 @@ async function operatePreviewDialog(page, file) {
         assert.ok(restoredHistory.includes('Podemos continuar'));
         assert.ok(restoredHistory.includes('Esta é uma verificação somente de leitura.'));
         assert.ok(previousHistory.includes('Podemos continuar'));
-        assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isEnabled(), true);
+        assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true, 'A restored conversation without a draft must not offer an empty Send');
         await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
         await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
         console.log('PASS: history restored from Codex after transport shutdown and WebView reload, without resending a turn.');
@@ -1169,16 +1177,30 @@ async function operatePreviewDialog(page, file) {
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'dark');
     assert.equal(await page.getByLabel('Reforçar contraste').isChecked(), true);
     console.log('PASS: native WebView appearance preference survives reload.');
-    if (process.env.FORGE_TEST_PROCESS_RESTART === '1' || process.env.FORGE_TEST_PREVIEW_PROCESS_RESTART === '1' || process.env.FORGE_TEST_DRAFT_PROCESS_RESTART === '1') {
+    if (process.env.FORGE_TEST_PROCESS_RESTART === '1' || process.env.FORGE_TEST_PREVIEW_PROCESS_RESTART === '1' || ['1', 'shortcut'].includes(process.env.FORGE_TEST_DRAFT_PROCESS_RESTART)) {
       if (process.env.FORGE_TEST_PROCESS_RESTART === '1') assert.ok(restartProject && restartHistory, 'Process restart requires the real-agent smoke journey');
       if (process.env.FORGE_TEST_PREVIEW_PROCESS_RESTART === '1') assert.ok(process.env.FORGE_TEST_PROJECT, 'Preview restart requires the native project fixture');
-      if (process.env.FORGE_TEST_DRAFT_PROCESS_RESTART === '1') {
+      if (['1', 'shortcut'].includes(process.env.FORGE_TEST_DRAFT_PROCESS_RESTART)) {
         assert.ok(process.env.FORGE_TEST_PROJECT, 'Draft restart requires the native project fixture');
+        const draftRoot = process.env.FORGE_TEST_DRAFT_PROCESS_RESTART === 'shortcut' ? restartProject : process.env.FORGE_TEST_PROJECT;
+        assert.ok(draftRoot, 'A preview shortcut requires the generated native project');
         await page.locator('nav a[data-route="workspace"]').click();
-        await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(process.env.FORGE_TEST_PROJECT);
+        await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(draftRoot);
         await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
         await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 35000 });
-        await page.locator('#message-text').fill('Rascunho preservado após reiniciar o aplicativo');
+        if (process.env.FORGE_TEST_DRAFT_PROCESS_RESTART === 'shortcut') {
+          const selected = path.join(draftRoot, 'notes.md');
+          await page.evaluate(file => {
+            const core = window.__TAURI__.core;
+            const facade = Object.create(core);
+            Object.defineProperty(facade, 'invoke', { value: (command, args) => command === 'choose_preview_file' ? Promise.resolve(file) : core.invoke(command, args) });
+            window.__TAURI__.core = facade;
+          }, selected);
+          await page.getByRole('button', { name: 'Escolher arquivo' }).click();
+          await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
+          await page.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
+          assert.match(await page.locator('#message-text').inputValue(), /Quero mudar o arquivo notes\.md:/);
+        } else await page.locator('#message-text').fill('Rascunho preservado após reiniciar o aplicativo');
       }
       await browser.close();
       browser = null;
@@ -1206,7 +1228,8 @@ async function operatePreviewDialog(page, file) {
       const restartedContext = browser.contexts()[0];
       page = restartedContext.pages()[0] || await restartedContext.waitForEvent('page', { timeout: 5000 });
       await page.locator('#home').waitFor({ state: 'visible' });
-      if (process.env.FORGE_TEST_DRAFT_PROCESS_RESTART === '1') {
+      if (['1', 'shortcut'].includes(process.env.FORGE_TEST_DRAFT_PROCESS_RESTART)) {
+        const draftRoot = process.env.FORGE_TEST_DRAFT_PROCESS_RESTART === 'shortcut' ? restartProject : process.env.FORGE_TEST_PROJECT;
         await page.evaluate(() => {
           window.draftRestartSendCount = 0;
           const core = window.__TAURI__.core;
@@ -1218,11 +1241,14 @@ async function operatePreviewDialog(page, file) {
           window.__TAURI__.core = facade;
         });
         await page.locator('nav a[data-route="projects"]').click();
-        await page.locator('#recent-projects .recent-project').filter({ hasText: process.env.FORGE_TEST_PROJECT }).getByRole('button', { name: /^Abrir / }).click();
+        await page.locator('#recent-projects .recent-project').filter({ hasText: draftRoot }).getByRole('button', { name: /^Abrir / }).click();
         await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 35000 });
-        assert.equal(await page.locator('#message-text').inputValue(), 'Rascunho preservado após reiniciar o aplicativo');
+        if (process.env.FORGE_TEST_DRAFT_PROCESS_RESTART === 'shortcut') {
+          assert.match(await page.locator('#message-text').inputValue(), /Quero mudar o arquivo notes\.md:/);
+          assert.equal(await page.locator('#draft-note').isVisible(), true);
+        } else assert.equal(await page.locator('#message-text').inputValue(), 'Rascunho preservado após reiniciar o aplicativo');
         assert.equal(await page.evaluate(() => window.draftRestartSendCount), 0, 'Restored native draft must never be sent automatically');
-        console.log('PASS: full native process restart restored the unsent project draft without sending a turn.');
+        console.log(`PASS: full native process restart restored the unsent ${process.env.FORGE_TEST_DRAFT_PROCESS_RESTART === 'shortcut' ? 'preview change request' : 'project draft'} without sending a turn.`);
       }
       if (process.env.FORGE_TEST_PREVIEW_PROCESS_RESTART === '1') {
         await page.locator('nav a[data-route="projects"]').click();

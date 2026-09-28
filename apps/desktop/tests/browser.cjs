@@ -577,6 +577,13 @@ async function openConversation(page) {
     await projectsPage.locator('#preview-status').filter({ hasText: 'Arquivo encontrado na pasta do projeto' }).waitFor();
     await projectsPage.getByRole('button', { name: 'Conversar sobre este arquivo' }).click();
     assert.match(await projectsPage.locator('#message-text').inputValue(), /Sobre o arquivo output\/report\.pdf:/);
+    const shortcutDraftKey = await projectsPage.evaluate(() => `forge.draft.v1:${JSON.stringify([
+      document.getElementById('confirmed-project-id').textContent,
+      document.getElementById('confirmed-root').textContent,
+    ])}`);
+    assert.equal(await projectsPage.evaluate(key => localStorage.getItem(key), shortcutDraftKey), await projectsPage.locator('#message-text').inputValue(),
+      'A preview change shortcut must save the same unsent composer text as typing does');
+    assert.equal(await projectsPage.locator('#draft-note').isVisible(), true, 'The preview shortcut must show the local-draft notice');
     await projectsPage.evaluate(() => { window.previewKind = 'html'; window.previewChoice = 'D:\\one\\site\\index.html'; });
     await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
     await projectsPage.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
@@ -699,13 +706,14 @@ async function openConversation(page) {
     assert.deepEqual(await projectsPage.evaluate(() => window.startCalls), ['D:\\two', 'D:\\three', 'D:\\new']);
     assert.equal(await projectsPage.locator('#connect-agent').isEnabled(), true);
     assert.equal(await projectsPage.locator('#message-text').isEnabled(), true);
-    assert.equal(await projectsPage.locator('#send-message').isEnabled(), true);
+    assert.equal(await projectsPage.locator('#send-message').isDisabled(), true, 'An empty confirmed-project composer must not offer a no-op Send');
     assert.equal(await projectsPage.locator('#agent-access-note').isVisible(), true);
     assert.match(await projectsPage.locator('#agent-access-note').textContent(), /fora da pasta escolhida.*sem pedir confirmação|sem pedir confirmação.*fora da pasta escolhida/);
     await projectsPage.locator('#conversation-picker summary').click();
     assert.equal(await projectsPage.locator('#connect-help').isVisible(), true);
     const composerSize = await projectsPage.locator('#message-text').evaluate(node => node.getBoundingClientRect().height);
     await projectsPage.locator('#message-text').fill('Uma ideia com detalhes.\n'.repeat(10));
+    assert.equal(await projectsPage.locator('#send-message').isEnabled(), true, 'Typing a message enables Send');
     assert.ok(await projectsPage.locator('#message-text').evaluate(node => node.getBoundingClientRect().height) > composerSize, 'Long drafts should expand the composer before scrolling');
     await projectsPage.locator('#message-text').fill('');
     await openProjectSetup(projectsPage);
@@ -1172,6 +1180,13 @@ async function openConversation(page) {
     await page.locator('#message-text').fill('Minha ideia continua aqui.');
     await page.getByRole('button', { name: 'Entender isto na conversa' }).click();
     assert.match(await page.locator('#message-text').inputValue(), /^Minha ideia continua aqui\.\n\nExplique em linguagem simples/);
+    const recordDraftKey = await page.evaluate(() => `forge.draft.v1:${JSON.stringify([
+      document.getElementById('confirmed-project-id').textContent,
+      document.getElementById('confirmed-root').textContent,
+    ])}`);
+    assert.equal(await page.evaluate(key => localStorage.getItem(key), recordDraftKey), await page.locator('#message-text').inputValue(),
+      'A Forge record shortcut must save its complete unsent prompt, not only the earlier typed text');
+    assert.equal(await page.locator('#draft-note').isVisible(), true, 'The Forge record shortcut must show the local-draft notice');
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'message-text');
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Explaining the record must not send a turn');
     await page.setViewportSize({ width: 390, height: 844 });

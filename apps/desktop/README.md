@@ -1,9 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.48` is the current source version
-and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.48-alpha.1).
-Its installer was downloaded without authentication, hash-checked, installed
-and tested in the hidden native app.
+Independent Tauri application. Desktop `0.1.49` is the current source version
+and installed candidate; the latest verified [published alpha is 0.1.48](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.48-alpha.1).
+The 0.1.49 candidate has been hash-checked and tested in the hidden native app.
+Public readback remains pending.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -9324,3 +9324,44 @@ BRL cost and Pro quota attribution remain UNKNOWN.
 **Next smallest step:** inspect the next concrete real-user UI/backend gap and
 deliver a coherent package. Do not infer full product readiness from draft
 persistence alone.
+
+### Desktop 0.1.49 prepared-request candidate — 2026-09-28
+
+The previous alpha persisted typed text, but project-file and Forge-record
+shortcuts wrote into the composer without notifying the draft owner. The
+browser suite reproduced a saved-draft mismatch and an enabled no-op Send on
+an empty confirmed project. `ui/preview.mjs` and all record shortcuts in
+`ui/progress.mjs` now dispatch the established composer input event after
+preparing a request; `ui/chat.mjs` keeps Send disabled until there is text.
+The request remains unsent, belongs to the confirmed project and survives a
+full app restart. No parallel project store or backend protocol was added.
+
+Changed: `ui/chat.mjs`, `ui/preview.mjs`, `ui/progress.mjs`, browser/native
+tests, Desktop version files, `RELEASE_NOTES-0.1.49.md`, and this checkpoint.
+The browser suite was red on both exact symptoms before the fixes and passed
+afterward. JavaScript syntax and diff checks passed. Desktop `cargo check`,
+two focused identity tests, 51 non-ignored crate tests (one ignored), and
+strict Clippy passed. Hidden native debug and installed candidate smokes
+selected and read a real project file, prepared its change request, restarted
+the full app process, and restored that unsent text without invoking Send.
+The Windows file-picker response in this smoke was simulated; the file read
+used native validation. The normal hidden native suite also passed. A real
+Codex turn was NOT_RUN for this package; prior alpha evidence is separate.
+No core workspace suite or manual GitHub CI ran.
+
+One NSIS candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.49_x64-setup.exe`
+has 123,160,487 bytes, SHA-256
+`537C7D80780EFB52A6957ED54CDA7CC2E32F0ED329D3084B5EA2CB6022AA87D6`.
+Its sidecar has 93 bytes. Silent installation over 0.1.48 exited 0,
+preserved candidate bytes and installed ProductVersion 0.1.49, executable
+SHA-256
+`59CAC58759BAB28A6994FC8D0DB91E37947B87657E0EE5677F6EFE23132E4CFD`.
+No worker was delegated; per-model tokens, BRL cost and Pro quota attribution
+remain UNKNOWN. Clean-machine setup, external-browser launch, real provider
+login completion, physical mobile access and manual screen-reader acceptance
+remain NOT_RUN.
+
+**State:** candidate installed and tested. Next exact step: review the diff,
+commit/push/tag, publish this exact candidate and sidecar, verify anonymous
+download bytes and reinstall, then continue the broad Desktop product goal.

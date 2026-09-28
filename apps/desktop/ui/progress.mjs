@@ -114,10 +114,14 @@ function showSuggestedQuestions(values) {
   section.hidden = values.length === 0;
   explainSuggestions.hidden = values.length === 0;
 }
+function appendConversationDraft(composer, request) {
+  composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n\n${request}` : request;
+  composer.dispatchEvent(new Event('input', { bubbles: true }));
+}
 function prepareQuestion(request, current) {
   const composer = document.getElementById('message-text');
   if (current !== generation || !project || composer.disabled) return;
-  composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n\n${request}` : request;
+  appendConversationDraft(composer, request);
   showWorkspacePane('conversation');
   composer.focus();
   status.textContent = 'Pergunta preparada na conversa. Revise e envie quando quiser; nenhuma decisão foi registrada.';
@@ -306,7 +310,7 @@ explainPending.addEventListener('click', () => {
     return;
   }
   const request = 'Consulte o registro do Forge deste projeto e explique quais decisões ainda estão pendentes e por quê. Mostre a pergunta e as opções somente se conseguir verificar o texto na fonte original. Se não conseguir recuperá-lo, diga isso claramente. Não trate sugestões como escolhas minhas e não registre uma decisão.';
-  composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n\n${request}` : request;
+  appendConversationDraft(composer, request);
   showWorkspacePane('conversation');
   composer.focus();
   status.textContent = 'Pedido preparado na conversa. Revise e envie quando quiser; nenhuma decisão foi registrada.';
@@ -319,7 +323,7 @@ explainSuggestions.addEventListener('click', () => {
     return;
   }
   const request = 'Consulte as perguntas que o Forge sugere agora para este projeto e explique em português claro o que elas significam e se alguma escolha minha é necessária. Não trate sugestões como decisões minhas e não registre uma escolha.';
-  composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n\n${request}` : request;
+  appendConversationDraft(composer, request);
   showWorkspacePane('conversation');
   composer.focus();
   status.textContent = 'Pedido preparado na conversa. Revise e envie quando quiser; nenhuma decisão foi registrada.';
@@ -332,7 +336,7 @@ document.getElementById('explain-record').addEventListener('click', () => {
     return;
   }
   const request = 'Explique em linguagem simples a atividade atual e o próximo passo que constam no registro do Forge. Compare com a conversa mais recente antes de assumir que o registro está atualizado. Diga se precisa de alguma decisão minha.';
-  composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n\n${request}` : request;
+  appendConversationDraft(composer, request);
   showWorkspacePane('conversation');
   composer.focus();
   status.textContent = 'Pedido preparado na conversa. Revise e envie quando quiser; nada foi enviado.';
@@ -345,7 +349,7 @@ document.getElementById('explain-direction').addEventListener('click', () => {
     return;
   }
   const request = 'Explique em português claro a direção atual que consta no registro do Forge: o objetivo, o que foi combinado e o que devemos evitar. Compare com nossa conversa; se houver diferença, avise. Não trate perguntas sugeridas como decisões aprovadas e não altere o registro sem me consultar.';
-  composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n\n${request}` : request;
+  appendConversationDraft(composer, request);
   showWorkspacePane('conversation');
   composer.focus();
   status.textContent = 'Pedido preparado na conversa. Revise e envie quando quiser; nada foi enviado ou alterado no registro.';

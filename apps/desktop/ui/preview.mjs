@@ -430,6 +430,7 @@ function prepareChangeRequest() {
   }
   const request = fileOnly ? `Sobre o arquivo ${pathLabel.textContent}: ` : `Quero mudar o arquivo ${pathLabel.textContent}: `;
   composer.value = composer.value.trim() ? `${composer.value.trimEnd()}\n${request}` : request;
+  composer.dispatchEvent(new Event('input', { bubbles: true }));
   if (dialog.open) dialog.close();
   showWorkspacePane('conversation');
   composer.focus();
