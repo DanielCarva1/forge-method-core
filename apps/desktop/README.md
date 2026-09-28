@@ -1,7 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.49` is the current source version
-and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.49-alpha.1).
+Independent Tauri application. Desktop `0.1.50` is the current source version;
+its installer candidate is being prepared. The last
+[published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.49-alpha.1)
+is `0.1.49`.
 Its installer was downloaded without authentication, hash-checked, installed
 and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
@@ -9418,3 +9420,47 @@ delegated; per-model tokens, BRL cost and Pro quota attribution remain UNKNOWN.
 **Next smallest step:** use the real journey screenshot and remaining Desktop
 acceptance criteria to choose and close the next concrete user-facing UI gap;
 do not claim the entire Forge product finished from this bounded proof.
+
+### Desktop 0.1.50 open-choice readability candidate — 2026-09-28
+
+The real journey screenshot and a controlled browser capture exposed two
+competing explanation buttons when a recorded pending choice and optional
+suggested questions appeared together. The project record now prioritizes the
+recorded choice with one primary explanation action, labels suggested
+questions as optional, and places their caution inside their disclosure.
+Suggestion-only and pending-only states remain distinct. No question wording
+was reconstructed from digests, and preparing an explanation still does not
+send a message or record a decision. The first attempted history-loading
+regression was discarded after a browser run showed its premise was false:
+the history panel is intentionally hidden during the pending record read.
+
+Changed: `ui/index.html`, `ui/progress.mjs`, browser/native UI tests, Desktop
+version and lock/config files, `RELEASE_NOTES-0.1.50.md`, and this checkpoint.
+The browser suite was red on the old mixed-state presentation and passed after
+the change. Eight JS unit tests, 51 Desktop Rust tests (one ignored), strict
+Clippy, syntax/diff checks and a release build passed. Hidden native debug and
+installed-candidate smokes passed with actual Forge readback and a controlled
+pending-choice response; the action prepared a draft without sending.
+Dark browser and light native screenshots were visually reviewed at
+`D:/Temp/User/forge-audit-progress-after.png` and
+`D:/Temp/User/forge-pending-native-after.png`. Real Codex Send was NOT_RUN for
+this UI change; the separate installed 0.1.49 integration evidence remains
+valid for its unmodified conversation path. No core workspace suite or manual
+GitHub CI ran. No worker was delegated; per-model tokens, BRL cost and Pro
+quota attribution remain UNKNOWN.
+
+One NSIS candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.50_x64-setup.exe`
+has 123,091,836 bytes, SHA-256
+`D08F23DC35507E4BDA570B9A67850576DCC1EB4A325212558F0606850E53E614`.
+Its sidecar has 93 bytes. Silent installation over public 0.1.49 exited 0,
+preserved candidate bytes and installed ProductVersion 0.1.50, executable
+SHA-256 `E781B535C3F29512B38DFD82C13D9BED72E6A4BA78C66712CF4DF19A610702BD`.
+The installed candidate passed the hidden native smoke. Clean-machine setup,
+external-browser launch, real provider login completion, physical mobile
+access and manual screen-reader acceptance remain NOT_RUN.
+
+**State:** candidate installed and tested; not yet published. Next exact step:
+review the diff, commit/push/tag, publish this exact candidate and sidecar,
+verify anonymous download bytes and reinstall; then continue the broader
+Desktop product goal.

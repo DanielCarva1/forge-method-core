@@ -406,14 +406,18 @@ async function operatePreviewDialog(page, file) {
         if (await page.locator('#record-suggested').isVisible()) {
           assert.equal(await page.locator('#record-suggested').evaluate(node => node.open), false,
             'Native current Forge suggestions should start collapsed');
-          assert.equal(await page.getByRole('button', { name: 'Entender sugestões na conversa' }).isVisible(), true);
+          const hasPendingDecision = await page.locator('#explain-pending').isVisible();
+          assert.equal(await page.getByRole('button', { name: 'Entender sugestões na conversa' }).isVisible(), !hasPendingDecision,
+            'A recorded pending choice takes priority over optional suggested questions');
           const draft = page.locator('#message-text');
           const originalDraft = await draft.inputValue();
-          await page.getByRole('button', { name: 'Entender sugestões na conversa' }).click();
-          assert.match(await draft.inputValue(), /Consulte as perguntas que o Forge sugere agora/);
-          assert.match(await draft.inputValue(), /Não trate sugestões como decisões minhas/);
-          assert.equal(await page.locator('#messages article').count(), 0, 'The real Forge suggestion action must not send a turn');
-          await draft.fill(originalDraft);
+          if (!hasPendingDecision) {
+            await page.getByRole('button', { name: 'Entender sugestões na conversa' }).click();
+            assert.match(await draft.inputValue(), /Consulte as perguntas que o Forge sugere agora/);
+            assert.match(await draft.inputValue(), /Não trate sugestões como decisões minhas/);
+            assert.equal(await page.locator('#messages article').count(), 0, 'The real Forge suggestion action must not send a turn');
+            await draft.fill(originalDraft);
+          }
           await page.locator('#record-suggested summary').click();
           await page.locator('#record-suggestions .question-action').first().click();
           assert.match(await draft.inputValue(), /Explique em português claro/);

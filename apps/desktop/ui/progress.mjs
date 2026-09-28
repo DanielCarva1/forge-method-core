@@ -270,7 +270,7 @@ async function loadProgress() {
     pendingPanel.hidden = data.recorded_pending_count === 0 && data.suggested_questions.length === 0;
     questionsShortcut.hidden = pendingPanel.hidden;
     questionsShortcut.textContent = data.recorded_pending_count
-      ? data.suggested_questions.length ? 'Ver escolhas e perguntas' : 'Ver escolhas'
+      ? data.recorded_pending_count === 1 ? 'Ver escolha em aberto' : 'Ver escolhas em aberto'
       : 'Ver perguntas';
     explainPending.hidden = data.recorded_pending_count === 0;
     document.getElementById('record-suggestion-note').hidden = data.recorded_pending_count === 0 || data.suggested_questions.length === 0;
@@ -278,8 +278,11 @@ async function loadProgress() {
       ? 'Escolhas em aberto' : 'Perguntas para explorar';
     document.getElementById('record-pending-count').textContent = data.recorded_pending_count === 0
       ? 'O Forge sugeriu perguntas para explorar nesta etapa. Elas não são decisões suas nem interrompem a conversa.'
-      : `O Forge indica ${data.recorded_pending_count} ${data.recorded_pending_count === 1 ? 'escolha pendente' : 'escolhas pendentes'} no registro, mas não mostra aqui ${data.recorded_pending_count === 1 ? 'a pergunta original' : 'as perguntas originais'}. Peça ao agente para consultar a origem antes de decidir.`;
+      : `Há ${data.recorded_pending_count} ${data.recorded_pending_count === 1 ? 'escolha em aberto' : 'escolhas em aberto'} no registro. ${data.recorded_pending_count === 1 ? 'A pergunta original dessa escolha não está disponível' : 'As perguntas originais dessas escolhas não estão disponíveis'} nesta tela. Peça ao agente para consultar a origem antes de decidir.`;
     showSuggestedQuestions(data.suggested_questions);
+    explainSuggestions.hidden = data.recorded_pending_count > 0 || data.suggested_questions.length === 0;
+    document.querySelector('#record-suggested summary').textContent = data.recorded_pending_count
+      ? 'Ver perguntas sugeridas (opcional)' : 'Ver perguntas e opções originais';
     result.hidden = false;
     status.textContent = `${data.status === 'absent' && direction ? 'A direção foi registrada no Forge, mas o próximo trabalho ainda não.' : labels[data.status]} Consultado às ${new Date().toLocaleTimeString('pt-BR')}.`;
   } catch (error) {

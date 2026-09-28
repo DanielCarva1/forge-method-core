@@ -1298,8 +1298,8 @@ async function openConversation(page) {
     assert.match(await page.locator('#record-revision').textContent(), /Direção revista.*revisão 2/);
     assert.equal(await page.locator('#record-constraints-list li').textContent(), '<script>changed</script>');
     assert.equal(await page.locator('#record-direction script').count(), 0);
-    assert.match(await page.locator('#record-pending-count').textContent(), /indica 1 escolha pendente/);
-    assert.match(await page.locator('#record-pending-count').textContent(), /não mostra aqui a pergunta original/);
+    assert.match(await page.locator('#record-pending-count').textContent(), /Há 1 escolha em aberto/);
+    assert.match(await page.locator('#record-pending-count').textContent(), /pergunta original dessa escolha não está disponível/);
     const stateNames = { current: 'Em andamento', stale: 'Acompanhamento desatualizado', blocked: 'Há uma pendência', completed: 'Esta parte foi concluída', abandoned: 'Encerrado sem concluir' };
     for (const state of ['current', 'stale', 'blocked', 'completed', 'abandoned', 'absent']) {
       await page.evaluate(state => { window.progressState = state; }, state);
@@ -1377,9 +1377,9 @@ async function openConversation(page) {
     assert.equal(await page.locator('#explain-pending').isVisible(), true);
     assert.equal(await page.locator('#explain-suggestions').isVisible(), false);
     assert.equal(await page.locator('#record-pending-heading').textContent(), 'Escolhas em aberto');
-    assert.equal(await page.locator('#record-questions-shortcut').textContent(), 'Ver escolhas');
+    assert.equal(await page.locator('#record-questions-shortcut').textContent(), 'Ver escolha em aberto');
     assert.equal(await page.locator('#record-suggestion-note').isVisible(), false);
-    assert.match(await page.locator('#record-pending-count').textContent(), /indica 1 escolha pendente/);
+    assert.match(await page.locator('#record-pending-count').textContent(), /Há 1 escolha em aberto/);
     await page.locator('#message-text').fill('Minha pergunta original.');
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Andamento' }).click();
@@ -1406,10 +1406,14 @@ async function openConversation(page) {
     assert.equal(await page.locator('#record-direction').isVisible(), false, 'A suggestion must not become an accepted direction');
     assert.equal(await page.locator('#record-direction-card').isVisible(), false, 'No recorded direction means no visible agreement card');
     assert.equal(await page.locator('#record-pending').isVisible(), true);
-    assert.match(await page.locator('#record-pending-count').textContent(), /indica 1 escolha pendente/);
-    assert.equal(await page.locator('#record-questions-shortcut').textContent(), 'Ver escolhas e perguntas');
-    assert.equal(await page.locator('#record-suggestion-note').isVisible(), true);
+    assert.match(await page.locator('#record-pending-count').textContent(), /Há 1 escolha em aberto/);
+    assert.equal(await page.locator('#record-questions-shortcut').textContent(), 'Ver escolha em aberto');
+    assert.equal(await page.locator('#explain-suggestions').isVisible(), false, 'The pending choice remains the single primary explanation action');
+    assert.equal(await page.locator('#record-suggested summary').textContent(), 'Ver perguntas sugeridas (opcional)');
+    assert.equal(await page.locator('#record-suggestion-note').isVisible(), false, 'A warning about optional questions stays with those hidden questions');
     assert.equal(await page.locator('#record-suggested').evaluate(node => node.open), false);
+    await page.locator('#record-suggested summary').click();
+    assert.equal(await page.locator('#record-suggestion-note').isVisible(), true);
     assert.match(await page.locator('#record-suggestions').textContent(), /sugestão do Forge, não uma decisão sua/);
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Reading a suggestion must not send or decide');
     await page.setViewportSize({ width: 390, height: 844 });
