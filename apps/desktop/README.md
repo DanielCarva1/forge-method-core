@@ -9590,3 +9590,30 @@ remain UNKNOWN.
 **Next smallest step:** continue the real-user create/chat/result/restart
 journey and close the next substantial UI or reliability gap. Do not infer
 whole-product completion from this alpha release.
+
+### Desktop action confirmations in source — 2026-09-28
+
+The accepted goal remains a complete, approachable Desktop alpha; this is a
+source-only UI slice after public 0.1.51, not an installed update. Generic
+browser confirmation prompts for an external citation and for switching
+projects during a running Codex turn are replaced with one Forge-styled,
+keyboard-accessible in-app dialog. The external address is shown in full;
+cancel and Escape are safe defaults. Declining a project switch leaves the
+current connection and draft in place. The dialog also reflows at a narrow
+viewport with 200% text. No engine or Rust source was changed.
+
+Files: `ui/index.html`, `ui/styles.css`, `ui/chat.mjs`,
+`tests/browser.cjs`, and this checkpoint. The browser test was red before
+implementation, then the complete browser suite passed after the responsive
+fix, including both acceptance/refusal paths and no external call on refusal.
+The Desktop debug build passed; hidden native smoke passed real Forge project
+and record readback, onboarding and preview, but did not exercise a real Codex
+reply or actual external-browser launch in this slice. The controlled browser
+capture `D:/Temp/User/forge-confirmation-dialog-browser.png` was visually
+inspected. No full core workspace or manual GitHub CI ran. No worker was
+delegated; per-model tokens, BRL-equivalent cost and Pro quota attribution
+remain UNKNOWN.
+
+**Next smallest step:** inspect another high-impact real-user journey gap and
+bundle it with this dialog improvement before the next coherent installer.
+Do not call 0.1.51 updated or claim whole-product completion.

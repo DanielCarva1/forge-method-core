@@ -378,8 +378,41 @@ findConversations.addEventListener('click', () => loadConversationChoices());
 previousConversations.addEventListener('click', () => loadConversationChoices(pageNumber - 1, pageCursors[pageNumber - 1]));
 moreConversations.addEventListener('click', () => loadConversationChoices(pageNumber + 1, listCursor));
 
+const confirmation = byId('action-confirmation');
+const confirmationTitle = byId('action-confirmation-title');
+const confirmationCopy = byId('action-confirmation-copy');
+const confirmationAddress = byId('action-confirmation-address');
+const confirmationCancel = byId('action-confirmation-cancel');
+const confirmationAccept = byId('action-confirmation-accept');
+let resolveConfirmation = null;
+function finishConfirmation(accepted) {
+  if (!resolveConfirmation) return;
+  const resolve = resolveConfirmation;
+  resolveConfirmation = null;
+  if (confirmation.open) confirmation.close();
+  resolve(accepted);
+}
+confirmationCancel.addEventListener('click', () => finishConfirmation(false));
+confirmationAccept.addEventListener('click', () => finishConfirmation(true));
+confirmation.addEventListener('close', () => finishConfirmation(false));
+function confirmAction({ title, copy, address = '', accept, cancel = 'Cancelar' }) {
+  if (resolveConfirmation) return Promise.resolve(false);
+  confirmationTitle.textContent = title;
+  confirmationCopy.textContent = copy;
+  confirmationAddress.textContent = address;
+  confirmationAddress.hidden = !address;
+  confirmation.setAttribute('aria-describedby', address ? 'action-confirmation-copy action-confirmation-address' : 'action-confirmation-copy');
+  confirmationAccept.textContent = accept;
+  confirmationCancel.textContent = cancel;
+  return new Promise(resolve => {
+    resolveConfirmation = resolve;
+    confirmation.showModal();
+    confirmationCancel.focus();
+  });
+}
+
 async function openExternalUrl(url, button) {
-  if (!globalThis.confirm(`Abrir este site fora do Forge?\n\n${url}\n\nConfira o endereço antes de continuar.`)) return;
+  if (!await confirmAction({ title: 'Abrir site no navegador?', copy: 'Este endereço foi citado na resposta do Codex. Confira antes de sair do Forge.', address: url, accept: 'Abrir no navegador' })) return;
   let feedback = button.nextElementSibling;
   if (!feedback?.classList.contains('message-web-status')) {
     feedback = document.createElement('span');
@@ -868,7 +901,7 @@ export async function prepareProjectSwitch() {
     return false;
   }
   if (!connected) return !byId('project-root').disabled;
-  if (busy && !globalThis.confirm('O Codex ainda está trabalhando. Trocar de projeto vai interromper a resposta; mudanças já feitas podem permanecer. Quer continuar?')) return false;
+  if (busy && !await confirmAction({ title: 'Trocar de projeto?', copy: 'O Codex ainda está trabalhando. Trocar agora interrompe a resposta; mudanças já feitas podem permanecer.', accept: 'Interromper e trocar', cancel: 'Ficar neste projeto' })) return false;
   return disconnectCurrent();
 }
 
