@@ -735,11 +735,30 @@ async function operatePreviewDialog(page, file) {
       }
       await page.locator('#preview-status').filter({ hasText: 'Arquivo encontrado na pasta do projeto' }).waitFor({ timeout: 20000 });
       assert.equal(await page.locator('#preview-file-note').isVisible(), true);
-      assert.equal(await page.locator('#preview-heading').textContent(), 'Arquivo do projeto');
+      assert.equal(await page.locator('#preview-heading').textContent(), 'PDF do projeto');
       assert.equal(await page.locator('#preview-path').textContent(), 'report.pdf');
       assert.equal(await page.locator('#open-preview').isHidden(), true);
       assert.equal(await page.getByRole('button', { name: 'Abrir PDF no navegador' }).isVisible(), true);
-      assert.match(await page.locator('#open-browser-hint').textContent(), /fora da prévia protegida/);
+      assert.equal(await page.locator('#open-site-browser').evaluate(node => node.classList.contains('primary')), true);
+      assert.equal(await page.locator('#preview-result').evaluate(node => {
+        const ids = [...node.children].map(child => child.id);
+        return ids.indexOf('preview-browser-action') < ids.indexOf('request-preview-change');
+      }), true);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+      assert.equal(await page.locator('#mobile-workspace-nav button').evaluateAll(nodes => nodes[0].getBoundingClientRect().top === nodes[1].getBoundingClientRect().top), true, 'Normal narrow native text keeps two workspace choices per row');
+      await page.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
+      assert.equal(await page.locator('#mobile-workspace-nav button').evaluateAll(nodes => nodes[0].getBoundingClientRect().top !== nodes[1].getBoundingClientRect().top), true, 'Enlarged native text gives workspace choices a full row');
+      assert.equal(await page.locator('#mobile-workspace-nav button').evaluateAll(nodes => nodes.every(node => { const range = document.createRange(); range.selectNodeContents(node); return range.getClientRects().length === 1; })), true, 'Native workspace choices must not split words across lines at 200% text');
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      assert.equal(await page.getByRole('button', { name: 'Abrir PDF no navegador' }).evaluate(node => node.getBoundingClientRect().height >= 48), true);
+      if (process.env.FORGE_PDF_NARROW_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_PDF_NARROW_SCREENSHOT, fullPage: true });
+      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Conversa' }).click();
+      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+      assert.equal(await page.locator('#preview-path').textContent(), 'report.pdf');
+      await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+      await page.setViewportSize(initialViewport);
+      assert.match(await page.locator('#open-browser-hint').textContent(), /fora do Forge/);
       if (process.env.FORGE_NONVISUAL_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_NONVISUAL_SCREENSHOT });
       await page.getByRole('button', { name: 'Conversar sobre este arquivo' }).click();
       assert.match(await page.locator('#message-text').inputValue(), /Sobre o arquivo report\.pdf:/);

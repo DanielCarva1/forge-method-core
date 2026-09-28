@@ -432,7 +432,7 @@ footer { color: var(--muted); padding-block: 8px 32px; }
   .explore-heading::before { display: none; }
 }
 @media (max-width: 480px) {
-  .mobile-workspace-nav:not([hidden]) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
+  .mobile-workspace-nav:not([hidden]) { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr)); overflow: visible; }
   .mobile-workspace-nav button { width: 100%; min-width: 0; overflow-wrap: anywhere; }
 }
 :root[data-theme="dark"] { color-scheme: dark; --canvas: #1c142b; --surface: #2c213e; --ink: #faf3ff; --muted: #d0c2de; --line: #625071; --focus: #ffbaad; --soft: #48325f; --shadow: none; --ambient: #312044; --preview-wash: #30243f; }

@@ -8278,3 +8278,78 @@ UNKNOWN. No candidate rebuild or manual GitHub CI run followed publication.
 closes one result-access gap, not all visual coverage. Avoid inventing
 historical decision text from current policy or a digest; inspect the
 authoritative core contract and its Desktop pin before addressing #92.
+
+### Result action hierarchy after 0.1.36 — 2026-09-28
+
+The active full Forge Desktop objective continues. The installed 0.1.36 PDF
+capture showed that **Conversar sobre este arquivo** came before the main
+**Abrir PDF no navegador** action, which was buried below file-origin copy.
+The current source makes opening the PDF the first, coral action and keeps
+conversation secondary; the DOM/keyboard order matches the visible order.
+Other unsupported files emphasize conversation, while HTML/text/image
+results emphasize **Pedir mudança neste arquivo** and retain the optional
+HTML browser action in its previous position. PDF copy is shorter and does
+not claim the PDF was rendered inside Forge. No native command, project
+authority or stored state changed.
+
+Changed locally, **not yet committed or installed**: `ui/index.html`,
+`ui/preview.mjs`, `tests/browser.cjs`, `tests/native.cjs`, and this checkpoint.
+The browser suite passed, including PDF/HTML action order, narrow 390px
+pane switching, 200% enlarged text and a 48px PDF target. Rebuilt debug UI
+passed hidden native Windows smoke with real project onboarding and actual
+PDF file-picker selection; its 390px/200% PDF state had no horizontal overflow
+and retained the selected file when switching panes. Screenshot
+`D:/Temp/User/forge-0137-pdf-primary-final.png` was reviewed against the
+approved conversation board. `git diff --check` passed. Actual external
+browser opening and actual Codex Send were NOT_RUN for this UI-only slice.
+No subagent was used; model-attributed tokens, API-equivalent BRL and Pro
+quota impact remain UNKNOWN. This source change does not update the public
+0.1.36 installer.
+
+Read-only #92 contract review also reconfirmed the core boundary: durable
+decision audit carries references, digests and status, not verified historical
+question/choice prose. The Desktop cannot present those as accepted agreements
+without a core-owned historical readback; this did not justify a fake UI list
+or desktop-owned decision store.
+
+**Next exact step:** continue a different high-value, user-visible journey
+before packaging this visual refinement with other coherent UI work. For #92,
+first establish a verified historical core readback (or explicitly unavailable
+status) before rendering decision wording. Do not rebuild/publish merely for
+this action-order slice; preserve the local diff.
+
+### Desktop 0.1.37 responsive actions package — 2026-09-28
+
+The source-only PDF action-order refinement above is now combined with a
+native-discovered 200% text issue: at 390px, the narrow workspace navigation
+broke **Conversa** and **Andamento** inside the words. The 0.1.37 CSS keeps
+the two-column navigation at ordinary text size (including the 360px minimum
+window) and gives each destination a full row when enlarged text requires it.
+Browser tests assert both arrangements and intact labels; a hidden native
+390px/200% screenshot at
+`D:/Temp/User/forge-0137-pdf-narrow-zoom-final.png` was reviewed. No project,
+agent, backend or storage contract changed. This package remains separate
+from a full product-readiness claim.
+
+Changed: `ui/index.html`, `ui/preview.mjs`, `ui/styles.css`, browser/native
+tests, Desktop version files, `RELEASE_NOTES-0.1.37.md`, and this checkpoint.
+JavaScript syntax, browser suite, Desktop `cargo check`, 51 non-ignored
+Desktop tests, strict Clippy and `git diff --check` passed. A debug build and
+then the installed NSIS candidate passed hidden native Windows smoke with
+actual folder/PDF picker selection, onboarding and Forge record readback.
+Actual external PDF browser launch and actual Codex Send were NOT_RUN for
+this UI-only package. No subagent was used; attributable model tokens,
+API-equivalent BRL and Pro-quota impact remain UNKNOWN.
+
+One NSIS candidate was built at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.37_x64-setup.exe`,
+123,159,645 bytes, SHA-256
+`4A0A4C688B22E624EFE6166DDB6053D63037AFDE8C0F067C73C9C1513CA93C3D`.
+Silent installation over public 0.1.36 returned exit 0 and left the
+candidate hash unchanged. Installed 0.1.37 executable SHA-256 is
+`21DBE1B874DD5D887CB701D8A1A264A6B5C862E0172EF9EFC4FC51DE8A48005B`.
+Installed-candidate native smoke passed. Do not rebuild the candidate;
+selectively commit/push/tag and publish under standing alpha authorization,
+then download unauthenticated, compare bytes, reinstall that download and
+repeat native smoke. Continue other high-value UI/backend journeys after
+this package; #92 historical wording remains subject to core readback.

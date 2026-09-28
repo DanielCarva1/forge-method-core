@@ -19,6 +19,7 @@ const fileNote = document.getElementById('preview-file-note');
 const markdown = document.getElementById('preview-markdown');
 const openPreview = document.getElementById('open-preview');
 const browserAction = document.getElementById('preview-browser-action');
+const previewOrigin = document.querySelector('#preview-result .preview-origin');
 const openSiteBrowser = document.getElementById('open-site-browser');
 const browserLabel = document.getElementById('open-browser-label');
 const browserHint = document.getElementById('open-browser-hint');
@@ -105,6 +106,9 @@ function clearResult() {
   result.hidden = true;
   openPreview.hidden = true;
   browserAction.hidden = true;
+  previewOrigin.after(browserAction);
+  requestChange.classList.add('primary');
+  openSiteBrowser.classList.remove('primary');
   browserLabel.textContent = 'Usar no navegador';
   browserHint.textContent = 'Fora da prévia protegida, a página pode executar código e acessar a internet. Abra apenas projetos de confiança.';
   fileNote.textContent = 'Este arquivo está na pasta do projeto, mas não pode ser mostrado aqui. Peça ao agente para explicar o resultado ou diga o que gostaria de mudar.';
@@ -187,11 +191,14 @@ async function loadPreview() {
       pdfFile = /\.pdf$/i.test(preview.relative_path);
       fileNote.hidden = false;
       if (pdfFile) {
-        fileNote.textContent = 'Este PDF está na pasta do projeto, mas não é exibido na prévia protegida. Você pode abri-lo no navegador ou conversar sobre ele.';
+        fileNote.textContent = 'Este PDF não aparece na prévia protegida.';
         browserLabel.textContent = 'Abrir PDF no navegador';
-        browserHint.textContent = 'O PDF abre fora da prévia protegida do Forge. Abra apenas arquivos de projetos de confiança.';
+        browserHint.textContent = 'Abre fora do Forge. Use apenas arquivos de projetos de confiança.';
+        fileNote.after(browserAction);
+        openSiteBrowser.classList.add('primary');
+        requestChange.classList.remove('primary');
       }
-      heading.textContent = 'Arquivo do projeto';
+      heading.textContent = pdfFile ? 'PDF do projeto' : 'Arquivo do projeto';
       refresh.textContent = 'Atualizar informações';
       requestChange.textContent = 'Conversar sobre este arquivo';
     } else if (preview.kind === 'image') {
