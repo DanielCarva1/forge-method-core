@@ -203,7 +203,11 @@ preview after native containment and type checks; external URLs do not navigate
 the app. Ordinary tables, quoted text and separators also render as safe DOM;
 wide tables scroll in a focusable region rather than widening the page. This
 is intentionally not a full Markdown engine; unsupported syntax remains
-visible as text.
+visible as text. Since Desktop 0.1.51, a completed Codex reply can turn a
+validated HTTP(S) Markdown link into an explicit, confirmed system-browser
+action. The full destination is shown before launch, and the app itself never
+navigates to it. Local Markdown preview documents and inline-code URLs remain
+inert text.
 
 Previous Codex conversations for the confirmed project use a six-entry
 read-only page, not a growing list or nested scrolling pane. Long titles are
