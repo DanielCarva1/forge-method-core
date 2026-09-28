@@ -493,6 +493,9 @@ async function openConversation(page) {
     await projectsPage.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await projectsPage.locator('#preview-site').isVisible(), true);
     assert.equal(await projectsPage.locator('#preview-browser-action').isVisible(), true);
+    assert.equal(await projectsPage.locator('#open-site-browser').evaluate(node => node.classList.contains('primary')), true, 'Trying a created site is the primary next action');
+    assert.equal(await projectsPage.locator('#request-preview-change').evaluate(node => node.classList.contains('primary')), false);
+    assert.equal(await projectsPage.locator('#preview-browser-action').evaluate(node => node.previousElementSibling?.id), 'preview-site', 'The browser action belongs beside the protected site preview');
     assert.match(await projectsPage.locator('#preview-browser-action .hint').textContent(), /pode executar código e acessar a internet/);
     assert.deepEqual(await projectsPage.evaluate(() => window.browserOpens), [], 'A protected preview must never open the browser automatically');
     await projectsPage.getByRole('button', { name: 'Usar no navegador' }).click();
@@ -597,8 +600,8 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#preview-file-note').isVisible(), false);
     assert.equal(await projectsPage.locator('#preview-result').evaluate(node => {
       const ids = [...node.children].map(child => child.id);
-      return ids.indexOf('request-preview-change') < ids.indexOf('preview-browser-action');
-    }), true, 'HTML keeps change request before the optional external browser action');
+      return ids.indexOf('preview-browser-action') < ids.indexOf('request-preview-change');
+    }), true, 'HTML lets the user try the site before requesting another change');
     assert.equal(await projectsPage.locator('#preview-heading').textContent(), 'Prévia do resultado');
     assert.equal(await projectsPage.getByRole('button', { name: 'Pedir mudança neste arquivo' }).isVisible(), true);
     await projectsPage.setViewportSize({ width: 390, height: 844 });
@@ -796,6 +799,39 @@ async function openConversation(page) {
     assert.equal(await manyProjectsPage.evaluate(() => JSON.parse(localStorage.getItem('forge.projects.v1')).length), 50);
     await manyProjectsPage.close();
     console.log('PASS: 50 recent shortcuts, accent-insensitive search, distinct same-name paths, empty search and revalidated opening.');
+    const reopenedPage = await browser.newPage();
+    await reopenedPage.addInitScript(() => {
+      window.reopenConnects = []; window.reopenSends = 0;
+      window.__TAURI__ = { core: {
+        Channel: class {},
+        invoke: async (command, args) => {
+          if (command === 'app_info') return { name: 'Forge', version: '0.1.1' };
+          if (command === 'inspect_project') return { project_id: 'saved-project', project_root: args.projectRoot };
+          if (command === 'connect_agent') {
+            window.reopenConnects.push(args.threadId);
+            return { thread_id: args.threadId, resumed: true, messages: [
+              { id: 'prior-user', role: 'user', text: 'Minha ideia anterior.' },
+              { id: 'prior-agent', role: 'agent', text: 'Podemos continuar daqui.' },
+            ] };
+          }
+          if (command === 'send_message') window.reopenSends++;
+        },
+      } };
+    });
+    await reopenedPage.goto(`${url}#projects`);
+    await reopenedPage.evaluate(() => {
+      localStorage.setItem('forge.projects.v1', JSON.stringify([{ project_id: 'saved-project', project_root: 'D:\\saved' }]));
+      localStorage.setItem('forge.conversation.v1:["saved-project","D:\\\\saved"]', 'saved-thread');
+    });
+    await reopenedPage.reload();
+    await reopenedPage.getByRole('button', { name: 'Abrir saved na pasta D:\\saved' }).click();
+    await reopenedPage.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.deepEqual(await reopenedPage.evaluate(() => window.reopenConnects), ['saved-thread']);
+    assert.equal(await reopenedPage.locator('#messages article').count(), 2);
+    assert.match(await reopenedPage.locator('#messages').textContent(), /Minha ideia anterior.*Podemos continuar daqui/s);
+    assert.equal(await reopenedPage.evaluate(() => window.reopenSends), 0, 'Opening a saved project restores history without sending a turn');
+    await reopenedPage.close();
+    console.log('PASS: reopening a saved project displays its Codex conversation without another click or Send.');
     const conversationListPage = await browser.newPage();
     await conversationListPage.addInitScript(() => {
       window.listCalls = []; window.connectCalls = []; window.sendCalls = 0; window.failSelection = true; window.failPage = false;
@@ -1171,6 +1207,16 @@ async function openConversation(page) {
         return preview.top >= 0 && preview.bottom < next.top && next.top < innerHeight;
       }), true, 'Preview choice and the recorded next step should be discoverable alongside an empty conversation at 1180x820');
     }
+    await page.setViewportSize({ width: 901, height: 844 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
+    assert.equal(await page.evaluate(() => {
+      const conversation = document.getElementById('project-conversation');
+      const preview = document.getElementById('project-preview');
+      return document.documentElement.scrollWidth <= innerWidth
+        && conversation.scrollWidth <= conversation.clientWidth + 1
+        && preview.scrollWidth <= preview.clientWidth + 1;
+    }), true, 'Intermediate desktop width and 200% text must not clip the conversation or preview');
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
     await page.setViewportSize({ width: 1280, height: 720 });
     assert.equal(await page.locator('#project-record').isVisible(), true);
     assert.equal(await page.locator('.project #project-record').count(), 0);
@@ -2149,7 +2195,7 @@ async function openConversation(page) {
           if (command === 'inspect_project') return { project_id: 'test-project', project_root: args.projectRoot };
           if (command === 'connect_agent') {
             window.agentEvents = args.events;
-            return { thread_id: 'switch-test-thread', messages: [], resumed: false };
+            return { thread_id: 'switch-test-thread', messages: [], resumed: !!args.threadId };
           }
           if (command === 'disconnect_agent') window.disconnectCalls++;
         },
@@ -2208,16 +2254,13 @@ async function openConversation(page) {
     const disconnectsBeforeShortcut = await page.evaluate(() => window.disconnectCalls);
     await page.getByRole('link', { name: 'Meus projetos' }).click();
     await page.getByRole('button', { name: 'Abrir first-project na pasta D:\\first-project' }).click();
-    await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
     assert.equal(await page.evaluate(() => window.disconnectCalls), disconnectsBeforeShortcut + 1, 'Opening a different saved project must disconnect the old Codex conversation first');
     assert.equal(await page.locator('#confirmed-root').textContent(), 'D:\\first-project');
     assert.equal(await page.locator('#message-text').inputValue(), 'Rascunho privado do primeiro projeto', 'Reopening a project restores its unsent draft in this app session');
     await page.locator('#message-text').fill('');
-    await page.locator('#project-setup summary').click();
-    await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
-    await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
-    assert.equal(await page.locator('#message-text').inputValue(), '', 'Clearing a draft must not resurrect it when confirming the same folder again');
-    assert.match(await page.locator('#agent-status').textContent(), /Projeto pronto\. Escreva sua ideia; a conversa abre quando você enviar\./);
+    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
     await page.evaluate(() => {
       const invoke = window.__TAURI__.core.invoke;
       window.__TAURI__.core.invoke = async (command, args) => {
@@ -2234,8 +2277,10 @@ async function openConversation(page) {
         return invoke(command, args);
       };
     });
-    await openConversation(page);
+    await page.locator('#project-setup summary').click();
+    await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.equal(await page.locator('#message-text').inputValue(), '', 'Clearing a draft must not resurrect it when confirming the same folder again');
     const history = page.getByRole('region', { name: 'Histórico da conversa' });
     assert.equal(await page.locator('#messages article').count(), 160);
     assert.equal(await history.evaluate(node => node.scrollHeight > node.clientHeight && node.scrollHeight - node.clientHeight - node.scrollTop < 2), true);
@@ -2295,7 +2340,7 @@ async function openConversation(page) {
         Channel: class {},
         invoke: async (command, args) => {
           if (command === 'start_project' || command === 'inspect_project') return { project_id: 'draft-project', project_root: args.projectRoot };
-          if (command === 'connect_agent') return { thread_id: 'draft-thread', messages: [], resumed: false };
+          if (command === 'connect_agent') return { thread_id: 'draft-thread', messages: [], resumed: !!args.threadId };
           if (command === 'send_message') { window.draftSendCalls++; return {}; }
           return null;
         },
@@ -2363,7 +2408,7 @@ async function openConversation(page) {
     await draftPage.reload();
     await draftPage.getByRole('link', { name: 'Meus projetos' }).click();
     await draftPage.locator('#recent-projects .recent-project').filter({ hasText: 'D:\\draft-project' }).getByRole('button', { name: /^Abrir / }).click();
-    await draftPage.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor();
+    await draftPage.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
     assert.equal(await draftPage.locator('#message-text').inputValue(), '', 'An accepted send must not reappear as an unsent draft after restart');
     assert.equal(await draftPage.evaluate(() => window.draftSendCalls), 0, 'Reopening after accepted send must not resend it');
     await draftPage.evaluate(() => {

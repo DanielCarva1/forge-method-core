@@ -1,5 +1,5 @@
 import { readAppInfo } from './connection.mjs';
-import { prepareProjectSwitch, setProject } from './chat.mjs';
+import { prepareProjectSwitch, resumeSavedConversation, setProject } from './chat.mjs';
 import { setProgressProject } from './progress.mjs';
 import { setPreviewProject } from './preview.mjs';
 import { rememberProject } from './recent-projects.mjs';
@@ -156,6 +156,7 @@ projectRoot.addEventListener('input', () => {
 });
 form.addEventListener('submit', async event => {
   event.preventDefault();
+  let openedProject = false;
   const readOnlyShortcut = event.submitter?.id === 'inspect-project';
   if (inspect.disabled || start.disabled) return;
   if (!projectRoot.value.trim()) {
@@ -199,6 +200,7 @@ form.addEventListener('submit', async event => {
     workspaceBackLabel.textContent = 'Voltar aos projetos';
     setup.open = false;
     projectStatus.textContent = 'Projeto pronto. Escreva para começar ou continuar a conversa; nada foi enviado.';
+    openedProject = true;
     if (!document.querySelector('#workspace').hidden) document.querySelector('#message-text').focus();
   } catch (error) {
     projectStatus.textContent = typeof error === 'string' ? error : 'Não foi possível conferir o projeto. Tente novamente.';
@@ -208,4 +210,5 @@ form.addEventListener('submit', async event => {
     projectRoot.disabled = false;
     browse.disabled = false;
   }
+  if (openedProject) void resumeSavedConversation();
 });

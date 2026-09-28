@@ -683,6 +683,11 @@ async function connectCurrent(explicitThreadId = null) {
   return connected && !broken;
 }
 
+export function resumeSavedConversation() {
+  if (!project || !hasResumableConversation || unconfirmedSends.has(referenceKey()) || connected || transitioning) return Promise.resolve(false);
+  return connectCurrent();
+}
+
 connect.addEventListener('click', () => connectCurrent());
 async function finishLogin() {
   if (!loginActive || loginPending) return;

@@ -1,7 +1,8 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.52` is the current source version
-and the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.52-alpha.1).
+Independent Tauri application. Desktop `0.1.53` is the current source version;
+`0.1.52` remains the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.52-alpha.1)
+until the tested candidate is published and downloaded again.
 The exact installer was downloaded without authentication, hash-checked,
 installed and tested in the hidden native app.
 Its installer was downloaded without authentication, hash-checked, installed
@@ -9728,3 +9729,101 @@ installed 0.1.52 do **not** include this source-only layout adjustment.
 **Next smallest step:** continue testing the actual create/chat/result/restart
 path and package this layout with another meaningful UI improvement rather
 than publishing a one-CSS-change installer. Keep the full Forge goal active.
+
+### Desktop create-to-real-chat readback — 2026-09-28
+
+The overarching objective remains a complete, approachable Forge Desktop
+alpha. The current source passed the controlled browser suite, including a
+new regression assertion for the intermediate 901px layout at 200% text size;
+the assertion found no clipping, so no speculative CSS change was made.
+`tests/browser.cjs` is the only source file changed in this slice.
+
+The pre-layout debug Desktop executable then passed `tests/native-hidden.ps1` on an isolated
+Windows desktop with `FORGE_TEST_NEW_IDEA_PROJECT=1` and
+`FORGE_TEST_NEW_IDEA_REAL_SEND=1`. The actual journey was: choose a theme in
+Explore, select a different fresh temporary folder, initialize and read its
+Forge project, send one bounded message to real Codex, receive one reply,
+and disconnect. The test counted exactly one user message and one agent
+message and checked that the answer concerned the new project. The binary
+predated the adaptive layout commit, so this does not verify the current
+source's exact visual bundle. The temporary
+test profile and project were cleaned by the harness. Existing native checks
+also passed for real record readback, project onboarding, file preview and
+project reopening. This is native UI-to-Codex proof, not a browser-double
+claim. It is **not** proof of long-history recovery or continuity across an
+installed-version upgrade in this source slice. No Rust source changed, so
+Rust tests and full workspace checks were not rerun. No manual GH CI ran.
+No worker was delegated; model-specific token use, BRL-equivalent cost and
+Pro allowance attribution remain UNKNOWN. Installed/public 0.1.52 predates
+the adaptive layout and this test addition.
+
+**Next smallest step:** exercise create/chat/result/restart on the same native
+source with a real generated result or find and fix a concrete UI gap on that
+journey, then group the accepted UI work into the next coherent alpha package.
+
+The pre-layout executable also passed the existing real Codex artifact journey:
+HTML creation, protected preview, one follow-up change, refreshed preview and
+conversation recovery after WebView reload. A repeat after rebuilding the
+current source was **interrupted**, not passed, because it would repeat three
+real Codex turns to recheck a visual-only change. Its partial output is not
+acceptance evidence. A concrete visual-action gap was instead fixed in source:
+when a local HTML site is shown, **Usar no navegador** now appears directly
+after the protected preview as the primary action; **Pedir mudança** remains
+available as a secondary action. The existing browser confirmation and native
+path validation are unchanged. `ui/preview.mjs` and `tests/browser.cjs` cover
+this hierarchy; the complete controlled browser suite passed. A new native
+browser launch was NOT_RUN. No Rust source or protocol changed, no Rust suite
+or manual GH CI ran, and no new installer has been packaged. The next product
+work should address another demonstrated journey gap before a coherent release.
+
+Saved-project reopening now attempts to restore its bookmarked Codex conversation
+as soon as project validation succeeds, without sending a message. Projects with
+no saved conversation still wait for the person's first message; an unconfirmed
+send still requires explicit review. Source changes: `ui/chat.mjs`,
+`ui/main.mjs`, and focused coverage in `tests/browser.cjs`. A headless,
+focused Edge check passed: one saved thread resumed, two prior messages appeared,
+and no Send occurred. The source was then rebuilt as a debug executable, and a
+focused hidden-native check passed with the real Codex bridge: one bounded
+read-only message received a real reply, the app process was restarted, the
+saved project was opened, the same user/agent messages reappeared, and no
+second Send occurred. This check did not run the installed 0.1.52 package.
+An initial native probe showed that a newly opened **empty** Codex thread could
+not be resumed after restart; this is not proof about a thread with a completed
+turn. It remains a separate empty-thread UX limitation, not a failure of the
+verified replied-conversation path. The existing broad browser suite was run prematurely and
+stopped at an older project-switch fixture that returned `resumed: false` even
+for a saved thread; that fixture was corrected, but the full suite has **not**
+been rerun. This is
+uncommitted source, not part of the installed/public 0.1.52 package.
+
+**Next step:** decide whether to avoid bookmarking empty unpersisted threads,
+then finish the source package with a single final browser run and native
+installation check; do not repeat the real Codex turn just to recheck UI.
+
+### Desktop 0.1.53 candidate — 2026-09-28
+
+The saved-project chat reopening, adaptive writing/preview widths and clearer
+HTML result action are grouped in one alpha package. The complete controlled
+browser suite passed after updating outdated project-switch/draft expectations;
+52 non-ignored Desktop Rust tests, strict Clippy, eight JS unit tests,
+JavaScript syntax and `git diff --check` passed. A debug app passed a focused
+hidden native real-Codex restart: one bounded reply, process restart, restored
+messages and no second Send. An empty thread without a sent message did not
+resume and remains a declared limit. One release build produced an NSIS
+candidate; silent upgrade from installed 0.1.52 exited 0, installed 0.1.53
+and left the candidate hash unchanged. The installed candidate passed hidden
+native smoke with actual project/record readback, onboarding and preview; a
+second real Codex turn on the installed candidate was NOT_RUN. No manual GitHub
+CI ran. Worker delegation, model-specific usage and BRL cost remain UNKNOWN.
+
+The single candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.53_x64-setup.exe`:
+123,040,987 bytes, SHA-256
+`1ED8B945DF44400CC697E8A6735C5D00D9E57D4D5B3F534A022AA4512FFDD377`.
+Its sidecar is 93 bytes. The installed executable SHA-256 is
+`A841B2C05F78EE1FE1D76452C8CB68165E44625E81E1084BF8D198941D17F6A6`.
+
+**Next step:** review diff, commit/push/tag and publish this exact candidate
+under the maintainer's standing alpha authorization; download anonymously,
+verify exact bytes and repeat installation readback. Do not rebuild it or
+call 0.1.53 public before that check.

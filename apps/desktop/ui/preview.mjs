@@ -253,6 +253,9 @@ async function loadPreview(restored = false) {
         site.src = renderUrl;
         siteNote.hidden = false;
         sourceToggle.hidden = false;
+        site.after(browserAction);
+        openSiteBrowser.classList.add('primary');
+        requestChange.classList.remove('primary');
         showSource(false);
       } else if (/\.md$/i.test(preview.relative_path)) {
         formattedMarkdown = true;
