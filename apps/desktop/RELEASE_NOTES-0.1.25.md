@@ -49,5 +49,8 @@ The single locally tested candidate is `Forge_0.1.25_x64-setup.exe`,
 Silent installation over 0.1.24 left those installer bytes unchanged, and
 the installed executable reports 0.1.25 with SHA-256
 `A6DCDA319C241CDD089D3FF33A44204C8ACB6CC5424F842537AA268EE6CCAC39`.
-The installer is **local only** until publication and downloaded-byte
-verification are complete. This test machine is not a clean-machine oracle.
+The public prerelease contains this installer and its checksum sidecar. An
+unauthenticated download matched the tested candidate's size and SHA-256
+exactly. Installing those downloaded bytes silently returned exit code 0;
+the installed executable reported 0.1.25 and retained the hash above.
+This test machine is not a clean-machine oracle.

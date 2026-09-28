@@ -6864,3 +6864,31 @@ impact remain UNKNOWN. **Next exact step:** review and selectively commit/push
 the package, then publish this exact tested installer under the maintainer's
 standing alpha authorization and verify an unauthenticated download's exact
 bytes before calling 0.1.25 available. Do not rebuild the candidate.
+
+### Desktop 0.1.25 public release readback — 2026-09-27
+
+Package commit `40c0a484` was pushed on `codex/desktop-shell`. Annotated tag
+`desktop-v0.1.25-alpha.1` resolves to it and was pushed. The public
+prerelease is
+`https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.25-alpha.1`.
+An unauthenticated download to
+`C:/ForgeFast/forge-alpha-0125-public-20260927/Forge_0.1.25_x64-setup.exe`
+matched the tested candidate: 123,042,265 bytes and SHA-256
+`F76671E32C235F614C059DD3C6CA7537B6C6C55B22E00BF4E471AC096B930CC3`.
+The downloaded checksum sidecar matched. Silent installation of the
+downloaded bytes returned exit 0; installed version is 0.1.25 and executable
+SHA-256 remains
+`A6DCDA319C241CDD089D3FF33A44204C8ACB6CC5424F842537AA268EE6CCAC39`.
+No manual GitHub CI was run. This proves public availability and byte
+continuity on this machine, not a clean-machine installation.
+
+**State:** 0.1.25 is published and installed. The actual Forge button
+launching the external browser remains NOT_RUN, as do real fresh-account
+login completion and manual accessibility acceptance. No subagent was used;
+per-task BRL and Pro-quota impact remain UNKNOWN. **Next exact step:** return
+to the whole nontechnical journey and select a remaining high-impact gap
+from native readback rather than treating publication as full product
+completion. Prioritize an isolated external-browser launch test if it can
+avoid the active desktop; otherwise retain the explicit limitation and work
+on first-use/visual acceptance. Keep mobile and offline distribution for
+later stages of the same goal.
