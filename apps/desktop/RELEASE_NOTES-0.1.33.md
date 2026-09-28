@@ -26,8 +26,9 @@ project progress or modifies the Forge backend.
   Clippy, browser UI suite, release build and installed-candidate native smoke
   passed. No separate core-workspace run or manual GitHub CI run was made for
   this frontend package.
-- Same-machine installation over 0.1.32 passed. Public download readback is
-  still pending; this note alone does not claim publication.
+- Same-machine installation over 0.1.32 passed. The published installer and
+  sidecar were downloaded without authentication, matched the candidate bytes,
+  and the downloaded file passed silent installation and hidden native smoke.
 
 ## Limits
 
@@ -49,5 +50,10 @@ bytes, SHA-256
 Silent installation over 0.1.32 returned exit 0. The installed executable
 reports 0.1.33 and has SHA-256
 `A9B072C9924EE8E55B9596810E69AF19D5BE43384ACD18A22B476390BDFFA188`.
-The candidate hash remained unchanged after installation. Public asset
-download and installation remain to be verified.
+The candidate hash remained unchanged after installation. The published
+installer downloaded at 123,105,178 bytes with the same SHA-256, matching its
+published sidecar. Installing those downloaded bytes returned exit 0 without
+changing their hash; the installed executable retained the SHA-256 above.
+Hidden native smoke passed after that installation, including real folder
+onboarding, record readback, narrow panel switching, local preview and
+controlled conversation events. Actual Codex Send was not run.

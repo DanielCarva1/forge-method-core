@@ -1,9 +1,9 @@
 # Forge desktop shell
 
 Independent Tauri application. Desktop `0.1.33` is the current source version
-and is installed locally from a tested candidate; `0.1.32` remains the
-published alpha until the next package is released. The 0.1.32 installer was
-downloaded back without authentication, hash-checked and installed first.
+and [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.33-alpha.1).
+Its installer was downloaded without authentication, hash-checked, installed
+over `0.1.32` and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -7985,3 +7985,27 @@ BRL equivalent and Pro-quota impact remain UNKNOWN.
 same candidate plus SHA-256 sidecar as an alpha prerelease, then download both
 assets without authentication, compare bytes and install/test the public file.
 Do not rebuild the candidate. Continue the broader Forge UI goal afterward.
+
+### Desktop 0.1.33 public readback — 2026-09-28
+
+Code commit `1d61a822` was pushed on `codex/desktop-shell` and tagged
+`desktop-v0.1.33-alpha.1`. The single tested candidate and its SHA-256 sidecar
+were published as the [0.1.33 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.33-alpha.1).
+Unauthenticated downloads returned a 123,105,178-byte installer with SHA-256
+`90D94DE8984F92BE810999A1B06F6EC523D60061490B28BF58288AC9959AE80B`,
+matching both the sidecar and the candidate. Installing the downloaded bytes
+silently over the installed candidate returned exit 0, did not change the
+downloaded hash and produced installed executable SHA-256
+`A9B072C9924EE8E55B9596810E69AF19D5BE43384ACD18A22B476390BDFFA188`.
+The downloaded installation passed the full hidden native smoke with real
+folder selection, onboarding and Forge record readback, narrow workspace
+switching, isolated local preview and controlled conversation events. Actual
+Codex Send remains NOT_RUN in this exact flow; clean-machine setup, mobile
+device access and manual screen-reader acceptance are also NOT_RUN/PARTIAL.
+No rebuild or manual GitHub CI occurred after candidate validation. No
+subagent was used; attributable per-model tokens, API-equivalent BRL and
+Pro-quota impact remain UNKNOWN.
+
+**Next product step:** continue the connected UI journey from a concrete
+remaining gap in the approved visual direction. Do not treat this alpha
+package as completion of the Forge Desktop goal.
