@@ -8353,3 +8353,27 @@ selectively commit/push/tag and publish under standing alpha authorization,
 then download unauthenticated, compare bytes, reinstall that download and
 repeat native smoke. Continue other high-value UI/backend journeys after
 this package; #92 historical wording remains subject to core readback.
+
+### Desktop 0.1.37 public readback — 2026-09-28
+
+Code commit `1e0fdfd0` was pushed on `codex/desktop-shell`, tagged
+`desktop-v0.1.37-alpha.1`, and the single tested installer plus SHA-256
+sidecar were published in the [0.1.37 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.37-alpha.1).
+Unauthenticated downloads returned 123,159,645 bytes and SHA-256
+`4A0A4C688B22E624EFE6166DDB6053D63037AFDE8C0F067C73C9C1513CA93C3D`,
+identical to the tested candidate and sidecar. Silent installation of that
+download returned exit 0 without changing its hash. The installed executable
+reports 0.1.37 and SHA-256
+`21DBE1B874DD5D887CB701D8A1A264A6B5C862E0172EF9EFC4FC51DE8A48005B`.
+Downloaded-installation hidden native smoke passed with actual Windows folder
+and PDF selection, new-project onboarding, Forge record and isolated preview.
+Actual external PDF browser launch and actual Codex Send were NOT_RUN for this
+UI package; clean-machine, mobile device and manual screen-reader acceptance
+remain unverified. No candidate rebuild or manual GitHub CI run followed
+publication. Model-specific usage and BRL economics remain UNKNOWN.
+
+**Next product step:** continue the full Desktop objective beyond action
+hierarchy/accessibility. Prioritize a user-visible path not yet proven with
+real Codex on the installed version, then a truthful UI for historical
+project decisions only after a core-owned historical readback exists. Keep
+the installed 0.1.37 release distinct from future source-only work.
