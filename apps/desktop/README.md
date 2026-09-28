@@ -8253,3 +8253,28 @@ PDF file selection, disposable-project Forge onboarding, record readback and
 isolated HTML preview. Actual external browser launch and actual Codex Send
 remain NOT_RUN for this package. The next step is publication and downloaded
 file readback, not rebuilding the candidate.
+
+### Desktop 0.1.36 public readback — 2026-09-28
+
+Code commit `fcf32bf7` was pushed on `codex/desktop-shell` and tagged
+`desktop-v0.1.36-alpha.1`. The single tested installer and SHA-256 sidecar
+were published as the [0.1.36 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.36-alpha.1).
+Unauthenticated downloads returned a 123,068,768-byte installer with SHA-256
+`DAC51CBF4B8653A4DF0223510CDECA4AF9B7D61752926473F0F40DCB1357B575`,
+identical to the candidate and sidecar. Installing the downloaded file
+silently returned exit 0 and did not change it. The installed executable
+reports 0.1.36 and SHA-256
+`CCAF472DB21B0DDB9B2D51B9B2609ABA8982559084389768A0EA479ACB85CF98`.
+Downloaded-installation hidden native smoke passed with actual Windows folder
+and PDF file selection, new-project onboarding, Forge record and isolated
+preview. External PDF browser launch and actual Codex Send were NOT_RUN for
+this package; they are not implied by successful app-command validation or
+older real-Codex evidence. Clean-machine setup, mobile-device use and manual
+screen-reader acceptance remain NOT_RUN/PARTIAL. No subagent was used and
+model-attributed tokens, API-equivalent BRL and Pro-quota impact remain
+UNKNOWN. No candidate rebuild or manual GitHub CI run followed publication.
+
+**Next product step:** continue the full Forge UI objective; the PDF handoff
+closes one result-access gap, not all visual coverage. Avoid inventing
+historical decision text from current policy or a digest; inspect the
+authoritative core contract and its Desktop pin before addressing #92.

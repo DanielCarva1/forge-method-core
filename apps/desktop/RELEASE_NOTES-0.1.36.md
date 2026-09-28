@@ -41,5 +41,10 @@ Silent installation over public 0.1.35 returned exit 0 and left the candidate
 unchanged. The installed executable reports 0.1.36 and has SHA-256
 `CCAF472DB21B0DDB9B2D51B9B2609ABA8982559084389768A0EA479ACB85CF98`.
 Installed-candidate hidden native smoke passed with the real Windows PDF
-picker and project readback. Public download verification is pending; do not
-call this release available until the same candidate is published and checked.
+picker and project readback. The published installer and sidecar were
+downloaded without authentication. Both installer copies and the sidecar
+matched the SHA-256 above and the download had the same 123,068,768 bytes.
+Silent installation of the downloaded file returned exit 0, preserved its
+hash and produced the installed executable hash above. Hidden native smoke
+passed again after installing those downloaded bytes. No candidate rebuild
+or manual GitHub CI run followed publication.
