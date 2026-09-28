@@ -8947,3 +8947,21 @@ tokens, BRL cost and Pro quota attribution remain UNKNOWN.
 download and downloaded-file installation verification remain. No worker was
 delegated. After publication, continue the broad Desktop goal at the next
 user-visible gap rather than treating this refinement as product completion.
+
+### Desktop 0.1.43 public readback — 2026-09-28
+
+Package commit `64c7387a` was pushed on `codex/desktop-shell`; annotated tag
+`desktop-v0.1.43-alpha.1` points to it. The exact tested candidate and sidecar
+were published in the [0.1.43 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.43-alpha.1).
+Unauthenticated downloads returned 123,064,514 bytes and SHA-256
+`67C4CDEDCD7DE175AFB8553427301AB396780B414913898CD1D42A10233793C3`,
+identical to the tested candidate and sidecar. Silent installation of the
+downloaded bytes over that candidate returned exit 0 and preserved the
+downloaded file. The installed executable reports ProductVersion 0.1.43,
+SHA-256 `29123D1FFC2246F6AD8DBAD30C0FE2B82AB1CFC59B48C11B5174F96736225F62`.
+Downloaded-installation hidden native smoke passed, including actual Forge
+record readback. Real Codex Send was NOT_RUN in this read-only UI package.
+No manual GitHub CI or candidate rebuild followed publication. The broad
+Desktop goal remains active for the next user-visible gap and the documented
+accessibility/distribution limitations; model-attributed tokens, BRL cost and
+Pro quota attribution remain UNKNOWN.
