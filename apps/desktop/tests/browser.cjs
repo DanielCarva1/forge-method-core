@@ -57,6 +57,27 @@ async function openConversation(page) {
     assert.equal(await page.locator('#workspace').isHidden(), true);
     assert.equal(await page.locator('#agent-access-note').isHidden(), true);
     assert.equal(await page.locator('nav a[data-route="home"]').getAttribute('aria-current'), 'page');
+    await page.setViewportSize({ width: 360, height: 720 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
+    for (const [route, heading, link] of [
+      ['home', '.hero h1', 'Início'],
+      ['explore', '.explore-heading h1', 'Explorar'],
+      ['projects', '.projects-heading h1', 'Meus projetos'],
+      ['workspace', '.workspace-screen .screen-heading h1', 'Minha conversa'],
+    ]) {
+      await page.getByRole('link', { name: link, exact: true }).click();
+      await page.locator(`#${route}`).waitFor({ state: 'visible' });
+      assert.equal(await page.locator(heading).evaluate(node => node.scrollWidth <= node.clientWidth + 1), true,
+        `${route} heading must reflow without clipping at 360px and 200% text size`);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true,
+        `${route} must not require horizontal scrolling at 360px and 200% text size`);
+      assert.equal(await page.locator(heading).evaluate(node =>
+        document.querySelector('.appearance').getBoundingClientRect().bottom <= node.getBoundingClientRect().top), true,
+      `${route} heading must not sit behind appearance controls at 360px and 200% text size`);
+    }
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.getByRole('link', { name: 'Início', exact: true }).click();
     await page.getByRole('link', { name: 'Continuar um projeto' }).click();
     await page.locator('#projects').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#recent-projects').getAttribute('role'), 'group');

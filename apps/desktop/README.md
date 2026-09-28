@@ -1,6 +1,6 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.24` is the published alpha
+Independent Tauri application. Desktop `0.1.25` is the published alpha
 prerelease. Its exact installer was downloaded back, hash-checked and installed.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
@@ -6892,3 +6892,132 @@ completion. Prioritize an isolated external-browser launch test if it can
 avoid the active desktop; otherwise retain the explicit limitation and work
 on first-use/visual acceptance. Keep mobile and offline distribution for
 later stages of the same goal.
+
+### Installed real-result continuity after full restart — 2026-09-27
+
+An isolation probe attempted to give Windows Chrome a temporary
+`LOCALAPPDATA` before opening the real generated HTML headlessly. The page
+rendered, but Chrome did **not** create a user-data profile under that
+temporary directory. Thus this environment variable does not establish a
+safe separate browser instance here. The Chromium user-data-dir guide
+documents `--user-data-dir` for Windows and `CHROME_USER_DATA_DIR` only for
+Linux (`chromium.googlesource.com/chromium/src/+/HEAD/docs/user_data_dir.md`).
+The Forge button remains **NOT_RUN** rather than risking a tab on the
+maintainer's active desktop. No registry/default-browser settings were
+changed.
+
+Instead, a new opt-in hidden native read-only test against installed 0.1.25
+used the actual 33-message personal-ideas Codex thread. It reopened the
+real reply's `site/index.html` link through the project-bound preview,
+rendered the changed heading, prepared a change request without sending,
+fully stopped and restarted the Desktop process with the same isolated
+WebView profile, then repeated the conversation/file action. Message count
+and first/last order were unchanged, and the generated HTML SHA-256 did not
+change. **PASS:** `node --check tests/native-real-result-readonly.cjs`,
+`git diff --check`, and `tests/native-hidden.ps1` with
+`FORGE_NATIVE_TEST_SCRIPT=native-real-result-readonly.cjs`. No provider turn
+was sent. New local files changed: `tests/native-real-result-readonly.cjs`,
+`tests/native-hidden.ps1`, and this checkpoint. These changes are test-only,
+not in the published 0.1.25 installer. No subagent was used; task-level BRL
+and Pro-quota impact remain UNKNOWN.
+
+**Next exact step:** inspect the still-unverified first-use and accessibility
+paths for a concrete UI problem that can be tested in the native app without
+altering the maintainer's account or foreground desktop. Do not rerun the
+same real conversation merely for reassurance. Keep the browser-button
+limitation explicit until truly isolated positive evidence is available.
+
+### First-use large-text reflow — 2026-09-27
+
+A headless 360 CSS-pixel / 200% root-text inspection found a concrete visual
+problem: the Home and Explore headings clipped or split awkwardly, and the
+absolute-positioned appearance disclosure could cover the start of the active
+screen. `ui/styles.css` now gives both headings explicit wrapping, scales their
+mobile type to preserve whole words at this text size, and keeps appearance in
+normal flow on narrow screens. The Home introduction uses the mobile text size.
+No engine/domain behavior changed.
+
+**PASS:** a new `tests/browser.cjs` regression failed before the CSS fix on the
+Home heading, then the complete mocked-IPC browser suite passed afterward.
+It checks both screens at 360px/200% for heading clipping, horizontal overflow,
+and appearance overlap. Headless Chromium visual readback of Home and Explore at
+that size and Explore at normal mobile text showed the headings legible;
+`git diff --check` passed. Those screenshots live under
+`C:/ForgeFast/forge-reflow-*20260927.png` and
+`C:/ForgeFast/forge-mobile-explore-verified-20260927.png`. These are browser
+checks, **not native WebView acceptance**. No Rust tests were run for CSS-only
+changes. Installed/public 0.1.25 does not include these source edits.
+
+**Current local state:** `ui/styles.css`, `tests/browser.cjs`,
+`tests/native-hidden.ps1`, this README and untracked
+`tests/native-real-result-readonly.cjs`; no commit/push/publication in this
+slice. No subagent used; per-task BRL and Pro-quota cost remain UNKNOWN.
+**Next exact step:** inspect the integrated diff and run a hidden native source
+build/smoke at the next coherent Desktop package boundary, then decide whether
+these visual fixes and the read-only continuity test form 0.1.26. Keep the
+external-browser button and fresh-account login as NOT_RUN until genuinely
+isolated evidence exists; do not claim a browser check proves native behavior.
+
+### Hidden native reflow verification — 2026-09-27
+
+A source Desktop debug executable was rebuilt with `cargo build --manifest-path
+apps/desktop/src-tauri/Cargo.toml -p forge-desktop --offline --locked -j2` using
+the existing target cache. The hidden native WebView smoke now checks the same
+360px / 200% text reflow for Home and Explore before its existing journey.
+**PASS:** native headings did not clip, no horizontal overflow appeared, and
+appearance controls did not overlap headings. The rest of the no-project native
+smoke passed (formatting, Explore, controlled long history, first-use draft,
+missing-folder guidance, appearance reload, frontend-to-Rust identity/retry).
+`node --check tests/native.cjs` and `git diff --check` passed. The test ran
+on an isolated Windows desktop and WebView profile, not the maintainer's
+foreground desktop. Real project resolution was NOT_RUN in this specific run
+because no project path was supplied; it was previously covered by the
+installed 0.1.25 smoke. This is native layout evidence, not manual
+accessibility acceptance or an installed update.
+
+**Local state:** source edits now include `ui/styles.css`, `tests/browser.cjs`,
+`tests/native.cjs`, plus the prior read-only result test and its hidden-runner
+allowlist, and this README. No commit/push/release. Per-task BRL and Pro-quota
+cost remain UNKNOWN. **Next exact step:** group these verified UI and
+continuity improvements into a coherent next Desktop alpha only when release
+scope is settled; review diff, bump version, run package-boundary checks, then
+test an exact installer before publication. External-browser button, real
+fresh-account login, clean-machine installation and manual accessibility
+acceptance remain explicit NOT_RUN.
+
+### Desktop 0.1.26 installed candidate — 2026-09-27
+
+The package boundary is now 0.1.26. UI changes are the narrow-screen/large-text
+Home and Explore reflow and non-overlapping appearance control; the four-screen
+360px/200% regression also covers Projects and Workspace. The separate
+read-only real-result restart test is source-only test coverage, not a new
+runtime feature. `RELEASE_NOTES-0.1.26.md` states scope and limits. Version
+changed only in the Desktop Cargo manifest/lock and Tauri config. The README
+intro now identifies 0.1.25 as the prior published alpha.
+
+**PASS:** focused Desktop `cargo check`; all 50 active Desktop crate tests
+(one conditional browser-association test ignored); strict Clippy; eight
+frontend unit tests; complete browser UI suite; JS syntax and `git diff
+--check`. A single NSIS candidate was built with pinned staged core 0.13.2:
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.26_x64-setup.exe`,
+123,088,230 bytes, SHA-256
+`A5739B90347393B2F44F53D358622E9E5E0AF8E3A7D15248F32B95F257267DBA`.
+Its `.sha256` sidecar is adjacent. Silent installation over public 0.1.25
+returned exit 0; the candidate hash stayed unchanged. Installed version is
+0.1.26 and executable SHA-256 is
+`AAC88FEAE37B81E6ACCBBAFC07B142E0B69DBEA0645F115BBBF50E2F8DEB85A9`.
+The **installed** app passed the hidden native first-use/layout smoke for all
+four screens, plus controlled history, draft, missing-folder, appearance and
+frontend-to-Rust checks. No provider turn was sent. Real project resolution
+was NOT_RUN in this particular installed-app smoke; installed 0.1.25 had
+already passed that path and the runtime code is unchanged in this package.
+No core-workspace test or GitHub CI was run for this UI/test-only package.
+
+**State:** installed locally, not committed or public. The Forge button
+launching an external browser, fresh-account real login, clean-machine setup,
+manual accessibility acceptance, mobile and offline distribution remain
+NOT_RUN or unfinished. No subagent was used; per-task BRL and Pro-quota cost
+remain UNKNOWN. **Next exact step:** review/selectively commit and push the
+0.1.26 package, publish the exact tested installer under standing alpha
+publication authorization, and check an unauthenticated download's size/hash
+before calling it available. Do not rebuild the candidate.

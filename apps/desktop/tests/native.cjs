@@ -69,6 +69,29 @@ async function operatePreviewDialog(page, file) {
     const context = browser.contexts()[0];
     let page = context.pages()[0] || await context.waitForEvent('page', { timeout: 5000 });
     await page.locator('#home').waitFor({ state: 'visible' });
+    const initialViewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+    await page.setViewportSize({ width: 360, height: 720 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
+    for (const [route, heading] of [
+      ['home', '.hero h1'],
+      ['explore', '.explore-heading h1'],
+      ['projects', '.projects-heading h1'],
+      ['workspace', '.workspace-screen .screen-heading h1'],
+    ]) {
+      await page.locator(`nav a[data-route="${route}"]`).click();
+      await page.locator(`#${route}`).waitFor({ state: 'visible' });
+      assert.equal(await page.locator(heading).evaluate(node => node.scrollWidth <= node.clientWidth + 1), true,
+        `Native ${route} heading must reflow at 360px and 200% text size`);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true,
+        `Native ${route} must not require horizontal scrolling at 360px and 200% text size`);
+      assert.equal(await page.locator(heading).evaluate(node =>
+        document.querySelector('.appearance').getBoundingClientRect().bottom <= node.getBoundingClientRect().top), true,
+      `Native ${route} heading must not sit behind appearance controls`);
+    }
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.setViewportSize(initialViewport);
+    await page.locator('nav a[data-route="home"]').click();
+    console.log('PASS: native Home, Explore, Projects and Workspace headings reflow at 360px / 200% text without clipping or appearance overlap.');
     if (process.env.FORGE_HOME_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_HOME_SCREENSHOT, fullPage: true });
     const formatted = await page.evaluate(async () => {
       const { renderAgentMessage } = await import('./message-format.mjs');
