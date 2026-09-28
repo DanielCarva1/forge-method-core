@@ -39,5 +39,9 @@ candidate bytes. The installed executable reports 0.1.35 and has SHA-256
 `16FF5987A7138A17E612F87EF4BC512F27E7CFBD9568233F3C8C379FFFF349E7`.
 Installed-candidate hidden native smoke passed with actual folder selection,
 new-project Forge onboarding and record readback, narrow panel switching and
-isolated preview. Public download readback remains pending; do not call the
-version available until that passes.
+isolated preview. The published installer and sidecar were downloaded without
+authentication; the installer was 123,135,285 bytes with the same SHA-256 as
+both candidate and sidecar. Silent installation of those downloaded bytes
+returned exit 0, preserved the downloaded hash, and produced the installed
+executable hash above. Hidden native smoke passed again after that
+installation. No rebuild or manual GitHub CI run followed candidate testing.

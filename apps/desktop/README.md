@@ -8177,3 +8177,30 @@ NOT_RUN/PARTIAL.
 under the standing alpha authorization, download unauthenticated, compare
 bytes, install the downloaded file and repeat hidden native smoke. Do not
 rebuild or call 0.1.35 available before public readback.
+
+### Desktop 0.1.35 public readback — 2026-09-28
+
+Code commit `d5509f10` was pushed on `codex/desktop-shell` and tagged
+`desktop-v0.1.35-alpha.1`. The single tested candidate plus SHA-256 sidecar
+were published as the [0.1.35 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.35-alpha.1).
+Unauthenticated downloads returned a 123,135,285-byte installer, SHA-256
+`B2D24C149529E5DE7FC77C47F10796DB2067F0E58240587B23E2B98652259384`,
+matching candidate and sidecar. Installing those downloaded bytes silently
+returned exit 0, left the downloaded file unchanged and produced installed
+executable version 0.1.35, SHA-256
+`16FF5987A7138A17E612F87EF4BC512F27E7CFBD9568233F3C8C379FFFF349E7`.
+The downloaded installation passed hidden native smoke with actual Windows
+folder selection, Forge onboarding and record readback, the separate narrow
+Conversa/Prévia/Andamento/Projeto panes, preserved folder controls and isolated
+preview. This proves the packaged same-machine Windows journey in scope, not
+actual mobile-device use or a new real Codex turn; those remain NOT_RUN here.
+Clean-machine setup and manual screen-reader acceptance remain NOT_RUN/PARTIAL.
+No subagent was used; model-attributed tokens, API-equivalent BRL and Pro-quota
+impact remain UNKNOWN. No candidate rebuild or manual GitHub CI run followed
+publication.
+
+**Next product step:** continue the broader Forge UI objective from a concrete
+remaining user journey, especially #91 nonvisual/browser handoff or #92
+authoritative decision reading. These alpha releases do not complete the
+product. Preserve the same hidden-native, focused-test and honest-evidence
+boundaries.
