@@ -20,6 +20,8 @@ const markdown = document.getElementById('preview-markdown');
 const openPreview = document.getElementById('open-preview');
 const browserAction = document.getElementById('preview-browser-action');
 const openSiteBrowser = document.getElementById('open-site-browser');
+const browserLabel = document.getElementById('open-browser-label');
+const browserHint = document.getElementById('open-browser-hint');
 const sourceToggle = document.getElementById('preview-source-toggle');
 const dialog = document.getElementById('preview-dialog');
 const closePreview = document.getElementById('close-preview');
@@ -44,6 +46,7 @@ let browserOpening = false;
 let renderUrl = null;
 let formattedMarkdown = false;
 let fileOnly = false;
+let pdfFile = false;
 let sourceVisible = false;
 let dialogSiteHeight = 560;
 let refreshAfterDialog = false;
@@ -97,10 +100,14 @@ function clearResult() {
   renderUrl = null;
   formattedMarkdown = false;
   fileOnly = false;
+  pdfFile = false;
   sourceVisible = false;
   result.hidden = true;
   openPreview.hidden = true;
   browserAction.hidden = true;
+  browserLabel.textContent = 'Usar no navegador';
+  browserHint.textContent = 'Fora da prévia protegida, a página pode executar código e acessar a internet. Abra apenas projetos de confiança.';
+  fileNote.textContent = 'Este arquivo está na pasta do projeto, mas não pode ser mostrado aqui. Peça ao agente para explicar o resultado ou diga o que gostaria de mudar.';
   sourceToggle.hidden = true;
   image.hidden = true;
   image.removeAttribute('src');
@@ -177,7 +184,13 @@ async function loadPreview() {
     pathLabel.textContent = preview.relative_path;
     if (preview.kind === 'file') {
       fileOnly = true;
+      pdfFile = /\.pdf$/i.test(preview.relative_path);
       fileNote.hidden = false;
+      if (pdfFile) {
+        fileNote.textContent = 'Este PDF está na pasta do projeto, mas não é exibido na prévia protegida. Você pode abri-lo no navegador ou conversar sobre ele.';
+        browserLabel.textContent = 'Abrir PDF no navegador';
+        browserHint.textContent = 'O PDF abre fora da prévia protegida do Forge. Abra apenas arquivos de projetos de confiança.';
+      }
       heading.textContent = 'Arquivo do projeto';
       refresh.textContent = 'Atualizar informações';
       requestChange.textContent = 'Conversar sobre este arquivo';
@@ -203,7 +216,7 @@ async function loadPreview() {
     }
     result.hidden = false;
     openPreview.hidden = fileOnly;
-    browserAction.hidden = !renderUrl;
+    browserAction.hidden = !renderUrl && !pdfFile;
     workspace.classList.add('preview-loaded');
     status.textContent = fileOnly ? 'Arquivo encontrado na pasta do projeto.' : 'Prévia local atualizada.';
   } catch (error) {
@@ -322,16 +335,21 @@ openPreview.addEventListener('click', () => {
   dialog.showModal();
 });
 openSiteBrowser.addEventListener('click', async () => {
-  if (!project || !filePath || !renderUrl || result.hidden || pending || browserOpening) return;
+  if (!project || !filePath || (!renderUrl && !pdfFile) || result.hidden || pending || browserOpening) return;
   const root = project.project_root;
   const selected = filePath;
+  const openingPdf = pdfFile;
   browserOpening = true;
   controls();
   try {
-    await globalThis.__TAURI__.core.invoke('open_site_in_browser', { projectRoot: root, filePath: selected });
-    if (project?.project_root === root && filePath === selected) status.textContent = 'Abertura solicitada ao navegador padrão. Esta página roda fora da prévia protegida do Forge.';
+    await globalThis.__TAURI__.core.invoke(openingPdf ? 'open_pdf_in_browser' : 'open_site_in_browser', { projectRoot: root, filePath: selected });
+    if (project?.project_root === root && filePath === selected) status.textContent = openingPdf
+      ? 'Abertura do PDF solicitada ao navegador padrão, fora da prévia protegida do Forge.'
+      : 'Abertura solicitada ao navegador padrão. Esta página roda fora da prévia protegida do Forge.';
   } catch {
-    if (project?.project_root === root && filePath === selected) status.textContent = 'Não foi possível abrir esta página no navegador. Confira o navegador padrão nas configurações do Windows; o arquivo não foi alterado.';
+    if (project?.project_root === root && filePath === selected) status.textContent = openingPdf
+      ? 'Não foi possível abrir este PDF no navegador. Confira o navegador padrão nas configurações do Windows; o arquivo não foi alterado.'
+      : 'Não foi possível abrir esta página no navegador. Confira o navegador padrão nas configurações do Windows; o arquivo não foi alterado.';
   } finally { browserOpening = false; controls(); }
 });
 sourceToggle.addEventListener('click', () => showSource(!sourceVisible));

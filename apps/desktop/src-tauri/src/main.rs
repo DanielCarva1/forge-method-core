@@ -57,6 +57,7 @@ fn main() {
             preview::choose_preview_file,
             preview::inspect_preview,
             preview::open_site_in_browser,
+            preview::open_pdf_in_browser,
             preview::clear_preview_site,
             agent::connect_agent,
             agent::start_login,

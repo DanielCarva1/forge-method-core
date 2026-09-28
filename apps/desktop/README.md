@@ -8204,3 +8204,52 @@ remaining user journey, especially #91 nonvisual/browser handoff or #92
 authoritative decision reading. These alpha releases do not complete the
 product. Preserve the same hidden-native, focused-test and honest-evidence
 boundaries.
+
+### Desktop 0.1.36 PDF result handoff — 2026-09-28
+
+The active Forge Desktop objective continues. A hidden native capture of a
+project `report.pdf` showed a real usability gap: the app identified the file
+but offered only conversation, not a way to see it. This package adds an
+explicit **Abrir PDF no navegador** action beside the existing project-file
+card. No external app opens merely by selecting or refreshing a file. The
+native command rechecks the confirmed project, canonical path containment,
+PDF extension and header before requesting the user's default browser. The
+isolated in-app HTML preview and other unsupported-file behavior are retained;
+no new project store or PDF renderer was added. The bundled core stays 0.13.2.
+
+Changed source: `src-tauri/src/preview.rs`, `src-tauri/src/main.rs`,
+`ui/preview.mjs`, `ui/index.html`, `tests/browser.cjs`, `tests/native.cjs`,
+Desktop version files and `RELEASE_NOTES-0.1.36.md`. The focused Rust PDF
+validation test passed, as did 51 non-ignored Desktop tests and the browser
+suite. A debug-build hidden native run passed actual Windows PDF file-picker
+selection, visible PDF action and conversation draft in a newly onboarded
+disposable project. The reviewed screenshot is
+`D:/Temp/User/forge-0136-pdf-handoff.png`. Actual browser launch was NOT_RUN
+because it can surface on the maintainer's desktop; simulated UI invocation
+and native path/header checks are not a substitute for that observation.
+Actual Codex Send was not repeated for this result-view change. No subagent
+was used. Attributable model tokens, API-equivalent BRL and Pro-quota impact
+remain UNKNOWN.
+
+**Next exact step:** run package-boundary static checks, build one 0.1.36 NSIS
+candidate, silently install it over public 0.1.35, repeat the hidden native
+project/PDF smoke, record the exact hash, then selectively commit/push/tag and
+publish under the standing alpha authorization. Download unauthenticated,
+compare bytes, install that download and repeat the hidden native smoke. Do
+not rebuild the candidate between verification and publication.
+
+Package-boundary Desktop `cargo check`, strict Clippy, JavaScript syntax and
+`git diff --check` passed. Repository-wide Desktop `cargo fmt --check` found
+pre-existing formatting differences in `agent.rs` and other untouched source;
+no broad formatting rewrite was made. The single 0.1.36 NSIS candidate is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.36_x64-setup.exe`,
+123,068,768 bytes, SHA-256
+`DAC51CBF4B8653A4DF0223510CDECA4AF9B7D61752926473F0F40DCB1357B575`.
+Silent installation over public 0.1.35 returned exit 0 without changing the
+candidate bytes. The installed 0.1.36 executable has SHA-256
+`CCAF472DB21B0DDB9B2D51B9B2609ABA8982559084389768A0EA479ACB85CF98`.
+Installed-candidate hidden native smoke passed with actual Windows folder and
+PDF file selection, disposable-project Forge onboarding, record readback and
+isolated HTML preview. Actual external browser launch and actual Codex Send
+remain NOT_RUN for this package. The next step is publication and downloaded
+file readback, not rebuilding the candidate.

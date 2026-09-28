@@ -152,7 +152,7 @@ async function openConversation(page) {
     console.log('PASS: Explore filters eight approachable themes and carries the chosen idea into the conversation.');
     const projectsPage = await browser.newPage();
     await projectsPage.addInitScript(() => {
-      window.projectChecks = []; window.startCalls = []; window.previewReads = []; window.browserOpens = [];
+      window.projectChecks = []; window.startCalls = []; window.previewReads = []; window.browserOpens = []; window.pdfBrowserOpens = [];
       window.__TAURI__ = { core: { invoke: async (command, args) => {
         if (command === 'app_info') return { name: 'Forge', version: '0.1.0' };
         if (command === 'choose_project_folder') {
@@ -176,6 +176,11 @@ async function openConversation(page) {
           if (window.rejectBrowserOpen) throw 'Navegador indisponível';
           return null;
         }
+        if (command === 'open_pdf_in_browser') {
+          window.pdfBrowserOpens.push(args);
+          if (window.rejectBrowserOpen) throw 'Navegador indisponível';
+          return null;
+        }
         if (command === 'inspect_preview') {
           window.previewReads.push(args);
           if (args.filePath.includes('outside')) throw 'Este arquivo não pertence ao projeto aberto.';
@@ -183,6 +188,8 @@ async function openConversation(page) {
             ? { kind: 'image', relative_path: 'result.png', size_bytes: 100, content: window.previewImage }
             : window.previewKind === 'file'
               ? { kind: 'file', relative_path: 'output/report.pdf', size_bytes: 2084, content: '' }
+            : window.previewKind === 'otherFile'
+              ? { kind: 'file', relative_path: 'output/archive.zip', size_bytes: 2084, content: '' }
             : window.previewKind === 'html'
               ? { kind: 'text', relative_path: 'site/index.html', size_bytes: 100, content: '<h1>Site local</h1>', render_url: 'http://forgepreview.localhost/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/index%2Ehtml' }
             : window.previewKind === 'markdown'
@@ -444,6 +451,22 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#preview-path').textContent(), 'output/report.pdf');
     assert.equal(await projectsPage.locator('#open-preview').isHidden(), true);
     assert.equal(await projectsPage.locator('#preview-text').isVisible(), false);
+    assert.equal(await projectsPage.locator('#preview-browser-action').isVisible(), true);
+    assert.match(await projectsPage.locator('#open-browser-hint').textContent(), /fora da prévia protegida/);
+    assert.deepEqual(await projectsPage.evaluate(() => window.pdfBrowserOpens), [], 'Selecting a PDF must not open the browser automatically');
+    await projectsPage.getByRole('button', { name: 'Abrir PDF no navegador' }).click();
+    await projectsPage.locator('#preview-status').filter({ hasText: 'Abertura do PDF solicitada' }).waitFor();
+    assert.deepEqual(await projectsPage.evaluate(() => window.pdfBrowserOpens), [{ projectRoot: 'D:\\one', filePath: 'D:\\one\\output\\report.pdf' }]);
+    await projectsPage.evaluate(() => { window.rejectBrowserOpen = true; });
+    await projectsPage.getByRole('button', { name: 'Abrir PDF no navegador' }).click();
+    await projectsPage.locator('#preview-status').filter({ hasText: 'Não foi possível abrir este PDF' }).waitFor();
+    await projectsPage.evaluate(() => { window.rejectBrowserOpen = false; window.previewKind = 'otherFile'; window.previewChoice = 'D:\\one\\output\\archive.zip'; });
+    await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
+    await projectsPage.locator('#preview-status').filter({ hasText: 'Arquivo encontrado na pasta do projeto' }).waitFor();
+    assert.equal(await projectsPage.locator('#preview-browser-action').isVisible(), false, 'Other unsupported files must not expose browser opening');
+    await projectsPage.evaluate(() => { window.previewKind = 'file'; window.previewChoice = 'D:\\one\\output\\report.pdf'; });
+    await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
+    await projectsPage.locator('#preview-status').filter({ hasText: 'Arquivo encontrado na pasta do projeto' }).waitFor();
     await projectsPage.getByRole('button', { name: 'Conversar sobre este arquivo' }).click();
     assert.match(await projectsPage.locator('#message-text').inputValue(), /Sobre o arquivo output\/report\.pdf:/);
     await projectsPage.evaluate(() => { window.previewKind = 'html'; window.previewChoice = 'D:\\one\\site\\index.html'; });
@@ -478,7 +501,7 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#preview-result').isVisible(), false);
     assert.equal(await projectsPage.locator('#open-preview').isHidden(), true);
     assert.equal(await projectsPage.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), false);
-    assert.deepEqual(await projectsPage.evaluate(() => window.previewReads.map(read => read.projectRoot)), Array(8).fill('D:\\one'));
+    assert.deepEqual(await projectsPage.evaluate(() => window.previewReads.map(read => read.projectRoot)), Array(10).fill('D:\\one'));
     if (process.env.FORGE_CONFIRMED_SCREENSHOT) await projectsPage.screenshot({ path: process.env.FORGE_CONFIRMED_SCREENSHOT, fullPage: true });
     await openProjectSetup(projectsPage);
     await projectsPage.evaluate(() => { window.folderChoice = null; });

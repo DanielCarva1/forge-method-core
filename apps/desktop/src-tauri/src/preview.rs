@@ -1,6 +1,7 @@
 //! Bounded local preview. Project authority is still resolved by Forge.
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::Serialize;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri_plugin_dialog::DialogExt;
@@ -170,6 +171,36 @@ fn local_html_path(root: &Path, requested: &Path) -> Result<PathBuf, &'static st
     Ok(file)
 }
 
+fn local_pdf_path(root: &Path, requested: &Path) -> Result<PathBuf, &'static str> {
+    if !requested.is_absolute() {
+        return Err("Escolha um PDF deste projeto.");
+    }
+    let root = root
+        .canonicalize()
+        .map_err(|_| "Não foi possível conferir a pasta do projeto.")?;
+    let file = requested
+        .canonicalize()
+        .map_err(|_| "Este PDF não está mais disponível.")?;
+    file.strip_prefix(&root)
+        .map_err(|_| "Este PDF não pertence ao projeto aberto.")?;
+    if !file.is_file()
+        || !file
+            .extension()
+            .and_then(|value| value.to_str())
+            .is_some_and(|value| value.eq_ignore_ascii_case("pdf"))
+    {
+        return Err("Escolha um PDF deste projeto.");
+    }
+    let mut header = [0_u8; 5];
+    std::fs::File::open(&file)
+        .and_then(|mut source| source.read_exact(&mut header))
+        .map_err(|_| "Não foi possível conferir este PDF.")?;
+    if &header != b"%PDF-" {
+        return Err("Este arquivo não tem um cabeçalho PDF válido.");
+    }
+    Ok(file)
+}
+
 #[cfg(windows)]
 fn default_browser_executable() -> Result<PathBuf, &'static str> {
     use std::ffi::OsString;
@@ -204,7 +235,7 @@ fn default_browser_executable() -> Result<PathBuf, &'static str> {
         );
     }
     if !(2..=32768).contains(&length) {
-        return Err("Defina um navegador padrão no Windows para abrir esta página.");
+        return Err("Defina um navegador padrão no Windows para abrir este arquivo.");
     }
     let mut output = vec![0_u16; length as usize];
     let result = unsafe {
@@ -231,10 +262,10 @@ fn default_browser_executable() -> Result<PathBuf, &'static str> {
 }
 
 #[cfg(windows)]
-fn local_html_url(file: &Path) -> Result<String, &'static str> {
+fn local_file_url(file: &Path) -> Result<String, &'static str> {
     tauri::Url::from_file_path(file)
         .map(|url| url.to_string())
-        .map_err(|_| "Não foi possível preparar o endereço desta página.")
+        .map_err(|_| "Não foi possível preparar o endereço deste arquivo.")
 }
 
 #[tauri::command]
@@ -246,7 +277,7 @@ pub async fn open_site_in_browser(
     let file = local_html_path(Path::new(&project.project_root), Path::new(&file_path))?;
     #[cfg(windows)]
     {
-        let url = local_html_url(&file)?;
+        let url = local_file_url(&file)?;
         let browser = default_browser_executable()?;
         std::process::Command::new(browser)
             .arg(url)
@@ -258,6 +289,30 @@ pub async fn open_site_in_browser(
     {
         let _ = file;
         Err("Abra esta página HTML em um navegador para usá-la.")
+    }
+}
+
+#[tauri::command]
+pub async fn open_pdf_in_browser(
+    project_root: String,
+    file_path: String,
+) -> Result<(), &'static str> {
+    let project = crate::project::inspect_project(project_root).await?;
+    let file = local_pdf_path(Path::new(&project.project_root), Path::new(&file_path))?;
+    #[cfg(windows)]
+    {
+        let url = local_file_url(&file)?;
+        let browser = default_browser_executable()?;
+        std::process::Command::new(browser)
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|_| "Não foi possível solicitar a abertura deste PDF no navegador.")
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = file;
+        Err("Abra este PDF em um navegador para vê-lo.")
     }
 }
 
@@ -394,10 +449,34 @@ mod tests {
         #[cfg(windows)]
         {
             let spaced = root.join("a page #1.html");
-            let url = local_html_url(&spaced).unwrap();
+            let url = local_file_url(&spaced).unwrap();
             assert!(url.starts_with("file:///"));
             assert!(url.contains("a%20page%20%231.html"));
         }
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn pdf_browser_opening_accepts_only_real_project_pdfs() {
+        let base = std::env::temp_dir().join(format!("forge-open-pdf-{}", std::process::id()));
+        let root = base.join("project");
+        fs::create_dir_all(&root).unwrap();
+        let inside = root.join("report.PDF");
+        let wrong_header = root.join("fake.pdf");
+        let wrong_extension = root.join("report.txt");
+        let outside = base.join("outside.pdf");
+        fs::write(&inside, b"%PDF-1.4\nfixture").unwrap();
+        fs::write(&wrong_header, b"<html>not a pdf</html>").unwrap();
+        fs::write(&wrong_extension, b"%PDF-1.4\nfixture").unwrap();
+        fs::write(&outside, b"%PDF-1.4\nfixture").unwrap();
+        assert_eq!(
+            local_pdf_path(&root, &inside).unwrap(),
+            inside.canonicalize().unwrap()
+        );
+        assert!(local_pdf_path(&root, &wrong_header).is_err());
+        assert!(local_pdf_path(&root, &wrong_extension).is_err());
+        assert!(local_pdf_path(&root, &outside).is_err());
+        assert!(local_pdf_path(&root, Path::new("report.PDF")).is_err());
         fs::remove_dir_all(base).unwrap();
     }
 

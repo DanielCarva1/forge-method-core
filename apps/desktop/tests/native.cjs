@@ -738,6 +738,8 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('#preview-heading').textContent(), 'Arquivo do projeto');
       assert.equal(await page.locator('#preview-path').textContent(), 'report.pdf');
       assert.equal(await page.locator('#open-preview').isHidden(), true);
+      assert.equal(await page.getByRole('button', { name: 'Abrir PDF no navegador' }).isVisible(), true);
+      assert.match(await page.locator('#open-browser-hint').textContent(), /fora da prévia protegida/);
       if (process.env.FORGE_NONVISUAL_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_NONVISUAL_SCREENSHOT });
       await page.getByRole('button', { name: 'Conversar sobre este arquivo' }).click();
       assert.match(await page.locator('#message-text').inputValue(), /Sobre o arquivo report\.pdf:/);
