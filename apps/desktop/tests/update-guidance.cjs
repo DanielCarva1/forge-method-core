@@ -62,7 +62,7 @@ const server = createServer(async (request, response) => {
     await page.locator('#project-result').waitFor({ state: 'visible' });
     await page.locator('#conversation-picker summary').click();
     await page.locator('#connect-agent').click();
-    await page.locator('#disconnect-agent').waitFor({ state: 'visible' });
+    await page.locator('#conversation-options summary').waitFor({ state: 'visible' });
     await page.evaluate(() => { window.channels.at(-1).onmessage({ kind: 'update_required' }); });
     const updateAction = page.locator('#agent-update-action');
     await updateAction.waitFor({ state: 'visible' });

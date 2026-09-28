@@ -30,6 +30,7 @@ const messages = byId('messages');
 const conversationBody = document.querySelector('.conversation-body');
 const jumpLatest = byId('jump-latest');
 const messageView = byId('message-view');
+const conversationOptions = byId('conversation-options');
 const newConversation = byId('new-conversation');
 const newConversationChoice = byId('new-conversation-choice');
 const conversationPicker = byId('conversation-picker');
@@ -185,6 +186,8 @@ function controls() {
   connect.hidden = connected;
   connectHelp.hidden = !project || connected;
   disconnect.hidden = !connected;
+  conversationOptions.hidden = !connected && messageView.hidden;
+  if (conversationOptions.hidden) conversationOptions.open = false;
   reopenConversation.hidden = !project || !connected || !broken || !reconnectable;
   reopenConversation.disabled = transitioning;
   newConversationChoice.hidden = connected || !project || !hasPreviousConversation;
@@ -263,6 +266,8 @@ export function setProject(value) {
     rawMessageView = false;
     messageView.hidden = true;
     messageView.textContent = 'Ver texto original';
+    conversationOptions.hidden = true;
+    conversationOptions.open = false;
     if (!loginActive) loginPanel.hidden = true;
   }
   conversationStep.textContent = 'SUA CONVERSA';
@@ -590,7 +595,10 @@ function message(id, role, text, append = false, complete = false) {
   item.complete = complete;
   paintMessage(item);
   if (!restoringHistory && (created || complete)) updateLastResultAction();
-  if (complete && !item.isUser) messageView.hidden = false;
+  if (complete && !item.isUser) {
+    messageView.hidden = false;
+    conversationOptions.hidden = false;
+  }
   if (followLatest) showLatestMessage();
   else updateLatestAction();
   return item;
@@ -689,7 +697,7 @@ async function connectCurrent(explicitThreadId = null) {
       ? reconnectable
         ? 'A conexão foi encerrada. Use “Reabrir conversa” para conferir o histórico; nada será reenviado.'
         : 'O Codex precisa ser atualizado antes de continuar. Sua conversa não foi apagada.'
-      : `${reviewingSend ? 'Conversa retomada. O envio anterior ainda não foi confirmado. Confira as mensagens e o que foi feito; depois escolha “Já conferi o envio” para continuar. Nada foi reenviado.' : latestReplyIncomplete ? 'Conversa retomada. Última resposta incompleta: confira mensagens e arquivos antes de continuar. Mudanças podem permanecer; nada foi reenviado.' : conversation.resumed ? 'Conversa retomada. Você pode continuar de onde parou.' : `Codex conectado ao projeto ${projectDisplayName(project)}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}`, broken ? 'disconnected' : 'connected');
+      : `${reviewingSend ? 'Conversa retomada. O envio anterior ainda não foi confirmado. Confira as mensagens e o que foi feito; depois escolha “Já conferi o envio” para continuar. Nada foi reenviado.' : latestReplyIncomplete ? 'Conversa retomada. Última resposta incompleta: confira mensagens e arquivos antes de continuar. Mudanças podem permanecer; nada foi reenviado.' : conversation.resumed ? 'Conversa retomada.' : `Codex conectado ao projeto ${projectDisplayName(project)}. Pode mandar sua ideia.`}${saved ? '' : ' Não foi possível salvar o acesso à conversa. Enquanto este app estiver aberto, você pode reconectar; depois de fechá-lo, pode aparecer a conversa anterior.'}`, broken ? 'disconnected' : 'connected');
   } catch (error) {
     if (current !== generation) return;
     activeThreadId = null;
@@ -933,6 +941,7 @@ async function disconnectCurrent() {
     if (current !== generation) return false;
     connected = false; busy = false; broken = false; reconnectable = false; channel = null;
     activeThreadId = null;
+    conversationOptions.open = false;
     disconnected = true;
     showStatus('Desconectado. As alterações já feitas no projeto permanecem.', 'disconnected');
   } catch { if (current !== generation) return false; showStatus('Não foi possível desconectar. Tente novamente.', 'error'); }

@@ -4,6 +4,7 @@ const { createServer } = require('node:http');
 const { readFile } = require('node:fs/promises');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const { clickConversationAction } = require('./conversation-options.cjs');
 
 const root = path.resolve(__dirname, '../ui');
 const types = { '.html': 'text/html', '.css': 'text/css', '.mjs': 'text/javascript', '.js': 'text/javascript', '.png': 'image/png' };
@@ -56,6 +57,13 @@ const server = createServer(async (request, response) => {
     };
 
     await open();
+    const capability = page.locator('#agent-access-note');
+    assert.equal(await capability.locator('summary').isVisible(), true, 'The agent capability warning stays visible');
+    assert.match(await capability.locator('summary').textContent(), /alterar outros arquivos sem pedir confirmação/);
+    assert.equal(await capability.locator('p').isHidden(), true, 'The full explanation need not crowd the composer');
+    await capability.locator('summary').click();
+    assert.match(await capability.locator('p').textContent(), /fora da pasta escolhida sem pedir confirmação/);
+    await capability.locator('summary').click();
     await page.locator('#conversation-picker summary').click();
     await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
     await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor();
@@ -81,11 +89,33 @@ const server = createServer(async (request, response) => {
     await page.getByRole('button', { name: 'Reabrir conversa' }).click();
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Reopening after disconnection must not replay a turn');
-    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    const options = page.locator('#conversation-options');
+    assert.equal(await options.locator('summary').isVisible(), true, 'Secondary actions stay reachable');
+    assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isHidden(), true,
+      'The conversation should not start with technical controls expanded');
+    await options.locator('summary').click();
+    assert.equal(await page.getByRole('button', { name: 'Ver texto original' }).isVisible(), true);
+    assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isVisible(), true);
+    await options.locator('summary').click();
+    assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isHidden(), true);
+    await options.locator('summary').focus();
+    await page.keyboard.press('Enter');
+    assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isVisible(), true,
+      'Keyboard users can open the secondary actions');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isHidden(), true);
+    await page.setViewportSize({ width: 360, height: 700 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = '32px'; });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true,
+      'Collapsed options and conversation must not force sideways scrolling at enlarged text');
+    assert.equal(await options.locator('summary').isVisible(), true);
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await clickConversationAction(page, 'Desconectar');
     await page.getByRole('button', { name: 'Continuar conversa anterior' }).click();
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Manual reconnect must not replay a turn');
-    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await clickConversationAction(page, 'Desconectar');
     await page.locator('#conversation-picker summary').click();
     await page.getByRole('checkbox', { name: 'Começar outra conversa' }).check();
     await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();

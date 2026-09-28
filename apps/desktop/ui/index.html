@@ -151,7 +151,7 @@
       </nav>
       <div class="workspace" data-mobile-pane="conversation">
       <section class="conversation panel" id="project-conversation" aria-labelledby="chat-title">
-        <div class="conversation-heading"><div><p class="eyebrow" id="conversation-step">SUA CONVERSA</p><h2 id="chat-title" tabindex="-1">Vamos criar juntos</h2><span class="agent-badge">Agente · Codex</span></div><div class="conversation-tools"><button id="resume-last-conversation" type="button" hidden>Continuar conversa anterior</button><button id="reopen-conversation" type="button" hidden>Reabrir conversa</button><button id="confirm-reviewed-send" type="button" hidden>Já conferi o envio</button><button id="message-view" type="button" hidden>Ver texto original</button><button id="disconnect-agent" disabled hidden>Desconectar</button></div></div>
+        <div class="conversation-heading"><div><p class="eyebrow" id="conversation-step">SUA CONVERSA</p><h2 id="chat-title" tabindex="-1">Vamos criar juntos</h2><span class="agent-badge">Agente · Codex</span></div><div class="conversation-tools"><button id="resume-last-conversation" type="button" hidden>Continuar conversa anterior</button><button id="reopen-conversation" type="button" hidden>Reabrir conversa</button><button id="confirm-reviewed-send" type="button" hidden>Já conferi o envio</button><details id="conversation-options" hidden><summary aria-label="Opções da conversa">Opções</summary><div><button id="message-view" type="button" hidden>Ver texto original</button><button id="disconnect-agent" disabled hidden>Desconectar</button></div></details></div></div>
         <details id="conversation-picker" class="conversation-picker" hidden>
           <summary>Conversas e histórico</summary>
           <div class="chat-actions"><button id="connect-agent" disabled>Abrir conversa</button><span id="connect-help" class="hint">Opcional: abra agora sem enviar nada, ou escreva e envie sua ideia.</span></div>
@@ -184,7 +184,7 @@
         <button id="jump-latest" type="button" aria-controls="messages" hidden>↓ Ir para a mensagem mais recente</button>
         <form id="message-form">
           <label for="message-text" class="visually-hidden">Sua ideia começa aqui</label>
-          <p id="agent-access-note" class="agent-access-note" hidden><strong>Atenção:</strong> o Codex pode executar comandos e alterar arquivos fora da pasta escolhida sem pedir confirmação. Use projetos de confiança.</p>
+          <details id="agent-access-note" class="agent-access-note" hidden><summary>Atenção: o Codex pode alterar outros arquivos sem pedir confirmação</summary><p>O Codex pode executar comandos e alterar arquivos fora da pasta escolhida sem pedir confirmação. Use projetos de confiança.</p></details>
           <div class="composer-row">
             <textarea id="message-text" rows="1" required aria-describedby="composer-help draft-note agent-access-note" placeholder="Escreva sua ideia ou peça uma mudança…"></textarea>
             <div class="chat-actions"><button id="send-message" class="primary" disabled><span id="send-label">Enviar</span><span aria-hidden="true">→</span></button><button id="interrupt-agent" type="button" disabled hidden>Interromper</button></div>

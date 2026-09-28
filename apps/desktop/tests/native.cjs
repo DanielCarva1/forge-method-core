@@ -7,6 +7,7 @@ const { once } = require('node:events');
 const { tmpdir } = require('node:os');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const { openConversationOptions, clickConversationAction } = require('./conversation-options.cjs');
 
 async function openConversation(page) {
   if (!await page.locator('#conversation-picker').evaluate(node => node.open)) await page.locator('#conversation-picker summary').click();
@@ -325,7 +326,7 @@ async function operatePreviewDialog(page, file) {
           const project = await page.evaluate(root => window.__TAURI__.core.invoke('inspect_project', { projectRoot: root }), process.env.FORGE_TEST_PROJECT);
           const bookmark = await page.evaluate(key => localStorage.getItem(key), `forge.conversation.v1:${JSON.stringify([project.project_id, project.project_root])}`);
           assert.equal(bookmark, expected, 'Successful explicit resume updates the last-conversation bookmark');
-          await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+          await clickConversationAction(page, 'Desconectar');
           await page.locator('#agent-status').filter({ hasText: 'Desconectado' }).waitFor({ timeout: 10000 });
           console.log(`PASS: native picker resumed the exact selected real Codex thread with ${await page.locator('#messages article').count()} messages and no send.`);
         } else await page.locator('#conversation-picker summary').click();
@@ -520,7 +521,7 @@ async function operatePreviewDialog(page, file) {
         const firstMessage = await page.locator('#messages article').first().textContent();
         const lastMessage = await page.locator('#messages article').last().textContent();
         if (process.env.FORGE_REAL_HISTORY_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_REAL_HISTORY_SCREENSHOT });
-        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await clickConversationAction(page, 'Desconectar');
         await page.locator('#agent-status').filter({ hasText: 'Desconectado' }).waitFor({ timeout: 10000 });
         await page.reload();
         await page.locator('nav a[data-route="workspace"]').click();
@@ -533,7 +534,7 @@ async function operatePreviewDialog(page, file) {
         assert.equal(await page.locator('#messages article').count(), count);
         assert.equal(await page.locator('#messages article').first().textContent(), firstMessage);
         assert.equal(await page.locator('#messages article').last().textContent(), lastMessage);
-        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await clickConversationAction(page, 'Desconectar');
         await page.locator('#agent-status').filter({ hasText: 'Desconectado' }).waitFor({ timeout: 10000 });
         console.log(`PASS: resumed ${count} real Codex conversation messages without sending a turn; initially visible after ${initialElapsed} ms, then reloaded the WebView and preserved first/last message order.`);
       }
@@ -660,7 +661,7 @@ async function operatePreviewDialog(page, file) {
           await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor({ timeout: 35000 });
           assert.equal(await page.locator('#progress-result').isVisible(), true, `${kind} must restore the native Forge record`);
         }
-        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await clickConversationAction(page, 'Desconectar');
         await page.evaluate(() => window.restoreTerminalRecordInvoke());
         console.log('PASS: native WebView completed, disconnected and update-required events re-read the unchanged, authoritative Forge project record (controlled agent events; no real Codex turn).');
       }
@@ -795,7 +796,7 @@ async function operatePreviewDialog(page, file) {
         await page.locator('#preview-dialog').waitFor({ state: 'hidden' });
         await page.evaluate(() => { location.hash = '#workspace'; });
         await page.locator('#preview-text').filter({ hasText: 'changed before leaving expanded preview' }).waitFor({ timeout: 20000 });
-        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await clickConversationAction(page, 'Desconectar');
         await page.evaluate(() => window.restorePreviewTerminalInvoke());
         console.log('PASS: terminal Codex events re-read the real project file after an in-flight read, canceled picker or expanded-preview navigation (controlled agent events; no real Send).');
       }
@@ -814,7 +815,7 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.locator('#preview-markdown h3').textContent(), 'Resultado');
       assert.equal(await page.locator('#preview-markdown li strong').textContent(), 'Item');
       assert.equal(await page.locator('#preview-markdown script, #preview-markdown a').count(), 0);
-      await page.getByRole('button', { name: 'Ver texto original' }).click();
+      await clickConversationAction(page, 'Ver texto original');
       assert.match(await page.locator('#preview-text').textContent(), /^# Resultado/);
       await page.getByRole('button', { name: 'Abrir prévia' }).click();
       await page.getByRole('button', { name: 'Ver leitura' }).last().click();
@@ -1083,7 +1084,7 @@ async function operatePreviewDialog(page, file) {
         if (process.env.FORGE_TEST_AGENT_SMOKE_NARROW === '1') {
           await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Conversa' }).click();
         }
-        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await clickConversationAction(page, 'Desconectar');
         await page.locator('#agent-status').filter({ hasText: 'Desconectado' }).waitFor({ timeout: 10000 });
         await page.reload();
         await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(newProject);
@@ -1102,7 +1103,7 @@ async function operatePreviewDialog(page, file) {
           first: await page.locator('#messages article').first().textContent(),
           last: await page.locator('#messages article').last().textContent(),
         };
-        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await clickConversationAction(page, 'Desconectar');
         await page.locator('#agent-status').filter({ hasText: 'Desconectado' }).waitFor({ timeout: 10000 });
         console.log('PASS: first Send opened the real Codex conversation, delivered one reply, and restored both sides after WebView reload without resending.');
       }
@@ -1123,7 +1124,7 @@ async function operatePreviewDialog(page, file) {
         assert.equal(await page.locator('#project-title').textContent(), 'Seu projeto');
         assert.equal(await page.locator('#connect-agent').isHidden(), true);
         assert.equal(await page.locator('#new-conversation-choice').isHidden(), true);
-        assert.equal(await page.locator('#disconnect-agent').isVisible(), true);
+        assert.equal(await page.locator('#conversation-options summary').isVisible(), true);
         assert.match(await page.locator('#empty-conversation-description').textContent(), /Sua conversa está pronta/);
         if (process.env.FORGE_CONNECTED_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_CONNECTED_SCREENSHOT, fullPage: true });
         await page.locator('#project-setup summary').click();
@@ -1171,7 +1172,7 @@ async function operatePreviewDialog(page, file) {
         await composer.fill('Sem ferramentas, responda apenas: Podemos continuar.');
         await page.getByRole('button', { name: 'Enviar', exact: true }).click();
         await page.locator('#agent-status').filter({ hasText: 'Resposta recebida' }).waitFor({ timeout: 90000 });
-        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await clickConversationAction(page, 'Desconectar');
         await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor({ timeout: 10000 });
         assert.equal(await field.isDisabled(), false);
         console.log('PASS: actual ChatGPT-authenticated Codex response, streamed deltas, interruption, subsequent turn and disconnect.');
@@ -1187,7 +1188,7 @@ async function operatePreviewDialog(page, file) {
         assert.ok(restoredHistory.includes('Esta é uma verificação somente de leitura.'));
         assert.ok(previousHistory.includes('Podemos continuar'));
         assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true, 'A restored conversation without a draft must not offer an empty Send');
-        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await clickConversationAction(page, 'Desconectar');
         await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
         console.log('PASS: history restored from Codex after transport shutdown and WebView reload, without resending a turn.');
       } else if (process.env.FORGE_TEST_AGENT_SMOKE !== '1' && process.env.FORGE_TEST_NEW_IDEA_REAL_SEND !== '1') { console.log('NOT_RUN: actual Codex conversation (real-agent smoke flags not set).'); }
@@ -1313,7 +1314,7 @@ async function operatePreviewDialog(page, file) {
       await access(path.join(projectForNewIdea, '.forge-method.yaml'));
       await page.locator('nav a[data-route="workspace"]').click();
       if (process.env.FORGE_TEST_PROCESS_RESTART === '1') {
-        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await clickConversationAction(page, 'Desconectar');
         await page.locator('#agent-status').filter({ hasText: 'Desconectado' }).waitFor({ timeout: 10000 });
       }
       if (!await page.locator('#project-setup').evaluate(node => node.open)) await page.locator('#project-setup summary').click();
@@ -1343,7 +1344,7 @@ async function operatePreviewDialog(page, file) {
         assert.equal(await page.locator('#messages article[data-role="user"]').count(), 1);
         assert.equal(await page.locator('#messages article[data-role="agent"]').count(), 1);
         assert.match(await page.locator('#messages article[data-role="agent"]').innerText(), /nova ideia|projeto certo/i);
-        await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+        await clickConversationAction(page, 'Desconectar');
         await page.locator('#agent-status').filter({ hasText: 'Desconectado' }).waitFor({ timeout: 10000 });
         console.log('PASS: a fresh Explore idea selected a different real Forge project and delivered one Codex reply there.');
       }

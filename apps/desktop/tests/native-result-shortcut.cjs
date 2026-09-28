@@ -169,6 +169,24 @@ async function resumeFixture(page, citation, interrupted = false) {
     assert.equal(await app.page.locator('#preview-path').textContent(), 'archive.zip');
     assert.equal(await app.page.getByRole('button', { name: 'Copiar caminho do arquivo' }).isVisible(), true,
       'A nonvisual deliverable needs a direct route to its real project file');
+    if (await app.page.evaluate(() => innerWidth > 900)) assert.equal(await app.page.evaluate(() => {
+      const conversation = document.getElementById('project-conversation').getBoundingClientRect();
+      const preview = document.getElementById('project-preview').getBoundingClientRect();
+      return conversation.width >= preview.width * 1.15 && document.documentElement.scrollWidth <= innerWidth;
+    }), true, 'A nonvisual native file should keep more reading space for the conversation');
+    if (process.env.FORGE_RESULT_NONVISUAL_SCREENSHOT) await app.page.screenshot({ path: process.env.FORGE_RESULT_NONVISUAL_SCREENSHOT, fullPage: true });
+    const options = app.page.locator('#conversation-options');
+    assert.equal(await options.locator('summary').isVisible(), true);
+    assert.equal(await app.page.getByRole('button', { name: 'Desconectar', exact: true }).isHidden(), true);
+    await options.locator('summary').click();
+    assert.equal(await app.page.getByRole('button', { name: 'Desconectar', exact: true }).isVisible(), true);
+    await options.locator('summary').click();
+    const capability = app.page.locator('#agent-access-note');
+    assert.equal(await capability.locator('summary').isVisible(), true);
+    assert.equal(await capability.locator('p').isHidden(), true);
+    await capability.locator('summary').click();
+    assert.match(await capability.locator('p').textContent(), /fora da pasta escolhida sem pedir confirmação/);
+    await capability.locator('summary').click();
     if (process.env.FORGE_MULTI_CITATIONS_SCREENSHOT) await app.page.screenshot({ path: process.env.FORGE_MULTI_CITATIONS_SCREENSHOT, fullPage: true });
     console.log('PASS: two restored citations remain distinct and the selected file passes native project-bound preview.');
   } finally {

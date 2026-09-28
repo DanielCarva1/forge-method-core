@@ -88,6 +88,11 @@ const server = createServer(async (request, response) => {
     await page.getByRole('button', { name: 'Escolher arquivo' }).click();
     await page.locator('#preview-status').filter({ hasText: 'Arquivo encontrado' }).waitFor();
     assert.equal(await page.getByRole('button', { name: 'Copiar caminho do arquivo' }).isVisible(), true);
+    assert.equal(await page.evaluate(() => {
+      const conversation = document.getElementById('project-conversation').getBoundingClientRect();
+      const preview = document.getElementById('project-preview').getBoundingClientRect();
+      return conversation.width >= preview.width * 1.15 && document.documentElement.scrollWidth <= innerWidth;
+    }), true, 'A nonvisual file should keep reading space in the conversation');
     await page.getByRole('button', { name: 'Copiar caminho do arquivo' }).click();
     assert.equal(await page.evaluate(() => window.copiedPreviewPath), 'D:\\project\\archive.zip');
     assert.match(await page.locator('#preview-status').textContent(), /Caminho copiado/);

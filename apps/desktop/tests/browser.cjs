@@ -4,6 +4,7 @@ const { createServer } = require('node:http');
 const { readFile } = require('node:fs/promises');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const { openConversationOptions, clickConversationAction } = require('./conversation-options.cjs');
 
 const assets = new Map([
   ['/', ['index.html', 'text/html']],
@@ -454,7 +455,7 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#preview-markdown a').count(), 0);
     assert.match(await projectsPage.locator('#preview-markdown').textContent(), /\[fora\]\(https:\/\/outside\.example\/\)/);
     assert.equal(await projectsPage.locator('#preview-text').isVisible(), false);
-    await projectsPage.getByRole('button', { name: 'Ver texto original' }).click();
+    await clickConversationAction(projectsPage, 'Ver texto original');
     assert.match(await projectsPage.locator('#preview-text').textContent(), /^# Resultado/);
     assert.equal(await projectsPage.locator('#preview-markdown').isVisible(), false);
     await projectsPage.getByRole('button', { name: 'Abrir prévia' }).click();
@@ -1538,7 +1539,8 @@ async function openConversation(page) {
     assert.equal(await page.locator('#conversation-step').textContent(), 'SUA CONVERSA');
     assert.equal(await page.locator('#connect-agent').isHidden(), true);
     assert.equal(await page.locator('#new-conversation-choice').isHidden(), true);
-    assert.equal(await page.locator('#disconnect-agent').isVisible(), true);
+    assert.equal(await page.locator('#conversation-options summary').isVisible(), true);
+    assert.equal(await page.locator('#disconnect-agent').isHidden(), true);
     assert.match(await page.locator('#empty-conversation-description').textContent(), /Sua conversa está pronta/);
     assert.equal(await page.locator('#browse-project').isDisabled(), true);
     assert.equal(await page.locator('#interrupt-agent').isHidden(), true, 'Idle chat should not advertise an unavailable interrupt action');
@@ -1549,7 +1551,7 @@ async function openConversation(page) {
     await page.keyboard.press('Shift+Tab');
     assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Histórico da conversa');
     await page.keyboard.press('Shift+Tab');
-    assert.equal(await page.evaluate(() => document.activeElement.id), 'disconnect-agent');
+    assert.equal(await page.evaluate(() => document.activeElement.tagName === 'SUMMARY' && document.activeElement.parentElement.id === 'conversation-options'), true);
     await page.evaluate(() => { window.delayProgress = true; });
     await page.getByRole('button', { name: 'Atualizar andamento', exact: true }).click();
     await page.evaluate(() => { window.agentEvents.onmessage({ kind: 'running' }); window.resolveProgress({ status: 'current', focus: { title: 'Obsolete response' } }); window.delayProgress = false; });
@@ -1576,7 +1578,7 @@ async function openConversation(page) {
       await page.waitForFunction(previous => (window.progressCalls || 0) > previous, priorProgressReads);
       await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
       assert.equal(await page.locator('#progress-result').isVisible(), true, `${kind} must restore the independent Forge record without a manual click`);
-      await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+      await clickConversationAction(page, 'Desconectar');
       await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
       await openConversation(page);
       await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
@@ -1655,7 +1657,7 @@ async function openConversation(page) {
     await page.locator('#action-confirmation-accept').click();
     await formattedBubble.locator('.message-web-status').filter({ hasText: 'Abertura solicitada' }).waitFor();
     assert.deepEqual(await page.evaluate(() => window.externalLinkCalls), [{ url: 'https://example.com/' }]);
-    await page.getByRole('button', { name: 'Ver texto original' }).click();
+    await clickConversationAction(page, 'Ver texto original');
     assert.equal(await formattedBubble.locator('pre.message-raw').textContent(), formattedReply);
     await page.getByRole('button', { name: 'Ver texto formatado' }).click();
     assert.equal(await formattedBubble.locator('h3').textContent(), 'Plano');
@@ -1817,6 +1819,7 @@ async function openConversation(page) {
     await page.waitForFunction(key => localStorage.getItem(key) === null, pendingKey);
     assert.equal(await composer.inputValue(), 'Keep this new draft');
     await page.evaluate(() => { window.delayDisconnect = true; });
+    await openConversationOptions(page);
     await page.getByRole('button', { name: 'Desconectar', exact: true }).focus();
     await page.keyboard.press('Enter');
     await page.evaluate(() => window.agentEvents.onmessage({ kind: 'running' }));
@@ -1846,7 +1849,7 @@ async function openConversation(page) {
       { id: 'result-user', role: 'user', text: 'Crie uma página simples.' },
       { id: 'result-agent', role: 'agent', text: 'Pronto: [Ver página](site/index.html).' },
     ]; });
-    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await clickConversationAction(page, 'Desconectar');
     await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
     await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
@@ -1855,7 +1858,7 @@ async function openConversation(page) {
     const resultAction = page.getByRole('button', { name: 'Conferir arquivo citado na resposta: site/index.html' });
     assert.equal(await resultAction.isVisible(), true, 'The completed reply should offer its project file without requiring a search in the side panel');
     assert.match(await page.locator('#preview-intro').textContent(), /resposta cita um arquivo/);
-    await page.getByRole('button', { name: 'Ver texto original' }).click();
+    await clickConversationAction(page, 'Ver texto original');
     assert.equal(await page.locator('#preview-last-result').isVisible(), true, 'Reading the original answer must not lose its file shortcut');
     assert.equal(await resultAction.isVisible(), true, 'The file shortcut must remain available in original-text mode');
     await resultAction.click();
@@ -1874,7 +1877,7 @@ async function openConversation(page) {
       { id: 'planning-user', role: 'user', text: 'Vamos planejar o próximo passo.' },
       { id: 'planning-agent', role: 'agent', text: 'O próximo passo é definir o público. Nenhum arquivo mudou.' },
     ]; });
-    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await clickConversationAction(page, 'Desconectar');
     await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
     await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
@@ -1891,7 +1894,7 @@ async function openConversation(page) {
       { id: 'interrupted-agent', role: 'agent', text: 'Vou preparar', incomplete: true },
     ]; });
     const sendsBeforeInterruptedResume = await page.evaluate(() => window.sendCalls);
-    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await clickConversationAction(page, 'Desconectar');
     await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
     await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
@@ -1911,7 +1914,7 @@ async function openConversation(page) {
         ]).flat(),
       ];
     });
-    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await clickConversationAction(page, 'Desconectar');
     await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
     await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
@@ -1933,7 +1936,7 @@ async function openConversation(page) {
       await page.screenshot({ path: process.env.FORGE_CONVERSATION_LIGHT_SCREENSHOT, fullPage: true });
       await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, previousTheme);
     }
-    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await clickConversationAction(page, 'Desconectar');
     await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
     await page.locator('#conversation-picker summary').click();
     await page.getByLabel('Começar outra conversa', { exact: true }).check();
@@ -1955,11 +1958,11 @@ async function openConversation(page) {
     assert.equal(await page.evaluate(() => window.connectedThread), null);
     assert.equal(await page.locator('#preview-last-result').isHidden(), true, 'A new empty conversation must clear the prior file shortcut');
     assert.equal(await page.locator('#preview-cited-files').isHidden(), true, 'A new empty conversation must clear prior cited files');
-    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await clickConversationAction(page, 'Desconectar');
     await openConversation(page);
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
     assert.equal(await page.evaluate(() => window.connectedThread), 'new-thread');
-    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await clickConversationAction(page, 'Desconectar');
     await page.evaluate(() => {
       Storage.prototype.setItem = window.beforeBookmarkSet;
       window.__TAURI__.core.invoke = async (command, args) => {
@@ -2078,7 +2081,7 @@ async function openConversation(page) {
     await page.getByRole('button', { name: 'Já conferi o envio' }).click();
     assert.doesNotMatch(await page.locator('#composer-help').textContent(), /último envio não foi confirmado/);
     assert.equal(await page.evaluate(() => window.sendCalls), sendsBeforeReview, 'Reviewing history must not send a turn');
-    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await clickConversationAction(page, 'Desconectar');
     console.log('PASS: rejected send remains unconfirmed and cannot silently resend before explicit history review.');
     await page.evaluate(() => {
       const invoke = window.__TAURI__.core.invoke;
@@ -2106,6 +2109,7 @@ async function openConversation(page) {
     }
     await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
     await page.emulateMedia({ forcedColors: 'active' });
+    await openConversationOptions(page);
     assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isVisible(), true);
     await page.emulateMedia({ forcedColors: 'none', colorScheme: 'light' });
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -2259,7 +2263,7 @@ async function openConversation(page) {
     assert.equal(await page.locator('#confirmed-root').textContent(), 'D:\\first-project');
     assert.equal(await page.locator('#message-text').inputValue(), 'Rascunho privado do primeiro projeto', 'Reopening a project restores its unsent draft in this app session');
     await page.locator('#message-text').fill('');
-    await page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await clickConversationAction(page, 'Desconectar');
     await page.locator('#agent-status').filter({ hasText: 'Desconectado.' }).waitFor();
     await page.evaluate(() => {
       const invoke = window.__TAURI__.core.invoke;

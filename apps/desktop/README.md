@@ -1,10 +1,9 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.61` is the current source,
-installed and latest
-[published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.61-alpha.1).
-The exact 0.1.61 candidate was installed over 0.1.60, passed focused
-hidden-native result-access checks, then matched an anonymous download.
+Independent Tauri application. Desktop `0.1.62` is current source and locally
+installed; `0.1.61` remains the latest
+[published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.61-alpha.1)
+until the 0.1.62 candidate is published and checked.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -10283,3 +10282,52 @@ not installed a second time. The same exact candidate bytes had already been
 installed over 0.1.60 and passed the focused hidden-native result-access
 test. No broad suite, new real Codex turn or manual GH CI ran. Continue the
 Desktop product goal; this alpha is not full completion.
+
+### Desktop conversation readability in source — 2026-09-28
+
+Current uncommitted source changes make the conversation header less crowded:
+secondary actions live under **Opções**, the normal restored-conversation notice
+is shorter, and the Codex file-access warning keeps its short warning visible
+while details expand on demand. The warning and its full text remain present;
+disconnect and original-text actions remain available. Related test selectors
+were updated in `apps/desktop/tests`, with a small shared options helper.
+Focused `empty-conversation.cjs` passed after the final wording change;
+`update-guidance.cjs` and hidden-native `native-result-shortcut.cjs` passed
+before that wording-only change. `git diff --check` passed. The larger browser
+and native scripts were syntax-checked, not executed end to end; no full suite,
+Rust test, CI, new real Codex Send, installer or release ran. Installed/public
+0.1.61 does not contain this UI change. Next: review the scoped diff, continue
+the coherent UI package, then validate only affected flows before packaging.
+
+### Desktop nonvisual-result balance in source — 2026-09-28
+
+The next UI edit keeps a real visual preview wider on desktop, but gives the
+conversation the wider column when a selected project file cannot be rendered
+(for example a ZIP). The file path, copy action and change-request entry remain
+in the result card; mobile stays single-column. Focused `preview-preserve.cjs`
+passed in a browser double, including the width/no-horizontal-overflow check.
+A fresh debug build passed focused `native-result-shortcut.cjs` on an isolated
+Windows desktop, including the same nonvisual layout, real project file
+inspection, restart and unsent draft. The native screenshot was visually
+reviewed at `D:/Temp/User/forge-nonvisual-chat-space.png`. No full suite, Rust
+tests, CI, new real Codex Send, installer or release ran. These source changes
+remain uncommitted and are not in installed/public 0.1.61. Next: continue a
+coherent UI package rather than publishing this single layout adjustment.
+
+### Desktop 0.1.62 tested candidate — 2026-09-28
+
+The conversation-readability and nonvisual-result package has one NSIS
+candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.62_x64-setup.exe`:
+123,146,772 bytes, SHA-256
+`F8693C2A4E05518530F95F26B93920D27BED81B362E5B31E83CED1B4CBE5ACCC`.
+The 93-byte sidecar matches. Silent installation over 0.1.61 exited 0 and
+preserved candidate bytes. Installed ProductVersion is 0.1.62; executable
+SHA-256 is `CC384B7FD2C16CC546DF05C7975AE16569574380ED1F9479F5F0F5E524829FBE`.
+The installed app passed focused hidden-native `native-result-shortcut.cjs`,
+including real folder-picker/project-bound file read, restart, unsent draft,
+secondary conversation actions and nonvisual-result layout. Focused browser
+`empty-conversation.cjs` and `preview-preserve.cjs` passed. No broad suite,
+Rust tests, manual GitHub CI or new real Codex Send ran. Next: commit and push
+this package, publish this exact candidate under standing alpha authorization,
+then verify the anonymous download hash and sidecar. Do not rebuild it.

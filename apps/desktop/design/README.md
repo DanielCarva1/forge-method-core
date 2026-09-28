@@ -74,6 +74,12 @@ native WebView. It is not a browser, a published-artifact checker, or the full
 review-and-change loop described by #91. The person can prefill a change
 request in the same conversation without an automatic send.
 
+When a selected file has no visual representation in the app, its result card
+retains the validated path and actions, but the desktop conversation gets the
+wider column. Renderable files keep the wider preview. This makes the layout
+follow what the person can actually inspect rather than treating every file
+as a large image or page.
+
 Local Markdown documents can be read as bounded, safely formatted text, with
 the original file text one click away in both preview sizes. This reuses the
 conversation's non-executing formatter; links in a project document stay

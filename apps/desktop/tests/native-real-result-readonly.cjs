@@ -8,6 +8,7 @@ const { tmpdir } = require('node:os');
 const { createHash } = require('node:crypto');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const { clickConversationAction } = require('./conversation-options.cjs');
 
 const exe = process.env.FORGE_DESKTOP_EXE;
 const project = process.env.FORGE_TEST_PROJECT;
@@ -134,7 +135,7 @@ async function inspectResult(page) {
     }, threadId);
     const before = await resume(app.page);
     await inspectResult(app.page);
-    await app.page.getByRole('button', { name: 'Desconectar', exact: true }).click();
+    await clickConversationAction(app.page, 'Desconectar');
     await app.page.locator('#agent-status').filter({ hasText: 'Desconectado' }).waitFor();
     await stop(app); app = null;
 
