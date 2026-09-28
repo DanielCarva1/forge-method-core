@@ -1,9 +1,7 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.50` is the current source version;
-its installer candidate is being prepared. The last
-[published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.49-alpha.1)
-is `0.1.49`.
+Independent Tauri application. Desktop `0.1.50` is the current source version
+and the latest [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.50-alpha.1).
 Its installer was downloaded without authentication, hash-checked, installed
 and tested in the hidden native app.
 It does not require Codex Desktop. A Codex CLI adapter supports
@@ -9464,3 +9462,25 @@ access and manual screen-reader acceptance remain NOT_RUN.
 review the diff, commit/push/tag, publish this exact candidate and sidecar,
 verify anonymous download bytes and reinstall; then continue the broader
 Desktop product goal.
+
+### Desktop 0.1.50 public readback — 2026-09-28
+
+Package commit `ff9a720f` was pushed on `codex/desktop-shell` and tagged
+`desktop-v0.1.50-alpha.1`. The exact tested candidate and sidecar are in the
+[0.1.50 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.50-alpha.1).
+Unauthenticated downloads returned 123,091,836 bytes and SHA-256
+`D08F23DC35507E4BDA570B9A67850576DCC1EB4A325212558F0606850E53E614`,
+identical to the candidate and public sidecar. Silent installation of the
+downloaded file exited 0, preserved that hash, and installed ProductVersion
+0.1.50, executable SHA-256
+`E781B535C3F29512B38DFD82C13D9BED72E6A4BA78C66712CF4DF19A610702BD`.
+The downloaded installation passed the hidden native smoke with real Forge
+readback and controlled pending-choice draft preparation; it did not send a
+real Codex turn. Clean-machine setup, real provider login completion,
+external-browser launch and manual screen-reader acceptance remain NOT_RUN.
+No manual GitHub CI ran. The broad Desktop goal stays active; per-model
+tokens, BRL cost and Pro quota attribution remain UNKNOWN.
+
+**Next smallest step:** use the published native app and remaining Desktop
+acceptance criteria to close the next concrete create/chat/result UI gap. Do
+not treat publication as whole-product completion.

@@ -39,6 +39,9 @@ Its adjacent 93-byte `.sha256` sidecar records the same hash. Silent
 installation over 0.1.49 returned exit 0, preserved candidate bytes and
 installed ProductVersion 0.1.50, executable SHA-256
 `E781B535C3F29512B38DFD82C13D9BED72E6A4BA78C66712CF4DF19A610702BD`.
-The installed candidate passed the hidden native smoke above. Public download
-and installation readback are still pending; the installer is not yet
-available as a 0.1.50 release.
+The public installer and sidecar were downloaded without authentication. The
+installer was byte-identical to the candidate, and silent installation of the
+downloaded file passed with the same executable hash. The downloaded
+installation passed the hidden native smoke with real Forge readback and a
+controlled pending-choice action. This is same-machine evidence, not a
+clean-machine installation or real Codex turn for this UI change.
