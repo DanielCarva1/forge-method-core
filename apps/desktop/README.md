@@ -9944,3 +9944,19 @@ This is a tested local candidate, not yet a public release. Next: review the
 diff, commit/push/tag this candidate and publish it under the standing alpha
 authorization, then download anonymously, verify exact bytes and repeat the
 focused installed readback. Do not rebuild the candidate.
+
+### Desktop 0.1.55 public readback — 2026-09-28
+
+Package commit `735ac330` and tag `desktop-v0.1.55-alpha.1` were pushed.
+The [0.1.55 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.55-alpha.1)
+contains the exact tested installer and sidecar. Unauthenticated downloads
+returned the 123,128,502-byte installer and 93-byte sidecar; SHA-256
+`BE0FC873A0286820B62299909E4D99D79926F97155BDEA499BD77FF67370C402`
+matched the candidate. Silent installation of the downloaded file exited 0,
+left its bytes unchanged and installed ProductVersion 0.1.55 with executable
+SHA-256 `9B86D0921FD5DACD892851790557FD9D4CE0C2A9C8320B6FCC8390FF219A91AE`.
+The downloaded installation passed the focused hidden-native real Forge
+project-preparation and update-help check without a Codex Send. Existing real
+conversation continuity across this upgrade was NOT_RUN; earlier 0.1.54
+readbacks remain separate evidence. No manual GH CI or broad suite ran.
+Continue the Desktop product goal; this alpha is not completion.

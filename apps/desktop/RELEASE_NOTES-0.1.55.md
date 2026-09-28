@@ -42,5 +42,11 @@ Its 93-byte `.sha256` sidecar records the same hash. Silent installation over
 reports ProductVersion 0.1.55, SHA-256
 `9B86D0921FD5DACD892851790557FD9D4CE0C2A9C8320B6FCC8390FF219A91AE`.
 The installed candidate passed the focused hidden-native project preparation
-and update-help check. Public upload, anonymous download and download-install
-readback are still pending; this candidate is not yet a public release.
+and update-help check. This exact candidate was published as the
+[0.1.55 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.55-alpha.1).
+An unauthenticated download of the installer and sidecar matched the tested
+candidate's 123,128,502 bytes and SHA-256. Silent installation of that
+download exited 0 and installed the same executable SHA-256. The downloaded
+installation passed the same focused hidden-native project preparation and
+update-help check. This is same-machine evidence, not clean-machine setup or
+a real Codex Send in this package.
