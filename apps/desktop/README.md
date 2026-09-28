@@ -8492,3 +8492,26 @@ then download without authentication, verify size/hash, reinstall that
 download and repeat hidden native smoke. Do not rebuild the candidate.
 Afterward, keep progressing on meaningful remaining product journeys rather
 than treating this visual refinement as completion of the full Desktop goal.
+
+### Desktop 0.1.38 public readback — 2026-09-28
+
+Commit `c33ed7dc` was pushed on `codex/desktop-shell`, tagged
+`desktop-v0.1.38-alpha.1`, and the single tested installer plus SHA-256
+sidecar were published in the [0.1.38 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.38-alpha.1).
+Unauthenticated downloads returned 123,097,865 bytes and SHA-256
+`5506BA4E61DA833A8FA381559E22DA8D3F9F4C645212EB0D16B02A0B2AB05797`,
+identical to the tested candidate and sidecar. Silent installation of that
+download returned exit 0 without changing its hash. The installed executable
+reports 0.1.38 and SHA-256
+`EDA191ACC39A624AF77EFC78CF1881D8751F0184879F819EC6F9B4CBC5B4AA82`.
+Downloaded-installation hidden native smoke passed. Actual Codex Send for the
+pending-choice action, clean-machine setup, mobile-device use and manual
+screen-reader acceptance remain unverified. The historical decision text
+is not reconstructed from references. No manual GitHub CI run. Per-model
+tokens, BRL-equivalent cost and Pro-quota impact remain UNKNOWN.
+
+**Next product slice:** keep the installed release distinct from future source
+work. Audit a user journey that has not been proven end to end on the current
+alpha (especially using a real result from a Codex turn and returning to it
+after restart); fix a concrete UX/backend connection gap if observed. Do not
+add a second history store or present inferred historical decisions as fact.
