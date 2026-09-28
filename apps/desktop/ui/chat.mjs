@@ -10,6 +10,7 @@ const loginChallenge = byId('login-challenge');
 const loginStatus = byId('login-status');
 const loginCode = byId('login-code');
 const copyLoginCodeButton = byId('copy-login-code');
+const copyLoginStatus = byId('copy-login-status');
 const loginUrl = byId('login-url');
 const startLoginButton = byId('start-login');
 const finishLoginButton = byId('finish-login');
@@ -584,6 +585,8 @@ async function finishLogin() {
 startLoginButton.addEventListener('click', async () => {
   if (loginActive || loginPending || connected) return;
   loginPending = true; loginCompletedEarly = false; controls();
+  copyLoginStatus.hidden = true;
+  copyLoginStatus.textContent = '';
   loginStatus.textContent = 'Preparando o acesso seguro pelo Codex…';
   try {
     const loginEvents = new globalThis.__TAURI__.core.Channel();
@@ -614,10 +617,11 @@ copyLoginCodeButton.addEventListener('click', async () => {
   if (!loginActive || loginPending || !loginCode.textContent) return;
   try {
     await navigator.clipboard.writeText(loginCode.textContent);
-    loginStatus.textContent = 'Código copiado. Cole-o na página de acesso.';
+    copyLoginStatus.textContent = 'Código copiado. Cole-o na página de acesso.';
   } catch {
-    loginStatus.textContent = 'Não foi possível copiar. Selecione o código acima e copie manualmente.';
+    copyLoginStatus.textContent = 'Não foi possível copiar. Selecione o código acima e copie manualmente.';
   }
+  copyLoginStatus.hidden = false;
 });
 cancelLoginButton.addEventListener('click', async () => {
   if (!loginActive || loginPending) return;
@@ -627,6 +631,8 @@ cancelLoginButton.addEventListener('click', async () => {
     loginActive = false;
     loginChallenge.hidden = true;
     loginCode.textContent = '';
+    copyLoginStatus.hidden = true;
+    copyLoginStatus.textContent = '';
     loginStatus.textContent = 'Acesso cancelado. Seu texto continua aqui.';
   } catch (error) {
     loginStatus.textContent = typeof error === 'string' ? error : 'Não foi possível cancelar. Tente novamente.';

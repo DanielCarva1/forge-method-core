@@ -9107,3 +9107,31 @@ active; per-model tokens, BRL cost and Pro quota attribution remain UNKNOWN.
 **Next smallest step:** inspect a remaining user-visible journey against the
 approved design, fix a demonstrated gap, and package that coherent slice;
 do not infer full Forge completion from this first-use improvement.
+
+### Post-0.1.45 visible copy feedback — 2026-09-28
+
+Visual review of the installed first-use screen exposed a concrete problem:
+after **Copiar código**, feedback appeared at the bottom of the access panel,
+below the visible viewport. Source now places a polite status immediately
+under the temporary code and copy action. Starting a fresh challenge or
+canceling clears that local feedback; draft and login behavior are unchanged.
+
+Changed source: `ui/index.html`, `ui/chat.mjs`, `tests/browser.cjs`,
+`tests/native-auth.cjs`, and this checkpoint. The full browser UI suite
+passed success and failure copy paths plus 360px/200% proximity and no
+horizontal overflow. A hidden native debug WebView passed device-code,
+mocked copy, canceled-login and preserved-draft checks. The mock avoids
+changing the user's system clipboard. The native screenshot
+`D:/Temp/User/forge-copy-feedback-debug.png` was visually reviewed: the
+confirmation is directly under the code and visible in the current viewport.
+JavaScript syntax and `git diff --check` passed. No Rust source or backend
+contract changed; the debug executable was rebuilt to load the changed UI,
+but no new NSIS installer or manual GitHub CI was run. Public/installed 0.1.45
+still has the old feedback placement. No worker was delegated; per-model
+tokens, BRL cost and Pro quota attribution remain UNKNOWN.
+
+**Next smallest step:** continue the user-visible UI journey, bundle this
+feedback correction with the next coherent Desktop package, and validate its
+installed native behavior before public release. Real provider login
+completion, physical mobile access and manual screen-reader acceptance
+remain NOT_RUN.

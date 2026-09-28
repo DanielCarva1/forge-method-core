@@ -70,6 +70,12 @@ const assert = require('node:assert/strict');
     assert.equal(await page.locator('#login-url').textContent(), 'https://auth.openai.com/codex/device');
     assert.equal(await page.locator('#copy-login-code').isVisible(), true);
     assert.equal(await page.evaluate(() => typeof navigator.clipboard?.writeText), 'function');
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => { window.__copiedLoginCode = text; } } });
+    });
+    await page.locator('#copy-login-code').click();
+    await page.locator('#copy-login-status').filter({ hasText: 'Código copiado' }).waitFor();
+    assert.equal(await page.evaluate(() => window.__copiedLoginCode), await page.locator('#login-code').textContent());
     if (process.env.FORGE_AUTH_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_AUTH_SCREENSHOT });
     if (fakeCompletion) {
       await page.locator('#login-panel').waitFor({ state: 'hidden', timeout: 30000 });

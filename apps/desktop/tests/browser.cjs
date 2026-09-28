@@ -940,17 +940,21 @@ async function openConversation(page) {
     assert.equal(await loginPage.locator('#start-login').isHidden(), true);
     assert.equal(await loginPage.locator('#login-url').textContent(), 'https://auth.openai.com/codex/device');
     await loginPage.getByRole('button', { name: 'Copiar código' }).click();
-    await loginPage.locator('#login-status').filter({ hasText: 'Código copiado' }).waitFor();
+    await loginPage.locator('#copy-login-status').filter({ hasText: 'Código copiado' }).waitFor();
     assert.equal(await loginPage.evaluate(() => window.copiedLoginCode), 'ABCD-1234');
     await loginPage.evaluate(() => { window.copyLoginFails = true; });
     await loginPage.getByRole('button', { name: 'Copiar código' }).click();
-    await loginPage.locator('#login-status').filter({ hasText: 'Selecione o código' }).waitFor();
+    await loginPage.locator('#copy-login-status').filter({ hasText: 'Selecione o código' }).waitFor();
     assert.equal(await loginDraft.inputValue(), 'Minha ideia permanece');
     await loginPage.setViewportSize({ width: 360, height: 720 });
     await loginPage.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
     await loginPage.getByRole('button', { name: 'Copiar código' }).click();
     assert.equal(await loginPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Enlarged first-use login must not scroll sideways');
     assert.equal(await loginPage.locator('#copy-login-code').isVisible(), true);
+    const copyButtonBox = await loginPage.locator('#copy-login-code').boundingBox();
+    const copyStatusBox = await loginPage.locator('#copy-login-status').boundingBox();
+    assert.ok(copyButtonBox && copyStatusBox && copyStatusBox.y - (copyButtonBox.y + copyButtonBox.height) < 120,
+      'Copy feedback should remain near the code at enlarged text size');
     await loginPage.setViewportSize({ width: 1180, height: 820 });
     await loginPage.evaluate(() => { document.documentElement.style.removeProperty('font-size'); });
     await loginPage.getByRole('button', { name: 'Já entrei · verificar' }).click();
