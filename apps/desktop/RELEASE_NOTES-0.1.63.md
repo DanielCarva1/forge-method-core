@@ -24,6 +24,10 @@ screen-reader acceptance remain unverified. A local preview does not prove
 internet publication. Model-specific tokens and BRL-equivalent cost remain
 unknown.
 
+During this update, the already-open 0.1.62 app did not exit after a normal
+close request and was then force-stopped with the user's permission. This run
+did not verify preservation of that user's in-progress conversation or draft.
+
 ## Installer candidate
 
 The single Windows x64 NSIS candidate is `Forge_0.1.63_x64-setup.exe`
@@ -33,4 +37,6 @@ Its 93-byte SHA-256 sidecar matches. After the user authorized closing the
 previous app, silent installation over 0.1.62 exited 0. The installed app
 reports 0.1.63 and its executable SHA-256 is
 `BBC669B7A623D76CD9725496C63C1D5B789A603E3E7833B3D5A2E1A674A03A74`.
-Public download verification remains pending.
+The anonymous public download matched the same 123,095,797 bytes and SHA-256;
+the downloaded sidecar matched as well. The downloaded copy was hash-checked,
+not installed a second time.

@@ -10393,3 +10393,34 @@ install-over or public release has happened. Do not close it to run the test.
 Next: when the app is no longer in use, install this exact candidate over
 0.1.62, run focused installed hidden-native readback, then push and publish
 only if that passes. No full suite or manual GitHub CI was run.
+
+### Desktop disconnected drafting in source — 2026-09-29
+
+After a Codex disconnect or update-required event, the composer now remains editable for a local draft while Send remains blocked. Reopening preserves that draft and does not resend. Focused browser-double `empty-conversation.cjs` passed disconnect, reconnect, full reload, and update-required states. An incremental offline debug build and hidden-native `native-restart-guard.cjs` passed a full process restart, uncertain-send guard, offline draft, blocked Send and reconnect without replay on an isolated Windows desktop. Its Codex bridge was controlled; real Codex disconnection and delivery remain NOT_RUN. The first native attempt used an unlinked fixture and could not open the project; switching to a read-only-verified linked fixture passed. `git diff --check` passed. These UI/test edits are uncommitted, intended for a later package, and are not in the frozen 0.1.63 candidate. The user's installed 0.1.62 app remains open; do not interrupt it. Next: after the user is done with the app, install and verify the exact 0.1.63 candidate before publication; keep later source changes separate.
+
+The frozen 0.1.63 package commit `0194dd23` was pushed to `origin/codex/desktop-shell` without including these later edits. No release tag or installer publication occurred.
+
+The same source slice now also permits drafting the next message while Codex is working; Send stays disabled until the turn ends, and the composer explains that behavior. Focused `empty-conversation.cjs` passed the running/completed turn states. After an incremental offline debug build, hidden-native `native-restart-guard.cjs` passed the combined restart, uncertain-send, disconnected-draft and active-turn-draft flow on the verified linked fixture. No real Codex delivery or native transport failure was exercised. These edits remain separate from the frozen 0.1.63 installer.
+
+### Desktop 0.1.63 installed and public — 2026-09-29
+
+The user authorized closing the already-open 0.1.62 app. A normal close
+request did not end that process, so it was force-stopped with permission;
+preservation of that user's in-progress conversation or draft was not verified
+in this run. The exact 0.1.63 NSIS candidate above installed over 0.1.62 with
+exit code 0. Installed ProductVersion is 0.1.63 and the installed executable
+SHA-256 is `BBC669B7A623D76CD9725496C63C1D5B789A603E3E7833B3D5A2E1A674A03A74`.
+Focused hidden-native `native-result-shortcut.cjs` passed on the installed
+app: real project-bound file picker/read, outside-path rejection, restart,
+unsent draft, reading layout, and distinct citations. This used controlled
+Codex history, not a new real Codex Send.
+
+Commit `6514ff3d` and tag `desktop-v0.1.63-alpha.1` were pushed. The
+[0.1.63 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.63-alpha.1)
+contains the tested installer and matching 93-byte sidecar. An anonymous
+public download matched the candidate's 123,095,797 bytes and SHA-256
+`D0092DE52038BDC7BD55BEFC72FD37334447579539ABDB446D9F87D112D2F687`;
+the sidecar matched too. The downloaded copy was hash-checked, not installed
+again. No broad suite, manual GitHub CI, or new real Codex Send ran. The later
+disconnected-drafting UI/test edits remain outside this release. Next: move
+to a coherent non-chat product UI slice; do not keep polishing this chat view.
