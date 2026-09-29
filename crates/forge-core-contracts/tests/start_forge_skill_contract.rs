@@ -191,8 +191,7 @@ fn v10_uses_progressive_product_journey_and_current_work() {
         guided_contract(),
         &[
             "workflow_resume_summary_v10",
-            "catalog.consultation",
-            "consult_once_when_unseen",
+            "available on demand",
             "data.journey_guidance",
             "contact_density",
             "Expansion Signal",
@@ -201,8 +200,7 @@ fn v10_uses_progressive_product_journey_and_current_work() {
             "architectural choice",
             "validation failure",
             "catalog.status_argv",
-            "catalog.detail_argv.argv",
-            "Do not load every detail",
+            "capability catalog is available on demand",
             "do not force research or a large document",
             "quick_cycle",
             "predecessor_detail_argv",
@@ -215,35 +213,24 @@ fn v10_uses_progressive_product_journey_and_current_work() {
 }
 
 #[test]
-fn catalog_orchestration_runs_once_on_material_events() {
+fn catalog_is_on_demand_without_a_per_focus_preflight() {
     assert_contains(
         marked_section(SKILL, "event-driven-catalog-orchestration"),
         &[
-            "machine-readable event handoff",
-            "host_action",
-            "consult_once_when_unseen",
-            "project, active objective, canonical Phase, or Work Focus identity changes",
-            "recheck_events",
-            "material human redirection",
-            "validation that exposes an earlier misunderstanding",
-            "fresh session",
-            "do not consult again for ordinary messages",
-            "choose zero or one plausible practice",
-            "execute `data.journey_guidance.catalog.status_argv`",
-            "open at most one `data.journey_guidance.catalog.detail_argv.argv`",
-            "does not write Forge state",
-            "never creates a gate, approval, or mandatory ceremony",
+            "available on demand",
+            "not a mandatory consultation",
+            "only when a practice may change the approach",
+            "do not consult for ordinary messages",
+            "catalog advice creates no gate or approval",
         ],
     );
     assert_contains(
         AGENT_INTEGRATION,
         &[
-            "event-driven catalog handoff",
-            "catalog.consultation.key",
-            "consult_once_when_unseen",
-            "different project, active objective, Phase, or Work Focus identity",
-            "do not repeat the catalog query for ordinary messages",
-            "zero or one plausible practice",
+            "catalog is available on demand",
+            "available_on_demand",
+            "an unseen key alone never requires a query",
+            "do not query for ordinary messages",
         ],
     );
     assert_contains(
@@ -316,7 +303,6 @@ fn current_work_and_collaboration_use_existing_safe_interfaces() {
         &[
             "workflow current-work prepare",
             "--operation checkpoint_quick_cycle",
-            "Never use `supersede` for progress",
             "on-demand helper, not a pre-flight step",
             "temporary input outside the project snapshot",
             "Preparation is read-only",
@@ -324,12 +310,11 @@ fn current_work_and_collaboration_use_existing_safe_interfaces() {
             "current-work update",
             "focus.collaboration",
             "next_ready_lane",
-            "A dependent lane becomes ready only after every predecessor has a completed promotion receipt.",
-            "parallelize only independent lanes",
-            "../.forge-worktrees/<agent>/<task>",
+            "delegate independent reversible work",
+            "normal coordination and disjoint file ownership",
+            "a Forge lane or claim is not a prerequisite",
             "isolation propose",
-            "before active work begins",
-            "Never run `git worktree add` first",
+            "required scope claim before",
         ],
     );
 }

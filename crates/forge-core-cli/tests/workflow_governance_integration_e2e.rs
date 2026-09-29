@@ -2530,7 +2530,6 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
         &objective_input,
     ));
     let before = assert_ok(&consumer.run(&["resume"]));
-    let wal = consumer.state.join("wal/workflow-governance.ndjson");
     let records_before_accept = work_focus_record_count(&consumer.state);
 
     let accept_input = consumer.write_json(
@@ -2548,7 +2547,7 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
                 "acceptance_summary": "Acceptance and completion each append one atomic record",
                 "affected_area_refs": ["crates/forge-core-kernel"],
                 "current_activity": "Accept the compact cycle",
-                "next_step": "Complete all five lifecycle summaries"
+                "next_step": "Verify the outcome and finish the focus"
             },
             "continuity": {
                 "quick_cycle": {
@@ -2609,10 +2608,9 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
         &after_reference["data"]["journey_guidance"]["catalog"]["consultation"]["key"];
     assert_ne!(before_consultation_key, focused_consultation_key);
     let blocker_digest = blocker_record.record_digest;
-    let completion = |validation_summary: Option<&str>, interaction_ref: &str| {
-        consumer.write_json(
-            &format!("quick-cycle {interaction_ref}.json"),
-            &serde_json::json!({
+    let complete_input = consumer.write_json(
+        "quick-cycle complete.json",
+        &serde_json::json!({
                 "schema_version": "work_focus_update_input_v2",
                 "expected_snapshot_digest": after_reference["data"]["snapshot_digest"],
                 "expected_ledger_head_digest": after_reference["data"]["ledger_head_digest"],
@@ -2623,19 +2621,13 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
                 },
                 "change": {
                     "kind": "complete",
-                    "completion_summary": "The proportional lifecycle was completed atomically",
+                    "completion_summary": "The user journey was verified and completed atomically",
                     "next_step": "Read the compact cycle through Current Work",
                     "continuity": {
                         "blocker_record_digests": [blocker_digest],
                         "quick_cycle": {
                             "compactness_reason": "The behavior is bounded to one existing Current Work path",
-                            "stage_closeouts": {
-                                "analysis_discovery": { "summary": "The user need and existing path were checked" },
-                                "product_planning": { "summary": "The bounded acceptance rules were agreed" },
-                                "solution_definition": { "summary": "Current Work remains the single owner" },
-                                "implementation": { "summary": "The v2 input uses the existing atomic WAL" },
-                                "validation_delivery": validation_summary.map(|summary| serde_json::json!({ "summary": summary }))
-                            },
+                            "stage_closeouts": {},
                             "expansion_history": []
                         }
                     }
@@ -2645,33 +2637,17 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
                     "host_id": "host.cli-e2e",
                     "host_version": "test",
                     "session_ref": "session.quick-cycle-e2e",
-                    "interaction_ref": interaction_ref,
+                    "interaction_ref": "turn.complete-cycle",
                     "conversation_digest": format!("sha256:{}", "3".repeat(64)),
                     "observed_at_unix": 1
                 }
-            }),
-        )
-    };
-    let incomplete_input = completion(None, "turn.reject-incomplete-cycle");
-    let wal_after_accept = fs::read(&wal).expect("WAL before incomplete completion");
-    let incomplete = run_current_work_update(&consumer, &incomplete_input);
-    assert!(!incomplete.status.success());
-    assert_eq!(
-        fs::read(&wal).expect("WAL after incomplete completion"),
-        wal_after_accept,
-        "an incomplete Quick Cycle must not leave a partial record"
-    );
-
-    let complete_input = completion(
-        Some("The focused contract, transition, and CLI journey passed"),
-        "turn.complete-cycle",
+        }),
     );
     let completed = assert_ok(&run_current_work_update(&consumer, &complete_input));
     assert_eq!(completed["data"]["current_work"]["status"], "completed");
     assert_eq!(
-        completed["data"]["focus_record"]["event"]["payload"]["quick_cycle"]["stage_closeouts"]
-            ["validation_delivery"]["summary"],
-        "The focused contract, transition, and CLI journey passed"
+        completed["data"]["focus_record"]["event"]["payload"]["quick_cycle"]["stage_closeouts"],
+        serde_json::json!({}),
     );
     assert_eq!(
         completed["data"]["focus_record"]["event"]["payload"]["blocker_record_digests"],
@@ -2693,7 +2669,7 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
         completed_resume["data"]["current_work"]["focus"]["quick_cycle"],
         serde_json::json!({
             "state": "completed",
-            "stage_closeout_count": 5,
+            "stage_closeout_count": 0,
             "expansion_count": 0
         })
     );
@@ -2785,9 +2761,8 @@ fn quick_cycle_accept_and_complete_are_two_atomic_current_work_writes() {
             .expect("completed predecessor record"),
     ));
     assert_eq!(
-        predecessor_detail["data"]["focus"]["quick_cycle"]["stage_closeouts"]
-            ["validation_delivery"]["summary"],
-        "The focused contract, transition, and CLI journey passed"
+        predecessor_detail["data"]["focus"]["quick_cycle"]["stage_closeouts"],
+        serde_json::json!({})
     );
     assert!(predecessor_detail["data"]
         .get("predecessor_detail_argv")

@@ -25,8 +25,11 @@ this document must be corrected in the same change.**
 
 ### Non-negotiable agent rules
 
-1. **One story at a time.** Use the existing Forge Current Work flow,
-   isolation, and promotion for implementation work (delivery rule from #73).
+1. **One usable journey at a time.** Group related Stories into one coherent
+   outcome when they only make sense together. Stories route requirements;
+   they do not force a stop, new Work Focus, isolation, or PR after each card.
+   Use Forge-governed isolation and promotion for effects that actually cross
+   those boundaries, not as permission to perform ordinary reversible edits.
 2. **Open the owning authority before implementing.** The per-story summaries
    in §5 are routing aids, not full requirements. Never implement from this
    document's summary alone when the authority file or issue exists.
@@ -367,7 +370,7 @@ findings. Required CI, including the packaged Windows journey, passed in run
 
 | Layer | What it proves | When it runs |
 |---|---|---|
-| Focused unit/integration (`cargo test -p …`) | The story's own logic, including its negative cases | Every story, before review |
+| Focused unit/integration (`cargo test -p …`) | Changed behavior and relevant negative cases | During implementation of the affected package |
 | Workspace tests | No cross-crate regression | Locally when impact requires; existing CI gates remain unchanged |
 | Failure injection | Fail-closed behavior (state loss, tamper, forgery, interruption) | C1/C2/C3 stories — mandatory there |
 | Host-conformance adapters | The 8 host capabilities, protocol-level | Host-facing changes; evidence runs |
@@ -381,34 +384,33 @@ requirement-level R1–R8 audit.
 
 ---
 
-## 7. Review and delivery process (per story)
+## 7. Review and delivery process (per coherent package)
 
-1. **Prepare:** open the story's owning authority; record a Forge Current Work
-   entry; create isolation for mutation work.
-2. **Implement:** smallest change that satisfies the authority's acceptance;
-   reuse existing routes; no new governance layer unless the authority says so.
-3. **Verify:** §6 layers applicable to the story; evidence retained with
-   command, duration, and artifacts.
-4. **Two-axis review:** (a) *Standards* — repo conventions, AGENTS.md,
-   domain docs/ADRs; (b) *Spec* — against the owning issue/contract, not
-   against this document's summary.
-5. **Close:** promote through the existing governed flow; update the story row
-   status in §5 and the §2 snapshot in the same change; clean owned scratch.
-6. **Publish:** issues/PRs/releases only after maintainer acceptance of content;
+1. **Orient:** recover the accepted outcome and open only authorities relevant
+   to the planned package. Keep a Work Focus at journey scale when needed for
+   continuity; do not create one for every Story.
+2. **Implement:** use the smallest coherent route to a user-visible result.
+   Independent agents may work on disjoint areas without Forge lane ceremony;
+   claims and isolation remain required for Forge-governed promotion.
+3. **Verify proportionally:** focused checks during implementation; broader
+   evidence and review at the integration or release boundary where they matter.
+4. **Close the package:** report the tested journey and limits, update relevant
+   status once, and promote only through the applicable governed boundary.
+5. **Publish:** issues/PRs/releases only after maintainer acceptance of content;
    human authorship preserved; no AI attribution.
 
 ---
 
 ## 8. Global definition of done
 
-A story is done when **all** of these hold:
+A coherent package is done when the applicable conditions hold:
 
-- [ ] Tests written and passing (§6 layers for its kind).
+- [ ] Focused tests for changed behavior pass; wider tests run when impact or release requires them.
 - [ ] Errors handled, not swallowed — fail closed where the authority requires.
 - [ ] Verified, not asserted — evidence run and retained, not claimed.
-- [ ] Two-axis review completed (Standards + Spec).
+- [ ] Relevant repository standards and owning requirements reviewed at the package boundary.
 - [ ] Evidence boundary honest (no solo→strict_external relabeling, ever).
-- [ ] §5 row + §2 snapshot updated here; scratch/temp removed.
+- [ ] Relevant §5 rows and §2 snapshot updated once; owned scratch/temp handled.
 - [ ] For claims: admitted through the claim machinery, not prose.
 
 ---

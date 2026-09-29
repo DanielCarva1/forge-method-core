@@ -52,10 +52,10 @@ product_contract:
 proportional_cycle_model:
   rule: >-
     Forge exposes one Product Lifecycle rather than separate lightweight and
-    heavyweight methods. A clear, bounded, reversible change starts as a Quick
-    Cycle: every lifecycle stage is visited, but its closeout is compressed into
-    one small durable record. Evidence can expand the affected stage without
-    restarting or expanding the whole cycle by default.
+    heavyweight methods. The agent chooses a proportionate path to a usable
+    user outcome. Quick Cycle is optional continuity, not a requirement to
+    visit or record every stage. Evidence can deepen the affected concern
+    without restarting the whole journey by default.
   artifact_hygiene:
     rule: >-
       Exploration is ephemeral by default. Forge promotes only an agreed result,
@@ -90,19 +90,20 @@ proportional_cycle_model:
     bounds:
       - "one active user-facing objective"
       - "closeouts are summaries backed by referenced evidence, not replacements for evidence"
-      - "a stage may close immediately only when the host can explain why additional work cannot reasonably change the decision"
+      - "record a stage closeout only when it aids recovery or explains a material decision"
       - "compactness never removes a required authority, safety, evidence, or release gate"
       - "the complete Work Focus event remains within the existing 16 KiB bound and Current Work detail remains within 20 KiB"
       - "compactness_reason is at most 512 UTF-8 bytes"
-      - "each of the five closeout summaries is at most 768 UTF-8 bytes"
+      - "each optional closeout summary is at most 768 UTF-8 bytes"
       - "expansion_history contains at most four entries and each reason is at most 512 UTF-8 bytes"
       - "each closeout or expansion may cite at most two evidence digests, each already present in the owning Work Focus evidence set"
       - "when a fifth expansion is accepted, one superseding Work Focus with a new focus_id records that reason as its first expansion and links to the prior partial cycle; it does not invent terminal closeouts or copy the first four entries"
       - "implementation must fit these sub-bounds inside current total budgets; it must not raise a budget merely to fit copied prose"
     write_model:
       ordinary_compact_task: >-
-        Accept one Work Focus with the compactness reason, then write all five
-        closeouts together in the same terminal Work Focus update. Do not write
+        An accepted Work Focus may cover a complete user journey without a Quick
+        Cycle snapshot. If one is useful, keep its closeouts optional and record
+        the verified outcome in the terminal Work Focus update. Do not write
         one event per stage.
       legitimate_intermediate_write:
         - "an accepted Expansion Signal changes the treatment or sends work back to an earlier stage"
@@ -312,9 +313,9 @@ resume_interface:
     catalog:
       eligible_count: "count of operational non-retired capabilities eligible in the phase"
       consultation:
-        schema_version: "catalog_consultation_v1"
+        schema_version: "catalog_consultation_v2"
         key: "sha256 over project id, active objective digest, canonical Phase, and Work Focus id"
-        host_action: "consult_once_when_unseen"
+        host_action: "available_on_demand"
         recheck_events:
           - "material_human_redirect"
           - "validation_reveals_misunderstanding"
@@ -379,7 +380,7 @@ host_adapter_behavior:
     - "Bootstrap and resume exactly once according to the existing durable-state rule."
     - "Read journey_guidance after resume instead of carrying a copied lifecycle or capability catalog."
     - "Use contact_density to decide how much human conversation is expected, not to request procedural confirmation during autonomous stages."
-    - "When catalog.consultation.key is unseen in the current host session, execute catalog.status_argv once, remember the key, reason over the latest conversation, then request detail only for a plausible capability."
+    - "Consult the catalog on demand when a practice may change the approach; an unseen consultation key alone does not require a call."
     - "A material human redirect or validation that reveals an earlier misunderstanding may trigger one recheck even when the durable key is unchanged."
     - "Explain the selected practice and why it helps in simple language; do not expose catalog browsing as human work."
     - "Do not run research merely because a research capability exists. The host chooses it when uncertainty can change the decision."
@@ -455,8 +456,8 @@ current_work_continuity:
       - "zero or more accepted partial closeouts only at a legitimate intermediate-write boundary"
       - "ordered append-only expansion entries identifying the canonical Phase, reason, and a subset of existing Work Focus evidence references"
     terminal_shape:
-      - "all five lifecycle closeouts are present"
-      - "validation and delivery states the user-journey result, remaining limits, and delivery state"
+      - "stage closeouts are optional; no artificial five-stage completion is required"
+      - "the completion summary states the user-journey result, remaining limits, and delivery state"
       - "the terminal Work Focus update carries the complete Quick Cycle snapshot in the same WAL record"
       - "the same terminal change carries the final top-level blocker and evidence sets, so binding references does not require a write before completion"
     bounded_overflow:
@@ -495,7 +496,7 @@ current_work_continuity:
       - "accepted practice and reason"
       - "durable decision, blocker, and evidence references"
       - "supersession and freshness bindings"
-      - "compactness reason, five closeouts, and ordered expansion history when explicitly recorded"
+      - "compactness reason, optional closeouts, and ordered expansion history when explicitly recorded"
       - "an exact bounded predecessor-detail argv when a prior Work Focus record exists"
     bounds:
       - "ordinary resume includes at most one active Work Focus"
@@ -560,7 +561,7 @@ current_work_continuity:
     - id: "replacement-agent"
       expected: "one start/resume explains the objective, stage, active focus, accepted practice, blockers, and next step without chat history"
     - id: "replacement-agent-quick-cycle"
-      expected: "one resume plus progressive Current Work detail recovers the compactness reason, five accepted closeouts, and expansion history; exact predecessor detail is followed only when the current focus links to a prior cycle"
+      expected: "one resume plus progressive Current Work detail recovers the compactness reason, any recorded closeouts, and expansion history; exact predecessor detail is followed only when the current focus links to a prior cycle"
     - id: "external-issue"
       expected: "the focus can reference a GitHub issue, local ticket, or no tracker while preserving identical Forge semantics"
     - id: "objective-replaced"
@@ -899,6 +900,17 @@ resolved_product_decisions:
       Work Focus event to 16 KiB. Quick Cycle allocates sub-bounds inside those
       limits and may not increase them without new measured installed-runtime
       evidence and an explicit product decision.
+  - id: "PD-007"
+    accepted_at: "2026-09-29"
+    decision: >-
+      Superseding PD-002 and PD-004, a usable user journey, not a Story or
+      lifecycle closeout, is the normal unit of progress. Quick Cycle and its
+      five stage fields remain readable
+      for historical continuity but are optional for new and existing work.
+      Finishing a focus requires an honest outcome, limits, and next step, not
+      five synthetic summaries. Catalog advice is on demand. Ordinary local
+      reversible work and independent agents do not require a Forge permission
+      cycle; governed promotion and consequential claims retain their boundaries.
 
 acceptance_boundary: >-
   This draft specifies the intended product interface and implementation

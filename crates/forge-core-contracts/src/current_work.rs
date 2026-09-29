@@ -824,10 +824,6 @@ fn validate_summary(
                 quick_cycle.state,
                 WorkflowCurrentWorkQuickCycleState::ActiveExpanded
             ) && quick_cycle.expansion_count == 0
-            || matches!(
-                quick_cycle.state,
-                WorkflowCurrentWorkQuickCycleState::Completed
-            ) && quick_cycle.stage_closeout_count != 5
         {
             return Err(WorkflowCurrentWorkValidationError::ListBound);
         }

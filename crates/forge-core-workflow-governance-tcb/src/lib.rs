@@ -4321,22 +4321,6 @@ fn validate_quick_cycle_transition(
                     reason: "same-focus Quick Cycle updates must preserve compactness and the expansion-history prefix",
                 });
             }
-            if next.state == WorkflowWorkFocusState::Completed
-                && [
-                    next_cycle.stage_closeouts.analysis_discovery.as_ref(),
-                    next_cycle.stage_closeouts.product_planning.as_ref(),
-                    next_cycle.stage_closeouts.solution_definition.as_ref(),
-                    next_cycle.stage_closeouts.implementation.as_ref(),
-                    next_cycle.stage_closeouts.validation_delivery.as_ref(),
-                ]
-                .iter()
-                .any(Option::is_none)
-            {
-                return Err(WorkflowGovernanceLedgerError::WorkFocusInvalid {
-                    line,
-                    reason: "a completed Quick Cycle requires all five lifecycle closeouts",
-                });
-            }
         }
     }
     Ok(())
@@ -7606,6 +7590,53 @@ mod replacement_protocol_tests {
 
     #[test]
     #[allow(clippy::too_many_lines)] // One test keeps the complete append-only history scenario visible.
+    fn quick_cycle_can_complete_without_artificial_stage_closeouts() {
+        let root = test_root("quick-cycle-outcome-closeout");
+        let (projection, objective_record) =
+            initialize_quick_cycle_focus(&root, "objective.workflow.quick-cycle-outcome-closeout");
+        let mut active = work_focus_event(&projection, &objective_record);
+        active.quick_cycle = Some(quick_cycle_snapshot());
+        lock_workflow_governance_ledger_tcb(&root)
+            .expect("active focus ledger")
+            .record_work_focus_unchecked_tcb(
+                projection.head_digest.as_deref().expect("objective head"),
+                &test_identity(),
+                projection.current_state_version().expect("objective state"),
+                active,
+            )
+            .expect("record active focus");
+
+        let projection = recover_under_lock(&root).expect("recover active focus");
+        let mut completed = next_work_focus_event(&projection);
+        completed.state = WorkflowWorkFocusState::Completed;
+        completed.current_activity = "The user journey was verified".to_owned();
+        completed.next_step = "Continue with the next product outcome".to_owned();
+        lock_workflow_governance_ledger_tcb(&root)
+            .expect("completed focus ledger")
+            .record_work_focus_unchecked_tcb(
+                projection
+                    .head_digest
+                    .as_deref()
+                    .expect("active focus head"),
+                &test_identity(),
+                projection
+                    .current_state_version()
+                    .expect("active focus state"),
+                completed,
+            )
+            .expect("complete without five stage closeouts");
+        let recovered = recover_under_lock(&root).expect("recover completed focus");
+        assert_eq!(
+            recovered
+                .latest_work_focus_record()
+                .expect("completed focus")
+                .1
+                .state,
+            WorkflowWorkFocusState::Completed
+        );
+    }
+
+    #[test]
     fn quick_cycle_same_focus_preserves_expansion_history_prefix() {
         let root = test_root("quick-cycle-append-only-history");
         let (projection, objective_record) =
@@ -7677,39 +7708,6 @@ mod replacement_protocol_tests {
         ));
         assert_eq!(
             fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH)).expect("WAL after reject"),
-            before
-        );
-
-        let mut incomplete = next_work_focus_event(&projection);
-        incomplete.state = WorkflowWorkFocusState::Completed;
-        incomplete
-            .quick_cycle
-            .as_mut()
-            .expect("Quick Cycle")
-            .stage_closeouts
-            .analysis_discovery = Some(forge_core_contracts::WorkflowQuickCycleCloseout {
-            summary: "The need was understood".to_owned(),
-            evidence_record_digests: Vec::new(),
-        });
-        assert!(matches!(
-            lock_workflow_governance_ledger_tcb(&root)
-                .expect("incomplete Quick Cycle ledger")
-                .record_work_focus_unchecked_tcb(
-                    projection
-                        .head_digest
-                        .as_deref()
-                        .expect("expanded focus head"),
-                    &test_identity(),
-                    projection
-                        .current_state_version()
-                        .expect("expanded focus state"),
-                    incomplete,
-                ),
-            Err(WorkflowGovernanceLedgerError::WorkFocusInvalid { .. })
-        ));
-        assert_eq!(
-            fs::read(root.join(WORKFLOW_GOVERNANCE_WAL_RELATIVE_PATH))
-                .expect("WAL after incomplete closeout reject"),
             before
         );
 

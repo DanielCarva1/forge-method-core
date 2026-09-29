@@ -218,7 +218,7 @@ pub fn derive_product_journey_guidance(
             consultation: ProductJourneyCatalogConsultation {
                 schema_version: CATALOG_CONSULTATION_SCHEMA_VERSION.to_owned(),
                 key: catalog_consultation_key(phase, consultation_context),
-                host_action: ProductJourneyCatalogHostAction::ConsultOnceWhenUnseen,
+                host_action: ProductJourneyCatalogHostAction::AvailableOnDemand,
                 recheck_events: vec![
                     ProductJourneyCatalogRecheckEvent::MaterialHumanRedirect,
                     ProductJourneyCatalogRecheckEvent::ValidationRevealsMisunderstanding,

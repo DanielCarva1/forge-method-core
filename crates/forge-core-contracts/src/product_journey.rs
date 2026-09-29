@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub const PRODUCT_JOURNEY_SCHEMA_VERSION: &str = "0.1";
 pub const PRODUCT_JOURNEY_CONTRACT_REF: &str = "contracts/guidance/product-journey-v0.yaml";
 pub const PRODUCT_JOURNEY_GUIDANCE_SCHEMA_VERSION: &str = "product_journey_guidance_v2";
-pub const CATALOG_CONSULTATION_SCHEMA_VERSION: &str = "catalog_consultation_v1";
+pub const CATALOG_CONSULTATION_SCHEMA_VERSION: &str = "catalog_consultation_v2";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -92,11 +92,11 @@ pub struct ProductJourneyGuidanceCatalog {
     pub detail_argv: ProductJourneyDetailArgv,
 }
 
-/// Stable host-session handoff for event-driven catalog consultation.
+/// Stable host-session context for optional catalog consultation.
 ///
 /// Forge derives the key from durable semantic context. The host remembers keys
-/// only for its current session, so unchanged progress does not cause another
-/// catalog read and a fresh session still performs one initial consultation.
+/// only for its current session. A new key never requires a catalog read by
+/// itself; the host consults only when guidance may change its approach.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ProductJourneyCatalogConsultation {
@@ -109,6 +109,8 @@ pub struct ProductJourneyCatalogConsultation {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ProductJourneyCatalogHostAction {
+    AvailableOnDemand,
+    /// Legacy v1 readback; retained for historical deserialization.
     ConsultOnceWhenUnseen,
 }
 
@@ -155,9 +157,9 @@ mod tests {
             "catalog": {
                 "eligible_count": 1,
                 "consultation": {
-                    "schema_version": "catalog_consultation_v1",
+                    "schema_version": "catalog_consultation_v2",
                     "key": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                    "host_action": "consult_once_when_unseen",
+                    "host_action": "available_on_demand",
                     "recheck_events": [
                         "material_human_redirect",
                         "validation_reveals_misunderstanding"

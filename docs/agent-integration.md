@@ -157,20 +157,14 @@ the larger detail projection. The argv carries the ledger head observed by
 the project again. If the head changed, run `resume` again rather than removing
 or rewriting the expected digest.
 
-The event-driven catalog handoff keeps practice discovery reliable without
-restoring a pre-flight on every message. Keep
-`journey_guidance.catalog.consultation.key` values only in the current host
-session. When a key is unseen and `host_action` is `consult_once_when_unseen`,
-execute the published `journey_guidance.catalog.status_argv` once and let
-the host choose zero or one plausible practice from the bounded summaries. Open
-only that practice's published detail when it can change the approach. Forge
-changes the key only for a different project, active objective, Phase, or Work
-Focus identity. A material human redirection or correction, or validation that
-exposes an earlier misunderstanding, permits one recheck even when the durable
-key is unchanged. Do not repeat
-the catalog query for ordinary messages, reads, tests, progress, or unchanged
-resume data. Reading guidance is advisory, writes no Forge state, and creates no
-gate or human approval.
+The catalog is available on demand, not a pre-flight. The current
+`journey_guidance.catalog.consultation.host_action` is `available_on_demand`:
+an unseen key alone never requires a query. Use the published status argv only
+when a practice could change the approach, then open at most one relevant
+detail. Do not query for ordinary messages, reads, tests, progress, or an
+unchanged work focus. Legacy `consult_once_when_unseen` readback remains
+deserializable but is not the current default. Guidance is advisory, writes no
+Forge state, and creates no gate or human approval.
 
 The host does not wait for the human to request research. When a doubt may
 change the accepted outcome, expose an unacceptable outcome, alter material

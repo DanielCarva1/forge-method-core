@@ -6,8 +6,10 @@ description: Start or resume Forge Method for the current project. Use when the 
 # Start Forge
 
 This is the single entry point for Forge Method in a project. Run it once per
-chat/session — it bootstraps a fresh repo, fails closed on linked state loss,
-or routes a healthy project into agent-native workflow governance.
+chat/session to bootstrap or recover project continuity. After activation,
+Forge is a companion to the agent's work, not a per-task permission ritual.
+The agent owns the implementation strategy and may continue safe, reversible
+work across related Stories without reactivating Forge.
 
 ## Core rules
 
@@ -113,19 +115,23 @@ required approval.
 
 Read `data.current_work` before reconstructing work from chat or repository
 files. It is the accepted product-work continuity. `absent` means Forge has no
-accepted Work Focus yet, so ask one useful product question instead of
-inventing one. `current` and `blocked` carry the accepted activity and next
+accepted Work Focus yet; use the user's already stated outcome when clear and
+ask one product question only when a material choice remains. `current` and
+`blocked` carry the accepted activity and next
 step; `stale` means the objective or Phase changed and the old focus must not be
 silently reused. `completed` and `abandoned` are terminal: a terminal
 `next_step` is a handoff toward a new Work Focus, not active work. Execute
 `focus.detail_argv` only when the bounded summary is not enough; it returns
 accepted detail without scanning project documentation. This block is
-read-only advice and never authorizes edits or completion.
+read-only advice and never authorizes edits or completion. A Work Focus may
+cover a complete user journey spanning several Stories; cards and micro-slices
+are navigation aids, not mandatory stopping points.
 
-For a new or replacement Work Focus, first establish its accepted meaning with
-the human. Updating or closing already accepted work does not require another
-approval. Run `forge-core workflow current-work prepare --root <path> --json`
-to prepare either kind of change.
+For a new or materially changed Work Focus, use the outcome the human has
+already accepted in chat; do not ask them to approve the same meaning again.
+Updating or closing already accepted work does not require another approval.
+Run `forge-core workflow current-work prepare --root <path> --json` only when
+the durable focus actually needs to be created or changed.
 This is an on-demand helper, not a pre-flight step: never run it for every
 message or ordinary resume. Replace every marker in its candidate template,
 write the temporary input outside the project snapshot, execute the exact
@@ -133,27 +139,14 @@ write the temporary input outside the project snapshot, execute the exact
 successful existing `current-work accept` or `current-work update` operation
 makes the saved resume response stale.
 
-To save progress on the same active Quick Cycle, use
-`current-work prepare --operation checkpoint_quick_cycle --root <path> --json`.
-This prepares the existing checkpoint operation, retaining the focus identity
-and complete continuity (blockers, evidence, Quick Cycle, collaboration). Fill
-activity, next step and provenance markers; adjust only honestly changed
-continuity fields. Never use `supersede` for progress: it means a different task
-with a new identity. Without `--operation`, preparation still selects a new-task
-accept/supersede candidate; it does not infer your intent.
-
-For a new compact task, populate `continuity.quick_cycle` in the prepared
-acceptance input (inside `change.continuity` for a superseding focus). Set an
-honest `compactness_reason`, empty `stage_closeouts`, and empty
-`expansion_history`; do not use null merely because the work is small. This
-uses the existing Work Focus record, not another document or permission step.
-At delivery, supply the verified summaries for `analysis_discovery`, `product_planning`, `solution_definition`,
-`implementation`, and `validation_delivery` in the same completion update.
-Each closeout has a `summary` and optional `evidence_record_digests` referring
-only to evidence already in the owning continuity evidence set. Preserve the
-complete continuity snapshot as described below. Do not create an event per stage
-or invent a finished stage; if accepted work remains, keep the task open.
-This applies to new work; do not backfill terminal or historical work.
+Quick Cycle is optional, including for small work. Do not add one merely to
+prove every lifecycle stage was visited. If an existing focus carries one,
+preserve its accepted continuity and use
+`current-work prepare --operation checkpoint_quick_cycle --root <path> --json`
+only when a real progress checkpoint needs to survive context loss. Do not
+write stage-by-stage events or invent closeouts. Verified outcome, limitations,
+and next step belong in the normal completion summary; optional stage summaries
+may be retained when they actually aid recovery.
 
 Before reporting the accepted task as finished, check all of the current Work
 Focus acceptance against actual results; a promotion receipt alone is not enough
@@ -163,7 +156,7 @@ bindings, replace only its `change` with `kind: complete`, `completion_summary`
 and `next_step`, and fill the host provenance honestly. Use `completion_summary`
 and `next_step` to record verified results, limitations and the real handoff.
 When supplying `continuity`, carry its complete snapshot: final blocker/evidence
-references and existing Quick Cycle/collaboration state, with any verified
+references and existing Quick Cycle/collaboration state, with any useful verified
 closeouts. It replaces those fields, not merges them; never invent missing
 evidence. Omit it when no continuity change is needed. Do not create a replacement
 focus just to close the old task. Execute the prepared update argv, then confirm
@@ -195,18 +188,13 @@ never to list or reconstruct deeper history.
 When `focus.collaboration` is present, use its bounded counts and
 `next_ready_lane` first. Execute `focus.detail_argv` only when exact lane,
 dependency, owner, claim, isolation, or promotion information is needed.
-A dependent lane becomes ready only after every predecessor has a completed
-promotion receipt.
-Parallelize only independent lanes. Before active work begins, run
-`forge-core isolation propose` with a promotion-safe path shaped as
-`../.forge-worktrees/<agent>/<task>`. Never run `git worktree add` first: Forge
-must reject an incompatible path before it persists a contract or the agent
-starts work.
-Acquire the scope claim first and pass its exact ID to `isolation propose --claim`.
-If an existing Proposed or Active isolation was created without a claim, use
-`forge-core isolation link-claim --root <project> --id <isolation-id> --claim <claim-id>`.
-This only attaches a live claim owned by the isolation agent; an identical link
-is a no-op. Do not repropose the isolation or replace a different existing link.
+The agent may delegate independent reversible work using the host's normal
+coordination and disjoint file ownership; a Forge lane or claim is not a
+prerequisite for ordinary implementation. For work that will use Forge-governed
+isolation and promotion, preserve its accepted dependency order and acquire the
+required scope claim before `forge-core isolation propose`. Use the proposed
+promotion-safe path; do not create an incompatible worktree first. An existing
+unclaimed Forge isolation may use `isolation link-claim` rather than reproposal.
 
 Keep signal scope and priority clear. `data.current_work.focus.blocker_count`
 and its blocker references are focus-bound: they describe only blockers
@@ -227,28 +215,13 @@ validation failure caused by an earlier misunderstanding. Explain the reason
 simply and deepen only the affected stage.
 
 <!-- event-driven-catalog-orchestration:start -->
-Use the machine-readable event handoff in
-`data.journey_guidance.catalog.consultation`. Keep its seen `key` values only in
-the current host session. When a key is unseen and `host_action` is
-`consult_once_when_unseen`, execute `data.journey_guidance.catalog.status_argv`
-once, remember the key, choose zero or one plausible practice from its bounded
-summaries, and open at most one
-`data.journey_guidance.catalog.detail_argv.argv` only when its detail may change
-the approach. Forge changes the key only when the project, active objective,
-canonical Phase, or Work Focus identity changes. The `recheck_events` also allow
-one consultation after a material human redirection or validation that exposes
-an earlier misunderstanding, even when the durable key is unchanged.
-
-Track this consultation in the host session, not Forge state. An unseen key in a
-fresh session provides the initial consultation without a per-message pre-flight.
-Do not consult
-again for ordinary messages, repository reads, tests, status checks, progress
-narration, or unchanged resume data. A consultation may select no practice. It
-does not write Forge state and never creates a gate, approval, or mandatory
-ceremony. Persist `selected_practice_ref` only as part of an independently
-accepted Work Focus meaning change; never write merely to record that the
-catalog was read. Do not load every detail or ask the human to browse the
-catalog. The Host Agent chooses what helps.
+The capability catalog is available on demand, not a mandatory consultation
+at each new key. Use `data.journey_guidance.catalog.status_argv` only when a
+practice may change the approach; open one relevant detail when needed. Do not
+consult for ordinary messages, reads, tests, status checks, or because a new
+Work Focus exists. Catalog advice creates no gate or approval. Persist
+`selected_practice_ref` only with a real accepted Work Focus meaning change;
+never write merely to record that the catalog was read.
 <!-- event-driven-catalog-orchestration:end -->
 
 For Solo Cooperative work, translate the ranked action into the smallest concrete
@@ -748,8 +721,9 @@ proves integrity, not native host authenticity.
 6. **Keep output useful to the project owner.** Lead with the guided activation
    explanation above, not Forge internals. Keep explanatory prose in the human's
    language and pair useful technical facts with their practical meaning. Include
-   a short **Forge status** after the project orientation: active, unavailable,
-   or blocked, plus the material consequence. Show executable argv, release
+   a short **Forge status** only when it changes what can happen next or the
+   human asks; say the practical consequence before any internal term. Show
+   executable argv, release
    identifiers, bootstrap states, Project Link paths, and sidecar paths only when
    the human asks for diagnostics or when one of those details is necessary to
    repair a failure. Do not expose private attestation material, present a legacy

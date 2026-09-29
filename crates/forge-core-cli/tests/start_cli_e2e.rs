@@ -512,8 +512,8 @@ fn fresh_start_handoff_initializes_and_resumes_solo_profile() {
         "forge-core"
     );
     let consultation = &resumed["data"]["journey_guidance"]["catalog"]["consultation"];
-    assert_eq!(consultation["schema_version"], "catalog_consultation_v1");
-    assert_eq!(consultation["host_action"], "consult_once_when_unseen");
+    assert_eq!(consultation["schema_version"], "catalog_consultation_v2");
+    assert_eq!(consultation["host_action"], "available_on_demand");
     assert!(consultation["key"]
         .as_str()
         .is_some_and(|key| key.starts_with("sha256:") && key.len() == 71));
@@ -1524,20 +1524,17 @@ fn reinitialize_resumes_reserved_wal_in_a_fresh_process() {
 }
 
 #[test]
-fn canonical_skill_guides_compact_cycle_creation_and_closeout() {
+fn canonical_skill_keeps_quick_cycle_optional() {
     let skill = std::fs::read_to_string(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skill/start-forge/SKILL.md"),
     )
     .expect("read canonical skill");
     for instruction in [
-        "For a new compact task, populate `continuity.quick_cycle`",
-        "`compactness_reason`",
-        "empty `stage_closeouts`",
-        "`analysis_discovery`, `product_planning`, `solution_definition`",
-        "`implementation`, and `validation_delivery`",
-        "same completion update",
-        "Do not create an event per stage",
-        "do not backfill terminal or historical work",
+        "Quick Cycle is optional, including for small work",
+        "Do not add one merely to",
+        "write stage-by-stage events or invent closeouts",
+        "Verified outcome, limitations,",
+        "belong in the normal completion summary",
     ] {
         assert!(
             skill.contains(instruction),
