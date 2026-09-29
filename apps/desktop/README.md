@@ -10455,3 +10455,16 @@ installed smoke attempt failed at the harness dependency lookup (`playwright`);
 setting the known module path allowed it to pass, not a product defect.
 Next: commit/push this package, publish **this exact candidate** under the
 standing alpha authorization, then verify anonymous download and sidecar.
+
+### Desktop 0.1.64 public readback — 2026-09-29
+
+Commit `e6c9c343` and tag `desktop-v0.1.64-alpha.1` were pushed. The
+[0.1.64 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.64-alpha.1)
+contains the exact installer installed and tested above. Anonymous download
+matched 123,157,874 bytes and SHA-256
+`671582CE0CE15E3150A9494FABD6FD6373E0DE75C5AD05E7B62566A1B179ED6C`;
+its 93-byte sidecar matched. The downloaded copy was hash-checked, not
+installed a second time. Installed version 0.1.64 passed both focused native
+journeys, including real one-click default project creation. No broad suite,
+manual GH CI, or new real Codex reply ran. Continue with the remaining
+connected product UI rather than repeated chat polish.
