@@ -29,7 +29,10 @@ function renderRoute(moveFocus) {
       if (fragment === 'about') target.querySelector('summary')?.focus({ preventScroll: true });
       if (fragment === 'updates') target.querySelector('h3')?.focus({ preventScroll: true });
     }
-    else heading?.focus({ preventScroll: false });
+    else {
+      heading?.focus({ preventScroll: true });
+      scrollTo({ top: 0, left: 0 });
+    }
   });
 }
 

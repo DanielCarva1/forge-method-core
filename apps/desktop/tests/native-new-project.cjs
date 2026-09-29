@@ -44,7 +44,7 @@ if (!executable || !process.env.FORGE_CORE_EXE) throw new Error('Set FORGE_DESKT
     if (installedParent) await page.locator('#message-text').fill(`Quero ${marker}.`);
     const draft = await page.locator('#message-text').inputValue();
     assert.match(draft, installedParent ? /teste forge/ : /artístico/);
-    await page.locator('#create-default-project').click();
+    await page.locator('#idea-choose-folder').click();
     await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 90000 });
     assert.equal((await stat(project)).isDirectory(), true);
     assert.equal(await page.locator('#project-root').inputValue(), project);

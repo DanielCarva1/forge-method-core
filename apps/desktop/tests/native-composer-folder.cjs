@@ -19,6 +19,7 @@ async function chooseNativeFolder(page, folder) {
   await page.locator('#browse-project').click();
   const [code] = await once(helper, 'exit');
   assert.equal(code, 0, `Native folder picker failed: ${output}`);
+  await page.waitForFunction(expected => document.querySelector('#project-root').value === expected, folder, { timeout: 10000 });
 }
 
 (async () => {
@@ -73,6 +74,7 @@ async function chooseNativeFolder(page, folder) {
     const draft = page.locator('#message-text');
     const idea = await draft.inputValue();
     assert.match(idea, /artístico/);
+    await page.locator('#custom-folder-option summary').click();
     await chooseNativeFolder(page, project);
     assert.equal(await page.locator('#project-root').inputValue(), project);
     assert.deepEqual(await page.evaluate(() => [...document.querySelector('.workspace').children].slice(0, 2).map(node => node.id)),

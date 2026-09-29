@@ -21,7 +21,7 @@ export function showStarterHandoffError(message) {
 }
 function updateHandoffAction() {
   chooseFolder.textContent = projectRoot.value.trim()
-    ? 'Preparar projeto nesta pasta →' : 'Escolher pasta para esta ideia →';
+    ? 'Preparar projeto nesta pasta →' : 'Começar projeto com esta ideia →';
 }
 
 function normalize(value) {
@@ -52,21 +52,23 @@ export function chooseStarter(link) {
     ideaStatus.textContent = 'Sua ideia escrita foi mantida. Você pode editá-la antes de enviar.';
     ideaStatus.hidden = false;
     chooseFolder.hidden = false;
+    updateHandoffAction();
     return;
   }
   composer.value = link.dataset.starter;
   lastSuggestedDraft = composer.value;
   composer.dispatchEvent(new Event('input', { bubbles: true }));
   ideaStatus.textContent = link.dataset.category
-    ? `Você escolheu ${link.dataset.category}. Sua ideia inicial está pronta na conversa; escolha uma pasta para continuar. Nada foi enviado.`
-    : 'Sua ideia inicial está pronta na conversa; escolha uma pasta para continuar. Nada foi enviado.';
+    ? `Você escolheu ${link.dataset.category}. Sua ideia inicial está pronta na conversa; o Forge pode criar o projeto para você. Nada foi enviado.`
+    : 'Sua ideia inicial está pronta na conversa; o Forge pode criar o projeto para você. Nada foi enviado.';
   ideaStatus.hidden = false;
   chooseFolder.hidden = false;
+  updateHandoffAction();
 }
 
 chooseFolder.addEventListener('click', () => {
   if (projectRoot.value.trim()) document.querySelector('#project-form').requestSubmit(document.querySelector('#start-project'));
-  else document.querySelector('#browse-project').click();
+  else document.querySelector('#create-default-project').click();
 });
 projectRoot.addEventListener('input', updateHandoffAction);
 

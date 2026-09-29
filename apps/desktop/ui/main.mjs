@@ -1,5 +1,5 @@
 import { readAppInfo } from './connection.mjs';
-import { prepareProjectSwitch, resumeSavedConversation, setProject } from './chat.mjs';
+import { cancelPendingFirstSend, finishPendingFirstSend, prepareProjectSwitch, resumeSavedConversation, setProject } from './chat.mjs';
 import { setProgressProject } from './progress.mjs';
 import { setPreviewProject } from './preview.mjs';
 import { rememberProject } from './recent-projects.mjs';
@@ -56,6 +56,7 @@ const defaultProjectStatus = document.querySelector('#default-project-status');
 const modeHelp = document.querySelector('#project-mode-help');
 const projectTitle = document.querySelector('#project-title');
 const setup = document.querySelector('#project-setup');
+const customFolderOption = document.querySelector('#custom-folder-option');
 const setupSummary = document.querySelector('#project-setup-summary');
 const projectLocation = document.querySelector('#project-location');
 const workspaceTitle = document.querySelector('#workspace-title');
@@ -66,18 +67,22 @@ const projectStep = document.querySelector('#project-step');
 const resultLabel = document.querySelector('#project-result-label');
 let projectMode = 'new';
 let createdDefaultPath = '';
+let startReturnTo = 'explore';
 
 function resetWorkspaceHeading() {
   workspaceTitle.textContent = 'Vamos dar vida à sua ideia.';
   workspaceIntro.textContent = 'Escreva sua ideia e comece. O Forge pode criar o espaço do projeto para você; nada é enviado sem sua ação.';
-  workspaceBack.href = '#explore';
-  workspaceBackLabel.textContent = 'Voltar às ideias';
+  workspaceBack.href = startReturnTo === 'projects' ? '#projects' : '#explore';
+  workspaceBackLabel.textContent = startReturnTo === 'projects' ? 'Voltar aos projetos' : 'Voltar às ideias';
 }
 
-function chooseMode(mode, openFolder = false) {
+function chooseMode(mode, openFolder = false, returnTo = 'explore') {
   if (projectRoot.disabled || !['new', 'existing'].includes(mode)) return;
   if (resultPanel.hidden || openFolder) setup.open = true;
+  customFolderOption.open = openFolder;
   projectMode = mode;
+  startReturnTo = returnTo;
+  if (resultPanel.hidden) resetWorkspaceHeading();
   if (resultPanel.hidden) projectTitle.textContent = mode === 'new' ? 'Onde vamos criar?' : 'Qual projeto vamos abrir?';
   modeHelp.textContent = 'Você pode abrir uma pasta existente ou criar outra no seletor do Windows. O Forge prepara o projeto sem apagar seus arquivos.';
 }
@@ -95,19 +100,19 @@ for (const link of document.querySelectorAll('[data-project-mode]')) {
       event.stopImmediatePropagation();
       if (!await prepareProjectSwitch()) return;
       clearPreviousProjectForFolderChoice();
-      chooseMode('new', true);
+      chooseMode('new', true, link.dataset.returnTo);
       if (link.dataset.starter) chooseStarter(link);
       location.hash = '#workspace';
       return;
     }
     if (!link.hasAttribute('data-open-folder')) {
-      chooseMode(link.dataset.projectMode);
+      chooseMode(link.dataset.projectMode, false, link.dataset.returnTo);
       return;
     }
     event.preventDefault();
     if (await prepareProjectSwitch()) {
       clearPreviousProjectForFolderChoice();
-      chooseMode(link.dataset.projectMode, true);
+      chooseMode(link.dataset.projectMode, true, link.dataset.returnTo);
       location.hash = '#workspace';
     }
   }, { capture: true });
@@ -147,6 +152,7 @@ createDefaultProject.addEventListener('click', async () => {
   if (!resultPanel.hidden && !await prepareProjectSwitch()) return;
   const invoke = globalThis.__TAURI__?.core?.invoke;
   if (!invoke) {
+    cancelPendingFirstSend();
     defaultProjectStatus.textContent = 'Abra esta tela pelo aplicativo Forge para começar.';
     return;
   }
@@ -161,6 +167,7 @@ createDefaultProject.addEventListener('click', async () => {
     createdPath = await invoke('create_default_project', { idea: document.querySelector('#message-text').value.trim() });
     defaultProjectStatus.textContent = 'Pasta criada. Preparando o projeto no Forge…';
   } catch (error) {
+    cancelPendingFirstSend();
     defaultProjectStatus.textContent = typeof error === 'string' ? error : 'Não foi possível criar o projeto. Nada foi iniciado.';
   } finally {
     createDefaultProject.disabled = false;
@@ -169,7 +176,7 @@ createDefaultProject.addEventListener('click', async () => {
     start.disabled = false;
     inspect.disabled = false;
   }
-  if (!createdPath) return;
+  if (!createdPath) { cancelPendingFirstSend(); return; }
   createdDefaultPath = createdPath;
   projectRoot.value = createdPath;
   projectRoot.dispatchEvent(new Event('input', { bubbles: true }));
@@ -194,13 +201,15 @@ projectRoot.addEventListener('input', () => {
 });
 form.addEventListener('submit', async event => {
   event.preventDefault();
-  let openedProject = false;
+  let openedProject = null;
   const readOnlyShortcut = event.submitter?.id === 'inspect-project';
-  if (inspect.disabled || start.disabled) return;
+  if (inspect.disabled || start.disabled) { cancelPendingFirstSend(); return; }
   if (!projectRoot.value.trim()) {
+    cancelPendingFirstSend();
     projectRoot.setAttribute('aria-invalid', 'true');
     projectStatus.textContent = 'Escolha uma pasta para este projeto. Você pode usar “Escolher pasta…” ou informar o caminho acima.';
     setup.open = true;
+    customFolderOption.open = true;
     projectRoot.focus();
     return;
   }
@@ -241,9 +250,12 @@ form.addEventListener('submit', async event => {
     projectStatus.textContent = 'Projeto pronto. Escreva para começar ou continuar a conversa; nada foi enviado.';
     if (projectRoot.value.trim() === createdDefaultPath) defaultProjectStatus.textContent = 'Projeto criado e pronto.';
     clearStarterHandoff();
-    openedProject = true;
+    openedProject = project;
     if (!document.querySelector('#workspace').hidden) document.querySelector('#message-text').focus();
   } catch (error) {
+    cancelPendingFirstSend();
+    customFolderOption.open = true;
+    setup.open = true;
     projectStatus.textContent = typeof error === 'string' ? error : 'Não foi possível conferir o projeto. Tente novamente.';
     if (projectRoot.value.trim() === createdDefaultPath) defaultProjectStatus.textContent = 'A pasta foi criada, mas o projeto ainda não ficou pronto. Tente “Continuar nesta pasta” novamente.';
     showStarterHandoffError(projectStatus.textContent);
@@ -254,5 +266,8 @@ form.addEventListener('submit', async event => {
     browse.disabled = false;
     createDefaultProject.disabled = false;
   }
-  if (openedProject) void resumeSavedConversation();
+  if (openedProject) {
+    await resumeSavedConversation();
+    finishPendingFirstSend(openedProject);
+  }
 });

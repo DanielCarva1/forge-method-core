@@ -1,9 +1,8 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.62` is current source, locally
-installed and latest
-[published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.62-alpha.1).
-The exact installed candidate matched an anonymous download and sidecar.
+Independent Tauri application. Desktop `0.1.70` is current source and locally
+installed. The latest verified [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.64-alpha.1)
+is `0.1.64`; `0.1.70` has not been published for download.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -45,10 +44,11 @@ server, CDN or runtime download. Packaging uses the exact Tauri CLI and Codex
 CLI versions in `apps/desktop/package-lock.json`. Codex CLI is a native Windows
 x64 runtime resource, not a frontend dependency, and increases installer size.
 `npm ci` fetches it during the build; installed app startup does not download it.
-For the current Windows installer, `npm run build:nsis` also stages the pinned
-released `forge-core` executable after checking both archive and binary hashes.
-The release build uses `src-tauri/tauri.bundle.conf.json` to include it without
-requiring that download for ordinary `cargo check` or debug builds.
+For the current Windows installer, `npm run build:nsis` builds Forge Core 0.13.3
+from this checkout with the locked offline Cargo dependencies. It verifies the
+reviewed Start Forge guidance hash and stages the resulting executable. The
+release build includes both through `src-tauri/tauri.bundle.conf.json`; an
+ordinary desktop `cargo check` or debug build does not rebuild Core.
 This is not a commitment against using a frontend framework when warranted.
 
 To repeat the Windows NSIS build from the repository with the same Tauri CLI:
@@ -81,13 +81,13 @@ built and the published candidate must be the exact artifact later verified.
   whether empty or already containing work. The core creates the Forge Project
   Link and sibling sidecar when needed, but refuses to recreate damaged linked
   state or use a nonexistent folder. Failed lookups hide earlier results. The **Meus projetos**
-  screen keeps up to eight local shortcuts after successful confirmation, in
+  screen keeps up to 50 local shortcuts after successful confirmation, in
   `forge.projects.v1` localStorage. Each shortcut is checked again through
   `inspect_project` before use; the list is not project state or a discovery of
   every Forge project on the machine. Removing a shortcut changes only this list.
   If local storage fails, opening a project still works, but the shortcut may
   not survive restart.
-- The 0.1.12 Windows bundle prefers its pinned `forge-core 0.13.2` executable.
+- The 0.1.67 Windows bundle prefers its included `forge-core 0.13.3` executable.
   An absolute `FORGE_CORE_EXE` host override takes precedence for development;
   an older source build without the bundled file falls back to the executable
   under `%LOCALAPPDATA%/Programs/forge-core/bin/forge-core.exe`. The app does
@@ -10468,3 +10468,344 @@ installed a second time. Installed version 0.1.64 passed both focused native
 journeys, including real one-click default project creation. No broad suite,
 manual GH CI, or new real Codex reply ran. Continue with the remaining
 connected product UI rather than repeated chat polish.
+
+### Desktop direct creation and outcome-first record — source checkpoint, 2026-09-29
+
+The source now exposes **Começar com minha ideia** on Home and **Criar um
+projeto** in My Projects. The typed-idea and Explore actions create a default
+project through the existing native command instead of forcing folder selection;
+the draft remains unsent until a separate explicit Send. A custom/existing
+folder remains available in a collapsed optional control and opens when that
+route is explicitly chosen. The Back link returns to the originating screen.
+The existing Forge record now shows objective and next step before its optional
+general stage, using `inspect_progress` without changing the core or adding a
+registry.
+
+Focused mocked-browser `project-creation.cjs`, `composer-folder.cjs`, and
+`record-priority.cjs` passed. The incremental offline debug build succeeded;
+hidden-native `native-new-project.cjs` created a real Forge project from an
+Explore idea without Send, and `native-composer-folder.cjs` passed a real
+Windows folder choice on the optional route. Home, My Projects and the creation
+screen were visually inspected from headless screenshots. JavaScript syntax and
+`git diff --check` passed. The broad `browser.cjs` suite remains stale: its run
+passed initial navigation, then stopped at an assertion for the removed
+"Ver versões disponíveis" button; it is not a pass. No new real Codex Send,
+installed update, commit, push, or publication was done in this source slice.
+
+### Desktop 0.1.65 installed locally — 2026-09-29
+
+The direct-creation and outcome-first record package above is now version
+0.1.65. The one NSIS candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.65_x64-setup.exe`
+is 123,104,033 bytes, SHA-256
+`D188669E1780A0B1BB320134C65495B4F64F8010A7498EA243E00DA43EF31EE0`.
+It installed silently over 0.1.64 with exit code 0; candidate bytes were
+unchanged. `%LOCALAPPDATA%/Forge/forge-desktop.exe` reports ProductVersion
+0.1.65 and SHA-256
+`7B256753BB6911F1111B70D52CF2581EEE9E6CB2327F0B6C27B0A6D4EB7CE912`.
+
+Focused hidden-native installed readback passed: an Explore idea created a real
+project in Documents/Projetos Forge with Forge initialization, retained its
+unsent draft and made no Codex Send; the optional custom-folder route passed
+real Windows folder selection, project preparation and Home reopen. The first
+folder test read the input before the dialog result reached the WebView; the
+harness now waits for that value and the rerun passed. Test fixtures were
+isolated and removed. No new real Codex reply, broad browser-suite pass, clean
+machine install, commit, push, or public release is claimed. The installed
+app remains at 0.1.65; `RELEASE_NOTES-0.1.65.md` documents scope and limits.
+
+### Desktop 0.1.66 local Core integration — 2026-09-29
+
+Current working objective: finish a genuinely usable, friendly Forge Desktop,
+with the UI connected to the existing Core and real Codex. The parent owns
+integration; no agents are active. Preserve the uncommitted 0.1.65 UI package
+and these 0.1.66 packaging changes. Do not restart an already completed
+investigation or run the broad test suite after each small change.
+
+The prior installed 0.1.65 app still bundled Core 0.13.2, so the proportional,
+less-blocking Core 0.13.3 and Start Forge guidance from commit `205a5678c833`
+were not reaching app users. The NSIS entry point now builds Core 0.13.3 from
+this checkout with locked offline Cargo dependencies, verifies the source
+guidance SHA-256 `B017B167DFD03E3E5933DD9AAD6B667E1451EE39FEE5CB8B97D178D6B90C3064`,
+and stages the local executable. The bundle points at that source skill; the
+unused vendored 0.13.2 guidance/provenance files were removed. This avoids a
+silent switch to a machine-installed Core but is not a bit-for-bit reproducible
+build claim. The Core release build completed in 9m55s and produced SHA-256
+`C320BF99D4A0457AF9955670B6A8770CD66B2E5BE6153CCD626E1D433BBF805D`.
+The first NSIS invocation stopped before building because its Windows
+PowerShell lacked `Get-FileHash`; the script now uses the existing .NET hash
+method and the next invocation passed.
+
+Exactly one successful 0.1.66 NSIS candidate is at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.66_x64-setup.exe`:
+123,073,797 bytes, SHA-256
+`95934143C2FAD5251749937FB8E79ADB1342B39B76C5D7B5FDF08187FBF04FD5`.
+It installed silently over 0.1.65 with exit 0, unchanged candidate hash,
+ProductVersion 0.1.66 and installed app SHA-256
+`D3AAFEF553E893243928F5910F3E79D36FC477BB19982CF40561D761122DC4B7`.
+Installed Core reports `forge-core 0.13.3`, matching the staged binary hash;
+the installed skill matches the source hash above. Focused hidden-native tests
+passed: `native-new-project.cjs` created and removed a real Documents/Projetos
+Forge project without Send; `native-saved-reopen.cjs` got one real Codex reply,
+restarted the app and reopened the same conversation without replay. The latter
+tests connectivity/history, not a substantive project task. Browser-mock UI
+tests from the 0.1.65 source slice passed as recorded above. No manual visual
+review of the installed 0.1.66 app, clean-machine install, full suite, commit,
+push or public release is claimed.
+
+Next product step: test one small real creation task in the installed 0.1.66
+app to assess whether the lighter Core guidance lets the agent produce a useful
+result without getting stuck; then fix a concrete UI or integration failure
+found there. Do not claim product completeness from the packaging smoke alone.
+
+### First real creation task and fast-path correction — 2026-09-29
+
+On installed 0.1.66, a fresh project under `C:/ForgeFast` received one real
+Codex Send to create a small static `site/index.html`; the file and response
+passed the focused `native-guided-first-result.cjs` check. Elapsed time from
+Send to response was 370 seconds. The matching Codex rollout
+`01a0ec8b-9e0f-7031-a0a2-b05019dc9ac8` had 29 tool calls. Its chronology
+shows objective acceptance, phase completion, Work Focus creation and closure,
+and cooperative evidence admission around a single local HTML edit. This is
+direct evidence of avoidable protocol work, not proof that all 370 seconds were
+caused by Forge; model/runtime latency is not isolated. The disposable project
+under `C:/ForgeFast` was removed by the passing harness.
+The installed app-server selected `gpt-6-sol` at `max` effort (not Astra or a
+delegated worker). The final cumulative `token_usage_record` for that one
+fresh turn reports 1,993,489 input tokens, of which 1,905,536 were cached,
+and 13,713 output tokens, of which 5,322 were reasoning output. The non-cached
+input remainder is 87,953. These are one turn's cumulative counters, not a
+sum of the 30 snapshots; cached input and reasoning output are subsets, not
+extra charges to add twice. No BRL cost is claimed without current tariffs and
+exchange rate, and Pro allowance consumption cannot be attributed from this
+rollout alone. This high repeated-input count strengthens the case for cutting
+unnecessary model/tool round trips.
+
+The first attempt of that harness failed before Send because the installed
+release intentionally ignored the development-only default-project root
+override and created a project in Documents instead. The harness now chooses
+an existing test folder inside `C:/ForgeFast`; the initial unmessaged Documents
+fixture and two temporary test directories need cleanup by a permitted path.
+No user project or message was touched by that failed attempt.
+
+The canonical Start Forge skill now states a fast path for small reversible
+local work: do the work and focused check without Work Focus, phase closeout,
+or evidence admission merely for ceremony. Desktop's agent instructions now
+direct the agent to the applicable guidance instead of reading all unrelated
+sections. The global installed Start Forge skill was updated to the same source
+SHA-256 `C4EA074BADC24B420170ABAFC894807432A57F553D453865B4CC448E62579E49`.
+Focused `forge-core-contracts` Start Forge contract tests passed (16/16),
+desktop `cargo check` passed, focused agent instruction test passed, and full
+desktop crate tests passed (53, 1 ignored). These checks establish contract
+and compilation, not the behavior of the next packaged app. The following
+checkpoint records the 0.1.67 installation and comparable native test.
+
+### Desktop 0.1.67 fast path installed and measured — 2026-09-29
+
+One successful NSIS candidate at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.67_x64-setup.exe`
+is 123,037,300 bytes, SHA-256
+`D7EA0128642CBABB5E9136C849971C8CD1AC4DB390721FF62C22764098FF6C30`.
+It installed silently over 0.1.66 with exit 0 and unchanged candidate bytes.
+The installed executable reports ProductVersion 0.1.67 and SHA-256
+`ED87324FD98D28244A333B7DAF183B6DF807ECE3F44ED6595DF8D110D20370C9`.
+Bundled Core remains 0.13.3 with executable SHA-256
+`C320BF99D4A0457AF9955670B6A8770CD66B2E5BE6153CCD626E1D433BBF805D`;
+the bundled and global Start Forge skills have SHA-256
+`C4EA074BADC24B420170ABAFC894807432A57F553D453865B4CC448E62579E49`.
+
+The same controlled native first-result request passed on the installed 0.1.67
+app: a real Codex agent created and checked `site/index.html`, then returned a
+response in 262 seconds from Send. Its rollout
+`01a0ec9b-0110-7043-8f11-e804e9dba44c` recorded 17 tool calls and final
+cumulative usage of 849,962 input tokens (784,512 cached; 65,450 non-cached)
+and 11,066 output tokens (6,441 reasoning subset). No Work Focus, phase
+closeout or cooperative evidence admission was invoked in this run. Compared
+with the one 0.1.66 run on the same prompt, calls were 29→17, elapsed time
+370→262 seconds, and input tokens 1,993,489→849,962. This is evidence that
+the new guidance changed agent behavior in this controlled example, **not** a
+causal savings guarantee across projects: model/runtime variance, output
+differences and caching were not controlled. Both runs used the app's selected
+`gpt-6-sol` model at `max` effort; no worker was dispatched. No tariff/FX-based
+BRL figure or Pro quota attribution is claimed. The 0.1.67 test project and
+profile under `C:/ForgeFast` were removed by the passing harness.
+
+Current limitation: even the improved 262-second turnaround is slow for a
+small static page. The new rollout still read several guidance sections and
+accepted the initial objective, then did the local work; it no longer performed
+the extra workflow closeouts. Do not spend repeated builds on tiny wording
+changes. The next meaningful product slice should improve how the app shows
+long-running agent progress and verify a created file can be discovered,
+previewed and changed from the UI. The 0.1.67 candidate is local only; no
+commit, push or public download is claimed.
+
+### Desktop 0.1.68 activity and result loop — 2026-09-29
+
+Current source and installed Desktop are 0.1.68. Native Codex `item/started`
+events are now projected into four bounded activity states: checking,
+editing, replying, or generic working. The UI describes these states in plain
+Portuguese; it never forwards arbitrary protocol command/text. No percentage
+or completion claim is inferred from an item start. A focused Rust test
+checks the whitelist, and the Desktop crate suite passed 53 tests with one
+platform-specific test ignored. `git diff --check` passed. The broad
+`browser.cjs` suite remains stale: it stopped near its start waiting for the
+old label “Ver versões disponíveis,” now “Encontrar atualização do Forge
+Desktop.” It did not exercise this new status behavior. Do not count this as
+a passed browser suite or keep rerunning it unchanged.
+
+The first package attempt stopped before NSIS because `prepare-core.ps1`
+assumed Cargo used the repository's `target` folder. It now asks Cargo for
+`target_directory`; the following package run succeeded. One successful
+NSIS candidate is at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.68_x64-setup.exe`:
+123,064,653 bytes, SHA-256
+`3AAF021F274FBFF523952496839ACC8E2EADA5F3A8B85361568CFEF5AF4964A8`.
+It installed silently over 0.1.67, exit 0; the candidate hash was unchanged.
+The installed product version is 0.1.68 and installed executable SHA-256 is
+`4AE349622580E2A36C13ADC91BAE6A78F4495818A2CE48A205086828961EBC40`.
+Bundled Core 0.13.3 hash remains
+`C320BF99D4A0457AF9955670B6A8770CD66B2E5BE6153CCD626E1D433BBF805D`;
+bundled Start Forge skill hash remains
+`C4EA074BADC24B420170ABAFC894807432A57F553D453865B4CC448E62579E49`.
+
+The installed-app `native-guided-first-result.cjs` test passed with a real
+`gpt-6-sol` Codex turn at max effort. It sent once into a disposable project,
+observed at least one curated activity status, got a real `site/index.html`
+and answer in 186 seconds, opened the file in the protected native preview,
+and prepared an unsent request to change that file. The project/profile were
+removed by the passing harness. The matching rollout
+`01a0ecaa-e58d-7991-9487-ef563e04a01a` records 13 tool calls and final
+cumulative usage of 630,909 input tokens (571,520 cached; 59,389 non-cached)
+and 7,536 output tokens (3,514 reasoning subset). These are not BRL costs or
+Pro quota attribution. Compared with the earlier 370s/262s samples, this is
+another successful example with fewer calls, not a controlled causal
+benchmark. The original failed-before-Send Documents fixture and two Temp
+test directories from the 0.1.66 attempt still need cleanup by a permitted
+path; earlier direct recursive removal was policy-rejected. No user project
+was touched by that failed attempt.
+
+No commit, push, public release, clean-machine install, manual visual review,
+or full browser suite is claimed. The current candidate is local only. Next
+product step: use native screenshots against the approved visual references to
+choose a concrete UI improvement, then validate it with a focused browser or
+native check. Avoid another real Codex Send merely to repeat this passing
+journey. The selected file preview/change path is now natively proven once.
+
+### Desktop 0.1.69 navigation visibly fixed — 2026-09-29
+
+Reviewing the four native 0.1.68 screenshots against the approved design
+references exposed a concrete navigation bug: choosing Home focused its
+heading with scrolling enabled, moving the top navigation off screen. Route
+focus now remains accessible without scrolling the header away; normal route
+navigation starts at the top. A focused native screenshot harness captured
+Home, Explore, Projects and Workspace from the development build and asserted
+zero scroll offset on every route. The same harness passed on the installed
+0.1.69 executable, without starting a project, sending a message or altering
+user files. Screenshots are at `C:/ForgeFast/forge-069-visual/`; the Home image
+shows the navigation and hero together. This is visual first-use proof, not a
+claim that every loaded-project state matches the reference art.
+
+One successful candidate was generated at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.69_x64-setup.exe`:
+123,077,764 bytes, SHA-256
+`B60BD64E0EBA6CCCECA42230B207BCC7E177FD905AE7217C45FE875F5B1055ED`.
+NSIS installed it silently over 0.1.68 (exit 0), and its candidate hash was
+unchanged. Installed ProductVersion is 0.1.69; installed executable SHA-256 is
+`1E6BC004879DE93C57C3AC255658B6011AE0B9072408BE0B58FDB57E01DEF9CE`.
+Bundled Core and Start Forge skill hashes still match those in the 0.1.68
+checkpoint. No second real Codex Send was done for this navigation-only
+package. Release notes are in `RELEASE_NOTES-0.1.69.md`. No commit, push or
+public release is claimed. The latest public desktop remains 0.1.64.
+
+Next work should address a high-return first-use friction rather than repeat
+this release check: before a project exists, the composer button labeled
+“Começar meu projeto” currently prepares a project but deliberately leaves
+the idea unsent, requiring a second Enviar. Decide and implement a clear,
+safe one-click Send path or make the two-step intent unmistakable, with an
+exactly-once regression around project creation and existing conversation
+recovery. Avoid calling the full UI complete until this and loaded-project
+visual use have been checked. Pending changes remain in the working tree;
+preserve them, and do not silently publish or commit.
+
+### Desktop 0.1.70 single-click first Send — 2026-09-29
+
+Current source and installed Desktop are 0.1.70. The first composer Send now
+owns its intent across project preparation: the button says “Enviar e criar
+projeto” or “Enviar e abrir projeto”; once the chosen/default project is ready,
+the same draft is sent exactly once. Project-card preparation buttons remain
+non-sending. The pending intent is in memory only, canceled on setup failure
+or route change, and dropped if the draft changes, project identity changes,
+or an existing conversation cannot be resumed. The send path retains its
+durable unconfirmed-send guard. A Chromium reentrant-submit behavior required
+the second form submission to run on the next event-loop task; the focused
+browser test was red before that scheduling correction and now passes.
+
+Focused `project-creation.cjs` and `composer-folder.cjs` browser-double
+checks passed, as did JS syntax checks and `git diff --check`. The broader
+browser suite still has the unrelated stale update-button label and was not
+rerun. The prior Desktop Rust crate suite remains 53 passed/1 ignored;
+no Rust source changed in 0.1.70 apart from version metadata. No workspace
+suite or GitHub CI was run for this UI slice.
+
+Exactly one successful 0.1.70 NSIS candidate is at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.70_x64-setup.exe`:
+123,156,681 bytes, SHA-256
+`867BC20472F1F3D8D8035461CE462AFD198D331A85FAB056016D468649B8A33B`.
+It installed silently over 0.1.69 with exit 0 and unchanged candidate bytes.
+Installed ProductVersion is 0.1.70, exe SHA-256
+`1C3F52AE8FD43747EB72AF05ED25C6B9CE9F047A783EDA48DE85628692DD8F2B`.
+Bundled Core and Start Forge skill retain the 0.1.69 hashes above.
+
+The installed `native-guided-first-result.cjs` passed the revised one-click
+journey with an explicitly chosen disposable folder under `C:/ForgeFast`:
+one click created/opened the project, sent one real Codex turn, generated
+`site/index.html`, surfaced curated activity, opened the protected preview,
+and prepared an unsent change request. The response took 253 seconds.
+The passing harness removed its project/profile. The matching rollout
+`01a0ecc4-959f-70b1-9599-49bd8b69ff34` used `gpt-6-sol` at max effort,
+16 tool calls, and final cumulative usage of 715,278 input tokens (653,184
+cached; 62,094 non-cached) and 10,634 output tokens (5,924 reasoning subset).
+No BRL or Pro quota attribution is claimed. The default-folder one-click
+path has browser-double proof, while native default folder creation and
+native custom-folder one-click Send have separately passed; do not call a
+single real default-folder Send tested. The local candidate is not public.
+No commit, push or release is claimed.
+
+Next high-return slice: inspect a *loaded* project's native UI and preview
+against the approved conversation reference, then fix one concrete visual or
+journey problem. Do not burn another real Codex turn just to restate the
+passing one-click result. Long-run cost/productivity conclusions still need
+multiple real projects and a sourced tariff/FX basis.
+
+The follow-on native visual audit used a disposable local HTML file in a
+temporary `C:/ForgeFast` project, initialized through the installed 0.1.70
+UI without Send. It captured the loaded Conversation+Preview screen at
+`C:/ForgeFast/forge-070-loaded-visual/loaded-project.png` after the real
+protected iframe rendered the file. The fixture was removed. The two-column
+loaded layout remained readable and the change action was visible in the
+viewport; this is a manually inspected concrete state, not a full aesthetic
+sign-off. A focused browser-double regression also passed for changing the
+draft during project preparation: project creation may finish, but the stale
+pending message is not sent. No product source changed after the 0.1.70
+installation; only that focused test and visual-capture harness were extended.
+
+### Desktop 0.1.71 record visibility and composer clarity — 2026-09-29
+
+The 0.1.70 loaded-project visual audit showed that the Codex capability notice
+was visually louder than the writing surface. Its true warning remains visible
+and expandable, but now uses a quieter presentation and plain wording. A real
+record state with an accepted direction but no work focus was being assigned a
+label and then hidden; it is now shown without inventing a next step. Focused
+browser-double tests `empty-conversation.cjs` and `record-priority.cjs` pass.
+No Rust behavior changed and no new real Codex turn was run for this UI-only
+slice. Exactly one successful NSIS candidate was built at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.71_x64-setup.exe`:
+123,071,908 bytes, SHA-256
+`EFBACCDA7F4B794762B11891B5DF4E18205609FFD364CF4EC13CC2F3699C4185`.
+It installed silently over 0.1.70 (exit 0); the candidate hash was unchanged.
+Installed ProductVersion is 0.1.71, installed exe SHA-256
+`E786AB23E6CB6EBFC4D0FAB4C8608A0C9BBDB9473921D427462548B8433F61B2`.
+The native installed-app visual harness captured the four first-use screens
+and a disposable loaded project/preview without Send at
+`C:/ForgeFast/forge-071-loaded-visual/`. The public release remains 0.1.64;
+no commit or push is claimed.

@@ -158,6 +158,7 @@ export function setProgressProject(value) {
   workspacePhase.textContent = '';
   resetHistory();
   document.querySelector('.record-more').open = false;
+  document.querySelector('.record-stage').open = false;
   document.getElementById('record-activity-details').open = false;
   recordPanel.hidden = !value;
   result.hidden = true;
@@ -175,6 +176,7 @@ export function invalidateProgress() {
   workspacePhase.textContent = '';
   resetHistory();
   document.getElementById('record-activity-details').open = false;
+  document.querySelector('.record-stage').open = false;
   if (!result.hidden || pending) {
     result.hidden = true;
     status.textContent = 'A conversa pode ter mudado o trabalho. Atualize o andamento para conferir.';
@@ -196,6 +198,7 @@ async function loadProgress() {
   workspacePhase.textContent = '';
   resetHistory();
   document.getElementById('record-activity-details').open = false;
+  document.querySelector('.record-stage').open = false;
   const hadFocus = document.activeElement === button;
   pending = true; controls(); result.hidden = true;
   questionsShortcut.hidden = true;
@@ -232,7 +235,7 @@ async function loadProgress() {
     const recordState = document.getElementById('record-state');
     recordState.textContent = data.status === 'absent' && direction
       ? 'Direção registrada; próximo trabalho pendente' : stateLabels[data.status];
-    recordState.hidden = data.status === 'absent';
+    recordState.hidden = data.status === 'absent' && !direction;
     result.dataset.state = data.status;
     document.querySelector('.record-stage').hidden = data.status === 'absent';
     const emptyHelp = document.getElementById('record-empty-help');
@@ -245,9 +248,8 @@ async function loadProgress() {
     document.getElementById('record-phase-help').textContent = phase[1];
     document.getElementById('record-activity-label').textContent = data.status === 'completed'
       ? 'Resultado registrado' : data.status === 'abandoned' ? 'Último registro' : 'Agora';
-    workspacePhase.textContent = data.status === 'absent'
-      ? direction ? 'Direção registrada; próximo trabalho pendente' : stateLabels.absent
-      : data.status === 'stale' ? `Etapa do projeto (desatualizada): ${phase[0]}` : `Etapa do projeto: ${phase[0]}`;
+    workspacePhase.textContent = data.status === 'absent' && direction
+      ? 'Direção registrada; próximo trabalho pendente' : stateLabels[data.status];
     workspacePhase.hidden = false;
     const directionPanel = document.getElementById('record-direction');
     const directionCard = document.getElementById('record-direction-card');

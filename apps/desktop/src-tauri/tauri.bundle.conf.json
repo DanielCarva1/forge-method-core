@@ -2,7 +2,7 @@
   "bundle": {
     "resources": {
       "bundled-core/forge-core.exe": "forge-core/forge-core.exe",
-      "../third-party/start-forge-0.13.2/SKILL.md": "forge-core/start-forge/SKILL.md",
+      "../../../skill/start-forge/SKILL.md": "forge-core/start-forge/SKILL.md",
       "../../../LICENSE": "forge-core/LICENSE"
     }
   }

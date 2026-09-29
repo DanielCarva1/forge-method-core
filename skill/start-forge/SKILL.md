@@ -11,6 +11,16 @@ Forge is a companion to the agent's work, not a per-task permission ritual.
 The agent owns the implementation strategy and may continue safe, reversible
 work across related Stories without reactivating Forge.
 
+For a small, clear, reversible local request, use the fast path: orient from
+the one activation handoff, do the work, run a focused check, and explain the
+result. A phase change, Work Focus, Quick Cycle, cooperative evidence admission,
+or another workflow resume is **not** a prerequisite for editing a local file.
+Use those records only when they preserve meaningful multi-turn continuity,
+support a concrete governed effect, or change what the agent should do next.
+Do not turn a one-turn deliverable into several protocol closeouts. Preserve
+existing accepted work and never bypass a real integrity, state-loss, external,
+irreversible, or material-decision boundary.
+
 ## Core rules
 
 - The current product target is `solo_cooperative` dogfooding by one developer
@@ -130,6 +140,11 @@ are navigation aids, not mandatory stopping points.
 For a new or materially changed Work Focus, use the outcome the human has
 already accepted in chat; do not ask them to approve the same meaning again.
 Updating or closing already accepted work does not require another approval.
+Work Focus is optional for a bounded one-turn local result: the accepted
+objective and actual files already provide enough context. Do not create a
+Focus merely to record that a small request began, and do not create one so
+that it can immediately be closed. Use it for work that genuinely spans turns,
+agents, or multiple related deliverables where a durable next step helps.
 Run `forge-core workflow current-work prepare --root <path> --json` only when
 the durable focus actually needs to be created or changed.
 This is an on-demand helper, not a pre-flight step: never run it for every
@@ -230,6 +245,11 @@ same turn. Do not treat an abstract capability label as the task itself. Exhaust
 concrete Solo Cooperative packets and reversible local work before escalating to
 the human. The selected project step must not be replaced by an unrelated
 validation command merely because that command is easy to run.
+For ordinary reversible implementation, the project step may be the file edit
+and its focused check, even when Forge also offers a phase-completion or
+evidence packet. Do not execute those packets merely to make a small local
+deliverable appear finished in the workflow; use them when a real governed
+advancement, claim, or consequence depends on their receipt.
 
 For greenfield, say plainly that no established project was found, summarize
 any seed material that does exist, and then ask what outcome the human wants to
@@ -760,7 +780,8 @@ Common conventions include `~/.pi/agent/skills/` (Pi),
 Activate this behavior once when `/start-forge` begins the chat; do not ask the
 user to restart Forge for each task.
 
-After an objective is accepted, always inspect the fresh v4
+When a governed advancement or evidence claim needs the current assessment,
+inspect the fresh v4
 `data.actions.cooperative_evidence_packet`. The packet's `route.target` decides
 what the agent must assess; a missing `target` is legacy `source_claim`:
 

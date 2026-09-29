@@ -434,6 +434,13 @@ fn project_event(value: Value, activity: &Mutex<Activity>) -> Option<AgentEvent>
         }
         "item/started" => {
             event.kind = "activity".into();
+            event.text = match p["item"]["type"].as_str() {
+                Some("commandExecution") => "checking",
+                Some("fileChange") => "editing",
+                Some("agentMessage") => "replying",
+                _ => "working",
+            }
+            .into();
         }
         _ => return None,
     }
@@ -542,7 +549,7 @@ fn developer_instructions(
         .filter(|path| path.is_file());
     let start = if let Some(path) = skill {
         format!(
-            "Read and apply the complete Start Forge guidance at `{}` once at the beginning of this conversation. Follow its structured handoff. Do not use a separately installed Start Forge skill instead.",
+            "Read the opening guidance and Guided activation contract at `{}` once at the beginning of this conversation; then read only the workflow sections relevant to this project and the current effect. Follow the structured handoff. The native Forge executable is already resolved below, so do not perform unrelated binary or WSL discovery. A small reversible local result does not require Work Focus, phase closeout, or evidence admission merely to proceed. Do not use a separately installed Start Forge skill instead.",
             path.display()
         )
     } else {
@@ -843,6 +850,7 @@ mod tests {
         assert!(instructions.contains(&runtime.display().to_string()));
         assert!(instructions.contains("Do not select another copy from PATH"));
         assert!(instructions.contains("Do not use a separately installed Start Forge skill"));
+        assert!(instructions.contains("does not require Work Focus, phase closeout, or evidence admission"));
         assert!(instructions
             .contains("write the file, invoke Forge, and clean up in separate tool calls"));
         assert!(!instructions.contains("Use the installed start-forge skill"));
@@ -970,6 +978,20 @@ mod tests {
         assert_eq!(event.kind, "disconnected");
         assert!(event.text.is_empty());
         assert!(activity.lock().unwrap().disconnected);
+        for (item_type, expected) in [
+            ("commandExecution", "checking"),
+            ("fileChange", "editing"),
+            ("agentMessage", "replying"),
+            ("unexpected", "working"),
+        ] {
+            let event = project_event(
+                json!({"method":"item/started","params":{"item":{"type":item_type,"command":"private","text":"private"}}}),
+                &activity,
+            ).unwrap();
+            assert_eq!(event.kind, "activity");
+            assert_eq!(event.text, expected);
+            assert!(!event.text.contains("private"));
+        }
     }
 
     #[test]

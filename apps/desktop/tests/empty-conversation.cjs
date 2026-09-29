@@ -51,6 +51,7 @@ const server = createServer(async (request, response) => {
     await page.goto(url);
     const open = async () => {
       await page.reload();
+      await page.locator('#custom-folder-option summary').click();
       await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\empty-project');
       await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
       await page.waitForFunction(() => document.getElementById('project-status').textContent.includes('Projeto pronto'));
@@ -59,7 +60,7 @@ const server = createServer(async (request, response) => {
     await open();
     const capability = page.locator('#agent-access-note');
     assert.equal(await capability.locator('summary').isVisible(), true, 'The agent capability warning stays visible');
-    assert.match(await capability.locator('summary').textContent(), /alterar outros arquivos sem pedir confirmação/);
+    assert.match(await capability.locator('summary').textContent(), /alterar arquivos fora deste projeto sem perguntar/);
     assert.equal(await capability.locator('p').isHidden(), true, 'The full explanation need not crowd the composer');
     await capability.locator('summary').click();
     assert.match(await capability.locator('p').textContent(), /fora da pasta escolhida sem pedir confirmação/);

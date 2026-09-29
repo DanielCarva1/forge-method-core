@@ -84,6 +84,7 @@ const unconfirmedSends = new Map(); // Project key -> Codex thread ID; no messag
 const projectDrafts = new Map(); // Immediate in-session copy; persisted drafts stay local to this device.
 let draftOrigin = null; // Survives a same-folder validation attempt that temporarily clears `project`.
 let draftStorageFailed = false;
+let pendingFirstSend = null; // One explicit Send while the first project is prepared; never persisted or retried.
 const projectKey = value => JSON.stringify([value.project_id, value.project_root]);
 const draftKey = value => `forge.draft.v1:${projectKey(value)}`;
 const referenceKey = () => JSON.stringify([project.project_id, project.project_root]);
@@ -133,7 +134,7 @@ function offerLogin(error) {
 
 function updateComposerHelp() {
   const help = !project
-    ? 'Sua ideia fica aqui nesta sessão. Nada é enviado antes de o projeto estar pronto.'
+    ? 'Ao enviar, o Forge prepara o projeto e só então envia sua ideia. Você também pode preparar o projeto primeiro.'
     : unconfirmedSends.has(referenceKey())
       ? connected
         ? 'O último envio não foi confirmado. Confira as mensagens e escolha “Já conferi o envio” antes de enviar outra.'
@@ -164,7 +165,7 @@ function updateResumeAction() {
 
 function updateSendControl() {
   byId('send-label').textContent = project ? 'Enviar'
-    : byId('project-root').value.trim() ? 'Preparar projeto' : 'Escolher pasta para continuar';
+    : byId('project-root').value.trim() ? 'Enviar e abrir projeto' : 'Enviar e criar projeto';
   send.disabled = transitioning || loginPending || !loginPanel.hidden || busy || broken ||
     !input.value.trim() || (connected && unconfirmedSends.has(referenceKey()));
 }
@@ -621,7 +622,12 @@ function receive(event) {
     return;
   }
   const labels = {
-    running: 'O Codex está trabalhando…', activity: 'O Codex está trabalhando…',
+    running: 'O Codex começou. Você pode preparar a próxima mensagem enquanto ele trabalha.',
+    activity: ({
+      checking: 'O Codex está conferindo o projeto…',
+      editing: 'O Codex está alterando arquivos…',
+      replying: 'O Codex está preparando a resposta…',
+    })[event.text] || 'O Codex está trabalhando…',
     completed: 'Resposta recebida. Confira o resultado e as mudanças feitas.',
     interrupted: 'Interrompido. O que já foi feito não foi desfeito.',
     failed: 'A execução falhou. Confira o que já foi feito antes de tentar novamente.',
@@ -727,6 +733,28 @@ export function resumeSavedConversation() {
   if (!project || !hasResumableConversation || unconfirmedSends.has(referenceKey()) || connected || transitioning) return Promise.resolve(false);
   return connectCurrent();
 }
+
+export function cancelPendingFirstSend() { pendingFirstSend = null; }
+
+export function finishPendingFirstSend(openedProject) {
+  const pending = pendingFirstSend;
+  pendingFirstSend = null;
+  if (!pending || !project || projectKey(project) !== projectKey(openedProject)
+    || byId('workspace').hidden || input.value !== pending.text
+    || (pending.path && pending.path.toLowerCase() !== project.project_root.toLowerCase())
+    || (hasResumableConversation && !connected)) return false;
+  // A second submit during the original form's submit dispatch is ignored by
+  // Chromium. Resume on the next task, and recheck that the draft still owns it.
+  setTimeout(() => {
+    if (project && projectKey(project) === projectKey(openedProject)
+      && !byId('workspace').hidden && input.value === pending.text) byId('message-form').requestSubmit();
+  }, 0);
+  return true;
+}
+
+addEventListener('hashchange', () => {
+  if (location.hash !== '#workspace') cancelPendingFirstSend();
+});
 
 connect.addEventListener('click', () => connectCurrent());
 async function finishLogin() {
@@ -835,12 +863,13 @@ byId('message-form').addEventListener('submit', async event => {
   event.preventDefault();
   if (!input.value.trim() || busy || transitioning || broken) return;
   if (!project) {
+    pendingFirstSend = { text: input.value, path: byId('project-root').value.trim() };
     const setup = byId('project-setup');
     setup.open = true;
     setup.scrollIntoView({ block: 'start' });
     if (byId('project-root').value.trim()) {
-      byId('project-form').requestSubmit(byId('start-project')); // Prepare the chosen folder; keep the draft unsent.
-    } else byId('browse-project').click(); // Folder choice alone never starts a project.
+      byId('project-form').requestSubmit(byId('start-project'));
+    } else byId('create-default-project').click();
     return;
   }
   if (unconfirmedSends.has(referenceKey())) {

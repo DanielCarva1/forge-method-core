@@ -1,4 +1,4 @@
-// Focused browser check: a draft advances from folder choice to project preparation without a Send.
+// Focused browser check: a draft starts a default project or uses an optional folder without an automatic Send.
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const { createServer } = require('node:http');
 const { readFile } = require('node:fs/promises');
@@ -27,12 +27,14 @@ const server = createServer(async (request, response) => {
     const page = await browser.newPage();
     await page.addInitScript(() => {
       window.folderChoices = 0;
+      window.defaultProjects = 0;
       window.projectStarts = 0;
       window.sends = 0;
       window.failStart = true;
       window.__TAURI__ = { core: { Channel: class {}, invoke: async (command, args) => {
         if (command === 'app_info') return { name: 'Forge', version: '0.1.54' };
         if (command === 'choose_project_folder') { window.folderChoices++; return 'D:\\new-project'; }
+        if (command === 'create_default_project') { window.defaultProjects++; return 'D:\\new-project'; }
         if (command === 'start_project') {
           window.projectStarts++;
           if (window.failStart) throw 'Não foi possível preparar esta pasta.';
@@ -69,7 +71,9 @@ const server = createServer(async (request, response) => {
     if (process.env.FORGE_UI_SCREENSHOT_DESKTOP) await page.screenshot({ path: process.env.FORGE_UI_SCREENSHOT_DESKTOP, fullPage: true });
     await page.setViewportSize({ width: 360, height: 700 });
     await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).fill('Quero fazer um jardim de ideias.');
-    await page.getByRole('button', { name: 'Escolher pasta para continuar' }).click();
+    assert.equal(await page.locator('#send-label').textContent(), 'Enviar e criar projeto');
+    await page.locator('#custom-folder-option summary').click();
+    await page.locator('#browse-project').click();
     assert.deepEqual(await page.evaluate(() => [window.folderChoices, window.projectStarts, window.sends]), [1, 0, 0]);
     assert.equal(await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).inputValue(), 'Quero fazer um jardim de ideias.');
     assert.deepEqual(await page.evaluate(() => [...document.querySelector('.workspace').children].slice(0, 2).map(node => node.id)),
@@ -81,30 +85,29 @@ const server = createServer(async (request, response) => {
     await page.getByRole('link', { name: /Arte e criação/ }).click();
     assert.match(await page.locator('#idea-selection-status').innerText(), /Arte e criação.*Nada foi enviado/);
     assert.equal(await page.evaluate(() => document.body.scrollWidth), 360);
-    assert.equal(await page.locator('#idea-choose-folder').isVisible(), true);
+    await page.locator('#idea-choose-folder').waitFor({ state: 'visible' });
     const draft = page.locator('#message-text');
     const idea = await draft.inputValue();
     assert.match(idea, /artístico/);
-    await page.getByRole('button', { name: 'Escolher pasta para esta ideia' }).click();
-    assert.equal(await page.locator('#project-root').inputValue(), 'D:\\new-project');
-    assert.deepEqual(await page.evaluate(() => [window.folderChoices, window.projectStarts, window.sends]), [1, 0, 0]);
-    assert.equal(await draft.inputValue(), idea);
-    await page.getByRole('button', { name: 'Preparar projeto nesta pasta' }).click();
+    await page.getByRole('button', { name: 'Começar projeto com esta ideia' }).click();
     await page.locator('#project-status').filter({ hasText: 'Não foi possível preparar esta pasta' }).waitFor();
+    assert.equal(await page.locator('#project-root').inputValue(), 'D:\\new-project');
+    assert.deepEqual(await page.evaluate(() => [window.folderChoices, window.defaultProjects, window.projectStarts, window.sends]), [0, 1, 1, 0]);
+    assert.equal(await draft.inputValue(), idea);
     assert.deepEqual(await page.evaluate(() => [...document.querySelector('.workspace').children].slice(0, 2).map(node => node.id)),
       ['project-conversation', 'project-panel'], 'A failed preparation must keep the idea-first order');
     assert.match(await page.locator('#idea-selection-status').innerText(), /Não foi possível preparar esta pasta.*não foi enviada/);
-    assert.deepEqual(await page.evaluate(() => [window.folderChoices, window.projectStarts, window.sends]), [1, 1, 0]);
+    assert.deepEqual(await page.evaluate(() => [window.folderChoices, window.defaultProjects, window.projectStarts, window.sends]), [0, 1, 1, 0]);
     assert.equal(await draft.inputValue(), idea);
     await page.evaluate(() => { window.failStart = false; });
     await page.getByRole('button', { name: 'Preparar projeto nesta pasta' }).click();
     await page.waitForFunction(() => !document.querySelector('#project-result').hidden);
-    assert.deepEqual(await page.evaluate(() => [window.folderChoices, window.projectStarts, window.sends]), [1, 2, 0]);
+    assert.deepEqual(await page.evaluate(() => [window.folderChoices, window.defaultProjects, window.projectStarts, window.sends]), [0, 1, 2, 0]);
     assert.equal(await draft.inputValue(), idea);
     await page.locator('#idea-choose-folder').waitFor({ state: 'hidden' });
     await page.getByRole('button', { name: 'Enviar', exact: true }).click();
     await page.waitForFunction(() => window.sends === 1);
-    console.log('PASS: narrow first idea appears before folder setup; folder choice preserves unsent draft; Explore preparation retry and explicit Send work.');
+    console.log('PASS: narrow idea-first layout, optional folder, default Explore project, retry, and explicit Send.');
   } finally {
     await browser?.close();
     await new Promise(resolve => server.close(resolve));

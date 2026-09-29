@@ -386,7 +386,7 @@ async function operatePreviewDialog(page, file) {
         assert.equal(await page.locator('#record-work').isVisible(), false);
         assert.equal(await page.locator('#record-direction').isVisible(), false);
       } else {
-        assert.match(recordedPhase, /Etapa do projeto:/);
+        assert.match(recordedPhase, /^(Em andamento|Há uma pendência|Acompanhamento desatualizado|Esta parte foi concluída|Encerrado sem concluir)$/);
         assert.ok((await page.locator('#record-outcome').textContent()).length > 0);
         assert.ok((await page.locator('#record-title').textContent()).length > 0);
         assert.ok((await page.locator('#record-next').textContent()).length > 0);
@@ -400,7 +400,8 @@ async function operatePreviewDialog(page, file) {
         await page.locator('#record-activity-details summary').click();
         assert.equal(await page.locator('#record-activity').isVisible(), true, 'Original native Forge activity remains available on request');
         await page.locator('#record-activity-details summary').click();
-        assert.equal(await page.locator('#record-outcome').isVisible(), false, 'Supporting details begin collapsed');
+        assert.equal(await page.locator('#record-outcome').isVisible(), true, 'Recorded objective is visible before optional process details');
+        assert.equal(await page.locator('#record-phase').isVisible(), false, 'Process stage begins collapsed');
         assert.match(await page.locator('#record-decisions').textContent(), /neste acompanhamento/);
         assert.equal(await page.locator('#record-direction-card').isVisible(), true);
         assert.equal(await page.locator('#record-direction-card').evaluate(node => node.open), false);

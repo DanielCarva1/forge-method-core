@@ -16,6 +16,7 @@ const assets = new Map([
   ['/project-display.mjs', ['project-display.mjs', 'text/javascript']],
   ['/connection.mjs', ['connection.mjs', 'text/javascript']],
   ['/chat.mjs', ['chat.mjs', 'text/javascript']],
+  ['/conversation-focus.mjs', ['conversation-focus.mjs', 'text/javascript']],
   ['/message-format.mjs', ['message-format.mjs', 'text/javascript']],
   ['/conversation-reference.mjs', ['conversation-reference.mjs', 'text/javascript']],
   ['/assets/forge.png', ['assets/forge.png', 'image/png']],
@@ -26,7 +27,8 @@ const assets = new Map([
   ['/mobile-workspace.mjs', ['mobile-workspace.mjs', 'text/javascript']],
 ]);
 async function openProjectSetup(page) {
-  if (!await page.locator('#project-setup').evaluate(node => node.open)) await page.locator('#project-setup summary').click();
+  if (!await page.locator('#project-setup').evaluate(node => node.open)) await page.locator('#project-setup > summary').click();
+  if (!await page.locator('#custom-folder-option').evaluate(node => node.open)) await page.locator('#custom-folder-option > summary').click();
 }
 async function openConversation(page) {
   if (!await page.locator('#conversation-picker').evaluate(node => node.open)) await page.locator('#conversation-picker summary').click();
@@ -98,7 +100,7 @@ async function openConversation(page) {
     await page.getByRole('link', { name: 'Escolher uma pasta' }).click();
     await page.locator('#workspace').waitFor({ state: 'visible' });
     assert.equal(await page.locator('#project-root').inputValue(), '');
-    assert.equal(await page.getByRole('region', { name: 'Histórico da conversa' }).isVisible(), true);
+    assert.equal(await page.getByRole('region', { name: 'Histórico da conversa' }).isVisible(), false, 'Conversation remains hidden until a project is confirmed');
     assert.equal(await page.locator('#workspace').isVisible(), true);
     assert.equal(await page.locator('#project-record').isVisible(), false, 'Do not show a record for an unconfirmed folder');
     assert.equal(await page.locator('#home').isHidden(), true);
@@ -169,7 +171,7 @@ async function openConversation(page) {
     await page.waitForFunction(() => document.activeElement === document.querySelector('#about summary'));
     await page.goto(`${url}#about`);
     assert.equal(await page.locator('#about').evaluate(node => node.open), true);
-    await page.getByRole('button', { name: 'Ver versões disponíveis' }).click();
+    await page.getByRole('button', { name: 'Encontrar atualização do Forge Desktop' }).click();
     await page.locator('#updates-status').filter({ hasText: 'Não foi possível abrir' }).waitFor();
     assert.match(await page.locator('#updates-url').textContent(), /github\.com\/DanielCarva1\/forge-method-core\/releases/);
     const updatesPage = await browser.newPage();
@@ -182,17 +184,19 @@ async function openConversation(page) {
     });
     await updatesPage.goto(`${url}#about`);
     await updatesPage.locator('#app-version').filter({ hasText: 'Versão instalada: 0.1.45' }).waitFor();
-    await updatesPage.getByRole('button', { name: 'Ver versões disponíveis' }).click();
+    await updatesPage.getByRole('button', { name: 'Encontrar atualização do Forge Desktop' }).click();
     await updatesPage.locator('#updates-status').filter({ hasText: 'solicitada ao navegador' }).waitFor();
     assert.equal(await updatesPage.evaluate(() => window.updatesCalls), 1);
     assert.equal(await updatesPage.locator('#updates-url').isHidden(), true);
     await updatesPage.evaluate(() => { window.updatesFail = true; });
-    await updatesPage.getByRole('button', { name: 'Ver versões disponíveis' }).click();
+    await updatesPage.getByRole('button', { name: 'Encontrar atualização do Forge Desktop' }).click();
     await updatesPage.locator('#updates-status').filter({ hasText: 'Não foi possível abrir' }).waitFor();
     assert.equal(await updatesPage.locator('#updates-url').isVisible(), true);
     await updatesPage.close();
     await page.getByRole('link', { name: 'Minha conversa', exact: true }).click();
     await page.locator('#workspace').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#custom-folder-option summary').isVisible(), true);
+    await page.locator('#custom-folder-option summary').click();
     assert.equal(await page.getByRole('button', { name: 'Continuar nesta pasta' }).isVisible(), true);
     if (process.env.FORGE_WORKSPACE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_WORKSPACE_SCREENSHOT, fullPage: true });
     console.log('PASS: Explore filters eight approachable themes and carries the chosen idea into the conversation.');
@@ -415,10 +419,10 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#project-record').isVisible(), false);
     assert.equal(await projectsPage.locator('#project-name').isVisible(), false, 'The narrow project card does not repeat the title above it');
     assert.equal(await projectsPage.locator('#workspace-title').isVisible(), true);
-    assert.equal(await projectsPage.locator('#project-setup summary').textContent(), 'Trocar de projeto');
-    await projectsPage.locator('#project-setup summary').click();
+    assert.equal(await projectsPage.locator('#project-setup > summary').textContent(), 'Trocar de projeto');
+    await projectsPage.locator('#project-setup > summary').click();
     assert.equal(await projectsPage.locator('#browse-project').isVisible(), true, 'The same folder picker remains reachable');
-    await projectsPage.locator('#project-setup summary').click();
+    await projectsPage.locator('#project-setup > summary').click();
     await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Projeto' }).focus();
     await projectsPage.keyboard.press('Shift+Tab');
     assert.equal(await projectsPage.evaluate(() => document.activeElement?.dataset.mobilePaneButton), 'progress');
@@ -628,9 +632,9 @@ async function openConversation(page) {
     await projectsPage.evaluate(() => { window.previewChoice = 'D:\\outside.txt'; });
     await projectsPage.getByRole('button', { name: 'Escolher arquivo' }).click();
     await projectsPage.locator('#preview-status').filter({ hasText: 'não pertence ao projeto' }).waitFor();
-    assert.equal(await projectsPage.locator('#preview-result').isVisible(), false);
-    assert.equal(await projectsPage.locator('#open-preview').isHidden(), true);
-    assert.equal(await projectsPage.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), false);
+    assert.equal(await projectsPage.locator('#preview-result').isVisible(), true, 'A rejected replacement must preserve the last valid preview');
+    assert.equal(await projectsPage.locator('#preview-path').textContent(), 'site/index.html');
+    assert.equal(await projectsPage.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), true);
     assert.deepEqual(await projectsPage.evaluate(() => window.previewReads.map(read => read.projectRoot)), Array(10).fill('D:\\one'));
     if (process.env.FORGE_CONFIRMED_SCREENSHOT) await projectsPage.screenshot({ path: process.env.FORGE_CONFIRMED_SCREENSHOT, fullPage: true });
     await openProjectSetup(projectsPage);
@@ -644,7 +648,7 @@ async function openConversation(page) {
     await projectsPage.locator('#project-status').filter({ hasText: 'Não foi possível abrir' }).waitFor();
     assert.equal(await projectsPage.locator('#project-root').inputValue(), 'D:\\one');
     await projectsPage.evaluate(() => { window.folderError = false; });
-    await projectsPage.locator('#project-setup summary').click();
+    await projectsPage.locator('#project-setup > summary').click();
     await projectsPage.getByRole('link', { name: 'Meus projetos' }).click();
     assert.equal(await projectsPage.locator('.recent-project').count(), 1);
     assert.equal(await projectsPage.locator('.recent-project h2').textContent(), 'one');
@@ -1060,7 +1064,7 @@ async function openConversation(page) {
     assert.equal(await keyboardPage.locator('.back-link').evaluate(node => node === document.activeElement), true);
     assert.ok(await keyboardPage.locator('.back-link').evaluate(node => parseFloat(getComputedStyle(node).outlineWidth) >= 3));
     assert.ok(await keyboardPage.locator('nav a').first().evaluate(node => node.getBoundingClientRect().height >= 48), 'Main navigation keeps a 48px target');
-    for (const selector of ['#project-setup summary', '#project-root', '#browse-project', '#start-project', '#connection summary', '#retry', '.conversation-body']) {
+    for (const selector of ['#project-setup > summary', '#project-root', '#browse-project', '#start-project', '#connection summary', '#retry', '.conversation-body']) {
       await keyboardPage.keyboard.press('Tab');
       assert.equal(await keyboardPage.locator(selector).evaluate(node => node === document.activeElement), true, `Workspace keyboard order: ${selector}`);
       assert.ok(await keyboardPage.locator(selector).evaluate(node => parseFloat(getComputedStyle(node).outlineWidth) >= 3), `Visible focus: ${selector}`);
@@ -1230,7 +1234,7 @@ async function openConversation(page) {
       return record.top >= 0 && record.top < innerHeight;
     }), true, 'The compact empty preview must leave the project record visible in the initial desktop viewport');
     assert.equal(await page.evaluate(() => window.progressCalls || 0), 1);
-    assert.equal(await page.locator('#workspace-phase').textContent(), 'Etapa do projeto: Descoberta');
+    assert.equal(await page.locator('#workspace-phase').textContent(), 'Em andamento');
     assert.equal(await page.locator('#workspace-phase').isVisible(), true);
     assert.equal(await page.locator('#record-activity').textContent(), 'Recorded activity');
     assert.equal(await page.getByRole('group', { name: 'Atividade e próximo passo registrados' }).isVisible(), true);
@@ -1239,7 +1243,7 @@ async function openConversation(page) {
     await page.locator('#record-activity-details summary').click();
     assert.equal(await page.locator('#record-activity').isVisible(), true, 'Original recorded activity remains available on request');
     await page.locator('#record-activity-details summary').click();
-    assert.equal(await page.locator('#record-outcome').isVisible(), false, 'Supporting objective stays in optional details');
+    assert.equal(await page.locator('#record-outcome').isVisible(), true, 'The recorded objective should be visible before optional process details');
     assert.equal(await page.locator('#record-outcome').textContent(), 'Accepted outcome');
     await page.locator('#message-text').fill('Minha ideia continua aqui.');
     await page.getByRole('button', { name: 'Entender isto na conversa' }).click();
@@ -1392,10 +1396,14 @@ async function openConversation(page) {
         assert.equal(await page.locator('.record-stage').isVisible(), true);
         assert.equal(await page.locator('#record-empty-help').isVisible(), false);
         assert.equal(await page.locator('#record-phase-label').textContent(), 'ETAPA GERAL DO PROJETO');
-        if (state === 'stale') assert.match(await page.locator('#workspace-phase').textContent(), /Etapa do projeto \(desatualizada\)/);
+        if (state === 'stale') assert.equal(await page.locator('#workspace-phase').textContent(), 'Acompanhamento desatualizado');
         assert.equal(await page.locator('#record-state').textContent(), stateNames[state]);
         assert.equal(await page.locator('#progress-result').getAttribute('data-state'), state);
         assert.equal(await page.locator('#record-phase').textContent(), 'Descoberta');
+        assert.equal(await page.locator('#record-phase').isVisible(), false, 'Process stage starts collapsed');
+        await page.locator('.record-stage summary').click();
+        assert.equal(await page.locator('#record-phase').isVisible(), true, 'Process stage remains available on request');
+        await page.locator('.record-stage summary').click();
         assert.equal(await page.locator('#record-activity-label').textContent(), state === 'completed' ? 'Resultado registrado' : state === 'abandoned' ? 'Último registro' : 'Agora');
         if (state === 'completed') {
           assert.match(await page.locator('#progress-status').textContent(), /Esta parte do trabalho foi concluída. O projeto pode continuar/);
@@ -1570,6 +1578,19 @@ async function openConversation(page) {
       assert.equal(await page.locator('#agent-status .status-icon').getAttribute('aria-hidden'), 'true');
       assert.ok((await page.locator('#agent-status span:last-child').textContent()).length > 15);
     }
+    await page.evaluate(() => window.agentEvents.onmessage({ kind: 'running' }));
+    for (const [activity, label] of [
+      ['checking', 'conferindo o projeto'],
+      ['editing', 'alterando arquivos'],
+      ['replying', 'preparando a resposta'],
+      ['private protocol text', 'trabalhando'],
+    ]) {
+      await page.evaluate(text => window.agentEvents.onmessage({ kind: 'activity', text }), activity);
+      assert.match(await page.locator('#agent-status').textContent(), new RegExp(label));
+      assert.equal((await page.locator('#agent-status').textContent()).includes('private protocol text'), false);
+    }
+    await page.evaluate(() => window.agentEvents.onmessage({ kind: 'completed' }));
+    await page.locator('#agent-status').filter({ hasText: 'Resposta recebida' }).waitFor();
     for (const kind of ['disconnected', 'update_required']) {
       await page.evaluate(() => window.agentEvents.onmessage({ kind: 'running' }));
       assert.equal(await page.locator('#progress-result').isVisible(), false);
@@ -2214,7 +2235,7 @@ async function openConversation(page) {
     assert.equal(await page.locator('#project-root').isDisabled(), true, 'An active Codex connection locks direct folder editing');
     const disconnectsBeforeSwitch = await page.evaluate(() => window.disconnectCalls);
     await page.evaluate(() => window.agentEvents.onmessage({ kind: 'running' }));
-    await page.locator('#project-setup summary').click();
+    await page.locator('#project-setup > summary').click();
     await page.locator('#action-confirmation').waitFor({ state: 'visible' });
     assert.match(await page.locator('#action-confirmation-copy').textContent(), /interrompe a resposta/);
     await page.locator('#action-confirmation-cancel').click();
@@ -2281,7 +2302,7 @@ async function openConversation(page) {
         return invoke(command, args);
       };
     });
-    await page.locator('#project-setup summary').click();
+    await page.locator('#project-setup > summary').click();
     await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
     assert.equal(await page.locator('#message-text').inputValue(), '', 'Clearing a draft must not resurrect it when confirming the same folder again');
@@ -2360,7 +2381,7 @@ async function openConversation(page) {
       window.__TAURI__.core.invoke = (command, args) => command === 'start_project'
         ? Promise.reject('Validação indisponível') : window.originalDraftInvoke(command, args);
     });
-    await draftPage.locator('#project-setup summary').click();
+    await draftPage.locator('#project-setup > summary').click();
     await draftPage.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     await draftPage.locator('#project-status').filter({ hasText: 'Validação indisponível' }).waitFor();
     assert.equal(await draftPage.locator('#message-text').inputValue(), 'Minha ideia ainda não enviada', 'A failed same-folder check must keep the draft');

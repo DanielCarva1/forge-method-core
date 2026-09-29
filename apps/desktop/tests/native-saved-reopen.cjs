@@ -51,6 +51,7 @@ if (!executable) throw new Error('Set FORGE_DESKTOP_EXE');
     await page.locator('nav a[data-route="workspace"]').click();
     const prompt = 'Sem usar ferramentas nem alterar arquivos, responda em português apenas: Retomada verificada.';
     await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).fill(prompt);
+    await page.locator('#custom-folder-option summary').click();
     await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill(projectRoot);
     await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 35000 });
