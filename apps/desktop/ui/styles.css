@@ -377,6 +377,8 @@ summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 6
 #messages:empty { margin: 0; }
 #messages:not(:empty) + .empty-conversation { display: none; }
 #messages article { display: flex; align-items: flex-end; gap: 12px; min-width: 0; max-width: 92%; }
+#messages article[data-role="agent"] { width: min(92%, 76ch); }
+#messages article[data-role="agent"] .message-bubble { flex: 1 1 0; }
 #messages article[data-role="user"] { justify-self: end; flex-direction: row-reverse; }
 .message-avatar { display: grid; place-items: center; flex: 0 0 42px; width: 42px; height: 42px; border-radius: 50%; background: var(--soft); color: var(--ink); font-size: .9rem; font-weight: 800; }
 .message-avatar img { width: 32px; height: 32px; object-fit: contain; }

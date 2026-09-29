@@ -10364,3 +10364,32 @@ button crowded the normal header; a second hidden-native screenshot at
 real Codex Send, installer or publication ran. Installed/public 0.1.62 does
 not include this source slice. Next: continue the same UI package, then
 package and install one candidate rather than releasing every small edit.
+
+### Desktop conversation reading width in source — 2026-09-28
+
+The expanded conversation no longer leaves a short Codex reply and its cited
+files in an unnecessarily narrow column: agent bubbles now use available
+reading width up to a bounded line length. Focused browser
+`preview-preserve.cjs` passed, including enlarged-text and no-horizontal-overflow
+checks. A fresh debug build passed focused hidden-native
+`native-result-shortcut.cjs`; its WebView capture was reviewed at
+`D:/Temp/User/forge-conversation-width-native.png`. This used a restored test
+conversation, not a new real Codex send. No broad suite, Rust tests, CI,
+installer or publication ran. This work is source-only, not in installed/public
+0.1.62; keep it in the coherent UI package.
+
+### Desktop 0.1.63 candidate waiting for install — 2026-09-29
+
+The reading-mode and reply-width package is versioned 0.1.63. One completed
+NSIS candidate is at
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.63_x64-setup.exe`:
+123,095,797 bytes, SHA-256
+`D0092DE52038BDC7BD55BEFC72FD37334447579539ABDB446D9F87D112D2F687`.
+The 93-byte sidecar matches; the release executable reports ProductVersion
+0.1.63. A first packaging process ended without an artifact after its tool
+session disappeared; a fresh build completed and produced this one candidate.
+The installed 0.1.62 app was open for the user's interaction, so no silent
+install-over or public release has happened. Do not close it to run the test.
+Next: when the app is no longer in use, install this exact candidate over
+0.1.62, run focused installed hidden-native readback, then push and publish
+only if that passes. No full suite or manual GitHub CI was run.

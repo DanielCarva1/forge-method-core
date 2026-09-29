@@ -174,6 +174,11 @@ async function resumeFixture(page, citation, interrupted = false) {
       const workspace = document.querySelector('.workspace').getBoundingClientRect();
       return conversation.width >= workspace.width - 2 && document.documentElement.scrollWidth <= innerWidth;
     }), true, 'Native reading mode should give the chat the full width');
+    assert.equal(await app.page.locator('#messages article[data-role="agent"] .message-bubble').last().evaluate(node => {
+      const bubble = node.getBoundingClientRect();
+      const conversation = document.getElementById('project-conversation').getBoundingClientRect();
+      return bubble.width >= conversation.width * 0.5 && bubble.width <= 900;
+    }), true, 'A restored native reply should use the reading width without overlong lines');
     if (process.env.FORGE_CONVERSATION_FOCUS_SCREENSHOT) await app.page.screenshot({ path: process.env.FORGE_CONVERSATION_FOCUS_SCREENSHOT, fullPage: true });
     await app.page.evaluate(async file => (await import('./preview.mjs')).previewLinkedFile(file), path.join(project, 'archive.zip'));
     await app.page.locator('#preview-status').filter({ hasText: 'Arquivo encontrado' }).waitFor();

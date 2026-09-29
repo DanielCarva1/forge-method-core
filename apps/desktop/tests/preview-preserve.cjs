@@ -92,6 +92,17 @@ const server = createServer(async (request, response) => {
       const workspace = document.querySelector('.workspace').getBoundingClientRect();
       return conversation.width >= workspace.width - 2 && document.documentElement.scrollWidth <= innerWidth;
     }), true, 'Reading mode gives the conversation the full desktop width');
+    await page.evaluate(() => {
+      const article = document.createElement('article');
+      article.dataset.role = 'agent';
+      article.innerHTML = '<span class="message-avatar" aria-hidden="true">F</span><div class="message-bubble"><strong>Codex</strong><div class="message-content">Aqui estão dois arquivos para conferir.</div></div>';
+      document.getElementById('messages').append(article);
+    });
+    assert.equal(await page.locator('#messages article[data-role="agent"] .message-bubble').evaluate(node => {
+      const bubble = node.getBoundingClientRect();
+      return bubble.width >= 550 && bubble.width <= 850 && document.documentElement.scrollWidth <= innerWidth;
+    }), true, 'An agent reply uses the reading space without becoming an overlong line');
+    if (process.env.FORGE_READING_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_READING_SCREENSHOT });
     await page.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true,
       'Reading mode must not force sideways scrolling with enlarged text');
@@ -101,6 +112,7 @@ const server = createServer(async (request, response) => {
     assert.equal(await page.getByRole('button', { name: 'Mostrar resultado e projeto' }).isVisible(), true);
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.locator('#messages article[data-role="agent"]').evaluate(node => node.remove());
     await page.getByRole('button', { name: 'Mostrar resultado e projeto' }).click();
     assert.equal(await page.locator('#project-preview').isVisible(), true, 'The reader can restore the side panels directly');
     assert.equal(await draft.inputValue(), 'Quero revisar este resultado.');
