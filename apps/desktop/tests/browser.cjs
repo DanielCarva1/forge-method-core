@@ -1094,7 +1094,7 @@ async function openConversation(page) {
     await page.evaluate(() => { window.__TAURI__ = { core: { invoke: async () => ({ name: 'Forge', version: '0.1.0' }) } }; });
     await page.getByRole('button', { name: 'Verificar novamente' }).click();
     await page.getByRole('status').filter({ hasText: 'Aplicativo iniciado' }).waitFor();
-    await page.getByText('Escolha uma pasta para começar.', { exact: false }).waitFor();
+    await page.getByText('Comece um projeto para conversar.', { exact: false }).waitFor();
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
     assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme), 'dark');

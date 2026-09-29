@@ -146,7 +146,7 @@ function recordFailure(error) {
   if (error === 'O Forge demorou para responder. Você pode tentar novamente.')
     return 'O Forge demorou para responder. Tente atualizar o andamento novamente. A conversa não foi interrompida; nenhum progresso foi presumido.';
   if (error === 'O estado deste projeto não está disponível. Nada foi recriado ou alterado.' || error === 'Esta pasta ainda não usa o Forge. Escolha-a em Minha conversa e clique em “Continuar nesta pasta”.') {
-    return 'O acompanhamento deste projeto não está disponível nesta pasta. Nada foi recriado. Confira a pasta em “Escolher pasta do projeto” antes de continuar.';
+    return 'O acompanhamento deste projeto não está disponível nesta pasta. Nada foi recriado. Confira a pasta em “Começar ou abrir projeto” antes de continuar.';
   }
   return 'Não foi possível atualizar o andamento. Nenhum progresso foi presumido; você pode continuar conversando e tentar novamente depois.';
 }

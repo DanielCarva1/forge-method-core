@@ -131,6 +131,7 @@ fn main() {
             open_updates_page,
             open_external_link,
             project::choose_project_folder,
+            project::create_default_project,
             project::inspect_project,
             project::start_project,
             progress::inspect_progress,

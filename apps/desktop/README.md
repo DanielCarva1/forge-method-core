@@ -10424,3 +10424,34 @@ the sidecar matched too. The downloaded copy was hash-checked, not installed
 again. No broad suite, manual GitHub CI, or new real Codex Send ran. The later
 disconnected-drafting UI/test edits remain outside this release. Next: move
 to a coherent non-chat product UI slice; do not keep polishing this chat view.
+
+### Desktop 0.1.64 candidate installed — 2026-09-29
+
+The next alpha makes **Começar meu projeto** the primary path: no folder or
+name input. It creates a unique directory in Windows Documents/Projetos Forge,
+uses a short local name derived from the idea (or Meu projeto), initializes it
+through the existing Forge Core path, and preserves the idea as an unsent draft.
+Choosing an existing/custom folder remains optional. Disconnected or busy Codex
+also permits local drafting without enabling Send. The default-name operation
+is local and does not ask Codex to generate a name or send a turn.
+
+The corrected final NSIS candidate, after removing an earlier rejected
+custom-folder-first design, is
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.64_x64-setup.exe`:
+123,157,874 bytes, SHA-256
+`671582CE0CE15E3150A9494FABD6FD6373E0DE75C5AD05E7B62566A1B179ED6C`.
+The 93-byte sidecar matches. Silent install over public 0.1.63 exited 0;
+installed ProductVersion is 0.1.64, executable SHA-256
+`27BA5996C8EE50E38636987A944806180638345A94092C53BA6EFC0E704E9C3D`.
+On the installed app, focused hidden-native `native-new-project.cjs` created a
+real project in the actual Documents location, confirmed Forge initialization,
+preserved the draft, observed no Codex Send, and removed only its uniquely
+marked test project. Installed `native-composer-folder.cjs` also passed real
+Windows folder selection and Explore/Home flow. Focused browser
+`project-creation.cjs` and `empty-conversation.cjs` passed; offline desktop
+`cargo check`, `project::tests`, and full crate tests passed (53, 1 ignored).
+No workspace suite, manual GH CI or new real Codex reply was run. The first
+installed smoke attempt failed at the harness dependency lookup (`playwright`);
+setting the known module path allowed it to pass, not a product defect.
+Next: commit/push this package, publish **this exact candidate** under the
+standing alpha authorization, then verify anonymous download and sidecar.

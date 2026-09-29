@@ -133,7 +133,7 @@ function offerLogin(error) {
 
 function updateComposerHelp() {
   const help = !project
-    ? 'Sua ideia fica aqui nesta sessão. Nada é enviado antes de confirmar a pasta.'
+    ? 'Sua ideia fica aqui nesta sessão. Nada é enviado antes de o projeto estar pronto.'
     : unconfirmedSends.has(referenceKey())
       ? connected
         ? 'O último envio não foi confirmado. Confira as mensagens e escolha “Já conferi o envio” antes de enviar outra.'
@@ -141,7 +141,7 @@ function updateComposerHelp() {
     : !connected
       ? loginPanel.hidden ? 'Escreva e envie sua ideia. A conversa será aberta antes do envio.' : 'Entre no ChatGPT para enviar. Seu texto está preservado.'
       : busy
-        ? 'Seu agente está trabalhando. Você pode interromper se precisar.'
+        ? 'O agente está trabalhando. Você pode preparar a próxima mensagem; o envio fica disponível quando ele terminar.'
         : broken
           ? reconnectable ? 'Use “Reabrir conversa” para continuar sem reenviar sua mensagem.' : 'Atualize o Codex antes de continuar. Sua conversa não foi apagada.'
           : 'Pronto para conversar. Você continua no controle das mudanças.';
@@ -175,7 +175,8 @@ function controls() {
   newConversation.disabled = transitioning || connected;
   disconnect.disabled = transitioning || !connected;
   updateSendControl();
-  input.disabled = transitioning || busy || broken;
+  // A running turn or lost connection blocks Send, not the user's next local draft.
+  input.disabled = transitioning;
   stop.disabled = transitioning || !connected || !busy || broken;
   stop.hidden = !connected || !busy;
   startLoginButton.disabled = loginPending || loginActive || connected;
@@ -212,6 +213,7 @@ function controls() {
   accessNote.hidden = !project;
   byId('project-root').disabled = transitioning || connected;
   byId('browse-project').disabled = transitioning || connected;
+  byId('create-default-project').disabled = transitioning || connected;
   byId('inspect-project').disabled = transitioning || connected;
   byId('start-project').disabled = transitioning || connected;
   if (focused && conversationPicker.hidden && conversationPicker.contains(focused)) status.focus();
@@ -317,7 +319,7 @@ export function setProject(value) {
   accessNote.hidden = !project;
   if (!connected && !transitioning) showStatus(project
     ? 'Projeto pronto. Escreva sua ideia; a conversa abre quando você enviar.'
-    : 'Escolha uma pasta para começar. A conversa será aberta quando você enviar sua ideia.');
+    : 'Comece um projeto para conversar. Sua ideia só será enviada quando você clicar em Enviar.');
 }
 
 function validConversationPage(page) {

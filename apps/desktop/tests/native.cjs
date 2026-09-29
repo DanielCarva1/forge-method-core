@@ -204,7 +204,7 @@ async function operatePreviewDialog(page, file) {
     await page.getByRole('status').filter({ hasText: 'Aplicativo iniciado' }).waitFor({ timeout: 5000 });
     await page.getByRole('button', { name: 'Verificar novamente' }).click();
     await page.getByRole('status').filter({ hasText: 'Aplicativo iniciado' }).waitFor({ timeout: 5000 });
-    await page.getByText('Escolha uma pasta para começar.', { exact: false }).waitFor();
+    await page.getByText('Comece um projeto para conversar.', { exact: false }).waitFor();
     if (process.env.FORGE_TEST_PROJECT) {
       const field = page.getByRole('textbox', { name: 'Pasta do projeto' });
       const submit = page.getByRole('button', { name: 'Continuar nesta pasta' });

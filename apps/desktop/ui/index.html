@@ -139,7 +139,7 @@
         <p class="eyebrow">SEU ESPAÇO DE CRIAÇÃO</p>
         <h1 id="workspace-title" tabindex="-1">Vamos dar vida à sua ideia.</h1>
         <p id="workspace-phase" class="workspace-phase" hidden></p>
-        <p class="intro">Escreva sua ideia e escolha onde guardar o projeto. Você decide quando enviar a mensagem.</p>
+        <p class="intro">Escreva sua ideia e comece. O Forge pode criar o espaço do projeto para você; nada é enviado sem sua ação.</p>
         <p id="idea-selection-status" class="idea-selection-status" role="status" aria-live="polite" hidden></p>
         <button id="idea-choose-folder" class="primary" type="button" hidden>Escolher pasta para esta ideia →</button>
       </div>
@@ -162,7 +162,7 @@
           <div id="conversation-list" class="conversation-list" role="group" aria-label="Conversas encontradas"></div>
           <div class="conversation-pages"><button id="previous-conversations" type="button" hidden>← Página anterior</button><button id="more-conversations" type="button" hidden>Próxima página →</button></div>
         </details>
-        <p id="agent-status" class="status" role="status" aria-live="polite" tabindex="-1">Escolha uma pasta para começar. A conversa será aberta quando você enviar sua ideia.</p>
+        <p id="agent-status" class="status" role="status" aria-live="polite" tabindex="-1">Comece um projeto para conversar. Sua ideia só será enviada quando você clicar em Enviar.</p>
         <a id="agent-update-action" href="#updates" hidden>Ver como atualizar o Forge</a>
         <section id="login-panel" class="login-panel" aria-labelledby="login-title" hidden>
           <h3 id="login-title">Entre no ChatGPT para continuar</h3>
@@ -189,7 +189,7 @@
             <textarea id="message-text" rows="1" required aria-describedby="composer-help draft-note agent-access-note" placeholder="Escreva sua ideia ou peça uma mudança…"></textarea>
             <div class="chat-actions"><button id="send-message" class="primary" disabled><span id="send-label">Enviar</span><span aria-hidden="true">→</span></button><button id="interrupt-agent" type="button" disabled hidden>Interromper</button></div>
           </div>
-          <p id="composer-help" class="hint" role="status" aria-live="polite">Sua ideia fica aqui nesta sessão. Nada é enviado antes de confirmar a pasta.</p>
+          <p id="composer-help" class="hint" role="status" aria-live="polite">Sua ideia fica aqui nesta sessão. Nada é enviado antes de o projeto estar pronto.</p>
           <p id="draft-note" class="hint" role="status" aria-live="polite" hidden></p>
         </form>
       </section>
@@ -197,10 +197,15 @@
         <p class="eyebrow" id="project-step">SEU PROJETO</p>
         <h2 id="project-title">Onde vamos criar?</h2>
         <details id="project-setup" open>
-          <summary id="project-setup-summary">Escolher pasta do projeto</summary>
-          <p>Escolha a pasta onde está ou ficará seu trabalho.</p>
-          <p id="project-mode-help" class="hint">Ela pode estar vazia ou já conter arquivos. Se ainda não usa Forge, vamos prepará-la sem apagar o que existe.</p>
+          <summary id="project-setup-summary">Começar ou abrir projeto</summary>
+          <div class="default-project">
+            <p>Seu projeto pode começar agora. O Forge cria uma pasta para ele em Documentos → Projetos Forge.</p>
+            <button id="create-default-project" class="primary" type="button">Começar meu projeto <span aria-hidden="true">→</span></button>
+            <p id="default-project-status" role="status" aria-live="polite"></p>
+          </div>
           <form id="project-form" novalidate>
+            <h3>Ou escolha uma pasta</h3>
+            <p id="project-mode-help" class="hint">Você pode abrir uma pasta existente ou criar outra no seletor do Windows. O Forge prepara o projeto sem apagar seus arquivos.</p>
             <label for="project-root">Pasta do projeto</label>
             <input id="project-root" name="project-root" type="text" required autocomplete="off" spellcheck="false" aria-describedby="path-help project-status" placeholder="Nenhuma pasta escolhida">
             <p id="path-help" class="hint">Use “Escolher pasta…” para navegar ou cole o caminho aqui.</p>

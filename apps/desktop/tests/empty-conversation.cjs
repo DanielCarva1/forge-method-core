@@ -85,10 +85,29 @@ const server = createServer(async (request, response) => {
     assert.deepEqual(await page.evaluate(() => window.connectCalls), ['thread-1']);
     assert.equal(await page.locator('#messages article').count(), 2);
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Resume must not send another turn');
+    await page.evaluate(() => window.testEvents.onmessage({ kind: 'running' }));
+    const nextDraft = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
+    assert.equal(await nextDraft.isEnabled(), true, 'A running Codex turn permits drafting the next message');
+    assert.match(await page.locator('#composer-help').textContent(), /preparar a próxima mensagem/);
+    await nextDraft.fill('Próxima ideia enquanto o agente responde.');
+    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true,
+      'A running turn must still block Send');
+    await page.evaluate(() => window.testEvents.onmessage({ kind: 'completed' }));
+    assert.equal(await nextDraft.inputValue(), 'Próxima ideia enquanto o agente responde.',
+      'Finishing a turn must not erase the next draft');
+    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isEnabled(), true);
+    await nextDraft.fill('');
     await page.evaluate(() => window.testEvents.onmessage({ kind: 'disconnected' }));
+    const offlineDraft = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
+    assert.equal(await offlineDraft.isEnabled(), true, 'A disconnected conversation still permits local drafting');
+    await offlineDraft.fill('Rascunho escrito enquanto a conexão caiu.');
+    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true,
+      'A disconnected conversation must not permit Send');
     await page.getByRole('button', { name: 'Reabrir conversa' }).click();
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
     assert.equal(await page.evaluate(() => window.sendCalls), 0, 'Reopening after disconnection must not replay a turn');
+    assert.equal(await offlineDraft.inputValue(), 'Rascunho escrito enquanto a conexão caiu.',
+      'Reopening must preserve the draft written while disconnected');
     const options = page.locator('#conversation-options');
     assert.equal(await options.locator('summary').isVisible(), true, 'Secondary actions stay reachable');
     assert.equal(await page.getByRole('button', { name: 'Desconectar', exact: true }).isHidden(), true,
@@ -124,7 +143,14 @@ const server = createServer(async (request, response) => {
     await open();
     await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
     assert.deepEqual(await page.evaluate(() => window.connectCalls), ['thread-1']);
-    console.log('PASS: empty thread is not bookmarked; acknowledged Send is; alternative empty thread preserves prior history; reopen never re-sends.');
+    assert.equal(await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).inputValue(),
+      'Rascunho escrito enquanto a conexão caiu.', 'The disconnected draft survives a full page reload');
+    await page.evaluate(() => window.testEvents.onmessage({ kind: 'update_required' }));
+    assert.equal(await page.getByRole('textbox', { name: 'Sua ideia começa aqui' }).isEnabled(), true,
+      'An incompatible Codex connection must not block editing a local draft');
+    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true,
+      'An incompatible Codex connection must still block Send');
+    console.log('PASS: bookmarks and resume never replay; disconnected/update-required states preserve local drafting while Send stays blocked.');
   } finally {
     await browser.close();
     await new Promise(resolve => server.close(resolve));

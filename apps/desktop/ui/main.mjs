@@ -51,6 +51,8 @@ const projectStatus = document.querySelector('#project-status');
 const resultPanel = document.querySelector('#project-result');
 const projectRoot = document.querySelector('#project-root');
 const browse = document.querySelector('#browse-project');
+const createDefaultProject = document.querySelector('#create-default-project');
+const defaultProjectStatus = document.querySelector('#default-project-status');
 const modeHelp = document.querySelector('#project-mode-help');
 const projectTitle = document.querySelector('#project-title');
 const setup = document.querySelector('#project-setup');
@@ -63,10 +65,11 @@ const workspaceBackLabel = document.querySelector('#workspace-back-label');
 const projectStep = document.querySelector('#project-step');
 const resultLabel = document.querySelector('#project-result-label');
 let projectMode = 'new';
+let createdDefaultPath = '';
 
 function resetWorkspaceHeading() {
   workspaceTitle.textContent = 'Vamos dar vida à sua ideia.';
-  workspaceIntro.textContent = 'Escreva sua ideia e escolha onde guardar o projeto. Você decide quando enviar a mensagem.';
+  workspaceIntro.textContent = 'Escreva sua ideia e comece. O Forge pode criar o espaço do projeto para você; nada é enviado sem sua ação.';
   workspaceBack.href = '#explore';
   workspaceBackLabel.textContent = 'Voltar às ideias';
 }
@@ -76,9 +79,7 @@ function chooseMode(mode, openFolder = false) {
   if (resultPanel.hidden || openFolder) setup.open = true;
   projectMode = mode;
   if (resultPanel.hidden) projectTitle.textContent = mode === 'new' ? 'Onde vamos criar?' : 'Qual projeto vamos abrir?';
-  modeHelp.textContent = mode === 'new'
-    ? 'A pasta pode estar vazia ou já conter arquivos. Se ainda não usa Forge, vamos prepará-la sem apagar o que existe.'
-    : 'Escolha qualquer pasta de projeto. Se ainda não usa Forge, vamos prepará-la sem apagar o que existe.';
+  modeHelp.textContent = 'Você pode abrir uma pasta existente ou criar outra no seletor do Windows. O Forge prepara o projeto sem apagar seus arquivos.';
 }
 
 function clearPreviousProjectForFolderChoice() {
@@ -141,7 +142,44 @@ browse.addEventListener('click', async () => {
     if (!projectRoot.disabled) browse.disabled = false;
   }
 });
+createDefaultProject.addEventListener('click', async () => {
+  if (createDefaultProject.disabled || projectRoot.disabled) return;
+  if (!resultPanel.hidden && !await prepareProjectSwitch()) return;
+  const invoke = globalThis.__TAURI__?.core?.invoke;
+  if (!invoke) {
+    defaultProjectStatus.textContent = 'Abra esta tela pelo aplicativo Forge para começar.';
+    return;
+  }
+  createDefaultProject.disabled = true;
+  projectRoot.disabled = true;
+  browse.disabled = true;
+  start.disabled = true;
+  inspect.disabled = true;
+  defaultProjectStatus.textContent = 'Criando seu espaço em Documentos…';
+  let createdPath;
+  try {
+    createdPath = await invoke('create_default_project', { idea: document.querySelector('#message-text').value.trim() });
+    defaultProjectStatus.textContent = 'Pasta criada. Preparando o projeto no Forge…';
+  } catch (error) {
+    defaultProjectStatus.textContent = typeof error === 'string' ? error : 'Não foi possível criar o projeto. Nada foi iniciado.';
+  } finally {
+    createDefaultProject.disabled = false;
+    projectRoot.disabled = false;
+    browse.disabled = false;
+    start.disabled = false;
+    inspect.disabled = false;
+  }
+  if (!createdPath) return;
+  createdDefaultPath = createdPath;
+  projectRoot.value = createdPath;
+  projectRoot.dispatchEvent(new Event('input', { bubbles: true }));
+  form.requestSubmit(start);
+});
 projectRoot.addEventListener('input', () => {
+  if (projectRoot.value.trim() !== createdDefaultPath) {
+    createdDefaultPath = '';
+    defaultProjectStatus.textContent = '';
+  }
   projectRoot.removeAttribute('aria-invalid');
   setProject(null);
   setProgressProject(null);
@@ -150,7 +188,7 @@ projectRoot.addEventListener('input', () => {
   projectLocation.open = false;
   projectStep.textContent = 'SEU PROJETO';
   projectTitle.textContent = projectMode === 'new' ? 'Onde vamos criar?' : 'Qual projeto vamos abrir?';
-  setupSummary.textContent = 'Escolher pasta do projeto';
+  setupSummary.textContent = 'Começar ou abrir projeto';
   resetWorkspaceHeading();
   projectStatus.textContent = '';
 });
@@ -169,6 +207,7 @@ form.addEventListener('submit', async event => {
   inspect.disabled = true;
   start.disabled = true;
   browse.disabled = true;
+  createDefaultProject.disabled = true;
   setProject(null);
   setProgressProject(null);
   setPreviewProject(null);
@@ -200,17 +239,20 @@ form.addEventListener('submit', async event => {
     workspaceBackLabel.textContent = 'Voltar aos projetos';
     setup.open = false;
     projectStatus.textContent = 'Projeto pronto. Escreva para começar ou continuar a conversa; nada foi enviado.';
+    if (projectRoot.value.trim() === createdDefaultPath) defaultProjectStatus.textContent = 'Projeto criado e pronto.';
     clearStarterHandoff();
     openedProject = true;
     if (!document.querySelector('#workspace').hidden) document.querySelector('#message-text').focus();
   } catch (error) {
     projectStatus.textContent = typeof error === 'string' ? error : 'Não foi possível conferir o projeto. Tente novamente.';
+    if (projectRoot.value.trim() === createdDefaultPath) defaultProjectStatus.textContent = 'A pasta foi criada, mas o projeto ainda não ficou pronto. Tente “Continuar nesta pasta” novamente.';
     showStarterHandoffError(projectStatus.textContent);
   } finally {
     inspect.disabled = false;
     start.disabled = false;
     projectRoot.disabled = false;
     browse.disabled = false;
+    createDefaultProject.disabled = false;
   }
   if (openedProject) void resumeSavedConversation();
 });

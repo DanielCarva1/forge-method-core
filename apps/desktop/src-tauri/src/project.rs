@@ -6,6 +6,7 @@ use std::{
     time::Duration,
 };
 use tauri_plugin_dialog::DialogExt;
+use tauri::Manager;
 use tokio::io::AsyncReadExt;
 
 #[derive(Deserialize)]
@@ -155,6 +156,68 @@ pub async fn choose_project_folder(
                 })
         })
         .transpose()
+}
+
+fn suggested_project_name(idea: &str) -> String {
+    let first = idea.split(['.', '!', '?', '\n']).next().unwrap_or("").trim();
+    let first = first.strip_prefix("Quero ").unwrap_or(first);
+    let clean = first
+        .chars()
+        .take(64)
+        .map(|c| if c.is_alphanumeric() || matches!(c, ' ' | '-' | '_') { c } else { ' ' })
+        .collect::<String>();
+    let words = clean.split_whitespace().take(6).collect::<Vec<_>>().join(" ");
+    if words.is_empty() { "Meu projeto".to_string() } else { words }
+}
+
+/// The default is one click: create a new, unique folder in Documents/Projetos
+/// Forge. The chosen folder remains visible after start; custom paths use the
+/// separate native picker and never become an invisible fallback.
+#[tauri::command]
+pub async fn create_default_project(
+    window: tauri::WebviewWindow,
+    idea: String,
+) -> Result<String, &'static str> {
+    if idea.len() > 16_384 {
+        return Err("A ideia está longa demais para iniciar o projeto.");
+    }
+    #[cfg(debug_assertions)]
+    let test_base = std::env::var_os("FORGE_DESKTOP_PROJECTS_DIR").map(PathBuf::from);
+    #[cfg(not(debug_assertions))]
+    let test_base: Option<PathBuf> = None;
+    let base = match test_base {
+        Some(path) => path,
+        None => window
+            .app_handle()
+            .path()
+            .document_dir()
+            .map_err(|_| "Não foi possível localizar a pasta Documentos deste usuário.")?
+            .join("Projetos Forge"),
+    };
+    std::fs::create_dir_all(&base)
+        .map_err(|_| "Não foi possível preparar a pasta Projetos Forge em Documentos.")?;
+    let visible_base = base.clone();
+    let base = base
+        .canonicalize()
+        .map_err(|_| "Não foi possível conferir a pasta de projetos.")?;
+    let name = suggested_project_name(&idea);
+    for index in 1..=100 {
+        let suffix = if index == 1 { String::new() } else { format!(" ({index})") };
+        let child = base.join(format!("{name}{suffix}"));
+        match std::fs::create_dir(&child) {
+            Ok(()) => {
+                let visible_child = visible_base.join(format!("{name}{suffix}"));
+                if visible_child.canonicalize().ok().as_ref() != Some(&child) {
+                    return Err("A pasta criada não corresponde ao local de projetos.");
+                }
+                return visible_child.into_os_string().into_string()
+                    .map_err(|_| "A pasta criada não tem um caminho de texto válido.");
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(_) => return Err("Não foi possível criar o novo projeto em Documentos."),
+        }
+    }
+    Err("Há muitas pastas com esse nome. Escolha outro local para o projeto.")
 }
 
 pub(crate) fn installed_runtime() -> Result<PathBuf, &'static str> {
@@ -369,6 +432,13 @@ pub async fn start_project(project_root: String) -> Result<ProjectSummary, &'sta
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_project_name_comes_from_idea_without_a_path() {
+        assert_eq!(suggested_project_name("Quero criar algo artístico. Me ajude."), "criar algo artístico");
+        assert_eq!(suggested_project_name(""), "Meu projeto");
+        assert_eq!(suggested_project_name("../fora"), "Meu projeto");
+    }
 
     #[test]
     fn initialization_waits_longer_than_read_only_project_queries() {

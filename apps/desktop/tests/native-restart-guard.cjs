@@ -60,7 +60,7 @@ if (!process.env.FORGE_DESKTOP_EXE || !process.env.FORGE_TEST_PROJECT) {
     const nativeCore = window.__TAURI__.core;
     const invoke = nativeCore.invoke;
     const controlledInvoke = (command, args) => {
-      if (command === 'connect_agent') { window.fakeCodexConnects++; return Promise.resolve({
+      if (command === 'connect_agent') { window.fakeCodexConnects++; window.fakeCodexEvents = args.events; return Promise.resolve({
         thread_id: 'controlled-native-thread',
         resumed: !!args.threadId,
         messages: args.threadId ? [{ id: 'earlier', role: 'user', text: 'Controlled history for review' }] : [],
@@ -119,7 +119,25 @@ if (!process.env.FORGE_DESKTOP_EXE || !process.env.FORGE_TEST_PROJECT) {
     await page.getByRole('button', { name: 'Já conferi o envio' }).click();
     assert.equal(await page.evaluate(key => localStorage.getItem(key), markerKey), null);
     assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isEnabled(), true);
-    console.log('PASS: hidden native WebView preserved uncertain-send marker across full process restart, blocked replay/new thread, and required explicit review acknowledgement before another Send.');
+    await page.evaluate(() => window.fakeCodexEvents.onmessage({ kind: 'disconnected' }));
+    const draft = page.getByRole('textbox', { name: 'Sua ideia começa aqui' });
+    assert.equal(await draft.isEnabled(), true, 'Native UI permits local drafting after disconnection');
+    await draft.fill('Native draft while disconnected');
+    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true,
+      'Native UI blocks Send after disconnection');
+    await page.getByRole('button', { name: 'Reabrir conversa' }).click();
+    await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
+    assert.equal(await draft.inputValue(), 'Native draft while disconnected');
+    assert.equal(await page.evaluate(() => window.fakeCodexSends), 0, 'Reopen must not replay or send the offline draft');
+    await page.evaluate(() => window.fakeCodexEvents.onmessage({ kind: 'running' }));
+    assert.equal(await draft.isEnabled(), true, 'Native UI permits drafting during an active turn');
+    await draft.fill('Native next message while Codex works');
+    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isDisabled(), true);
+    await page.evaluate(() => window.fakeCodexEvents.onmessage({ kind: 'completed' }));
+    assert.equal(await draft.inputValue(), 'Native next message while Codex works');
+    assert.equal(await page.getByRole('button', { name: 'Enviar', exact: true }).isEnabled(), true);
+    assert.equal(await page.evaluate(() => window.fakeCodexSends), 0);
+    console.log('PASS: hidden native restart guarded uncertain Send; drafts persisted across disconnection, reconnection and an active turn without replay.');
     console.log('NOT_RUN: real Codex delivery, response and native ambiguous transport outcome (controlled bridge only).');
   } finally {
     await stop();
