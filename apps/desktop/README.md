@@ -10807,5 +10807,14 @@ Installed ProductVersion is 0.1.71, installed exe SHA-256
 `E786AB23E6CB6EBFC4D0FAB4C8608A0C9BBDB9473921D427462548B8433F61B2`.
 The native installed-app visual harness captured the four first-use screens
 and a disposable loaded project/preview without Send at
-`C:/ForgeFast/forge-071-loaded-visual/`. The public release remains 0.1.64;
-no commit or push is claimed.
+`C:/ForgeFast/forge-071-loaded-visual/`.
+
+Commit `069695b3` was pushed. The
+[0.1.71 alpha prerelease](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.71-alpha.1)
+contains that exact candidate and its 93-byte SHA-256 sidecar. Anonymous
+downloads matched both the installer size/hash above and the sidecar. The
+downloaded installer then installed silently (exit 0), and the installed
+ProductVersion/exe hash matched the earlier local installation. This confirms
+the published file is the installed candidate; it does not extend the real
+Codex coverage beyond the custom-folder 0.1.70 journey. The broad browser
+suite still fails on older first-use expectations; do not call it passing.
