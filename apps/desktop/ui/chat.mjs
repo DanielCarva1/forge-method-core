@@ -3,6 +3,7 @@ import { readReference, saveReference, readUnconfirmedSend, markUnconfirmedSend,
 import { renderAgentMessage } from './message-format.mjs';
 import { previewLinkedFile, refreshPreviewAfterTurn } from './preview.mjs';
 import { projectDisplayName } from './project-display.mjs';
+import { setConversationFocus } from './conversation-focus.mjs';
 const byId = id => document.getElementById(id);
 const status = byId('agent-status');
 const updateAction = byId('agent-update-action');
@@ -186,7 +187,7 @@ function controls() {
   connect.hidden = connected;
   connectHelp.hidden = !project || connected;
   disconnect.hidden = !connected;
-  conversationOptions.hidden = !connected && messageView.hidden;
+  conversationOptions.hidden = !project && messageView.hidden;
   if (conversationOptions.hidden) conversationOptions.open = false;
   reopenConversation.hidden = !project || !connected || !broken || !reconnectable;
   reopenConversation.disabled = transitioning;
@@ -218,6 +219,7 @@ function controls() {
 }
 
 export function setProject(value) {
+  if (!value) setConversationFocus(false);
   reconnectable = false;
   const previous = project ?? draftOrigin;
   if (previous) {
@@ -234,6 +236,8 @@ export function setProject(value) {
     }
   }
   project = value;
+  byId('conversation-focus').hidden = !project;
+  conversationOptions.hidden = !project && messageView.hidden;
   if (!connected) activeThreadId = null;
   if (project) {
     draftOrigin = project;

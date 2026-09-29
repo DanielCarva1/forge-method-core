@@ -10344,3 +10344,23 @@ not installed a second time. The same exact candidate bytes had already been
 installed over 0.1.61 and passed the focused hidden-native result/conversation
 check. No broad suite, new real Codex turn or manual GH CI ran. Continue the
 Desktop product goal; this alpha is not full completion.
+
+### Desktop conversation reading mode in source — 2026-09-28
+
+The next source slice adds **Ampliar conversa** under **Opções** for a confirmed
+desktop project. It temporarily gives the chat the full workspace width while keeping
+the same history and unsent draft; **Mostrar resultado e projeto** restores the
+side panels, and opening a cited file restores them before native validation
+so success or error is visible. The mobile pane navigation is unchanged.
+Focused `preview-preserve.cjs` passed expanded/collapsed mode, enlarged text,
+draft preservation and citation return in a browser double. A fresh debug
+build passed focused `native-result-shortcut.cjs` on an isolated Windows
+desktop, including the reading-mode width, citation return, and real
+project-bound file checks. The expanded native view was visually reviewed at
+`D:/Temp/User/forge-conversation-focus.png`. The first placement of the new
+button crowded the normal header; a second hidden-native screenshot at
+`D:/Temp/User/forge-focus-control-fixed.png` confirmed that moving it under
+**Opções** restores the earlier one-row header. No full suite, Rust test, CI, new
+real Codex Send, installer or publication ran. Installed/public 0.1.62 does
+not include this source slice. Next: continue the same UI package, then
+package and install one candidate rather than releasing every small edit.

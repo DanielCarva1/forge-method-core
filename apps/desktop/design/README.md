@@ -80,6 +80,13 @@ wider column. Renderable files keep the wider preview. This makes the layout
 follow what the person can actually inspect rather than treating every file
 as a large image or page.
 
+An optional desktop reading mode under **Opções** lets a confirmed project's
+conversation use the full workspace width without changing its thread, draft
+or project state. **Mostrar resultado e projeto** remains directly visible in
+that mode; opening a cited file restores the side panels automatically,
+including when native validation rejects that file. The normal chat header
+does not gain a permanent extra row of controls.
+
 Local Markdown documents can be read as bounded, safely formatted text, with
 the original file text one click away in both preview sizes. This reuses the
 conversation's non-executing formatter; links in a project document stay

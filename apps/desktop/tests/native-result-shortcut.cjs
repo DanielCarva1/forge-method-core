@@ -164,8 +164,21 @@ async function resumeFixture(page, citation, interrupted = false) {
     await app.page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await app.page.locator('#preview-text').textContent(), 'Second real local file from this project.');
     assert.equal(await app.page.locator('#preview-cited-files').isVisible(), true, 'The other cited file remains available after opening one');
+    const draft = app.page.locator('#message-text');
+    await draft.fill('Quero conferir este arquivo antes de enviar.');
+    await app.page.locator('#conversation-options summary').click();
+    await app.page.getByRole('button', { name: 'Ampliar conversa' }).click();
+    assert.equal(await app.page.locator('#project-preview').isHidden(), true);
+    assert.equal(await app.page.evaluate(() => {
+      const conversation = document.getElementById('project-conversation').getBoundingClientRect();
+      const workspace = document.querySelector('.workspace').getBoundingClientRect();
+      return conversation.width >= workspace.width - 2 && document.documentElement.scrollWidth <= innerWidth;
+    }), true, 'Native reading mode should give the chat the full width');
+    if (process.env.FORGE_CONVERSATION_FOCUS_SCREENSHOT) await app.page.screenshot({ path: process.env.FORGE_CONVERSATION_FOCUS_SCREENSHOT, fullPage: true });
     await app.page.evaluate(async file => (await import('./preview.mjs')).previewLinkedFile(file), path.join(project, 'archive.zip'));
     await app.page.locator('#preview-status').filter({ hasText: 'Arquivo encontrado' }).waitFor();
+    assert.equal(await app.page.locator('.workspace').evaluate(node => node.classList.contains('conversation-focus')), false);
+    assert.equal(await draft.inputValue(), 'Quero conferir este arquivo antes de enviar.', 'Reading and result views must preserve the unsent draft');
     assert.equal(await app.page.locator('#preview-path').textContent(), 'archive.zip');
     assert.equal(await app.page.getByRole('button', { name: 'Copiar caminho do arquivo' }).isVisible(), true,
       'A nonvisual deliverable needs a direct route to its real project file');

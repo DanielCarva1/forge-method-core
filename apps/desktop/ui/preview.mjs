@@ -2,6 +2,7 @@
 // project, and every resumed preview is read and validated by native code.
 import { renderAgentMessage } from './message-format.mjs';
 import { setMobileWorkspaceProject, showWorkspacePane } from './mobile-workspace.mjs';
+import { setConversationFocus } from './conversation-focus.mjs';
 const panel = document.getElementById('project-preview');
 const heading = document.getElementById('preview-heading');
 const workspace = document.querySelector('.workspace');
@@ -372,6 +373,7 @@ export async function previewLinkedFile(candidate) {
       ? `${project.project_root.replace(/[\\/]+$/, '')}\\${path}`
       : null;
   if (!rooted) return;
+  setConversationFocus(false);
   controls();
   await loadPreview(false, rooted);
   // Keep both the result and any validation error visible to the reader.

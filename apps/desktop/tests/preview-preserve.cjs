@@ -79,7 +79,38 @@ const server = createServer(async (request, response) => {
     assert.equal(await page.locator('#preview-path').textContent(), 'good.txt');
     assert.equal(await page.locator('.workspace').evaluate(node => node.classList.contains('preview-loaded')), true);
 
+    const draft = page.locator('#message-text');
+    await draft.fill('Quero revisar este resultado.');
+    const focus = page.getByRole('button', { name: 'Ampliar conversa' });
+    await page.locator('#conversation-options summary').click();
+    await focus.click();
+    assert.equal(await page.locator('.workspace').evaluate(node => node.classList.contains('conversation-focus')), true);
+    assert.equal(await page.locator('#project-preview').isHidden(), true, 'Reading mode leaves result available but out of the way');
+    assert.equal(await page.locator('#project-record').isHidden(), true);
+    assert.equal(await page.evaluate(() => {
+      const conversation = document.getElementById('project-conversation').getBoundingClientRect();
+      const workspace = document.querySelector('.workspace').getBoundingClientRect();
+      return conversation.width >= workspace.width - 2 && document.documentElement.scrollWidth <= innerWidth;
+    }), true, 'Reading mode gives the conversation the full desktop width');
+    await page.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true,
+      'Reading mode must not force sideways scrolling with enlarged text');
+    await page.setViewportSize({ width: 901, height: 700 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true,
+      'Reading mode must remain usable at the narrow desktop breakpoint');
+    assert.equal(await page.getByRole('button', { name: 'Mostrar resultado e projeto' }).isVisible(), true);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
+    await page.getByRole('button', { name: 'Mostrar resultado e projeto' }).click();
+    assert.equal(await page.locator('#project-preview').isVisible(), true, 'The reader can restore the side panels directly');
+    assert.equal(await draft.inputValue(), 'Quero revisar este resultado.');
+    await page.locator('#conversation-options summary').click();
+    await focus.click();
     await page.evaluate(async () => (await import('/preview.mjs')).previewLinkedFile('other.txt'));
+    assert.equal(await page.locator('.workspace').evaluate(node => node.classList.contains('conversation-focus')), false,
+      'Opening a cited file returns to the result and project');
+    assert.equal(await page.locator('#project-preview').isVisible(), true);
+    assert.equal(await draft.inputValue(), 'Quero revisar este resultado.', 'Switching views never sends or erases the draft');
     await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor();
     assert.equal(await page.locator('#preview-path').textContent(), 'other.txt');
     assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('forge.preview-files.v1'))[0].filePath), 'D:\\project\\other.txt');

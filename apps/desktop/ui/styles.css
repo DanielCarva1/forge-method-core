@@ -341,6 +341,13 @@ summary { cursor: pointer; min-height: 48px; padding-block: 12px; font-weight: 6
 .conversation-tools #conversation-options > div { display: grid; gap: 8px; margin-top: 8px; }
 .conversation-tools #conversation-options button { width: 100%; justify-content: center; }
 .conversation-tools #conversation-options button[hidden] { display: none; }
+@media (min-width: 901px) {
+  .workspace.project-ready.conversation-focus { grid-template-columns: minmax(0, 1fr); }
+  .workspace.project-ready.conversation-focus > :not(.conversation) { display: none; }
+  .workspace.project-ready.conversation-focus .conversation { grid-column: 1; grid-row: 1; position: static; height: clamp(620px, calc(100vh - 160px), 1000px); }
+  .workspace.project-ready.conversation-focus .conversation-body { max-height: none; }
+}
+@media (max-width: 900px) { #conversation-focus { display: none; } }
 @media (min-width: 701px) {
   .workspace.project-ready .conversation-heading:has(#conversation-options:not([hidden])):not(:has(.conversation-tools > button:not([hidden]))) {
     display: grid;
