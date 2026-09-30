@@ -85,7 +85,7 @@ async function resumeFixture(page, citation, interrupted = false) {
     } } };
   }, { file: citation, interrupted });
   await page.locator('#conversation-picker summary').click();
-  await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
+  await page.getByRole('button', { name: 'Conectar ao Codex', exact: true }).click();
   await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor();
   if (citation === 'result.txt' && process.env.FORGE_RESULT_SHORTCUT_SCREENSHOT) {
     await page.locator('#messages .message-result-action').scrollIntoViewIfNeeded();

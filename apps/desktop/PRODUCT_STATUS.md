@@ -31,10 +31,13 @@ The Desktop README checkpoints own detailed test/release receipts.
    retain strict capture. Do not infer those paths are supported from onboarding
    success. Native project start, record consultation and results passed with
    the junction present; Codex simulated, external file unchanged.
-2. Complete clean-device sign-in with a real human account, and physical
-   accessibility checks. Existing authenticated-host and simulated-provider
-   evidence cannot close those checks.
-3. Finish [#96](https://github.com/DanielCarva1/forge-method-core/issues/96):
+2. Prioritize visual polish of the existing screens. Native account reuse and
+   simulated first-login/cancellation are covered by the 0.1.80 connection
+   package. Real provider-side first login by a new human on a clean device and
+   physical accessibility remain evidence limits, not a new Forge login system
+   or a reason to block visual work.
+3. **Deferred by maintainer, 2026-09-30:**
+   [#96](https://github.com/DanielCarva1/forge-method-core/issues/96), mobile.
    the supported-path comparison and local-only alpha scope are recorded in
    `docs/development-plan.md`. A real remote connection still needs an explicit
    host-access choice and controlled validation.

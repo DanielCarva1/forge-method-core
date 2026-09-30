@@ -33,7 +33,7 @@ async function openProjectSetup(page) {
 }
 async function openConversation(page) {
   if (!await page.locator('#conversation-picker').evaluate(node => node.open)) await page.locator('#conversation-picker summary').click();
-  await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
+  await page.getByRole('button', { name: 'Conectar ao Codex', exact: true }).click();
 }
 
 (async () => {
@@ -1019,7 +1019,6 @@ async function openConversation(page) {
     assert.equal(await loginPage.locator('#send-message').isDisabled(), true);
     assert.equal(await loginPage.locator('#connect-agent').isDisabled(), true);
     assert.equal(await loginPage.locator('#find-conversations').isDisabled(), true);
-    await loginPage.getByRole('button', { name: 'Entrar com ChatGPT' }).click();
     await loginPage.locator('#login-code').filter({ hasText: 'ABCD-1234' }).waitFor();
     assert.equal(await loginPage.locator('#start-login').isHidden(), true);
     assert.equal(await loginPage.locator('#login-url').textContent(), 'https://auth.openai.com/codex/device');
@@ -1537,7 +1536,7 @@ async function openConversation(page) {
     await page.locator('#progress-status').filter({ hasText: 'Consultado às' }).waitFor();
     assert.equal(await page.locator('#record-title').textContent(), 'Recorded task');
     await page.locator('#conversation-picker summary').click();
-    await page.getByRole('button', { name: 'Abrir conversa', exact: true }).focus();
+    await page.getByRole('button', { name: 'Conectar ao Codex', exact: true }).focus();
     await page.keyboard.press('Enter');
     await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor();
     assert.match(await page.locator('#agent-status').textContent(), /Codex conectado ao projeto another-project/);

@@ -155,7 +155,6 @@
         <div class="conversation-heading"><div><p class="eyebrow" id="conversation-step">SUA CONVERSA</p><h2 id="chat-title" tabindex="-1">Vamos criar juntos</h2><span class="agent-badge">Agente · Codex</span></div><div class="conversation-tools"><button id="resume-last-conversation" type="button" hidden>Continuar conversa anterior</button><button id="reopen-conversation" type="button" hidden>Reabrir conversa</button><button id="confirm-reviewed-send" type="button" hidden>Já conferi o envio</button><button id="conversation-show-context" type="button" hidden>Mostrar resultado e projeto</button><details id="conversation-options" hidden><summary aria-label="Opções da conversa">Opções</summary><div><button id="conversation-focus" type="button" hidden>Ampliar conversa</button><button id="message-view" type="button" hidden>Ver texto original</button><button id="disconnect-agent" disabled hidden>Desconectar</button></div></details></div></div>
         <details id="conversation-picker" class="conversation-picker" hidden>
           <summary>Conversas e histórico</summary>
-          <div class="chat-actions"><button id="connect-agent" disabled>Abrir conversa</button><span id="connect-help" class="hint">Opcional: abra agora sem enviar nada, ou escreva e envie sua ideia.</span></div>
           <label class="check-label" id="new-conversation-choice" hidden><input type="checkbox" id="new-conversation"> Começar outra conversa</label>
           <p class="hint">Encontre conversas deste projeto guardadas pelo Codex neste dispositivo. Abrir uma conversa não envia mensagens nem repete ações; começar outra não apaga o histórico anterior.</p>
           <button id="find-conversations" type="button">Buscar conversas</button>
@@ -163,11 +162,12 @@
           <div id="conversation-list" class="conversation-list" role="group" aria-label="Conversas encontradas"></div>
           <div class="conversation-pages"><button id="previous-conversations" type="button" hidden>← Página anterior</button><button id="more-conversations" type="button" hidden>Próxima página →</button></div>
         </details>
+        <div class="chat-actions"><button id="connect-agent" disabled>Conectar ao Codex</button><span id="connect-help" class="hint">Usamos seu acesso do Codex, sem criar uma conta no Forge. Conectar não envia sua ideia.</span></div>
         <p id="agent-status" class="status" role="status" aria-live="polite" tabindex="-1">Comece um projeto para conversar. Sua ideia só será enviada quando você clicar em Enviar.</p>
         <a id="agent-update-action" href="#updates" hidden>Ver como atualizar o Forge</a>
         <section id="login-panel" class="login-panel" aria-labelledby="login-title" hidden>
-          <h3 id="login-title">Entre no ChatGPT para continuar</h3>
-          <p>Seu texto continua aqui. Depois de entrar, você decide quando enviar.</p>
+          <h3 id="login-title">Conecte sua conta do Codex</h3>
+          <p>Entre com a conta ChatGPT que você usa no Codex. Depois, a conversa será conectada; você decide quando enviar. Seu texto continua aqui.</p>
           <button id="start-login" type="button" class="primary">Entrar com ChatGPT</button>
           <div id="login-challenge" hidden>
             <p>Abra a página de acesso e digite este código temporário:</p>

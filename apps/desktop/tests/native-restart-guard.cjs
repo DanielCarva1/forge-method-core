@@ -106,7 +106,7 @@ if (!process.env.FORGE_DESKTOP_EXE || !process.env.FORGE_TEST_PROJECT) {
     assert.equal(await page.evaluate(() => window.fakeCodexSends), 0);
     assert.match(await page.locator('#agent-status').textContent(), /envio anterior não foi confirmado/i);
     await page.getByLabel('Começar outra conversa').check();
-    await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
+    await page.getByRole('button', { name: 'Conectar ao Codex', exact: true }).click();
     assert.match(await page.locator('#agent-status').textContent(), /Retome a conversa anterior/);
     await page.getByLabel('Começar outra conversa').uncheck();
     await page.getByRole('button', { name: 'Conferir envio anterior' }).click();

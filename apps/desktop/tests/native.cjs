@@ -11,7 +11,7 @@ const { openConversationOptions, clickConversationAction } = require('./conversa
 
 async function openConversation(page) {
   if (!await page.locator('#conversation-picker').evaluate(node => node.open)) await page.locator('#conversation-picker summary').click();
-  await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
+  await page.getByRole('button', { name: 'Conectar ao Codex', exact: true }).click();
 }
 
 async function operateFolderDialog(page, mode, folder, trigger = '#browse-project') {

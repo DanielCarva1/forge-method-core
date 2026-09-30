@@ -66,7 +66,7 @@ const server = createServer(async (request, response) => {
     assert.match(await capability.locator('p').textContent(), /fora da pasta escolhida sem pedir confirmação/);
     await capability.locator('summary').click();
     await page.locator('#conversation-picker summary').click();
-    await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
+    await page.getByRole('button', { name: 'Conectar ao Codex', exact: true }).click();
     await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor();
     assert.equal(await page.evaluate(key => localStorage.getItem(key), bookmark), null, 'Opening an empty thread must not save a bookmark');
     assert.deepEqual(await page.evaluate(() => window.connectCalls), [null]);
@@ -138,7 +138,7 @@ const server = createServer(async (request, response) => {
     await clickConversationAction(page, 'Desconectar');
     await page.locator('#conversation-picker summary').click();
     await page.getByRole('checkbox', { name: 'Começar outra conversa' }).check();
-    await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
+    await page.getByRole('button', { name: 'Conectar ao Codex', exact: true }).click();
     await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor();
     assert.equal(await page.evaluate(key => localStorage.getItem(key), bookmark), 'thread-1', 'An empty alternative must not replace the previous real conversation');
     await open();

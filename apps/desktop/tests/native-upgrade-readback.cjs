@@ -72,7 +72,7 @@ async function readback(page) {
   await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
   await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 60000 });
   await page.locator('#conversation-picker summary').click();
-  await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
+  await page.getByRole('button', { name: 'Conectar ao Codex', exact: true }).click();
   await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor({ timeout: 110000 });
   const messages = page.locator('#messages article');
   const count = await messages.count();

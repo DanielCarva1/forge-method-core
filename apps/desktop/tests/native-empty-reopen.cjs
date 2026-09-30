@@ -70,7 +70,7 @@ if (!executable) throw new Error('Set FORGE_DESKTOP_EXE');
       window.__TAURI__.core = facade;
     });
     await page.locator('#conversation-picker summary').click();
-    await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
+    await page.getByRole('button', { name: 'Conectar ao Codex', exact: true }).click();
     await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor({ timeout: 60000 });
     // Inject only the disconnect notification; the button still uses real native IPC to shut down and reconnect.
     await page.evaluate(() => window.lastChannel.onmessage({ kind: 'disconnected' }));

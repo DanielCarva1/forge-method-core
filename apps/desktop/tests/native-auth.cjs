@@ -10,6 +10,7 @@ const assert = require('node:assert/strict');
 
 (async () => {
   const fakeCompletion = process.env.FORGE_AUTH_FAKE_COMPLETION === '1';
+  const existingAccount = process.env.FORGE_AUTH_EXISTING_ACCOUNT === '1';
   if (!process.env.FORGE_DESKTOP_EXE)
     throw new Error('Set FORGE_DESKTOP_EXE; bundled Forge core and Codex are used when executable overrides are absent');
   const profile = await mkdtemp(path.join(tmpdir(), 'forge-native-auth-'));
@@ -18,8 +19,11 @@ const assert = require('node:assert/strict');
   const project = path.join(profile, 'project');
   await mkdir(project);
   const fakeMarker = path.join(profile, 'fake-completed');
+  const startedMarker = path.join(profile, 'login-started');
+  const alreadySignedIn = existingAccount || (fakeCompletion && process.env.FORGE_AUTH_ALREADY_SIGNED_IN === '1');
   const skillMarker = path.join(profile, 'fake-skill-instructions.json');
   if (fakeCompletion) {
+    if (alreadySignedIn) await require('node:fs/promises').writeFile(fakeMarker, 'existing login');
     const fixture = path.join(__dirname, 'fixtures', 'fake-login-server.cjs');
     await copyFile(fixture, path.join(profile, 'app-server'));
     await copyFile(fixture, path.join(project, 'app-server'));
@@ -30,8 +34,8 @@ const assert = require('node:assert/strict');
   await new Promise(resolve => server.close(resolve));
   const child = spawn(process.env.FORGE_DESKTOP_EXE, [], { cwd: profile, windowsHide: true, stdio: 'ignore', env: {
     ...process.env,
-    CODEX_HOME: codexHome,
-    ...(fakeCompletion ? { FORGE_CODEX_EXE: process.execPath, FORGE_FAKE_AUTH_MARKER: fakeMarker, FORGE_FAKE_SKILL_MARKER: skillMarker } : {}),
+    ...(!existingAccount ? { CODEX_HOME: codexHome } : {}),
+    ...(fakeCompletion ? { FORGE_CODEX_EXE: process.execPath, FORGE_FAKE_AUTH_MARKER: fakeMarker, FORGE_FAKE_SKILL_MARKER: skillMarker, FORGE_FAKE_LOGIN_STARTED: startedMarker } : {}),
     WEBVIEW2_USER_DATA_FOLDER: path.join(profile, 'webview'),
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1`,
   } });
@@ -47,6 +51,7 @@ const assert = require('node:assert/strict');
     await page.locator('#home').waitFor({ state: 'visible' });
     await page.locator('nav a[data-route="workspace"]').click();
     await page.locator('#workspace').waitFor({ state: 'visible' });
+    if (!await page.locator('#custom-folder-option').evaluate(node => node.open)) await page.locator('#custom-folder-option summary').click();
     await page.locator('#project-root').fill(project);
     await page.locator('#start-project').click();
     await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 90000 });
@@ -56,7 +61,25 @@ const assert = require('node:assert/strict');
     assert.match(await page.locator('#record-empty-help').textContent(), /Comece pela conversa/);
     const draft = page.locator('#message-text');
     await draft.fill('Rascunho reservado durante o acesso');
-    await page.locator('#send-message').click();
+    await page.evaluate(() => {
+      const native = window.__TAURI__.core; window.authCalls = [];
+      const facade = Object.create(native);
+      Object.defineProperty(facade, 'invoke', { value: (command, args) => { window.authCalls.push(command); return native.invoke(command, args); } });
+      window.__TAURI__.core = facade;
+    });
+    assert.equal(await page.locator('#conversation-picker').evaluate(node => node.open), false);
+    await page.locator('#connect-agent').click();
+    if (alreadySignedIn) {
+      await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor();
+      await assert.rejects(access(startedMarker));
+      assert.equal(await page.locator('#login-panel').isVisible(), false);
+      assert.equal(await draft.inputValue(), 'Rascunho reservado durante o acesso');
+      assert.equal(await page.locator('#messages article').count(), 0);
+      assert.ok(!(await page.evaluate(() => window.authCalls)).some(command => command === 'start_login' || command === 'send_message'));
+      if (process.env.FORGE_AUTH_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_AUTH_SCREENSHOT });
+      console.log(`PASS: native ${existingAccount ? 'real' : 'simulated'} existing account connected with one click; no login request or message sent.`);
+      return;
+    }
     try { await page.locator('#login-panel').waitFor({ state: 'visible', timeout: 30000 }); }
     catch (error) {
       console.error('Native signed-out diagnostic:', { agent: await page.locator('#agent-status').textContent(), project: await page.locator('#project-status').textContent(), connected: await page.locator('#disconnect-agent').isVisible(), draft: await draft.inputValue() });
@@ -64,7 +87,6 @@ const assert = require('node:assert/strict');
     }
     assert.equal(await draft.inputValue(), 'Rascunho reservado durante o acesso');
     assert.equal(await page.locator('#messages article').count(), 0);
-    await page.locator('#start-login').click();
     await page.locator('#login-code').filter({ hasText: /[A-Z0-9-]+/ }).waitFor({ timeout: 60000 });
     assert.equal(await page.locator('#start-login').isHidden(), true);
     assert.equal(await page.locator('#login-url').textContent(), 'https://auth.openai.com/codex/device');
@@ -77,22 +99,31 @@ const assert = require('node:assert/strict');
     await page.locator('#copy-login-status').filter({ hasText: 'Código copiado' }).waitFor();
     assert.equal(await page.evaluate(() => window.__copiedLoginCode), await page.locator('#login-code').textContent());
     if (process.env.FORGE_AUTH_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_AUTH_SCREENSHOT });
-    if (fakeCompletion) {
+    if (process.env.FORGE_AUTH_CANCEL === '1') {
+      await page.locator('#cancel-login').click();
+      await page.locator('#login-status').filter({ hasText: 'Acesso cancelado' }).waitFor();
+      await assert.rejects(access(skillMarker));
+      assert.equal(await draft.inputValue(), 'Rascunho reservado durante o acesso');
+      assert.equal(await page.locator('#messages article').count(), 0);
+      console.log('PASS: native simulated login cancellation preserves draft and never connects or sends.');
+    } else if (fakeCompletion) {
       await page.locator('#login-panel').waitFor({ state: 'hidden', timeout: 30000 });
       await access(fakeMarker);
       assert.equal(await draft.inputValue(), 'Rascunho reservado durante o acesso');
       assert.equal(await page.locator('#messages article').count(), 0);
+      await page.locator('#agent-status').filter({ hasText: 'Codex conectado' }).waitFor();
       assert.equal(await page.locator('#send-message').isEnabled(), true);
+      await access(skillMarker); // Login itself reconnects, without a second click or Send.
       await page.locator('#send-message').click();
       for (let attempt = 0; attempt < 100; attempt++) {
         try { await access(skillMarker); break; }
         catch { await new Promise(resolve => setTimeout(resolve, 100)); }
       }
       const params = JSON.parse(await readFile(skillMarker, 'utf8'));
-      const skill = params.developerInstructions.match(/Start Forge guidance at `([^`]+)`/)?.[1];
+      const skill = params.developerInstructions.match(/Guided activation contract at `([^`]+)`/)?.[1];
       assert.ok(skill?.endsWith(path.join('forge-core', 'start-forge', 'SKILL.md')));
       const skillHash = createHash('sha256').update(await readFile(skill)).digest('hex');
-      assert.equal(skillHash, '10581e17d5dbb98bda3e0f3bc0b6a152736499451e1424e093dbecfafd8f0b06');
+      assert.equal(skillHash, 'c4ea074badc24b420170abafc894807432a57f553d453865b4cc448e62579e49');
       assert.ok(params.developerInstructions.includes('Do not use a separately installed Start Forge skill'));
       assert.ok(params.developerInstructions.includes('write the file, invoke Forge, and clean up in separate tool calls'));
       if (process.env.FORGE_EXPECT_BUNDLED_CORE_INSTRUCTIONS === '1') {

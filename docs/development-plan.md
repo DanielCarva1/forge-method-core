@@ -99,7 +99,7 @@ guarantee that an LLM always follows guidance.
 |---|---|
 | Stable release | **v0.12.0** published (tag = commit `4fc9bd80`), Release + CI green |
 | Main machine install | `forge-core 0.13.4` at `C:\Users\User\AppData\Local\Programs\forge-core\bin`; SHA-256 and 0.13.3 rollback recorded in the latest desktop README checkpoint. This checkout build is not a new stable Core release. |
-| Desktop delivery | Installed 0.1.79 with unchanged Core 0.13.4: literal objective changes in Andamento; focused native comparison receipt. 0.1.78 junction opening/record/results evidence remains valid within its scope. Detailed receipts and remaining product acceptance are in `apps/desktop/README.md` and `apps/desktop/PRODUCT_STATUS.md`; do not rerun proven chat journeys or infer mobile/clean-device acceptance. |
+| Desktop delivery | Installed 0.1.80 with unchanged Core 0.13.4: visible single-button Codex connection, existing-account reuse and post-login connection without draft replay; focused installed native receipts. 0.1.79 objective comparison remains covered. 0.1.78 junction opening/record/results evidence remains valid within its scope. Detailed receipts and remaining product acceptance are in `apps/desktop/README.md` and `apps/desktop/PRODUCT_STATUS.md`; do not rerun proven chat journeys or infer mobile/clean-device acceptance. |
 | Host skill | `start-forge` identical to the packaged canonical skill |
 | Milestone | **Solo Dogfood Ready — QUALIFIED** (`milestone_qualified: true`, authority revision 5, flipped 2026-09-08 through governed promotion) |
 | SD items (solo milestone) | SD-00 through SD-08 completed; qualification recorded (WS10) |
@@ -367,11 +367,13 @@ round-trip and tampering tests passed; Standards and Spec reviews had no
 findings. Required CI, including the packaged Windows journey, passed in run
 `34297021244`. This maintenance change does not extend platform support.
 
-### Desktop secure-mobile integration assessment (#96) — partial, 2026-09-30
+### Desktop secure-mobile integration assessment (#96) — deferred by maintainer, 2026-09-30
 
 Scope selected for this alpha: keep Forge local-only. Do not add a Forge HTTP
 server, credential relay or mandatory cloud service just to expose the desktop
 screens. This is not a claim that phone access is delivered.
+The maintainer explicitly put mobile aside on 2026-09-30; it is not the next
+product task or a completion gate for the current desktop visual-polish work.
 
 | Existing option | Actual scope | Assessment |
 | --- | --- | --- |

@@ -67,7 +67,7 @@ async function availablePort() {
       console.log('PASS: old installed binary created one real Codex turn in the disposable project/profile.');
     } else {
       await page.locator('#conversation-picker summary').click();
-      await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
+      await page.getByRole('button', { name: 'Conectar ao Codex', exact: true }).click();
       await page.locator('#messages article[data-role="agent"]').waitFor({ timeout: 30000 });
       assert.equal(await page.locator('#messages article[data-role="user"]').count(), 1);
       assert.equal(await page.locator('#messages article[data-role="agent"]').count(), 1);

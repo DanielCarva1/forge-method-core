@@ -11314,3 +11314,41 @@ installed candidate exactly (size/hash above, exact sidecar; GitHub asset digest
 also agrees). No redundant reinstall of the identical download. The installed
 app, source and public alpha now contain the comparison; whole-product phone,
 clean-device and legacy decision-history acceptance is still not claimed.
+
+## Session checkpoint — 2026-09-30 — Desktop 0.1.80 connection
+
+Completed the accepted single-button connection flow in the existing chat owner.
+Conectar ao Codex is visible outside the collapsed conversation/history selector.
+Existing account access is reused; explicit connection/Send needing access starts
+the official device-code flow without a second preliminary click. Successful
+login resumes only the requested connection, never the interrupted Send. Drafts
+survive completion/cancellation. Changing projects clears the pending continuation.
+No Forge account, credential copying, server or additional runtime owner added.
+
+Focused native candidate checks passed: simulated login completion, cancellation,
+and existing account; real existing account connection without login or model turn.
+The final installed artifact passed real-account reuse and simulated completion,
+with history still collapsed; fixture-only explicit Send checked packaged guidance.
+All ran on an isolated Windows desktop without stealing user focus. JS syntax and
+diff whitespace passed. No workspace/full Rust/browser suite or manual GitHub CI.
+Clean-device provider first-login completion and project-switch during login were
+NOT_RUN; UI-wide visual acceptance is not claimed. Other test edits align the
+button label; those suites were not rerun. Core remains 0.13.4, unchanged SHA-256
+D383A05D1D14921908874D1DBB3DDE1DF385E5CF774E4FBEF027BE537F2B479D.
+
+One 0.1.80 NSIS build completed successfully; silent upgrade over 0.1.79 exited 0.
+Installed ProductVersion: 0.1.80. Tested candidate:
+D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.80_x64-setup.exe
+Size: 123182496 bytes; SHA-256:
+1B7E209D0434EE0D8F484E8C13E2C01260D5C10B4C744307F0522C7B30235344.
+Installed executable SHA-256:
+D7E71A7061FB82BA140EA003B70F711ECF1A2C4AB4EE65D51E9CB2B4218B9A47.
+Post-bundle release-directory executable has a different hash; it is not asserted
+byte-identical to the installed payload. Acceptance above is of the actual installed
+candidate. Native screenshot: D:/forge-method-core-build-cache/auth-080.png.
+
+Parent handled this coupled task directly; no workers dispatched this round.
+Per-model usage/accepted-delivery BRL UNKNOWN; no savings estimate substituted.
+Mobile is deferred by maintainer. Next product work is visual polish of existing
+screens and approved artwork, not additional mandatory auth/chat testing.
+Publication/download receipt follows when completed.

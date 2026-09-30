@@ -65,6 +65,7 @@ let transitioning = false;
 let loginActive = false;
 let loginPending = false;
 let loginCompletedEarly = false;
+let loginConnection = null;
 let broken = false;
 let reconnectable = false;
 let generation = 0;
@@ -202,7 +203,7 @@ function controls() {
   cancelLoginButton.disabled = loginPending || !loginActive;
   openLoginPageButton.disabled = loginPending || !loginActive;
   copyLoginCodeButton.disabled = loginPending || !loginActive;
-  connect.hidden = connected;
+  connect.hidden = !project || connected;
   connectHelp.hidden = !project || connected;
   disconnect.hidden = !connected;
   conversationOptions.hidden = !project && messageView.hidden;
@@ -238,6 +239,7 @@ function controls() {
 }
 
 export function setProject(value) {
+  if (loginConnection && (!value || projectKey(value) !== loginConnection.key)) loginConnection = null;
   byId('preview-local-apps').hidden = true;
   byId('preview-local-apps-list').replaceChildren();
   questions.clear();
@@ -702,7 +704,7 @@ function receive(event) {
   controls();
 }
 
-async function connectCurrent(explicitThreadId = null) {
+async function connectCurrent(explicitThreadId = null, startAccess = false) {
   if (!project || connected || transitioning || !loginPanel.hidden) return false;
   updateAction.hidden = true;
   const reviewingSend = unconfirmedSends.has(referenceKey());
@@ -715,8 +717,9 @@ async function connectCurrent(explicitThreadId = null) {
   const current = ++generation;
   transitioning = true; broken = false; reconnectable = false; controls();
   showStatus('Conectando ao Codex com seu login…', 'working');
+  let threadId = explicitThreadId;
+  let needsAccess = false;
   try {
-    let threadId = explicitThreadId;
     if (!threadId && !newConversation.checked) {
       try { threadId = unconfirmedSends.get(referenceKey()) || sessionReferences.get(referenceKey()) || readReference(localStorage, project); }
       catch { throw 'Não foi possível consultar a conversa salva neste dispositivo. Para seguir sem retomá-la, marque “Começar outra conversa”.'; }
@@ -769,11 +772,16 @@ async function connectCurrent(explicitThreadId = null) {
     activeThreadId = null;
     ++generation;
     const needsLogin = offerLogin(error);
+    if (needsLogin) {
+      loginConnection = { key: referenceKey(), generation, threadId };
+      needsAccess = startAccess;
+    }
     showStatus(needsLogin ? 'Entre no ChatGPT para continuar. Sua mensagem não foi enviada.'
       : typeof error === 'string' ? error : 'Não foi possível conectar ao Codex.', 'error');
   }
   transitioning = false;
   controls();
+  if (needsAccess) void startLogin();
   if (connected && !broken) showLatestMessage();
   if (connected && !broken && !byId('workspace').hidden) {
     requestAnimationFrame(() => {
@@ -810,26 +818,36 @@ addEventListener('hashchange', () => {
   if (location.hash !== '#workspace') cancelPendingFirstSend();
 });
 
-connect.addEventListener('click', () => connectCurrent());
+connect.addEventListener('click', () => connectCurrent(null, true));
 async function finishLogin() {
   if (!loginActive || loginPending) return;
   loginPending = true; controls();
   loginStatus.textContent = 'Conferindo o acesso…';
+  let continuation = null;
   try {
     if (await invoke('finish_login')) {
       loginActive = false;
       loginChallenge.hidden = true;
       loginPanel.hidden = true;
+      loginCode.textContent = '';
+      loginUrl.textContent = '';
       loginStatus.textContent = '';
+      continuation = loginConnection;
+      loginConnection = null;
       showStatus('Conta conectada. Sua ideia está pronta para enviar.', 'completed');
       input.focus();
     } else loginStatus.textContent = 'Aguardando a confirmação no navegador. Depois, escolha “Já entrei · verificar”.';
   } catch (error) {
     loginStatus.textContent = typeof error === 'string' ? error : 'Não foi possível conferir o acesso. Tente novamente.';
   } finally { loginPending = false; controls(); }
+  if (continuation && project && continuation.key === referenceKey()
+      && continuation.generation === generation && !connected && !transitioning) {
+    // Resume only the requested connection, never the interrupted Send action.
+    await connectCurrent(continuation.threadId);
+  }
 }
 
-startLoginButton.addEventListener('click', async () => {
+async function startLogin() {
   if (loginActive || loginPending || connected) return;
   loginPending = true; loginCompletedEarly = false; controls();
   copyLoginStatus.hidden = true;
@@ -857,7 +875,8 @@ startLoginButton.addEventListener('click', async () => {
     loginPending = false; controls();
     if (loginCompletedEarly && loginActive) void finishLogin();
   }
-});
+}
+startLoginButton.addEventListener('click', () => void startLogin());
 
 finishLoginButton.addEventListener('click', () => void finishLogin());
 copyLoginCodeButton.addEventListener('click', async () => {
@@ -875,6 +894,7 @@ cancelLoginButton.addEventListener('click', async () => {
   loginPending = true; controls();
   try {
     await invoke('cancel_login');
+    loginConnection = null;
     loginActive = false;
     loginChallenge.hidden = true;
     loginCode.textContent = '';
@@ -936,7 +956,7 @@ byId('message-form').addEventListener('submit', async event => {
     showStatus('A mensagem está muito longa. Divida em partes menores; sua conexão continua ativa.', 'error');
     return;
   }
-  if (!connected && !await connectCurrent()) return;
+  if (!connected && !await connectCurrent(null, true)) return;
   const current = generation;
   const currentThread = activeThreadId;
   if (!currentThread) {

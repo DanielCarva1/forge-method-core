@@ -13,11 +13,12 @@ createInterface({ input: process.stdin }).on('line', line => {
     case 'initialize': reply(request.id, {}); break;
     case 'account/read': reply(request.id, { account: existsSync(marker) ? { type: 'chatgpt' } : null, requiresOpenaiAuth: true }); break;
     case 'account/login/start':
+      if (process.env.FORGE_FAKE_LOGIN_STARTED) writeFileSync(process.env.FORGE_FAKE_LOGIN_STARTED, 'started');
       reply(request.id, { type: 'chatgptDeviceCode', loginId: 'fixture-login', userCode: 'TEST-1234', verificationUrl: 'https://auth.openai.com/codex/device' });
-      setTimeout(() => {
+      if (process.env.FORGE_AUTH_CANCEL !== '1') setTimeout(() => {
         writeFileSync(marker, 'completed');
         process.stdout.write(`${JSON.stringify({ method: 'account/login/completed', params: { loginId: 'fixture-login', success: true } })}\n`);
-      }, 1500);
+      }, 6000);
       break;
     case 'account/login/cancel': reply(request.id, { status: 'canceled' }); break;
     case 'thread/start':

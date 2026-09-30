@@ -82,7 +82,7 @@ async function openProject(page) {
 }
 async function resume(page) {
   await page.locator('#conversation-picker summary').click();
-  await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
+  await page.getByRole('button', { name: 'Conectar ao Codex', exact: true }).click();
   await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor({ timeout: 110000 });
   return page.locator('#messages article').allTextContents();
 }

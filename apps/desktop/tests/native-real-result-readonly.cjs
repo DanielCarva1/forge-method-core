@@ -70,7 +70,7 @@ async function openProject(page) {
 
 async function resume(page) {
   await page.locator('#conversation-picker summary').click();
-  await page.getByRole('button', { name: 'Abrir conversa', exact: true }).click();
+  await page.getByRole('button', { name: 'Conectar ao Codex', exact: true }).click();
   await page.locator('#agent-status').filter({ hasText: 'Conversa retomada' }).waitFor({ timeout: 110000 });
   const messages = page.locator('#messages article');
   assert.ok(await messages.count() >= 30, 'Expected the existing substantial real conversation');
