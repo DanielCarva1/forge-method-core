@@ -22,13 +22,14 @@ def find_dialog(title):
 
 
 mode = sys.argv[1]
-dialog = find_dialog("Escolha um arquivo deste projeto" if mode == "file-select" else "Escolha a pasta do projeto")
-if sys.argv[1] == "cancel":
+title = "Escolha um arquivo como referência" if mode.startswith("reference-") else "Escolha um arquivo deste projeto" if mode == "file-select" else "Escolha a pasta do projeto"
+dialog = find_dialog(title)
+if mode in ("cancel", "reference-cancel"):
     dialog.close()
 elif sys.argv[1] == "select":
     dialog.descendants(class_name="Edit")[0].set_edit_text(sys.argv[2])
     dialog.descendants(title="Selecionar pasta", class_name="Button")[0].click()
-elif mode == "file-select":
+elif mode in ("file-select", "reference-select"):
     try:
         dialog.descendants(class_name="Edit")[0].set_edit_text(sys.argv[2])
         [button for button in dialog.descendants(class_name="Button") if button.window_text().replace("&", "") == "Abrir"][0].click()

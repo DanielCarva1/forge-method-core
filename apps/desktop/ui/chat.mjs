@@ -27,6 +27,10 @@ const input = byId('message-text');
 const composerHelp = byId('composer-help');
 const draftNote = byId('draft-note');
 const accessNote = byId('agent-access-note');
+const addReference = byId('add-reference');
+const referenceStatus = byId('reference-status');
+let referencePending = false;
+let referenceRequest = 0;
 const messages = byId('messages');
 const conversationBody = document.querySelector('.conversation-body');
 const jumpLatest = byId('jump-latest');
@@ -166,7 +170,7 @@ function updateResumeAction() {
 function updateSendControl() {
   byId('send-label').textContent = project ? 'Enviar'
     : byId('project-root').value.trim() ? 'Enviar e abrir projeto' : 'Enviar e criar projeto';
-  send.disabled = transitioning || loginPending || !loginPanel.hidden || busy || broken ||
+  send.disabled = referencePending || transitioning || loginPending || !loginPanel.hidden || busy || broken ||
     !input.value.trim() || (connected && unconfirmedSends.has(referenceKey()));
 }
 
@@ -178,6 +182,11 @@ function controls() {
   updateSendControl();
   // A running turn or lost connection blocks Send, not the user's next local draft.
   input.disabled = transitioning;
+  addReference.disabled = transitioning || referencePending;
+  if (input.getClientRects().length) {
+    input.style.height = 'auto';
+    input.style.height = `${input.scrollHeight}px`;
+  }
   stop.disabled = transitioning || !connected || !busy || broken;
   stop.hidden = !connected || !busy;
   startLoginButton.disabled = loginPending || loginActive || connected;
@@ -222,6 +231,9 @@ function controls() {
 }
 
 export function setProject(value) {
+  referenceRequest++;
+  referenceStatus.hidden = true;
+  referenceStatus.textContent = '';
   if (!value) setConversationFocus(false);
   reconnectable = false;
   const previous = project ?? draftOrigin;
@@ -861,7 +873,7 @@ confirmReviewedSend.addEventListener('click', () => {
 
 byId('message-form').addEventListener('submit', async event => {
   event.preventDefault();
-  if (!input.value.trim() || busy || transitioning || broken) return;
+  if (!input.value.trim() || referencePending || busy || transitioning || broken) return;
   if (!project) {
     pendingFirstSend = { text: input.value, path: byId('project-root').value.trim() };
     const setup = byId('project-setup');
@@ -896,6 +908,8 @@ byId('message-form').addEventListener('submit', async event => {
   }
   input.value = '';
   projectDrafts.delete(referenceKey());
+  referenceStatus.hidden = true;
+  referenceStatus.textContent = '';
   busy = true; controls(); stop.disabled = true;
   showStatus('Enviando sua mensagem…', 'working');
   const id = `user-${Date.now()}`;
@@ -953,6 +967,49 @@ input.addEventListener('input', () => {
     storeDraft(owner, input.value);
   }
   controls();
+});
+
+addReference.addEventListener('click', async () => {
+  if (addReference.disabled) return;
+  const owner = generation;
+  const selection = ++referenceRequest;
+  referencePending = true;
+  referenceStatus.hidden = false;
+  referenceStatus.textContent = 'Escolha uma imagem, um texto ou outro arquivo. Nada será enviado agora.';
+  controls();
+  try {
+    const file = await invoke('choose_reference_file');
+    if (owner !== generation || selection !== referenceRequest || byId('workspace').hidden) return;
+    if (!file) { referenceStatus.textContent = 'Seleção cancelada. Sua mensagem continua como estava.'; return; }
+    const reference = `Use como referência este arquivo local, sem executá-lo: ${JSON.stringify(file)}`;
+    if (input.value.includes(reference)) { referenceStatus.textContent = 'Este arquivo já está indicado na mensagem.'; return; }
+    const next = `${input.value.trimEnd()}${input.value.trim() ? '\n\n' : ''}${reference}`;
+    if (new TextEncoder().encode(next).length > 64000) {
+      referenceStatus.textContent = 'A mensagem está muito longa. Reduza o texto antes de adicionar este arquivo.';
+      return;
+    }
+    input.value = next;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    referenceStatus.textContent = 'Arquivo indicado no rascunho. Ao enviar, o agente poderá lê-lo neste computador; o Forge não cria uma cópia.';
+    input.focus();
+  } catch {
+    if (owner === generation && selection === referenceRequest) referenceStatus.textContent = 'Não foi possível escolher o arquivo. Sua mensagem não foi alterada.';
+  } finally {
+    referencePending = false;
+    controls();
+  }
+});
+
+input.addEventListener('keydown', event => {
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) {
+    event.preventDefault();
+    if (!send.disabled) byId('message-form').requestSubmit();
+  }
+});
+addEventListener('resize', () => controls());
+addEventListener('hashchange', () => {
+  if (location.hash !== '#workspace') referenceRequest++;
+  requestAnimationFrame(() => controls());
 });
 
 stop.addEventListener('click', async () => {

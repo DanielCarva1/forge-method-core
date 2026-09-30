@@ -47,6 +47,26 @@ assert.ok(executable && output, 'Set FORGE_DESKTOP_EXE and FORGE_VISUAL_OUTPUT')
       fixture = await mkdtemp(path.join(fixtureRoot, 'forge-native-visual-project-'));
       await mkdir(path.join(fixture, 'site'));
       await writeFile(path.join(fixture, 'site', 'index.html'), '<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Jardim de ideias</title><h1>Jardim de ideias</h1><p>Uma página de teste local para conferir a prévia.</p></html>');
+      if (process.env.FORGE_VISUAL_REFERENCE === '1') {
+        const composer = page.locator('#message-text');
+        await composer.fill('Quero criar algo inspirado nesta referência.');
+        for (const mode of ['reference-select', 'reference-cancel']) {
+          const before = await composer.inputValue();
+          const helper = spawn('py', ['-3.12', path.join(__dirname, 'folder-dialog.py'), mode, path.join(fixture, 'site', 'index.html')], { windowsHide: true });
+          let output = '';
+          helper.stdout.on('data', chunk => { output += chunk; });
+          helper.stderr.on('data', chunk => { output += chunk; });
+          const exited = once(helper, 'exit');
+          await page.locator('#add-reference').click();
+          const [code] = await exited;
+          assert.equal(code, 0, `Reference dialog failed: ${output}`);
+          await page.waitForFunction(() => !document.querySelector('#add-reference').disabled);
+          if (mode === 'reference-select') assert.ok((await composer.inputValue()).includes(JSON.stringify(path.join(fixture, 'site', 'index.html'))));
+          else assert.equal(await composer.inputValue(), before);
+        }
+        assert.equal(await page.locator('#messages article').count(), 0, 'Selecting a reference is not a Send');
+        console.log('PASS: actual Windows reference selection and cancellation preserve the visible draft without Send.');
+      }
       await page.locator('#custom-folder-option summary').click();
       await page.locator('#project-root').fill(fixture);
       await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
@@ -54,6 +74,13 @@ assert.ok(executable && output, 'Set FORGE_DESKTOP_EXE and FORGE_VISUAL_OUTPUT')
       await page.evaluate(() => import('./preview.mjs').then(module => module.previewLinkedFile('site/index.html')));
       await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
       await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias' }).waitFor({ timeout: 20000 });
+      if (process.env.FORGE_VISUAL_REFERENCE === '1') {
+        const fit = await page.evaluate(() => ({
+          form: document.querySelector('#message-form').getBoundingClientRect().bottom,
+          panel: document.querySelector('#project-conversation').getBoundingClientRect().bottom,
+        }));
+        assert.ok(fit.form <= fit.panel, 'Native long draft and file actions remain inside their panel');
+      }
       await page.screenshot({ path: path.join(output, 'loaded-project.png'), fullPage: false });
       if (process.env.FORGE_VISUAL_NAVIGATION === '1') {
         await checkWorkspaceNavigation(page);

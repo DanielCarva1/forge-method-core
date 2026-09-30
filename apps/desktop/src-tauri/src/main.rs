@@ -7,6 +7,7 @@ mod preview;
 mod preview_site;
 mod progress;
 mod project;
+mod reference;
 use tauri::Manager;
 
 #[derive(serde::Serialize)]
@@ -131,6 +132,7 @@ fn main() {
             open_updates_page,
             open_external_link,
             project::choose_project_folder,
+            reference::choose_reference_file,
             project::create_default_project,
             project::inspect_project,
             project::start_project,

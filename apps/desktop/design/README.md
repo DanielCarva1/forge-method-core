@@ -5,8 +5,9 @@ and Project are four direct choices over the same existing panels. Progress
 does not append the technical folder/connection card; Project keeps switching
 folders and inspecting connection details one choice away. At 480px and below,
 the choices form a balanced two-column grid. The project name remains in the
-workspace heading rather than repeating inside the narrow Project card. Wider
-layouts and first-use folder selection are unchanged.
+workspace heading rather than repeating inside the narrow Project card. Since
+0.1.72, the same choices provide sticky desktop shortcuts to the existing
+panels. First-use folder selection remains optional.
 
 The current 0.1.34 UI slice makes short cited-file choices visible on a new
 reply and gives an empty Forge record a direct route to the same unsent
@@ -64,10 +65,13 @@ Focused browser checks cover existing event/error behavior, narrow layouts,
 packaged HTML and project lookup. Visual review compares hierarchy, palette,
 message shapes and readable spacing against the retained concepts.
 
-Still separate work: backend-driven progress (#86), complete preview (#91), reopening
-saved conversations (#93), manual appearance
-preferences (#84) and distribution (#97). System-theme support alone does not
-establish complete accessibility conformance or mobile remote-agent access.
+Backend-driven progress (#86), bounded local preview/change requests (#91),
+saved-conversation reopening (#93), manual appearance preferences (#84), and
+Windows alpha distribution (#97) have implemented paths. Their actual evidence
+and remaining limitations belong in the current Desktop checkpoint; these old
+issue references do not prove that the capabilities are missing. Physical-device
+and manual accessibility checks remain separate, as does secure remote-agent
+access. Local static preview is not an interactive app preview.
 
 The local preview now covers bounded project text and raster files in the
 native WebView. It is not a browser, a published-artifact checker, or the full

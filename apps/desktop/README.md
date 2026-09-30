@@ -1,8 +1,8 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.72` is current source and locally
+Independent Tauri application. Desktop `0.1.73` is current source and locally
 installed. The latest verified [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.71-alpha.1)
-is `0.1.71`; `0.1.72` has not been published for download.
+is `0.1.71`; `0.1.73` has not been published for download.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -10860,3 +10860,54 @@ This is an installed local candidate, not a new public release. Latest public
 installer remains 0.1.71. Source and release notes describe that distinction.
 Work was performed directly by the parent, without new subagents. No model-
 attributed BRL cost or subscription savings is claimed.
+
+### Desktop 0.1.73 local references and writing — 2026-09-30
+
+The conversation can add a user-selected local file to the visible text draft
+before a project exists or within a confirmed project. The Windows picker only
+selects/validates an existing ordinary file; it does not read, copy or upload it.
+The ordinary message requests using that path as a reference without executing
+the file. The person reviews/removes the text and explicitly sends; Codex's
+existing local tools remain responsible for any subsequent reading. No new
+attachment store, image-input protocol, project registry or governance path.
+Messages grow vertically to a bounded size. Enter keeps a newline; Ctrl+Enter
+uses the same guarded Send. Late selections after leaving/changing project,
+cancel/error/duplicates and pending-selection Send attempts preserve the draft.
+
+`cargo check -p forge-desktop` through the desktop manifest passed, followed by
+one focused reference test and the affected crate: 54 passed, one existing
+ignored browser-association test. The crate-wide formatting check found prior
+formatting differences; only the new module was formatted. Focused browser
+doubles passed: `composer-reference.cjs`, `composer-folder.cjs`,
+`project-creation.cjs` and `workspace-navigation-browser.cjs`. A test initially
+lost input focus to the route's scheduled heading focus; targeting the textbox
+for the shortcut fixed that test race, without altering product routing.
+No core workspace suite, broad browser suite, manual GitHub CI or new real
+Codex turn was run. Model reading/understanding a selected reference is not
+proved by selection or mocked Send.
+
+The first 0.1.73 candidate (SHA-256
+`09764855DE9075786328BA403EF5BDB7F55DDE0617442CADB9DAADB3D8D23600`)
+passed dialog/navigation tests but visual inspection found writing controls
+outside their panel for a long draft. It was not published. It is retained as
+`D:/forge-method-core-build-cache/Forge_0.1.73-layout-rejected.exe`.
+The panel now fits its minimum content and an executable containment assertion
+covers long drafts. The repaired final candidate installed silently (exit 0):
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.73_x64-setup.exe`,
+123,084,843 bytes, SHA-256
+`0FEE80375178146F40341CF973459263296C5E243989DED3805F8F325C1D3DA7`.
+Installed version 0.1.73; exe SHA-256
+`E6F7AE40D4DB7F2F4D6F13E02058840CC522891CD41F47C5FCED59EF3469EC8A`.
+The final native hidden-desktop run passed actual Windows reference selection
+and cancellation, long-draft containment, project initialization/local HTML
+preview, keyboard navigation, narrow/larger-text areas and preserved draft,
+without Send. Final screenshots were inspected in
+`C:/ForgeFast/forge-073-reference-final/`. Test project/profile were removed.
+Large drafts can still require ordinary page scrolling; physical-phone and
+screen-reader checks remain unperformed. Existing broad browser-suite and
+static-preview limitations remain explicit in the release notes.
+
+Local installation is verified; publication/readback is recorded below when
+complete. Two local builds were needed because the first visual check found a
+real layout defect, not to repeat passing engine tests. No new subagents or
+model-attributed BRL/subscription savings claims for this package.
