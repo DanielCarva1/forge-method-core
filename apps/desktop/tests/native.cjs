@@ -361,7 +361,7 @@ async function operatePreviewDialog(page, file) {
       await page.locator('#project-setup summary').click();
       assert.equal(await page.locator('#browse-project').isVisible(), true, 'The Windows folder picker is still reachable from the project pane');
       await page.locator('#project-setup summary').click();
-      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Resultado' }).click();
       assert.equal(await page.locator('#project-preview').isVisible(), true);
       if (process.env.FORGE_MOBILE_PREVIEW_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_MOBILE_PREVIEW_SCREENSHOT, fullPage: true });
       await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Conversa' }).click();
@@ -844,7 +844,7 @@ async function operatePreviewDialog(page, file) {
         return ids.indexOf('preview-browser-action') < ids.indexOf('request-preview-change');
       }), true);
       await page.setViewportSize({ width: 390, height: 844 });
-      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Resultado' }).click();
       assert.equal(await page.locator('#mobile-workspace-nav button').evaluateAll(nodes => nodes[0].getBoundingClientRect().top === nodes[1].getBoundingClientRect().top), true, 'Normal narrow native text keeps two workspace choices per row');
       await page.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
       assert.equal(await page.locator('#mobile-workspace-nav button').evaluateAll(nodes => nodes[0].getBoundingClientRect().top !== nodes[1].getBoundingClientRect().top), true, 'Enlarged native text gives workspace choices a full row');
@@ -853,7 +853,7 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.getByRole('button', { name: 'Abrir PDF no navegador' }).evaluate(node => node.getBoundingClientRect().height >= 48), true);
       if (process.env.FORGE_PDF_NARROW_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_PDF_NARROW_SCREENSHOT, fullPage: true });
       await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Conversa' }).click();
-      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Resultado' }).click();
       assert.equal(await page.locator('#preview-path').textContent(), 'report.pdf');
       await page.evaluate(() => { document.documentElement.style.fontSize = ''; });
       await page.setViewportSize(initialViewport);
@@ -915,7 +915,7 @@ async function operatePreviewDialog(page, file) {
       assert.equal(await page.evaluate(() => document.querySelector('#preview-site').contentDocument), null);
       if (process.env.FORGE_SITE_SCREENSHOT) await page.screenshot({ path: process.env.FORGE_SITE_SCREENSHOT, fullPage: true });
       await page.setViewportSize({ width: 390, height: 844 });
-      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+      await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Resultado' }).click();
       assert.equal(await page.locator('#preview-site').isVisible(), true, 'The loaded local site remains visible in the narrow preview');
       assert.equal(await page.getByRole('button', { name: 'Pedir mudança neste arquivo' }).isVisible(), true);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'A loaded site must not overflow the narrow workspace');
@@ -1076,7 +1076,7 @@ async function operatePreviewDialog(page, file) {
           assert.match(await readFile(generatedFile, 'utf8'), /Jardim de ideias renovado/);
           if (process.env.FORGE_TEST_AGENT_SMOKE_NARROW === '1') {
             assert.equal(await page.locator('#project-conversation').isVisible(), true, 'Change request returns to the conversation');
-            await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+            await page.locator('#mobile-workspace-nav').getByRole('button', { name: 'Resultado' }).click();
           }
           await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias renovado' }).waitFor({ timeout: 20000 });
           assert.equal(await page.locator('#messages article[data-role="user"]').count(), 3);

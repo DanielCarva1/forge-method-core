@@ -404,12 +404,12 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#project-conversation').isVisible(), true);
     assert.equal(await projectsPage.locator('#project-preview').isVisible(), false);
     assert.equal(await projectsPage.locator('#project-record').isVisible(), false);
-    await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+    await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Resultado' }).click();
     assert.equal(await projectsPage.locator('#project-preview').isVisible(), true);
     assert.equal(await projectsPage.evaluate(() => document.activeElement?.dataset.mobilePaneButton), 'preview', 'Panel buttons retain keyboard focus');
     assert.equal(await projectsPage.locator('#preview-text').textContent(), '<script>primeiro</script>', 'Switching views must retain the actual loaded result');
     assert.equal(await projectsPage.locator('#project-conversation').isVisible(), false);
-    assert.equal(await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).getAttribute('aria-pressed'), 'true');
+    assert.equal(await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Resultado' }).getAttribute('aria-pressed'), 'true');
     await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Andamento' }).click();
     assert.equal(await projectsPage.locator('#project-record').isVisible(), true);
     assert.equal(await projectsPage.evaluate(() => document.activeElement?.dataset.mobilePaneButton), 'progress');
@@ -428,7 +428,7 @@ async function openConversation(page) {
     assert.equal(await projectsPage.evaluate(() => document.activeElement?.dataset.mobilePaneButton), 'progress');
     await projectsPage.keyboard.press('Enter');
     assert.equal(await projectsPage.locator('#project-record').isVisible(), true, 'Keyboard activation switches panels');
-    await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+    await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Resultado' }).click();
     await projectsPage.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
     assert.equal(await projectsPage.locator('#project-conversation').isVisible(), true, 'A change request must return to the same conversation');
     assert.equal(await projectsPage.evaluate(() => document.activeElement?.id), 'message-text');
@@ -566,7 +566,7 @@ async function openConversation(page) {
     await projectsPage.getByRole('button', { name: 'Abrir PDF no navegador' }).click();
     await projectsPage.locator('#preview-status').filter({ hasText: 'Não foi possível abrir este PDF' }).waitFor();
     await projectsPage.setViewportSize({ width: 390, height: 844 });
-    await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+    await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Resultado' }).click();
     assert.equal(await projectsPage.locator('#mobile-workspace-nav button').evaluateAll(nodes => nodes[0].getBoundingClientRect().top === nodes[1].getBoundingClientRect().top), true, 'Normal narrow text keeps two workspace choices per row');
     await projectsPage.setViewportSize({ width: 360, height: 844 });
     assert.equal(await projectsPage.locator('#mobile-workspace-nav button').evaluateAll(nodes => nodes[0].getBoundingClientRect().top === nodes[1].getBoundingClientRect().top), true, 'Minimum-width window keeps the compact two-column navigation at normal text size');
@@ -578,7 +578,7 @@ async function openConversation(page) {
     assert.equal(await projectsPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'PDF actions must not widen a 200% text narrow viewport');
     assert.equal(await projectsPage.getByRole('button', { name: 'Abrir PDF no navegador' }).evaluate(node => node.getBoundingClientRect().height >= 48), true);
     await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Conversa' }).click();
-    await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Prévia' }).click();
+    await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Resultado' }).click();
     assert.equal(await projectsPage.locator('#preview-path').textContent(), 'output/report.pdf', 'Switching panes must retain the selected PDF');
     await projectsPage.evaluate(() => { document.documentElement.style.fontSize = ''; });
     await projectsPage.setViewportSize({ width: 1280, height: 720 });

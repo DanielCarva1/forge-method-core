@@ -51,6 +51,7 @@ const server = createServer(async (request, response) => {
       } };
     });
     await page.goto(`http://127.0.0.1:${server.address().port}/#workspace`);
+    await page.locator('#custom-folder-option summary').click();
     await page.getByRole('textbox', { name: 'Pasta do projeto' }).fill('D:\\project');
     await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
     await page.waitForFunction(() => document.getElementById('project-status').textContent.includes('Projeto pronto'));

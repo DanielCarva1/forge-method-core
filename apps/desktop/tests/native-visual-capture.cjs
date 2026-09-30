@@ -6,6 +6,7 @@ const { mkdtemp, rm, mkdir, writeFile } = require('node:fs/promises');
 const { once } = require('node:events');
 const path = require('node:path');
 const assert = require('node:assert/strict');
+const { checkWorkspaceNavigation } = require('./workspace-navigation.cjs');
 
 const executable = process.env.FORGE_DESKTOP_EXE;
 const output = process.env.FORGE_VISUAL_OUTPUT;
@@ -54,6 +55,12 @@ assert.ok(executable && output, 'Set FORGE_DESKTOP_EXE and FORGE_VISUAL_OUTPUT')
       await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
       await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias' }).waitFor({ timeout: 20000 });
       await page.screenshot({ path: path.join(output, 'loaded-project.png'), fullPage: false });
+      if (process.env.FORGE_VISUAL_NAVIGATION === '1') {
+        await checkWorkspaceNavigation(page);
+        await page.locator('[data-mobile-pane-button="progress"]').click();
+        await page.screenshot({ path: path.join(output, 'project-navigation.png'), fullPage: false });
+        console.log('PASS: native workspace navigation, keyboard focus, narrow layout and larger text without Send.');
+      }
     }
     console.log(`PASS: captured native-app screens${fixture ? ' including a disposable loaded project' : ' without project mutation'} and no Send: ${output}`);
   } finally {

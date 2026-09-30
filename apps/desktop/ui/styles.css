@@ -109,7 +109,11 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 .workspace:not(.project-ready) .conversation { grid-column: 1; grid-row: 1; min-height: 0; }
 .workspace:not(.project-ready) .conversation-body { min-height: 0; max-height: none; overflow: visible; }
 .workspace:not(.project-ready) .empty-conversation { display: none; }
-.mobile-workspace-nav { display: none; }
+.mobile-workspace-nav:not([hidden]) { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; padding: 8px; position: sticky; top: 8px; z-index: 5; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); scroll-margin-top: 8px; }
+.mobile-workspace-nav button { flex: 1 1 auto; min-width: 0; padding-inline: 16px; border-color: transparent; background: transparent; }
+.mobile-workspace-nav button[aria-pressed="true"] { border-color: var(--line); background: var(--soft); font-weight: 750; }
+.workspace.project-ready > .panel { scroll-margin-top: calc(var(--workspace-nav-height, 64px) + 24px); }
+.mobile-workspace-nav[hidden] { display: none; }
 .workspace.project-ready { grid-template-columns: minmax(0, 1.18fr) minmax(340px, 1fr); }
 .workspace.project-ready.preview-loaded { grid-template-columns: minmax(0, 1fr) minmax(340px, 1.35fr); }
 @media (min-width: 901px) {
@@ -204,7 +208,7 @@ p { margin-block: 12px; overflow-wrap: anywhere; }
 .workspace-phase[hidden] { display: none; }
 .workspace-phase { display: inline-block; margin: 0 0 12px; padding: 5px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: .9rem; }
 .workspace-screen:has(.workspace.project-ready) .back-link { min-height: 48px; font-size: .9rem; }
-.workspace.project-ready .conversation { position: sticky; top: 16px; display: flex; flex-direction: column; height: clamp(560px, calc(100vh - 208px), 840px); min-height: 0; padding: 16px 20px; }
+.workspace.project-ready .conversation { position: sticky; top: calc(var(--workspace-nav-height, 64px) + 24px); display: flex; flex-direction: column; height: clamp(560px, calc(100vh - 208px), 840px); min-height: 0; padding: 16px 20px; }
 .workspace.project-ready .conversation:has(.login-panel:not([hidden])) { position: static; height: auto; min-height: 650px; }
 .workspace.project-ready .conversation:has(.login-panel:not([hidden])) .conversation-body { flex: 0 1 auto; min-height: 180px; max-height: 360px; }
 .workspace.project-ready .conversation:has(.login-panel:not([hidden])) .empty-conversation { display: none; }
@@ -487,7 +491,7 @@ footer { color: var(--muted); padding-block: 8px 32px; }
   .workspace.project-ready:not(.preview-loaded) .preview-actions { grid-column: 1; grid-row: auto; }
   .workspace.project-ready:not(.preview-loaded) .preview-actions { margin-top: 8px; }
   .workspace-screen:has(.workspace.project-ready) .workspace-phase { display: none; }
-  .mobile-workspace-nav:not([hidden]) { display: flex; gap: 8px; margin: 12px 0 16px; overflow-x: auto; scroll-margin-top: 12px; }
+  .mobile-workspace-nav:not([hidden]) { display: flex; flex-wrap: nowrap; overflow-x: auto; }
   .mobile-workspace-nav button { flex: 1 0 auto; min-width: 0; padding-inline: 12px; border-color: var(--line); background: var(--surface); }
   .mobile-workspace-nav button[aria-pressed="true"] { border-color: var(--focus); background: var(--soft); font-weight: 750; }
   .workspace.project-ready[data-mobile-pane="conversation"] > :not(.conversation),

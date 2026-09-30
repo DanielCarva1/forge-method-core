@@ -1,5 +1,6 @@
-// The mobile switch changes only which existing panel is visible; it never
-// copies project, preview or conversation state.
+// Desktop shortcuts and the narrow-screen switch share the existing panels;
+// neither copies state nor performs project or conversation operations.
+import { setConversationFocus } from './conversation-focus.mjs';
 const navigation = document.getElementById('mobile-workspace-nav');
 const workspace = document.querySelector('.workspace');
 const buttons = [...navigation.querySelectorAll('[data-mobile-pane-button]')];
@@ -9,6 +10,13 @@ const panels = {
   progress: document.getElementById('project-record'),
   project: document.getElementById('project-panel'),
 };
+const narrow = matchMedia('(max-width: 700px)');
+
+// Keep headings and the sticky conversation below the navigation even when
+// larger text wraps its buttons onto another row.
+new ResizeObserver(() => {
+  workspace.style.setProperty('--workspace-nav-height', `${navigation.hidden ? 0 : navigation.getBoundingClientRect().height}px`);
+}).observe(navigation);
 
 export function showWorkspacePane(pane, focus = false) {
   if (!Object.hasOwn(panels, pane)) return;
@@ -16,10 +24,12 @@ export function showWorkspacePane(pane, focus = false) {
   for (const button of buttons) {
     button.setAttribute('aria-pressed', String(button.dataset.mobilePaneButton === pane));
   }
-  if (focus && matchMedia('(max-width: 700px)').matches) {
+  if (focus) {
+    if (pane !== 'conversation') setConversationFocus(false);
     const heading = panels[pane].querySelector('h2, h3');
     heading?.focus({ preventScroll: true });
-    navigation.scrollIntoView({ block: 'start' });
+    if (narrow.matches) navigation.scrollIntoView({ block: 'start' });
+    else panels[pane].scrollIntoView({ block: 'start' });
   }
 }
 
@@ -30,8 +40,7 @@ export function setMobileWorkspaceProject(project) {
 
 for (const button of buttons) {
   button.addEventListener('click', () => {
-    showWorkspacePane(button.dataset.mobilePaneButton);
-    if (matchMedia('(max-width: 700px)').matches) navigation.scrollIntoView({ block: 'start' });
+    showWorkspacePane(button.dataset.mobilePaneButton, true);
   });
 }
 showWorkspacePane('conversation');

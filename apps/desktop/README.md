@@ -1,8 +1,8 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.70` is current source and locally
-installed. The latest verified [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.64-alpha.1)
-is `0.1.64`; `0.1.70` has not been published for download.
+Independent Tauri application. Desktop `0.1.72` is current source and locally
+installed. The latest verified [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.71-alpha.1)
+is `0.1.71`; `0.1.72` has not been published for download.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -10818,3 +10818,45 @@ ProductVersion/exe hash matched the earlier local installation. This confirms
 the published file is the installed candidate; it does not extend the real
 Codex coverage beyond the custom-folder 0.1.70 journey. The broad browser
 suite still fails on older first-use expectations; do not call it passing.
+
+### Desktop 0.1.72 project-area navigation — 2026-09-30
+
+A project now exposes Conversa, Resultado, Andamento and Projeto on desktop,
+not only on narrow screens. Desktop shortcuts scroll/focus the existing panel;
+narrow screens keep the existing single-panel layout. The sticky bar reserves
+space for its actual height, including wrapped larger text. Leaving expanded
+conversation reveals the requested area. No new state store, engine query,
+Codex reconnection or Send was added. Unsent drafts survive area navigation.
+
+Focused `workspace-navigation-browser.cjs`, `preview-preserve.cjs` and
+`record-priority.cjs` passed. Preview preservation initially timed out because
+its old setup did not expand the optional folder disclosure; that setup was
+corrected and the focused test passed. No Rust behavior changed; no workspace
+suite, broad browser suite or real Codex turn was run. Prior broad-suite
+first-use limitations remain. One NSIS candidate was built using the cached
+release path, then installed silently over 0.1.71 (exit 0). Candidate:
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.72_x64-setup.exe`,
+123,054,037 bytes, SHA-256
+`4D434CD70C7ED31DB40F1CFC307285B69AAA44611A105F732B883EE1B440DCB7`.
+Installed ProductVersion 0.1.72, exe SHA-256
+`B8D12D8EEC4E784CD8AE6CD18F8A00C7E3F72023D796A141AC863BBC893C1FA6`.
+An initial equality assertion against the raw release exe was incorrect:
+the complete byte comparison found only Tauri's three bundle-marker bytes,
+`UNK` in the raw exe versus `NSS` in the installed NSIS payload. The installer
+hash was unchanged after installation. Do not compare those raw hashes as if
+bundling did not modify the executable.
+
+The installed app passed the shared navigation assertions through
+`native-hidden.ps1` on an isolated Windows desktop: keyboard heading focus,
+expanded-conversation exit, 390px layout, 360px with 200% text, desktop return
+and preserved unsent draft. Native screenshots, including a disposable real
+project/local HTML preview, are in `C:/ForgeFast/forge-072-navigation/`.
+The fixture/profile were removed; no message was sent. The navigation screenshot
+was manually inspected; the initial record read was still pending in that frame,
+so this is navigation proof, not new record-engine completion evidence.
+Physical-phone and screen-reader verification remain unperformed.
+
+This is an installed local candidate, not a new public release. Latest public
+installer remains 0.1.71. Source and release notes describe that distinction.
+Work was performed directly by the parent, without new subagents. No model-
+attributed BRL cost or subscription savings is claimed.
