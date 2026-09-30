@@ -1,14 +1,15 @@
 # Forge desktop shell
 
-Independent Tauri application. Desktop `0.1.73` is current source and locally
-installed. The latest verified [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.73-alpha.1)
-is `0.1.73`; its downloaded installer matches the installed final candidate.
+Independent Tauri application. Desktop `0.1.77` is current source and locally
+installed. Publication receipts are in the latest checkpoint below.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
 
 For session recovery, read the latest checkpoint below and the
 [selective orchestration agreement](../../docs/agents/orchestration.md).
+The [product closeout map](PRODUCT_STATUS.md) separates implemented journeys,
+observed evidence and remaining work; publication alone is not product completion.
 
 Approved references, visual rules and remaining illustration gaps are maintained
 in [design/README.md](design/README.md). The conversation shell uses those rules
@@ -11106,3 +11107,54 @@ Anonymous downloads to `D:/forge-method-core-build-cache/public-check/desktop-07
 matched the native-tested installer exactly: 123,164,118 bytes, SHA-256 above,
 and the exact 93-byte sidecar. Installed version/exe hash still match. No
 redundant reinstall or test rerun of byte-identical downloads and no manual CI.
+
+## Session checkpoint — 2026-09-30 — product map and keyboard journey (0.1.77)
+
+Read-only accepted-scope audit covered UI epics #77–80 and children #82–97.
+`PRODUCT_STATUS.md` is the single journey/evidence/gap map. #96 is a secure
+mobile integration decision, not authorization for a new server or hosting.
+Meus projetos is a device-local shortcut list, not global project discovery.
+No issue closed by inference and no new product/process gate introduced.
+
+Corrected four real UI gaps: skip link no longer changes the active route;
+background file-list repaint preserves a focused surviving file (or the list
+when removed); pending questions are signaled in visible pane navigation without
+automatically changing panes; user-selected Conversa focuses the question and
+answer/interrupt/resolution recover focus without stealing it from a draft.
+Existing owners navigation/result-files/questions/mobile-workspace reused;
+no Core change, no new dependency, registry, message send or network server.
+
+Focused `results-browser.cjs` reproduced the skip-link failure before the fix,
+then passed route/focus and existing result checks. `questions-browser.cjs`
+passed pending cue from another pane, explicit navigation, answer focus,
+queued question and non-stealing external resolution, plus existing question
+safety and 360px/200% checks. These are browser doubles, not native authority.
+`git diff --check` passed. No Rust test/check suite: source changes are UI-only;
+the release build compiled the affected desktop. No workspace suite/manual CI.
+
+Initial build command had a wrong relative version-file path, so a 0.1.76
+compile started and was interrupted, never installed/published. Absolute paths
+and final reviewed version diff corrected this. One final 0.1.77 NSIS candidate:
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.77_x64-setup.exe`,
+123,237,708 bytes, SHA-256
+`8271114521F0C3B8D368529189EDC546E88B8A8F8378610307BA17A7989212CD`.
+Silent upgrade over 0.1.76 passed; installed ProductVersion 0.1.77; exe SHA-256
+`9A77088E717360665473DAE4D82A748EDEDA5296F161D0DCEA72D4808CF35C81`.
+Core 0.13.3/staged hash unchanged. Installed `native-questions.cjs` passed on
+an isolated Windows desktop: skip route/focus, 360px pane cue and deliberate
+question focus, answer focus and exact actual IPC/stdio response followed by
+agent reply; existing no-replay/wrong-thread/stale/approval checks passed.
+Codex server simulated, not a real model choosing to ask. Screenshot inspected:
+`C:/ForgeFast/forge-077-keyboard.png`; no physical phone/screen-reader claim.
+
+External-junction restriction traced: `start` links the project, but
+`workflow init` captures retained project tree, rejecting reparse directory
+metadata. The same capture guards strict capabilities; do not weaken it in UI,
+follow junctions, edit user's ignores or falsely claim initialization success.
+Requires an explicit cooperative observation design preserving strict promotion
+snapshot authority. Still NOT_FIXED. Clean-device completed sign-in, physical
+accessibility, #96 connection decision remain, as mapped in PRODUCT_STATUS.
+
+One read-only worker requested Sol medium for independent scope/a11y audit;
+parent implemented/integrated/verified/delivered. Observed model usage, tokens
+and attributable BRL unavailable; no savings claim. Publication receipt follows.

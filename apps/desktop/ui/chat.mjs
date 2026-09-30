@@ -6,7 +6,7 @@ import { projectDisplayName } from './project-display.mjs';
 import { setConversationFocus } from './conversation-focus.mjs';
 import { createQuestions } from './questions.mjs';
 import { localAppLinks } from './local-app-links.mjs';
-import { showWorkspacePane } from './mobile-workspace.mjs';
+import { showWorkspacePane, setWorkspaceQuestionPending } from './mobile-workspace.mjs';
 const byId = id => document.getElementById(id);
 const status = byId('agent-status');
 const updateAction = byId('agent-update-action');
@@ -96,7 +96,10 @@ const projectKey = value => JSON.stringify([value.project_id, value.project_root
 const draftKey = value => `forge.draft.v1:${projectKey(value)}`;
 const referenceKey = () => JSON.stringify([project.project_id, project.project_root]);
 const invoke = (command, args) => globalThis.__TAURI__.core.invoke(command, args);
-const questions = createQuestions(byId('agent-questions'), args => invoke('answer_questions', args), () => invoke('interrupt_agent'), () => activeThreadId);
+const questions = createQuestions(byId('agent-questions'), args => invoke('answer_questions', args), () => invoke('interrupt_agent'), () => activeThreadId, {
+  onPendingChange: setWorkspaceQuestionPending,
+  restoreFocus: () => status.focus({ preventScroll: true }),
+});
 function readStoredDraft(value) {
   const text = localStorage.getItem(draftKey(value));
   if (text !== null && text.length > 100000) throw new Error('Stored draft is too large');

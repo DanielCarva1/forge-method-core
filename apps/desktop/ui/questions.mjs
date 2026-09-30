@@ -1,13 +1,15 @@
 // Explicit answers to a pending Codex question. No draft/history persistence.
-export function createQuestions(panel, answer, interrupt, currentThread) {
+export function createQuestions(panel, answer, interrupt, currentThread, { onPendingChange = () => {}, restoreFocus = () => {} } = {}) {
   const pending = new Map();
   let active = null;
   let epoch = 0;
   function paint() {
+    const hadFocus = panel.contains(document.activeElement);
     panel.replaceChildren();
     active = pending.keys().next().value ?? null;
     panel.hidden = active === null;
-    if (active === null) return;
+    onPendingChange(active !== null);
+    if (active === null) { if (hadFocus) restoreFocus(); return; }
     const requestId = active;
     const request = pending.get(requestId);
     const heading = document.createElement('h3');
@@ -45,7 +47,9 @@ export function createQuestions(panel, answer, interrupt, currentThread) {
     const send = document.createElement('button'); send.type = 'submit'; send.className = 'primary'; send.textContent = 'Enviar respostas';
     const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Interromper esta execução';
     const status = document.createElement('p'); status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite');
+    status.tabIndex = -1;
     actions.append(send, cancel); form.append(actions, status); panel.append(heading, hint, form);
+    if (hadFocus) heading.focus({ preventScroll: true });
     let sending = false;
     const version = epoch;
     const valid = () => version === epoch && pending.get(requestId) === request && currentThread() === request.threadId;
@@ -58,6 +62,7 @@ export function createQuestions(panel, answer, interrupt, currentThread) {
         if (!value) { status.textContent = 'Responda a todas as perguntas antes de enviar.'; text.focus(); return; }
         answers[question.id] = value;
       }
+      if (panel.contains(document.activeElement)) status.focus({ preventScroll: true });
       sending = true; send.disabled = true; cancel.disabled = true;
       form.querySelectorAll('input,textarea').forEach(input => { input.disabled = true; });
       status.textContent = 'Enviando suas respostas…';
@@ -69,14 +74,16 @@ export function createQuestions(panel, answer, interrupt, currentThread) {
           status.textContent = typeof error === 'string' ? error : 'Não foi possível confirmar o envio. Confira a conexão.';
           sending = false; send.disabled = false; cancel.disabled = false;
           form.querySelectorAll('input,textarea').forEach(input => { input.disabled = false; });
+          if (document.activeElement === status) send.focus({ preventScroll: true });
         }
       }
     });
     cancel.addEventListener('click', async () => {
       if (sending || !valid()) return;
+      if (document.activeElement === cancel) status.focus({ preventScroll: true });
       cancel.disabled = true;
       try { await interrupt(); if (valid()) { pending.clear(); paint(); } }
-      catch { if (valid()) { status.textContent = 'Não foi possível interromper. Confira a conexão.'; cancel.disabled = false; } }
+      catch { if (valid()) { status.textContent = 'Não foi possível interromper. Confira a conexão.'; cancel.disabled = false; if (document.activeElement === status) cancel.focus({ preventScroll: true }); } }
     });
   }
   return {

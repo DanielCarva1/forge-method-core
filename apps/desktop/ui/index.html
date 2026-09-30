@@ -16,7 +16,7 @@
     <nav aria-label="Navegação principal"><a href="#home" data-route="home">Início</a><a href="#explore" data-route="explore">Explorar</a><a href="#projects" data-route="projects">Meus projetos</a><a href="#workspace" data-route="workspace" data-project-mode="new">Minha conversa</a><a href="#about">Como funciona</a></nav>
     <span class="development">Alpha</span>
   </header>
-  <main id="main">
+  <main id="main" tabindex="-1">
     <details class="appearance">
       <summary>Aparência e conforto</summary>
       <div class="appearance-options">
@@ -145,7 +145,7 @@
         <button id="idea-choose-folder" class="primary" type="button" hidden>Começar projeto com esta ideia →</button>
       </div>
       <nav id="mobile-workspace-nav" class="mobile-workspace-nav" aria-label="Áreas do projeto" hidden>
-        <button type="button" data-mobile-pane-button="conversation" aria-controls="project-conversation" aria-pressed="true">Conversa</button>
+        <button type="button" data-mobile-pane-button="conversation" aria-controls="project-conversation" aria-pressed="true">Conversa<span id="workspace-question-cue" role="status" aria-live="polite"></span></button>
         <button type="button" data-mobile-pane-button="preview" aria-controls="project-preview" aria-pressed="false">Resultado</button>
         <button type="button" data-mobile-pane-button="progress" aria-controls="project-record" aria-pressed="false">Andamento</button>
         <button type="button" data-mobile-pane-button="project" aria-controls="project-panel" aria-pressed="false">Projeto</button>

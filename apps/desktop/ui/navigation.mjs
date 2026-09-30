@@ -38,3 +38,9 @@ function renderRoute(moveFocus) {
 
 renderRoute(false);
 addEventListener('hashchange', () => renderRoute(true));
+document.querySelector('.skip').addEventListener('click', event => {
+  event.preventDefault();
+  const main = document.getElementById('main');
+  main.focus({ preventScroll: true });
+  main.scrollIntoView({ block: 'start' });
+});

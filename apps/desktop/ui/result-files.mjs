@@ -14,6 +14,7 @@ export function createResultFiles(openFile) {
   let pending = false;
   let refreshAgain = false;
   function paint() {
+    const focusedPath = list.contains(document.activeElement) ? document.activeElement.dataset.resultPath : null;
     const query = search.value.trim().toLocaleLowerCase('pt-BR');
     const visible = files.filter(file => (!type.value || file.kind === type.value) && file.relative_path.toLocaleLowerCase('pt-BR').includes(query));
     list.replaceChildren(...visible.map(file => {
@@ -31,6 +32,10 @@ export function createResultFiles(openFile) {
       button.addEventListener('click', () => { void openFile(file.relative_path); });
       return button;
     }));
+    if (focusedPath && list.getClientRects().length) {
+      const replacement = [...list.children].find(button => button.dataset.resultPath === focusedPath);
+      (replacement ?? list).focus({ preventScroll: true });
+    }
     status.textContent = pending ? 'Procurando arquivos nesta pasta…'
       : !files.length ? 'Ainda não encontramos páginas, imagens ou documentos nesta pasta. Você pode pedir ao agente para criar algo ou escolher um arquivo.'
       : !visible.length ? 'Nenhum arquivo combina com essa busca. Tente outro nome ou tipo.'

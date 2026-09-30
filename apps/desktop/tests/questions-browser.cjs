@@ -46,6 +46,12 @@ const server = createServer(async (request, response) => {
     await page.evaluate(() => { window.events.onmessage({ kind: 'running' }); window.ask(); });
     const panel = page.locator('#agent-questions');
     await panel.waitFor({ state: 'visible' });
+    await page.setViewportSize({ width: 360, height: 720 });
+    await page.locator('[data-mobile-pane-button="project"]').click();
+    assert.equal(await panel.isVisible(), false);
+    assert.equal(await page.locator('#workspace-question-cue').textContent(), ' · pergunta');
+    await page.locator('[data-mobile-pane-button="conversation"]').click();
+    assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Uma escolha sua');
     assert.equal(await panel.locator('input:checked').count(), 0, 'No answer preselected');
     assert.equal(await panel.locator('img').count(), 0, 'Question content is literal text');
     await panel.getByRole('button', { name: 'Enviar respostas' }).click();
@@ -67,10 +73,16 @@ const server = createServer(async (request, response) => {
     assert.deepEqual(answer, { requestId: 'request', threadId: 'thread', answers: { style: 'Colorido, com flores', name: 'Jardim' } });
     await page.evaluate(() => window.answerDone());
     await panel.waitFor({ state: 'hidden' });
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'agent-status', 'Answer returns keyboard focus to the conversation');
+    assert.equal(await page.locator('#workspace-question-cue').textContent(), '');
     assert.equal(await page.locator('#message-text').inputValue(), 'Meu próximo pedido continua aqui');
     await page.evaluate(() => window.ask('wrong', 'other-thread'));
     assert.equal(await panel.isHidden(), true, 'Other conversation ignored');
+    await page.locator('[data-mobile-pane-button="project"]').click();
     await page.evaluate(() => window.ask('second'));
+    assert.equal(await page.locator('#workspace-question-cue').textContent(), ' · pergunta');
+    assert.equal(await panel.isVisible(), false, 'Incoming question does not force a pane switch');
+    await page.locator('[data-mobile-pane-button="conversation"]').click();
     await panel.waitFor({ state: 'visible' });
     await page.setViewportSize({ width: 360, height: 720 });
     await page.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
@@ -78,7 +90,13 @@ const server = createServer(async (request, response) => {
     await panel.getByRole('button', { name: 'Interromper esta execução' }).click();
     await panel.waitFor({ state: 'hidden' });
     await page.evaluate(() => window.ask('third'));
+    await panel.locator('textarea').first().focus();
+    await page.evaluate(() => window.ask('queued'));
     await page.evaluate(() => window.events.onmessage({ kind: 'questions_resolved', id: 'third' }));
+    assert.equal(await page.evaluate(() => document.activeElement.textContent), 'Uma escolha sua', 'Queued question retains a meaningful focus target');
+    await page.locator('#message-text').focus();
+    await page.evaluate(() => window.events.onmessage({ kind: 'questions_resolved', id: 'queued' }));
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'message-text', 'External resolution does not steal focus');
     assert.equal(await panel.isHidden(), true);
     console.log('PASS: explicit options/free answers, literal text, failed/pending send, draft preservation, stale/resolved/cancel safety and narrow 200% form.');
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

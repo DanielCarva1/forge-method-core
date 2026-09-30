@@ -11,6 +11,9 @@ const panels = {
   project: document.getElementById('project-panel'),
 };
 const narrow = matchMedia('(max-width: 700px)');
+export function setWorkspaceQuestionPending(pending) {
+  document.getElementById('workspace-question-cue').textContent = pending ? ' · pergunta' : '';
+}
 
 // Keep headings and the sticky conversation below the navigation even when
 // larger text wraps its buttons onto another row.
@@ -26,7 +29,9 @@ export function showWorkspacePane(pane, focus = false) {
   }
   if (focus) {
     if (pane !== 'conversation') setConversationFocus(false);
-    const heading = panels[pane].querySelector('h2, h3');
+    const questions = document.getElementById('agent-questions');
+    const heading = pane === 'conversation' && !questions.hidden
+      ? questions.querySelector('h3') : panels[pane].querySelector('h2, h3');
     heading?.focus({ preventScroll: true });
     if (narrow.matches) navigation.scrollIntoView({ block: 'start' });
     else panels[pane].scrollIntoView({ block: 'start' });
