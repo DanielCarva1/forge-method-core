@@ -11352,3 +11352,11 @@ Per-model usage/accepted-delivery BRL UNKNOWN; no savings estimate substituted.
 Mobile is deferred by maintainer. Next product work is visual polish of existing
 screens and approved artwork, not additional mandatory auth/chat testing.
 Publication/download receipt follows when completed.
+Source a1861911 pushed; published
+[desktop-v0.1.80-alpha.1](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.80-alpha.1).
+Anonymous installer and sidecar downloads to
+D:/forge-method-core-build-cache/public-check/desktop-080/ matched the tested
+candidate SHA-256 and exact sidecar. No redundant reinstall of identical bytes.
+Installed/public/source connection flow is now delivered. Next visual priorities
+from the inspected native screenshot: reduce competing boxed sections and dense
+helper copy, improve conversation/composer hierarchy, and preserve approved artwork.
