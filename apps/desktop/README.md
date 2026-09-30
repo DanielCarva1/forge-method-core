@@ -11306,3 +11306,11 @@ criteria; parent implemented/integrated/verified. Observed per-model usage and
 accepted-delivery BRL UNKNOWN; no savings claim. This package advances the
 normal cooperative screen rather than resurrecting enterprise ceremony.
 Publication/download readback recorded below once performed.
+Source commit e93c7a2d pushed and published as
+[desktop-v0.1.79-alpha.1](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.79-alpha.1).
+Anonymous public installer and sidecar downloads to
+D:/forge-method-core-build-cache/public-check/desktop-079/ matched the tested
+installed candidate exactly (size/hash above, exact sidecar; GitHub asset digest
+also agrees). No redundant reinstall of the identical download. The installed
+app, source and public alpha now contain the comparison; whole-product phone,
+clean-device and legacy decision-history acceptance is still not claimed.
