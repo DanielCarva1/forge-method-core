@@ -11240,3 +11240,13 @@ fixture cleaned. Screenshot inspected: `C:/ForgeFast/forge-078-junction.png`.
 Native selection dialog, a real model reply, in-place retarget and valid evidence
 admission with a junction were not separately tested this round. Public release
 readback follows; do not confuse installed candidate with published installer.
+Source commit `ebe7d52f99344527ec49a60a8743c1827c58166e` pushed; published as
+[desktop-v0.1.78-alpha.1](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.78-alpha.1).
+Anonymous downloads to `D:/forge-method-core-build-cache/public-check/desktop-078/`
+matched the installed/native-tested candidate exactly: 123,139,612 bytes,
+SHA-256 above, exact sidecar. No redundant reinstall of byte-identical downloads,
+no full suite/manual CI. Installed app and PATH Core both updated, not only source.
+This closes the demonstrated Windows cooperative-opening blocker, not all
+protected operations, other platforms or whole-product acceptance. Next product
+focus: remaining desktop acceptance and the bounded secure-mobile integration
+decision (#96), without rebuilding chat or inventing an exposed server.
