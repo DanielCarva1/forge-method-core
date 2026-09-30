@@ -11099,3 +11099,10 @@ and open are not a new sandbox guarantee. Clean-device completed sign-in,
 manual accessibility/physical-phone checks, secure mobile connection (#96) and
 the existing external-junction onboarding restriction remain. This closes the
 file-use journey, not the entire product. Publication readback recorded below.
+
+Source commit `d522d9cd` pushed and published as
+[desktop-v0.1.76-alpha.1](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.76-alpha.1).
+Anonymous downloads to `D:/forge-method-core-build-cache/public-check/desktop-076/`
+matched the native-tested installer exactly: 123,164,118 bytes, SHA-256 above,
+and the exact 93-byte sidecar. Installed version/exe hash still match. No
+redundant reinstall or test rerun of byte-identical downloads and no manual CI.
