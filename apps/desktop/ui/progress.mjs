@@ -1,4 +1,5 @@
 import { showWorkspacePane } from './mobile-workspace.mjs';
+import { directionChanges } from './direction-changes.mjs';
 const button = document.getElementById('refresh-progress');
 const status = document.getElementById('progress-status');
 const result = document.getElementById('progress-result');
@@ -387,7 +388,7 @@ function historyDetail(label, values) {
   return detail;
 }
 function renderHistory(data) {
-  const rows = data.revisions.slice().reverse().map(entry => {
+  const rows = data.revisions.map((entry, index) => {
     const card = document.createElement('article');
     card.className = 'direction-entry';
     const detail = document.createElement('details');
@@ -395,19 +396,37 @@ function renderHistory(data) {
     const heading = document.createElement('h4');
     heading.textContent = `Revisão ${entry.revision} · ${entry.active ? 'Direção atual' : 'Direção anterior'}`;
     summary.append(heading);
+    const overview = document.createElement('p');
+    overview.textContent = entry.outcome;
+    summary.append(overview);
     const origin = document.createElement('p');
     origin.className = 'hint';
     origin.textContent = `${entry.origin === 'forge_cooperative_record' ? 'Registro cooperativo do Forge; não prova aprovação humana independente' : 'Registro de intenção com origem humana'} · ${new Date(entry.accepted_at_unix * 1000).toLocaleDateString('pt-BR')}`;
-    const outcome = document.createElement('p');
-    outcome.textContent = entry.outcome;
-    detail.append(summary, origin, outcome);
+    detail.append(summary, origin);
+    if (index > 0) {
+      const changesHeading = document.createElement('h5');
+      changesHeading.textContent = 'O que mudou';
+      detail.append(changesHeading);
+      const changes = directionChanges(data.revisions[index - 1], entry);
+      if (changes.length) {
+        for (const change of changes) detail.append(historyDetail(change.label, change.values));
+      } else {
+        const unchanged = document.createElement('p');
+        unchanged.textContent = 'O objetivo, os combinados e os cuidados têm o mesmo texto da versão anterior. Outros detalhes do registro podem ter mudado.';
+        detail.append(unchanged);
+      }
+      const comparisonNote = document.createElement('p');
+      comparisonNote.className = 'hint';
+      comparisonNote.textContent = `Comparação com a revisão ${data.revisions[index - 1].revision} exibida antes desta. Mostra diferenças de texto; não presume o motivo da mudança nem uma nova aprovação sua.`;
+      detail.append(comparisonNote);
+    }
     const constraints = historyDetail('Combinados registrados', entry.constraints);
     const unacceptable = historyDetail('O que evitar', entry.unacceptable_outcomes);
     if (constraints) detail.append(constraints);
     if (unacceptable) detail.append(unacceptable);
     card.append(detail);
     return card;
-  });
+  }).reverse();
   historyList.replaceChildren(...rows);
   explainHistory.hidden = data.revisions.length === 0;
   explainHistory.textContent = data.revisions.length + data.earlier_count === 1 ? 'Entender esta direção na conversa' : 'Entender mudanças na conversa';

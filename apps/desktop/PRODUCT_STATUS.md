@@ -16,11 +16,12 @@ The Desktop README checkpoints own detailed test/release receipts.
 | Return to work | Meus projetos → inspect → saved conversation | Native saved reopening, no message replay | Device-local shortcuts (50), not global discovery |
 | Converse and answer questions | Minha conversa → Codex stdio adapter | Real text turns/history; native simulated question protocol | Real-model invocation of question tool not verified |
 | Understand progress | Andamento → read-only Core record | Installed record/navigation checks | Record is not a complete automatic transcript of agent activity |
+| Review agreements and changes | Recorded objective history; 0.1.79 literal revision comparison | Focused comparison tests; native receipt in latest checkpoint | #92 partial: opaque legacy decision resolutions lack recoverable original wording |
 | Inspect and change a result | Resultado → bounded file list/preview → draft | Installed native discovery, preview and change-draft checks | Protected HTML is intentionally noninteractive |
 | Use a result outside Forge | Reveal/copy file; explicit trusted browser action | Native copy/cancel, exact bytes; browser dispatch partly simulated | Single-file copy is not complete website export or publishing |
 | Read and navigate comfortably | Appearance, responsive panes, keyboard controls | 360px/200% browser checks and native Windows resizing | Physical phone and screen-reader checks not performed |
 | Install and update | Published Windows NSIS, manual update instructions | Exact public download hashes and installed upgrades | No automatic update checker; unsigned alpha |
-| Access securely from a phone | Integration decision #96, not a server already delivered | No supported remote connection selected or tested | Requires bounded connection decision and controlled validation |
+| Access securely from a phone | #96 options assessed; alpha stays local-only | Pinned CLI/IPC/origin assessment; remote desktop disabled on this host | No phone connection tested; optional host-access choice remains explicit |
 
 ## Work that remains, without inventing new scope
 
@@ -34,12 +35,17 @@ The Desktop README checkpoints own detailed test/release receipts.
    accessibility checks. Existing authenticated-host and simulated-provider
    evidence cannot close those checks.
 3. Finish [#96](https://github.com/DanielCarva1/forge-method-core/issues/96):
-   compare supported connection paths, select and validate one bounded path.
+   the supported-path comparison and local-only alpha scope are recorded in
+   `docs/development-plan.md`. A real remote connection still needs an explicit
+   host-access choice and controlled validation.
    The issue explicitly delivers an **integration decision**, not authorization
    for additional infrastructure, hosting costs or an exposed network server.
 4. Reconcile the remaining issue acceptance items with these receipts. Open
    issues and published installers are neither proof of absence nor proof of
    complete acceptance. Do not close untested criteria by inference.
+   In particular, #92's legacy decision-history wording is not supplied by the
+   current report. Do not create a parallel decision store or revive strict
+   authority ceremony in the normal cooperative journey to fill that gap.
 
 ## Keyboard closeout package
 

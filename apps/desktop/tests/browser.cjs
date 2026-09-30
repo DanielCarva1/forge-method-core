@@ -23,6 +23,7 @@ const assets = new Map([
   ['/assets/explore-artwork.png', ['assets/explore-artwork.png', 'image/png']],
   ['/appearance.js', ['appearance.js', 'text/javascript']],
   ['/progress.mjs', ['progress.mjs', 'text/javascript']],
+  ['/direction-changes.mjs', ['direction-changes.mjs', 'text/javascript']],
   ['/preview.mjs', ['preview.mjs', 'text/javascript']],
   ['/mobile-workspace.mjs', ['mobile-workspace.mjs', 'text/javascript']],
 ]);
@@ -1309,6 +1310,8 @@ async function openConversation(page) {
     assert.match(await page.locator('#direction-history-list article').last().textContent(), /Direção anterior/);
     await page.locator('#direction-history-list article').first().locator('summary').click();
     assert.equal(await page.locator('#direction-history-list article').first().locator('details').evaluate(node => node.open), true);
+    assert.match(await page.locator('#direction-history-list article').first().textContent(), /O que mudou/);
+    assert.match(await page.locator('#direction-history-list article').first().textContent(), /Combinados retirados/);
     assert.equal(await page.locator('#direction-history-list script').count(), 0, 'Recorded text must be literal');
     assert.match(await page.locator('#direction-history-list').textContent(), /não prova aprovação humana independente/);
     await page.evaluate(() => { window.historyOneRevision = true; });

@@ -99,7 +99,7 @@ guarantee that an LLM always follows guidance.
 |---|---|
 | Stable release | **v0.12.0** published (tag = commit `4fc9bd80`), Release + CI green |
 | Main machine install | `forge-core 0.13.4` at `C:\Users\User\AppData\Local\Programs\forge-core\bin`; SHA-256 and 0.13.3 rollback recorded in the latest desktop README checkpoint. This checkout build is not a new stable Core release. |
-| Desktop delivery | Installed 0.1.78 with Core 0.13.4: native Windows cooperative project opening/record/results passed with an external junction present. Detailed receipts and remaining product acceptance are in `apps/desktop/README.md` and `apps/desktop/PRODUCT_STATUS.md`; do not rerun proven chat journeys or infer mobile/clean-device acceptance. |
+| Desktop delivery | Installed 0.1.79 with unchanged Core 0.13.4: literal objective changes in Andamento; focused native comparison receipt. 0.1.78 junction opening/record/results evidence remains valid within its scope. Detailed receipts and remaining product acceptance are in `apps/desktop/README.md` and `apps/desktop/PRODUCT_STATUS.md`; do not rerun proven chat journeys or infer mobile/clean-device acceptance. |
 | Host skill | `start-forge` identical to the packaged canonical skill |
 | Milestone | **Solo Dogfood Ready — QUALIFIED** (`milestone_qualified: true`, authority revision 5, flipped 2026-09-08 through governed promotion) |
 | SD items (solo milestone) | SD-00 through SD-08 completed; qualification recorded (WS10) |
@@ -366,6 +366,45 @@ module, dependency, migration or release. Known-digest, archive/receipt
 round-trip and tampering tests passed; Standards and Spec reviews had no
 findings. Required CI, including the packaged Windows journey, passed in run
 `34297021244`. This maintenance change does not extend platform support.
+
+### Desktop secure-mobile integration assessment (#96) — partial, 2026-09-30
+
+Scope selected for this alpha: keep Forge local-only. Do not add a Forge HTTP
+server, credential relay or mandatory cloud service just to expose the desktop
+screens. This is not a claim that phone access is delivered.
+
+| Existing option | Actual scope | Assessment |
+| --- | --- | --- |
+| Codex app-server remote WebSocket | Codex protocol/terminal client, not Forge's Tauri screens | Pinned 0.157.1 help confirms WebSocket auth flags. Official documentation calls this transport experimental/unsupported. A listener needs explicit authentication and TLS for nonlocal use. Not selected as a production Forge mobile bridge. |
+| User-managed remote desktop | Existing native Forge UI inside an OS desktop session | Candidate for an optional connection, not a Forge feature or mandatory dependency. Host access is broader than a single project, so it requires a deliberate human choice. Do not silently enable it. |
+| Serve the responsive UI in a phone browser | Static screens only; no local Tauri IPC or stdio process | Not a working host connection. Making it functional introduces a new authenticated host bridge and expands scope; not selected for this alpha. |
+
+Evidence: `codex app-server --help` from the pinned package; actual Forge
+`codex_transport.rs` starts `--listen stdio://`; `connection.mjs` and
+`tauri.conf.json` retain native IPC and restrictive origins. The Windows host's
+`fDenyTSConnections=1` was read, not modified. Thus no already-enabled native
+remote desktop path was available for a controlled phone check.
+
+If the maintainer selects the optional OS route, its bounded acceptance is:
+authenticate through the OS connection (not a shared Codex token), validate the
+expected host, keep encrypted transport on a trusted network or an existing
+approved private connection, do not expose a public RDP port, and limit the OS
+account's access deliberately. It grants that account's desktop/project access,
+not a Forge project-only security boundary. Disconnecting the remote viewer is
+not proof that a running agent stopped; interruption remains explicit in Forge.
+Codex login stays on the host through its existing device-code flow. No copied
+credentials, new subscription interpretation, hosting spend or automatic OS
+configuration is authorized here.
+
+**PASS:** compatibility/source assessment and unchanged local-only configuration.
+**NOT_RUN:** phone connection, remote authentication, project-access isolation,
+disconnect/reconnect and device accessibility. #96 remains partial until a
+supported path is selected for actual use and those checks run. This does not
+block normal local product work or require rebuilding the chat.
+
+Primary references: [Codex app-server](https://learn.chatgpt.com/docs/app-server),
+[Tauri capabilities](https://v2.tauri.app/security/capabilities/),
+[Microsoft remote desktop setup](https://learn.microsoft.com/windows-server/remote/remote-desktop-services/remotepc/remote-desktop-allow-access).
 
 ## 6. Test strategy
 

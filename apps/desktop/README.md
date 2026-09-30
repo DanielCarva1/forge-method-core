@@ -11250,3 +11250,59 @@ This closes the demonstrated Windows cooperative-opening blocker, not all
 protected operations, other platforms or whole-product acceptance. Next product
 focus: remaining desktop acceptance and the bounded secure-mobile integration
 decision (#96), without rebuilding chat or inventing an exposed server.
+## Session checkpoint — 2026-09-30 — Desktop 0.1.79 objective changes
+
+Delivered a read-only improvement to Andamento: each history card exposes its
+recorded objective immediately; later visible revisions compare literal goal,
+constraint and precaution wording with the preceding visible revision. Added
+and removed wording is distinguished without a model request, chat send or new
+state store. The oldest visible entry never invents an unseen predecessor.
+Existing source/provenance and suggested-question separation are preserved.
+This is not historical decision reconstruction; #92 remains partial for opaque
+legacy resolution wording. No new strict-authority production workflow was
+introduced merely to fill that retained-history gap.
+
+Changed UI owners: progress.mjs and direction-changes.mjs. Three focused Node
+comparison tests PASS (first visible, exact wording, reordering/duplicates),
+JS syntax/diff checks PASS. No Rust behavior changed; no cargo test/check
+workspace, full browser suite, Clippy or manual GitHub CI ran. Desktop release
+compilation finished in 1m53s; unchanged Core 0.13.4 was cached (5s).
+
+Packaging command reported Windows file-sharing error 32 while bundling;
+the emitted NSIS candidate was retained rather than regenerating another file.
+Cause of that packaging-command error is UNKNOWN. The candidate independently
+passed silent upgrade (exit 0) and installed native acceptance below; do not
+call the packaging command itself green.
+
+Single tested installer: D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.79_x64-setup.exe,
+123,170,042 bytes, SHA-256
+F7EF316A01C4BEB66E83C82E064707CDA941EDE7150795DA06F13DE4D263C52D.
+Installed ProductVersion 0.1.79, executable SHA-256
+C5D0E54BF3D54054D72D9C357BD2A20377B7D239D1991649B2CA0F4641D36D5A,
+matching the release executable. Core stays 0.13.4 with its prior exact hash.
+No live Forge process was interrupted, and no window was placed on the user's
+desktop.
+
+PASS: installed native-direction-changes.cjs on an isolated Windows desktop.
+Actual fresh-project Core history returned empty; historical revisions then
+used a controlled native-WebView readback double. Goal wording, additions,
+removals, literal script text, bounded single-entry and empty history passed.
+Draft unchanged; no connection, send, answer or project-start calls during
+history review. This proves the native presentation, not a real model-authored
+multi-revision history in this round. Screenshot viewed:
+C:/ForgeFast/forge-079-directions.png. Disposable project/profile cleaned.
+
+#96: bounded supported-path comparison recorded in docs/development-plan.md.
+Pinned Codex 0.157.1 help supports remote authentication flags, but its remote
+protocol does not expose Forge's Tauri UI. Alpha retains local IPC/stdio and
+restrictive origins. Windows remote desktop is disabled (read only, unchanged).
+Optional user-managed OS remote access grants broader desktop access, not a
+Forge project-only boundary; actual phone/auth/disconnect validation NOT_RUN.
+No server, tunnel, account change, mandatory cloud, credential copy or hosting
+cost introduced. The mobile issue remains partial, not a local-development gate.
+
+One bounded read-only worker requested Sol/medium for remaining accepted UI
+criteria; parent implemented/integrated/verified. Observed per-model usage and
+accepted-delivery BRL UNKNOWN; no savings claim. This package advances the
+normal cooperative screen rather than resurrecting enterprise ceremony.
+Publication/download readback recorded below once performed.
