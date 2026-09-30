@@ -557,3 +557,26 @@ select { max-width: 100%; min-height: 48px; padding: 8px; color: var(--ink); bac
 .question-option small { display: block; margin-top: 4px; }
 .agent-questions textarea { display: block; width: 100%; margin-top: 8px; }
 .question-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.result-files { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--line); }
+.result-files-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.result-files-heading h3 { margin: 0; }
+.result-files-heading button { font-size: .85rem; padding: 8px 12px; }
+.result-files-filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .7fr); gap: 12px; margin-top: 14px; }
+.result-files-filters label { min-width: 0; font-size: .85rem; }
+.result-files-filters input, .result-files-filters select { display: block; width: 100%; min-width: 0; margin-top: 6px; }
+.result-files-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 10px; max-height: 520px; overflow: auto; padding: 4px; }
+.result-file-card { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; border-radius: 14px; padding: 16px; text-align: left; background: var(--surface); }
+.result-file-card[aria-pressed="true"] { border-color: var(--focus); box-shadow: inset 0 0 0 1px var(--focus); background: var(--soft); }
+.result-file-card strong, .result-file-card small { overflow-wrap: anywhere; max-width: 100%; }
+.result-file-kind { border-radius: 999px; background: var(--soft); padding: 3px 9px; font-size: .75rem; color: var(--ink); }
+.result-file-size { color: var(--muted); }
+.local-apps { margin: 18px 0; padding: 16px; border-radius: 14px; background: var(--soft); }
+.local-apps h3 { margin-top: 0; }
+.local-app-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; }
+.local-app-card strong { overflow-wrap: anywhere; min-width: 0; font-size: .9rem; }
+.local-app-card button { font-size: .9rem; }
+@media (max-width: 480px) { .result-files-filters { grid-template-columns: minmax(0, 1fr); } }
+.workspace.project-ready:not(.preview-loaded) .preview .result-files,
+.workspace.project-ready:not(.preview-loaded) .preview .local-apps { grid-column: 1 / -1; }
+#preview-local-apps[hidden] { display: none; }
+.local-app-actions { display: flex; flex-wrap: wrap; gap: 8px; }

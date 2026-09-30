@@ -241,6 +241,11 @@
           <button id="preview-last-result" type="button" hidden>Conferir arquivo citado</button>
         </div>
         <p id="preview-status" role="status" aria-live="polite" hidden></p>
+        <section id="preview-local-apps" class="local-apps" aria-labelledby="local-apps-heading" hidden>
+          <h3 id="local-apps-heading">Experimente no navegador</h3>
+          <p class="hint">Endereços desta máquina citados pelo agente. O app precisa estar rodando; esta ação não o liga nem publica na internet.</p>
+          <div id="preview-local-apps-list"></div>
+        </section>
         <div id="preview-result" hidden>
           <img id="preview-image" alt="" hidden>
           <iframe id="preview-site" title="Prévia visual local, sem interação" sandbox="" referrerpolicy="no-referrer" tabindex="-1" hidden></iframe>
@@ -256,6 +261,16 @@
             <p id="open-browser-hint" class="hint">Fora da prévia protegida, a página pode executar código e acessar a internet. Abra apenas projetos de confiança.</p>
           </div>
         </div>
+        <section class="result-files" aria-labelledby="result-files-heading">
+          <div class="result-files-heading"><h3 id="result-files-heading">Arquivos para conferir</h3><button id="refresh-result-files" type="button">Atualizar lista</button></div>
+          <p class="hint">Páginas, imagens e documentos encontrados na pasta. Estar aqui não significa que um arquivo está pronto ou publicado.</p>
+          <div class="result-files-filters">
+            <label>Encontrar arquivo<input id="result-files-search" type="search" placeholder="Nome ou caminho" maxlength="200"></label>
+            <label>Mostrar<select id="result-files-type"><option value="">Todos os tipos</option><option value="page">Páginas</option><option value="image">Imagens</option><option value="document">Documentos</option><option value="data">Dados</option><option value="audio">Áudio</option><option value="video">Vídeo</option><option value="archive">Pacotes</option></select></label>
+          </div>
+          <p id="result-files-status" class="hint" role="status" aria-live="polite"></p>
+          <div id="result-files-list" class="result-files-list" role="region" tabindex="0" aria-label="Arquivos do projeto"></div>
+        </section>
         <details id="preview-cited-files" class="preview-cited-files" hidden>
           <summary id="preview-cited-files-summary">Arquivos citados na resposta</summary>
           <p class="hint">Confira o arquivo que quiser. A lista vem da resposta do agente; cada arquivo é validado no projeto antes de abrir.</p>

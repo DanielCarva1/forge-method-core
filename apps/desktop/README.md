@@ -10979,3 +10979,60 @@ Anonymous downloads to `D:/forge-method-core-build-cache/public-check/desktop-07
 matched the tested installer exactly: 123,117,872 bytes, SHA-256 above, and the
 exact 93-byte sidecar. The release target used the full source commit SHA.
 No second build, redundant reinstall of the identical download or manual CI.
+
+### Session checkpoint — 2026-09-30 (0.1.75 find, inspect and change results)
+
+Connected result journey: actual project files -> search/type filter -> existing
+native-authorized preview -> contextual change request preserving the draft,
+without Send. Completed agent messages can also expose up to five cited loopback
+app addresses with explicit browser confirmation and a contextual change action.
+Receiving an address never starts a server or publishes anything. Protected
+previews remain scriptless. Files listed are available, not presumed complete.
+
+`results.rs` implements a metadata-only bounded scan (100 returned files,
+2,000 visited entries, four directory levels); hidden/dependency/build folders
+and links/reparse points are excluded. `result-files.mjs` discards stale project
+responses, filters locally and preserves the previous list on failure. Native
+selection remains the existing preview authority. No additional registry,
+content index, server manager, dependency or Core change.
+
+Focused Rust check and three `results::` tests passed. Pure local-address test
+and `results-browser.cjs` passed: file search/filter/open/change, failed refresh,
+missing-file preservation, canceled/explicit app opening, preserved drafts,
+stale-project response rejection and 360px/200% layout. No workspace/full crate,
+broad browser suite or manual CI ran. Diff checked; new Rust module formatted.
+
+One installer was built and silently installed over 0.1.74:
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.75_x64-setup.exe`,
+123,099,688 bytes, SHA-256
+`208C7771C311BE3B2869B9B24D0C3BE848F78F8E176DFB572338CD879154AAFA`.
+Installed ProductVersion 0.1.75; exe SHA-256
+`33474F20D5D2D71FAA49F0E0372FE08DDB4A0C2728BCA4A47D768F1A08B27DD2`.
+Core remains 0.13.3 with unchanged staged hash recorded above.
+
+Final `native-results.cjs` passed on the installed app on an isolated Windows
+desktop: actual discovery excludes a temporary external junction/dependencies,
+file -> native preview -> draft, local-app confirmation/cancellation, real
+interactive HTTP page in a separate headless browser, change draft and refreshed
+file deletion. Codex server simulated; final native run does not dispatch the
+OS browser. Explicit acceptance/dispatch arguments are covered by browser doubles,
+not proof of default-browser page rendering. A prior test instrumentation attempt
+failed to intercept the module's captured invoke and issued a native browser-open
+request; it was not counted as successful browser rendering. Visual screenshots
+inspected: `C:/ForgeFast/forge-075-results.png` and diagnostic
+`C:/ForgeFast/forge-075-failure.png`; full-page sticky/scroll capture is not a
+manual accessibility or physical-phone verdict. Owned test project/profile cleaned.
+
+Test setup also reproduced an existing Core limitation: `workflow init` rejects
+a project containing an external Windows junction (`project ancestor must be a
+no-follow non-reparse directory`). The final scan test creates/removes the junction
+only after onboarding. This restriction is NOT fixed by this package. Native path
+labels use Windows separators; the fixture assertion was corrected accordingly.
+
+One bounded worker requested Luna medium for `results.rs`; parent implemented
+UI/integration/review and verification. Observed model identity, attributable
+usage and BRL/subscription cost unavailable; no savings claim. Remaining product
+areas: clean-device completed sign-in, manual accessibility/physical-phone checks,
+accepted secure-mobile-access connection decision (#96), and the existing
+junction/onboarding limitation above. Do not restart proven chat/history work
+without a demonstrated regression. Publication readback recorded separately below.

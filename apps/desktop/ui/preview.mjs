@@ -3,6 +3,7 @@
 import { renderAgentMessage } from './message-format.mjs';
 import { setMobileWorkspaceProject, showWorkspacePane } from './mobile-workspace.mjs';
 import { setConversationFocus } from './conversation-focus.mjs';
+import { createResultFiles } from './result-files.mjs';
 const panel = document.getElementById('project-preview');
 const heading = document.getElementById('preview-heading');
 const workspace = document.querySelector('.workspace');
@@ -59,6 +60,7 @@ let dialogSiteHeight = 560;
 let refreshAfterDialog = false;
 let refreshAfterPendingRead = false;
 let refreshAfterPicker = false;
+const resultFiles = createResultFiles(previewLinkedFile);
 
 function rememberedPreviews() {
   try {
@@ -182,6 +184,7 @@ export function setPreviewProject(value) {
     try { void globalThis.__TAURI__?.core?.invoke('clear_preview_site').catch(() => {}); } catch { /* UI remains safe if native cleanup fails. */ }
   }
   project = value;
+  resultFiles.setProject(value);
   // Keep the result entry point ahead of the record in both visual and
   // keyboard order, including before any file has been selected.
   if (value) {
@@ -237,6 +240,7 @@ async function loadPreview(restored = false, candidate = filePath) {
     if (keepPrevious) clearResult();
     filePath = selected;
     pathLabel.textContent = preview.relative_path;
+    resultFiles.select(preview.relative_path);
     if (preview.kind === 'file') {
       fileOnly = true;
       pdfFile = /\.pdf$/i.test(preview.relative_path);
@@ -345,6 +349,7 @@ choose.addEventListener('click', async () => {
 });
 refresh.addEventListener('click', () => void loadPreview());
 export async function refreshPreviewAfterTurn() {
+  void resultFiles.refresh();
   // A stopped Codex turn may already have changed the selected file. Reuse the
   // native project-bound read; never infer another file from reply text.
   if (!project || !filePath) return;

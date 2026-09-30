@@ -5,6 +5,8 @@ import { previewLinkedFile, refreshPreviewAfterTurn } from './preview.mjs';
 import { projectDisplayName } from './project-display.mjs';
 import { setConversationFocus } from './conversation-focus.mjs';
 import { createQuestions } from './questions.mjs';
+import { localAppLinks } from './local-app-links.mjs';
+import { showWorkspacePane } from './mobile-workspace.mjs';
 const byId = id => document.getElementById(id);
 const status = byId('agent-status');
 const updateAction = byId('agent-update-action');
@@ -233,6 +235,8 @@ function controls() {
 }
 
 export function setProject(value) {
+  byId('preview-local-apps').hidden = true;
+  byId('preview-local-apps-list').replaceChildren();
   questions.clear();
   referenceRequest++;
   referenceStatus.hidden = true;
@@ -449,7 +453,10 @@ function confirmAction({ title, copy, address = '', accept, cancel = 'Cancelar' 
 }
 
 async function openExternalUrl(url, button) {
-  if (!await confirmAction({ title: 'Abrir site no navegador?', copy: 'Este endereço foi citado na resposta do Codex. Confira antes de sair do Forge.', address: url, accept: 'Abrir no navegador' })) return;
+  const root = project?.project_root;
+  const local = localAppLinks(url).length > 0;
+  if (!await confirmAction({ title: local ? 'Experimentar app no navegador?' : 'Abrir site no navegador?', copy: local ? 'Este endereço foi citado pelo agente. O app precisa estar rodando e pode executar código no navegador. Nada será publicado ou ligado automaticamente.' : 'Este endereço foi citado na resposta do Codex. Confira antes de sair do Forge.', address: url, accept: 'Abrir no navegador' })) return;
+  if (project?.project_root !== root) return;
   let feedback = button.nextElementSibling;
   if (!feedback?.classList.contains('message-web-status')) {
     feedback = document.createElement('span');
@@ -533,6 +540,29 @@ function paintMessage(item) {
 }
 
 function updateLastResultAction() {
+  const localSection = byId('preview-local-apps');
+  const localList = byId('preview-local-apps-list');
+  const urls = project ? [...new Set([...items.values()].reverse().filter(item => !item.isUser && item.complete).flatMap(item => localAppLinks(item.raw)))].slice(0, 5) : [];
+  localSection.hidden = !urls.length;
+  localList.replaceChildren(...urls.map(url => {
+    const card = document.createElement('div'); card.className = 'local-app-card';
+    const address = document.createElement('strong'); address.textContent = url;
+    const button = document.createElement('button'); button.type = 'button'; button.className = 'primary'; button.textContent = 'Experimentar ↗';
+    button.setAttribute('aria-label', `Experimentar app local: ${url}`);
+    button.addEventListener('click', () => { void openExternalUrl(url, button); });
+    const change = document.createElement('button'); change.type = 'button'; change.textContent = 'Pedir mudança';
+    change.setAttribute('aria-label', `Pedir mudança no app local: ${url}`);
+    change.addEventListener('click', () => {
+      if (!project || input.disabled) return;
+      const request = `Quero mudar o resultado em ${url}: `;
+      input.value = input.value.trim() ? `${input.value.trimEnd()}\n${request}` : request;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      showWorkspacePane('conversation'); input.focus();
+      showStatus('Pedido preparado. Escreva a mudança e envie quando quiser.', busy ? 'working' : 'ready');
+    });
+    const actions = document.createElement('div'); actions.className = 'local-app-actions'; actions.append(button, change);
+    card.append(address, actions); return card;
+  }));
   const previousResult = project && latestItem
     ? [...items.values()].reverse().find(item => !item.isUser && item.complete && item.previewPaths?.length)
     : null;
