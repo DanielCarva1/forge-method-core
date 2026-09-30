@@ -11158,3 +11158,11 @@ accessibility, #96 connection decision remain, as mapped in PRODUCT_STATUS.
 One read-only worker requested Sol medium for independent scope/a11y audit;
 parent implemented/integrated/verified/delivered. Observed model usage, tokens
 and attributable BRL unavailable; no savings claim. Publication receipt follows.
+
+Source commit `e8f6c724` pushed and published as
+[desktop-v0.1.77-alpha.1](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.77-alpha.1).
+Anonymous installer/sidecar downloads to
+`D:/forge-method-core-build-cache/public-check/desktop-077/` matched the tested
+candidate hash, 123,237,708-byte size and exact sidecar contents. No redundant
+reinstall of the byte-identical download, no manual CI. Installed 0.1.77 is
+available for the maintainer to use; product gaps remain in PRODUCT_STATUS.
