@@ -11036,3 +11036,12 @@ areas: clean-device completed sign-in, manual accessibility/physical-phone check
 accepted secure-mobile-access connection decision (#96), and the existing
 junction/onboarding limitation above. Do not restart proven chat/history work
 without a demonstrated regression. Publication readback recorded separately below.
+
+Source commit `b69765e4` pushed and published as
+[desktop-v0.1.75-alpha.1](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.75-alpha.1).
+Anonymous downloads to `D:/forge-method-core-build-cache/public-check/desktop-075/`
+matched the tested installer exactly: 123,099,688 bytes, SHA-256 above, and the
+exact 93-byte sidecar. Installed ProductVersion/exe hash still match the
+native-tested candidate. No rebuild, redundant reinstall of identical bytes or
+manual CI was triggered. The package is installed and publicly available;
+remaining limitations are not relabeled as completion of the entire product.
