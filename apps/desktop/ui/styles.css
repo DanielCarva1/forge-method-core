@@ -548,3 +548,12 @@ select { max-width: 100%; min-height: 48px; padding: 8px; color: var(--ink); bac
 .check-label input { width: 24px; min-height: 24px; height: 24px; flex-shrink: 0; accent-color: var(--focus); }
 @media (prefers-contrast: more) { :root[data-theme] { --muted: var(--ink); --line: var(--ink); --shadow: none; } }
 @media (forced-colors: active) { button, .panel, .category-card, .message-bubble, .message-avatar, .status, .agent-badge { border: 1px solid CanvasText; } }
+/* Questions belong to the current conversation, not a second onboarding. */
+.agent-questions { padding: 20px; margin: 12px 0; border: 1px solid var(--accent, #ad8338); border-radius: 16px; background: var(--surface, #fff); }
+.agent-questions fieldset { border: 0; padding: 0; margin: 20px 0; min-width: 0; }
+.agent-questions legend { font-weight: 650; margin-bottom: 12px; overflow-wrap: anywhere; }
+.question-option { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; cursor: pointer; }
+.question-option input { flex: 0 0 auto; width: auto; margin-top: 4px; }
+.question-option small { display: block; margin-top: 4px; }
+.agent-questions textarea { display: block; width: 100%; margin-top: 8px; }
+.question-actions { display: flex; flex-wrap: wrap; gap: 10px; }

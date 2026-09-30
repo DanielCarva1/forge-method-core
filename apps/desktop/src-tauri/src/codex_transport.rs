@@ -30,9 +30,13 @@ struct Request {
     params: Value,
     reply: oneshot::Sender<Reply>,
 }
+enum Outgoing {
+    Request(Request),
+    Answer { id: String, thread: String, answers: crate::questions::Answers, reply: oneshot::Sender<Reply> },
+}
 
 pub struct Transport {
-    requests: mpsc::Sender<Request>,
+    requests: mpsc::Sender<Outgoing>,
     task: tokio::sync::Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
 }
 
@@ -81,17 +85,40 @@ impl Transport {
             .map_err(|_| "Não foi possível abrir o Codex instalado.")?;
         let mut stdin = child.stdin.take().ok_or("O Codex não abriu a conexão.")?;
         let stdout = child.stdout.take().ok_or("O Codex não abriu a conexão.")?;
-        let (requests, mut incoming) = mpsc::channel::<Request>(8);
+        let (requests, mut incoming) = mpsc::channel::<Outgoing>(8);
         let task = tauri::async_runtime::spawn(async move {
             let mut lines =
                 FramedRead::new(stdout, LinesCodec::new_with_max_length(MAX_FRAME_BYTES));
             let mut failure = "A conexão com o Codex foi encerrada.";
             let mut pending = HashMap::<u64, (&'static str, oneshot::Sender<Reply>)>::new();
             let mut id = 0u64;
+            let mut questions = HashMap::<String, (Value, crate::questions::Questions)>::new();
             loop {
                 tokio::select! {
                     request = incoming.recv() => {
                         let Some(request) = request else { break };
+                        let request = match request {
+                            Outgoing::Request(request) => request,
+                            Outgoing::Answer { id, thread, answers, reply } => {
+                                let result = questions.get(&id)
+                                    .filter(|(_, request)| request.thread_id == thread)
+                                    .ok_or(crate::questions::STALE)
+                                    .and_then(|(_, request)| crate::questions::response(request, answers));
+                                match result {
+                                    Ok(result) => {
+                                        let (request_id, _) = questions.remove(&id).unwrap();
+                                        let bytes = format!("{}\n", json!({"id":request_id,"result":result}));
+                                        if stdin.write_all(bytes.as_bytes()).await.is_err() {
+                                            let _ = reply.send(Err("A conexão com o Codex foi encerrada."));
+                                            break;
+                                        }
+                                        let _ = reply.send(Ok(Value::Null));
+                                    }
+                                    Err(error) => { let _ = reply.send(Err(error)); }
+                                }
+                                continue;
+                            }
+                        };
                         id += 1;
                         let mut bytes = json!({"id":id,"method":request.method,"params":request.params}).to_string().into_bytes();
                         bytes.push(b'\n');
@@ -110,11 +137,33 @@ impl Transport {
                         let Ok(value) = serde_json::from_str::<Value>(&line) else { break };
                         if value.get("method").is_some() {
                             if let Some(request_id) = value.get("id") {
+                                if value["method"] == "item/tool/requestUserInput" && questions.len() < 8
+                                    && (request_id.is_string() || request_id.is_number()) {
+                                    if let Some(request) = crate::questions::parse(&value["params"]) {
+                                        let key = request_id.to_string();
+                                        if !questions.contains_key(&key) {
+                                            event(json!({"method":"forge/questions","params":{"id":key,"questions":request}}));
+                                            questions.insert(key, (request_id.clone(), request));
+                                            continue;
+                                        }
+                                    }
+                                }
                                 // Unsupported interactive requests fail explicitly; no implicit approvals.
                                 let reply = json!({"id":request_id,"error":{"code":-32601,"message":"Interaction not supported by this client"}});
                                 if stdin.write_all(format!("{reply}\n").as_bytes()).await.is_err() { break; }
                                 event(json!({"method":"forge/unsupportedInteraction"}));
-                            } else { event(value); }
+                            } else {
+                                if value["method"] == "turn/completed" {
+                                    questions.retain(|_, (_, request)| request.turn_id != value["params"]["turn"]["id"].as_str().unwrap_or(""));
+                                }
+                                if value["method"] == "serverRequest/resolved" {
+                                    if let Some(id) = value["params"].get("requestId") {
+                                        questions.remove(&id.to_string());
+                                        event(json!({"method":"forge/questionsResolved","params":{"id":id.to_string()}}));
+                                    }
+                                }
+                                event(value);
+                            }
                         } else if let Some((method, reply)) = value["id"].as_u64().and_then(|id| pending.remove(&id)) {
                             if let Some(error) = value.get("error") {
                                 let _ = reply.send(Err(classify_rejection(method, error)));
@@ -143,11 +192,11 @@ impl Transport {
         let (reply, response) = oneshot::channel();
         tokio::time::timeout(timeout_for(method), async {
             self.requests
-                .send(Request {
+                .send(Outgoing::Request(Request {
                     method,
                     params,
                     reply,
-                })
+                }))
                 .await
                 .map_err(|_| "A conexão com o Codex foi encerrada.")?;
             response
@@ -156,6 +205,15 @@ impl Transport {
         })
         .await
         .map_err(|_| "O Codex demorou para responder. Desconecte e tente novamente.")?
+    }
+
+    pub async fn answer(&self, id: String, thread: String, answers: crate::questions::Answers) -> Reply {
+        let (reply, response) = oneshot::channel();
+        tokio::time::timeout(REQUEST_TIMEOUT, async {
+            self.requests.send(Outgoing::Answer { id, thread, answers, reply }).await
+                .map_err(|_| "A conexão com o Codex foi encerrada.")?;
+            response.await.map_err(|_| "A conexão com o Codex foi encerrada.")?
+        }).await.map_err(|_| "O envio não foi confirmado. Confira a conversa antes de tentar novamente.")?
     }
 }
 

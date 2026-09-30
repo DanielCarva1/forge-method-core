@@ -8,6 +8,7 @@ mod preview_site;
 mod progress;
 mod project;
 mod reference;
+mod questions;
 use tauri::Manager;
 
 #[derive(serde::Serialize)]
@@ -150,6 +151,7 @@ fn main() {
             agent::open_login_page,
             agent::list_conversations,
             agent::send_message,
+            agent::answer_questions,
             agent::interrupt_agent,
             agent::disconnect_agent
         ])

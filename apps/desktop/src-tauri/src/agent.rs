@@ -432,6 +432,15 @@ fn project_event(value: Value, activity: &Mutex<Activity>) -> Option<AgentEvent>
         "forge/unsupportedInteraction" => {
             event.kind = "interaction_required".into();
         }
+        "forge/questions" => {
+            event.kind = "questions".into();
+            event.id = p["id"].as_str()?.into();
+            event.text = p["questions"].to_string();
+        }
+        "forge/questionsResolved" => {
+            event.kind = "questions_resolved".into();
+            event.id = p["id"].as_str()?.into();
+        }
         "item/started" => {
             event.kind = "activity".into();
             event.text = match p["item"]["type"].as_str() {
@@ -558,7 +567,7 @@ fn developer_instructions(
         #[cfg(debug_assertions)]
         "Use the installed start-forge skill once at the beginning of this conversation, and follow its structured handoff.".to_string()
     };
-    Ok(format!("You are the user's agent inside Forge desktop. Work only on the selected project unless the user explicitly requests otherwise. {start} The app already resolved the exact Forge executable for this project: `{}`. Use that absolute executable for every Forge command in this conversation. Do not select another copy from PATH, Cargo bin, a global installer, or WSL. Check its --version before activation; if the host cannot access it, explain the problem instead of silently switching copies. Forge owns project continuity; use its public interfaces and do not create another state store. For a Forge command requiring a temporary JSON input, write the file, invoke Forge, and clean up in separate tool calls; never compose all three operations into one shell command. If the host blocks an operation, do not bypass its policy. Explain progress in the user's language, clearly and simply. A completed response is not proof that the user's task is complete. Treat exploration as conversation, not acceptance. After interruption, reconcile actual effects before continuing. When you create or substantially change a reviewable local file, identify only files that actually exist and include a Markdown link with a path relative to the project root, such as [Ver página](site/index.html), so the user can inspect it in the app. Do not imply a local file is published or that an unsupported output has a visual preview. The interface currently cannot display interactive tool forms; ask the user in ordinary conversation when a decision is needed.", runtime.display()))
+    Ok(format!("You are the user's agent inside Forge desktop. Work only on the selected project unless the user explicitly requests otherwise. {start} The app already resolved the exact Forge executable for this project: `{}`. Use that absolute executable for every Forge command in this conversation. Do not select another copy from PATH, Cargo bin, a global installer, or WSL. Check its --version before activation; if the host cannot access it, explain the problem instead of silently switching copies. Forge owns project continuity; use its public interfaces and do not create another state store. For a Forge command requiring a temporary JSON input, write the file, invoke Forge, and clean up in separate tool calls; never compose all three operations into one shell command. If the host blocks an operation, do not bypass its policy. Explain progress in the user's language, clearly and simply. A completed response is not proof that the user's task is complete. Treat exploration as conversation, not acceptance. After interruption, reconcile actual effects before continuing. When you create or substantially change a reviewable local file, identify only files that actually exist and include a Markdown link with a path relative to the project root, such as [Ver página](site/index.html), so the user can inspect it in the app. Do not imply a local file is published or that an unsupported output has a visual preview. The interface supports request_user_input questions with options or a written answer. Use ordinary conversation for unsupported interactions; never treat an answer as blanket permission for unrelated actions. Do not request passwords or secrets through these questions.", runtime.display()))
 }
 
 async fn resume_saved<P: Protocol>(
@@ -714,6 +723,16 @@ pub async fn send_message(text: String, state: State<'_, AgentState>) -> Result<
         release(&state, &session).await;
     }
     result.map(|_| ())
+}
+
+#[tauri::command]
+pub async fn answer_questions(request_id: String, thread_id: String, answers: crate::questions::Answers, state: State<'_, AgentState>) -> Result<(), &'static str> {
+    let session = state.session.lock().await.clone().ok_or(crate::questions::STALE)?;
+    if session.thread.lock().unwrap_or_else(|e| e.into_inner()).as_deref() != Some(thread_id.as_str()) {
+        return Err(crate::questions::STALE);
+    }
+    session.transport.answer(request_id, thread_id, answers).await?;
+    Ok(())
 }
 
 #[tauri::command]

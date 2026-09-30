@@ -10922,3 +10922,53 @@ and exe hash still match the native-tested final installation. Since the
 public download is byte-identical to that installed candidate, no redundant
 third installation or native-suite rerun was performed. No manual CI was
 triggered. The rejected first candidate was never published.
+
+### Session checkpoint — 2026-09-30 (0.1.74 questions inside the conversation)
+
+Supported Codex questions now appear as ordinary-language choices with optional
+written answers. No option is preselected and only explicit **Enviar respostas**
+sends them. The existing draft remains intact. The user can interrupt instead.
+This closes a concrete UI capability gap, not the entire product.
+
+`codex_transport.rs` keeps bounded pending `item/tool/requestUserInput` requests
+and returns the exact response once; answered, resolved, interrupted and
+wrong-conversation requests are rejected. Unsupported requests still receive an
+explicit error. `questions.rs` validates the supported payload, rejects
+secret-marked forms and projects complete answers. `agent.rs` exposes only that
+answer command and curated events. `ui/questions.mjs` renders literal text/options,
+handles failed/pending submission and clears session-owned forms without new
+persistence or a second history store. Core/project state/permissions unchanged.
+
+Protocol source: installed Codex CLI 0.157.1-generated JSON schemas in
+`D:/forge-method-core-build-cache/codex-schema-073/` (not tracked). The supported
+method, request IDs, question fields and answer shape were checked before edits.
+
+Verification: Rust check and `questions::` tests passed, then the affected desktop
+crate once stable: **56 passed, 1 ignored, 0 failed**. Browser doubles passed:
+`questions-browser.cjs`, `composer-reference.cjs`, `composer-folder.cjs`.
+Question checks cover no preselection, literal text, incomplete/failed/pending
+answers, free text, preserved drafts, stale/resolved/canceled forms and
+360px/200% text. No core workspace suite, broad browser suite or manual CI ran.
+Existing unrelated crate-wide formatting differences remain; new module formatted.
+No new subagents or attributable BRL/subscription savings claims.
+
+One 0.1.74 installer was built:
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.74_x64-setup.exe`,
+123,117,872 bytes, SHA-256
+`AB60DE5361476C3A1317ADB6642022A63227B35923DADD03FA68BCC5E00564F2`.
+Silent installation over 0.1.73 succeeded. Installed ProductVersion 0.1.74;
+exe SHA-256 `F8E185C6E158180D87F306108A3249F337A6823DB2E0762DF14DECE4BF965E0A`.
+`native-questions.cjs` passed on the isolated Windows desktop against this
+installed app: real WebView/IPC/stdio question -> exact answer -> agent message,
+numeric/string request IDs, no replay, wrong-thread rejection, interruption/stale
+rejection and unsupported execution-approval rejection. **Codex server simulated**;
+not proof of a real model invoking the tool. Screenshot inspected:
+`C:/ForgeFast/forge-074-questions.png`. Owned test project/profile cleaned.
+
+Remaining areas: result presentation beyond protected static preview,
+clean-device completed sign-in, manual accessibility/physical-phone checks and
+the accepted secure-mobile-access connection decision (#96). Do not silently
+introduce a remote server, hosting cost or permission system to close mobile.
+Existing real chat/history/first-result evidence is recorded above; do not restart
+those investigations without a demonstrated regression.
+Local installation verified; public readback will be recorded below.
