@@ -256,6 +256,11 @@
           <button id="request-preview-change" class="primary" type="button">Pedir mudança neste arquivo</button>
           <details id="preview-site-note" class="preview-safety-note" hidden><summary>Prévia protegida: o site não é interativo</summary><p class="hint">Partes interativas, imagens da internet e arquivos chamados pela raiz do site (como /assets) podem não aparecer.</p></details>
           <p class="preview-origin">Arquivo da pasta do projeto: <strong id="preview-path"></strong>. Isso não confirma publicação na internet.</p>
+          <div class="preview-file-actions">
+            <button id="reveal-result-file" type="button">Mostrar na pasta</button>
+            <button id="save-result-copy" type="button">Salvar uma cópia</button>
+            <details><summary>O que será copiado?</summary><p class="hint">Só o arquivo selecionado, sem alterar o original nem publicar na internet. Imagens e outros arquivos usados por uma página não vão junto. Escolha um nome novo: arquivos existentes não são substituídos.</p></details>
+          </div>
           <div id="preview-browser-action" class="preview-browser-action" hidden>
             <button id="open-site-browser" type="button"><span id="open-browser-label">Usar no navegador</span> <span aria-hidden="true">↗</span></button>
             <p id="open-browser-hint" class="hint">Fora da prévia protegida, a página pode executar código e acessar a internet. Abra apenas projetos de confiança.</p>

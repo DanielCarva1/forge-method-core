@@ -35,6 +35,7 @@ const server = createServer(async (request, response) => {
           if (args.filePath.includes('missing')) throw 'Este arquivo não está mais disponível.';
           return { kind: 'text', relative_path: args.filePath.endsWith('index.html') ? 'site/index.html' : 'ideias.md', content: '# Minha ideia\nTexto real do projeto', size_bytes: 40 };
         }
+        if (command === 'save_project_file_copy') { if (window.saveMode === 'fail') throw 'O destino já existe; nada foi substituído.'; if (window.saveMode === 'pending') return new Promise(resolve => { window.finishSave = resolve; }); return window.saveMode === 'cancel' ? null : 'D:/Cópias/ideias.md'; }
         if (command === 'choose_preview_file') return window.pick;
         if (command === 'connect_agent') { window.events = args.events; return { thread_id: 'results-thread', messages: [], resumed: false }; }
         if (command === 'send_message') window.events.onmessage({ kind: 'completed' });
@@ -50,6 +51,16 @@ const server = createServer(async (request, response) => {
     assert.equal(await page.locator('.result-file-card').count(), 1);
     await page.locator('.result-file-card').click();
     await page.locator('#preview-path').filter({ hasText: 'ideias.md' }).waitFor();
+    await page.locator('#reveal-result-file').click();
+    assert.ok(await page.evaluate(() => window.calls.some(c => c.command === 'reveal_project_file' && c.args.filePath.endsWith('ideias.md'))));
+    await page.locator('#save-result-copy').click();
+    await page.locator('#preview-status').filter({ hasText: 'Cópia salva' }).waitFor();
+    await page.evaluate(() => { window.saveMode = 'cancel'; });
+    await page.locator('#save-result-copy').click();
+    await page.locator('#preview-status').filter({ hasText: 'Você cancelou' }).waitFor();
+    await page.evaluate(() => { window.saveMode = 'fail'; });
+    await page.locator('#save-result-copy').click();
+    await page.locator('#preview-status').filter({ hasText: 'nada foi substituído' }).waitFor();
     await page.locator('#message-text').fill('Meu rascunho');
     await page.locator('#request-preview-change').click();
     assert.ok((await page.locator('#message-text').inputValue()).startsWith('Meu rascunho\nQuero mudar o arquivo ideias.md:'));
@@ -89,10 +100,17 @@ const server = createServer(async (request, response) => {
     await page.evaluate(() => { document.documentElement.style.fontSize = '36px'; });
     await page.locator('[data-mobile-pane-button="preview"]').click();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.evaluate(() => { window.saveMode = 'pending'; });
+    await page.locator('#save-result-copy').click();
+    await page.waitForFunction(() => window.finishSave);
+    assert.equal(await page.locator('#save-result-copy').isDisabled(), true);
+    await page.evaluate(async () => { const { setPreviewProject } = await import('/preview.mjs'); setPreviewProject(null); window.finishSave('D:/Cópias/old.md'); });
+    await page.waitForFunction(() => document.querySelector('#save-result-copy').disabled);
+    assert.equal((await page.locator('#preview-status').textContent()).includes('old.md'), false, 'Old-project save cannot update new project feedback');
     await page.evaluate(async () => { const { setPreviewProject } = await import('/preview.mjs'); window.listMode = 'pending'; setPreviewProject({ project_root: 'D:\\old' }); });
     await page.waitForFunction(() => window.finishList);
     await page.evaluate(async () => { const { setPreviewProject } = await import('/preview.mjs'); setPreviewProject(null); window.finishList({ files: window.files, truncated: false }); });
     assert.equal(await page.locator('.result-file-card').count(), 0, 'Late old-project list is discarded');
-    console.log('PASS: project file discovery/filter/open/change, failed refresh/missing file preserve prior result, explicit app opening/change, narrow 200% and stale project list. Browser double.');
+    console.log('PASS: reveal/copy success/cancel/failure/pending/stale draft preservation; project file discovery/filter/open/change, failed refresh/missing file preserve prior result, explicit app opening/change, narrow 200% and stale project list. Browser double.');
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

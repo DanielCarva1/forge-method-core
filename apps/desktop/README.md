@@ -11045,3 +11045,57 @@ exact 93-byte sidecar. Installed ProductVersion/exe hash still match the
 native-tested candidate. No rebuild, redundant reinstall of identical bytes or
 manual CI was triggered. The package is installed and publicly available;
 remaining limitations are not relabeled as completion of the entire product.
+
+### Session checkpoint — 2026-09-30 (0.1.76 use results outside Forge)
+
+Selected results now offer **Mostrar na pasta** and **Salvar uma cópia**.
+The Explorer action selects the project-bound file without executing it;
+copy uses the actual Windows save dialog, rechecks project/source authority,
+streams bytes into a new destination and never overwrites an existing file.
+Cancel creates nothing; originals/drafts remain intact; stale project/file
+feedback is discarded. Only one file is copied, not a site's dependencies;
+the UI explains this. Copy errors can leave an incomplete new destination and
+explicitly report that instead of unsafe path-based cleanup. No upload,
+publication, model request, dependency or Core change.
+
+`result_actions.rs` owns the two commands; main registers them and existing
+preview controls call them. `preview.rs` now returns file information for
+oversized supported files rather than blocking selection: users can copy/reveal
+them without loading their content into the UI. Reads remain bounded even if a
+file grows; oversized HTML does not install a protected-preview URL. Existing
+unsupported-file information is reused, not duplicated. Preview CSP unchanged.
+
+Focused cargo check passed. `result_actions::`: 4 passed. Existing
+`preview::tests`: 6 passed, 1 existing ignored association test. The extended
+large-file test passed for text/HTML/PNG metadata-only selection. Browser double
+`results-browser.cjs` passed: reveal arguments, copy success/cancel/error,
+pending controls, stale feedback and existing result/mobile layout checks.
+No full desktop crate/workspace suite, broad browser suite or manual CI.
+
+An initial build was superseded before installation/publication to include the
+large-file selection fix. Only the final candidate below was installed/tested:
+`D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.76_x64-setup.exe`,
+123,164,118 bytes, SHA-256
+`8AD342E507D4FFBA035552BC53518660FCC9760E10000990499136001EEA7601`.
+Silent upgrade over 0.1.75 succeeded; installed ProductVersion 0.1.76;
+exe SHA-256 `3BF82BB83C7EB9C1D48448FCA01951900C33D151EE58EB4A510ADCD590C3F59C`.
+Core 0.13.3/staged hash unchanged from the previous checkpoint.
+
+`native-result-copy.cjs` passed on the installed app on an isolated Windows
+desktop: real project -> actual file preview -> actual save-dialog cancellation
+and chosen Unicode/space destination -> exact copied bytes. Small Markdown and
+oversized HTML both copied, originals/draft unchanged; large HTML remains out
+of the preview iframe. No Codex server/model used. Explorer dispatch was mocked
+to avoid opening windows on the user's desktop; exact drive/UNC/Unicode argument
+construction is unit-tested, not a claim of visible Explorer selection.
+Screenshot inspected: `C:/ForgeFast/forge-076-copy.png`. Owned fixture/profile
+cleaned. Existing copy-path helper wording and extended destination path display
+are minor visual rough edges, not blockers of the working copy journey.
+
+One bounded worker requested Luna medium for the native module; parent owns
+UI/integration/review/tests and delivery. Usage/observed model/attributable BRL
+unavailable; no savings claim. Same-user filesystem races between validation
+and open are not a new sandbox guarantee. Clean-device completed sign-in,
+manual accessibility/physical-phone checks, secure mobile connection (#96) and
+the existing external-junction onboarding restriction remain. This closes the
+file-use journey, not the entire product. Publication readback recorded below.

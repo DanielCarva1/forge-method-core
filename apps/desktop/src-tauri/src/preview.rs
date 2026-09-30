@@ -114,14 +114,15 @@ fn read_preview(root: &Path, requested: &Path) -> Result<Preview, &'static str> 
             | "yml"
             | "toml"
     );
+    let file_info = || Preview {
+        kind: "file",
+        content: String::new(),
+        relative_path: relative.to_string_lossy().into_owned(),
+        size_bytes: metadata.len(),
+        render_url: None,
+    };
     if !is_image && !is_text {
-        return Ok(Preview {
-            kind: "file",
-            content: String::new(),
-            relative_path: relative.to_string_lossy().into_owned(),
-            size_bytes: metadata.len(),
-            render_url: None,
-        });
+        return Ok(file_info());
     }
     let limit = if is_image {
         MAX_IMAGE_BYTES
@@ -131,11 +132,16 @@ fn read_preview(root: &Path, requested: &Path) -> Result<Preview, &'static str> 
         MAX_TEXT_BYTES
     };
     if metadata.len() > limit {
-        return Err("Este arquivo é grande demais para a prévia. Ele não foi alterado.");
+        return Ok(file_info());
     }
-    let bytes = std::fs::read(&file).map_err(|_| "Não foi possível ler este arquivo.")?;
+    let mut bytes = Vec::new();
+    std::fs::File::open(&file)
+        .map_err(|_| "Não foi possível ler este arquivo.")?
+        .take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "Não foi possível ler este arquivo.")?;
     if bytes.len() as u64 > limit {
-        return Err("Este arquivo é grande demais para a prévia. Ele não foi alterado.");
+        return Ok(file_info());
     }
     let (kind, content) = if is_image {
         let mime = image_mime(&extension, &bytes)
@@ -343,7 +349,7 @@ pub async fn inspect_preview(
     })
     .await
     .map_err(|_| "Não foi possível preparar a prévia.")??;
-    if file
+    if preview.kind == "text" && file
         .extension()
         .and_then(|value| value.to_str())
         .is_some_and(|value| {
@@ -437,7 +443,18 @@ mod tests {
         assert_eq!(read_preview(&root, &html).unwrap().content.len(), 40 * 1024);
         let text = root.join("large.txt");
         fs::write(&text, "x".repeat(40 * 1024)).unwrap();
-        assert!(read_preview(&root, &text).is_err());
+        let info = read_preview(&root, &text).unwrap();
+        assert_eq!(info.kind, "file");
+        assert!(info.content.is_empty());
+        for (name, limit) in [("big.html", MAX_HTML_BYTES), ("big.png", MAX_IMAGE_BYTES)] {
+            let path = root.join(name);
+            fs::File::create(&path).unwrap().set_len(limit + 1).unwrap();
+            let info = read_preview(&root, &path).unwrap();
+            assert_eq!(info.kind, "file");
+            assert_eq!(info.size_bytes, limit + 1);
+            assert!(info.content.is_empty());
+            assert!(info.render_url.is_none());
+        }
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -22,17 +22,17 @@ def find_dialog(title):
 
 
 mode = sys.argv[1]
-title = "Escolha um arquivo como referência" if mode.startswith("reference-") else "Escolha um arquivo deste projeto" if mode == "file-select" else "Escolha a pasta do projeto"
+title = "Salvar uma cópia deste arquivo" if mode.startswith("save-") else "Escolha um arquivo como referência" if mode.startswith("reference-") else "Escolha um arquivo deste projeto" if mode == "file-select" else "Escolha a pasta do projeto"
 dialog = find_dialog(title)
-if mode in ("cancel", "reference-cancel"):
+if mode in ("cancel", "reference-cancel", "save-cancel"):
     dialog.close()
 elif sys.argv[1] == "select":
     dialog.descendants(class_name="Edit")[0].set_edit_text(sys.argv[2])
     dialog.descendants(title="Selecionar pasta", class_name="Button")[0].click()
-elif mode in ("file-select", "reference-select"):
+elif mode in ("file-select", "reference-select", "save-select"):
     try:
         dialog.descendants(class_name="Edit")[0].set_edit_text(sys.argv[2])
-        [button for button in dialog.descendants(class_name="Button") if button.window_text().replace("&", "") == "Abrir"][0].click()
+        [button for button in dialog.descendants(class_name="Button") if button.window_text().replace("&", "") == ("Salvar" if mode == "save-select" else "Abrir")][0].click()
     except (IndexError, RuntimeError):
         print("CONTROLS:", [(c.window_text(), c.element_info.class_name) for c in dialog.descendants()], flush=True)
         raise

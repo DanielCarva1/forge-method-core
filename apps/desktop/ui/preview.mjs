@@ -21,6 +21,9 @@ const siteNote = document.getElementById('preview-site-note');
 const text = document.getElementById('preview-text');
 const fileNote = document.getElementById('preview-file-note');
 const copyPath = document.getElementById('copy-preview-path');
+const revealFile = document.getElementById('reveal-result-file');
+const saveCopy = document.getElementById('save-result-copy');
+let fileActionPending = false;
 const markdown = document.getElementById('preview-markdown');
 const openPreview = document.getElementById('open-preview');
 const browserAction = document.getElementById('preview-browser-action');
@@ -116,7 +119,8 @@ function showSource(value) {
 }
 
 function controls() {
-  choose.disabled = !project || pending;
+  choose.disabled = !project || pending || fileActionPending;
+  revealFile.disabled = saveCopy.disabled = !project || !filePath || result.hidden || pending || fileActionPending;
   refresh.hidden = !filePath;
   refresh.disabled = !project || !filePath || pending;
   openPreview.disabled = !project || result.hidden || pending;
@@ -469,3 +473,26 @@ copyPath.addEventListener('click', async () => {
     status.textContent = 'Não foi possível copiar o caminho. Abra a pasta confirmada em “Seu projeto” e procure pelo arquivo indicado acima.';
   }
 });
+
+async function useSelectedFile(command) {
+  if (!project || !filePath || result.hidden || pending || fileActionPending) return;
+  const root = project.project_root;
+  const selected = filePath;
+  const current = generation;
+  fileActionPending = true; controls();
+  status.hidden = false;
+  status.textContent = command === 'save_project_file_copy' ? 'Escolha onde salvar a cópia…' : 'Solicitando abertura da pasta…';
+  try {
+    const destination = await globalThis.__TAURI__.core.invoke(command, { projectRoot: root, filePath: selected });
+    if (generation !== current || project?.project_root !== root || filePath !== selected) return;
+    status.textContent = command === 'save_project_file_copy'
+      ? destination === null ? 'Você cancelou. Nenhuma cópia foi criada; o original continua intacto.' : `Cópia salva em ${destination}. O original não foi alterado.`
+      : 'Abertura da pasta solicitada ao Windows. O arquivo não foi executado nem alterado.';
+  } catch (error) {
+    if (generation === current && project?.project_root === root && filePath === selected) {
+      status.textContent = typeof error === 'string' ? error : 'Não foi possível concluir. O arquivo original não foi alterado.';
+    }
+  } finally { fileActionPending = false; controls(); }
+}
+revealFile.addEventListener('click', () => void useSelectedFile('reveal_project_file'));
+saveCopy.addEventListener('click', () => void useSelectedFile('save_project_file_copy'));

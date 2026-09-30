@@ -10,6 +10,7 @@ mod project;
 mod reference;
 mod questions;
 mod results;
+mod result_actions;
 use tauri::Manager;
 
 #[derive(serde::Serialize)]
@@ -143,6 +144,8 @@ fn main() {
             preview::choose_preview_file,
             preview::inspect_preview,
             results::list_project_files,
+            result_actions::reveal_project_file,
+            result_actions::save_project_file_copy,
             preview::open_site_in_browser,
             preview::open_pdf_in_browser,
             preview::clear_preview_site,
