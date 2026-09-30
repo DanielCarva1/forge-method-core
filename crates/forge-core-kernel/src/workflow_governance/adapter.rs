@@ -844,6 +844,7 @@ pub(super) struct RetainedWorkflowProjectSnapshot {
     tree: Arc<RetainedProjectTree>,
     digest: String,
     regular_files: BTreeMap<String, (String, u64)>,
+    expected_profile: Option<WorkflowReadinessProfile>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -867,6 +868,84 @@ impl RetainedWorkflowProjectSnapshot {
             )?,
         );
         Self::from_retained_tree(tree)
+    }
+
+    fn capture_for_cooperative_journey(
+        root: &Path,
+        state_root: &Path,
+    ) -> Result<Self, WorkflowGovernanceAdapterError> {
+        // Release this read-only profile probe before acquiring the project or
+        // Domain Pack lifecycle. The authoritative ledger is checked again by
+        // the caller under its final operation lock, before reconciliation.
+        let profile = {
+            let ledger = observe_existing_workflow_governance_ledger(state_root)?;
+            ledger
+                .recover()?
+                .readiness_profile()
+                .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?
+        };
+        Self::capture_for_profile(root, profile)
+    }
+
+    fn capture_for_initialization(
+        root: &Path,
+        state_root: &Path,
+        requested: Option<WorkflowReadinessProfile>,
+    ) -> Result<Self, WorkflowGovernanceAdapterError> {
+        // Initialization is an explicit state-writing operation. Creating its
+        // ledger lock is permitted; a failed/malformed recovery is never treated
+        // as a pristine project. No lock is held when the tree is captured.
+        let profile = {
+            let ledger = lock_workflow_governance_ledger_tcb(state_root)?;
+            let projection = ledger.recover()?;
+            let current = projection.readiness_profile();
+            if let Some(current) = current {
+                if requested.is_some_and(|requested| requested != current) {
+                    return Err(
+                        WorkflowGovernanceAdapterError::ReadinessProfileReconfiguration {
+                            current,
+                            requested: requested.unwrap_or(current),
+                        },
+                    );
+                }
+                current
+            } else {
+                requested.unwrap_or(WorkflowReadinessProfile::SoloCooperative)
+            }
+        };
+        Self::capture_for_profile(root, profile)
+    }
+
+    fn capture_for_profile(
+        root: &Path,
+        profile: WorkflowReadinessProfile,
+    ) -> Result<Self, WorkflowGovernanceAdapterError> {
+        let mut snapshot = if profile == WorkflowReadinessProfile::SoloCooperative {
+            Self::from_retained_tree(Arc::new(
+                RetainedProjectTree::capture_cooperative_read_snapshot(
+                    root,
+                    MAX_SNAPSHOT_ENTRIES,
+                    MAX_SNAPSHOT_FILES,
+                    MAX_SNAPSHOT_BYTES,
+                )?,
+            ))?
+        } else {
+            Self::capture_for_resume(root)?
+        };
+        snapshot.expected_profile = Some(profile);
+        Ok(snapshot)
+    }
+
+    fn validate_profile(
+        &self,
+        profile: Option<WorkflowReadinessProfile>,
+    ) -> Result<(), WorkflowGovernanceAdapterError> {
+        if self.expected_profile.is_some() && self.expected_profile != profile {
+            return Err(WorkflowGovernanceAdapterError::InvalidObservation(
+                "project readiness profile changed during observation".to_owned(),
+            ));
+        }
+        Ok(())
     }
 
     fn capture_with_limits(
@@ -904,6 +983,7 @@ impl RetainedWorkflowProjectSnapshot {
             tree,
             digest,
             regular_files,
+            expected_profile: None,
         })
     }
 
@@ -1692,16 +1772,24 @@ impl WorkflowGovernanceProjectAdapter {
     ) -> Result<WorkflowGovernanceInitialization, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
         let genesis = registry.genesis();
-        let project_snapshot =
-            RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let project_snapshot = RetainedWorkflowProjectSnapshot::capture_for_initialization(
+            &self.binding.project_root,
+            &self.binding.state_root,
+            requested_profile,
+        )?;
         let snapshot_digest = project_snapshot.digest().to_owned();
         initialize_workflow_action_replay(&self.binding.state_root)?;
-        let domain = LockedWorkflowDomainPackContext::acquire(
-            &self.binding.project_root,
+        let domain = LockedWorkflowDomainPackContext::acquire_with_project_snapshot(
+            project_snapshot.project_tree_arc(),
             &self.binding.state_root,
         )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
+        project_snapshot.validate_profile(
+            projection
+                .readiness_profile()
+                .or(project_snapshot.expected_profile),
+        )?;
         if !projection.records.is_empty() {
             let readiness_profile = projection
                 .readiness_profile()
@@ -1913,14 +2001,17 @@ impl WorkflowGovernanceProjectAdapter {
         self.recover_pending_release_rebase()?;
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let snapshot =
-            RetainedWorkflowProjectSnapshot::capture_for_resume(&self.binding.project_root)?;
+        let snapshot = RetainedWorkflowProjectSnapshot::capture_for_cooperative_journey(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let domain = LockedWorkflowDomainPackContext::acquire_with_project_snapshot(
             snapshot.project_tree_arc(),
             &self.binding.state_root,
         )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
+        snapshot.validate_profile(projection.readiness_profile())?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
         let effective = domain.admit_effective(admitted)?;
         projection =
@@ -1943,9 +2034,13 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         input: AgentAutonomyAssessmentInput,
     ) -> Result<AgentAutonomyAssessment, WorkflowGovernanceAdapterError> {
-        let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let snapshot = RetainedWorkflowProjectSnapshot::capture_for_cooperative_journey(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
+        snapshot.validate_profile(projection.readiness_profile())?;
         if projection.readiness_profile() != Some(WorkflowReadinessProfile::SoloCooperative) {
             return Err(WorkflowGovernanceAdapterError::CooperativeObjectiveProfileRequired);
         }
@@ -2202,14 +2297,17 @@ impl WorkflowGovernanceProjectAdapter {
     ) -> Result<WorkflowGovernanceLedgerRecord, WorkflowGovernanceAdapterError> {
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let snapshot =
-            RetainedWorkflowProjectSnapshot::capture_for_resume(&self.binding.project_root)?;
+        let snapshot = RetainedWorkflowProjectSnapshot::capture_for_cooperative_journey(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let domain = LockedWorkflowDomainPackContext::acquire_with_project_snapshot(
             snapshot.project_tree_arc(),
             &self.binding.state_root,
         )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
+        snapshot.validate_profile(projection.readiness_profile())?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
         let effective = domain.admit_effective(admitted)?;
         projection =
@@ -2656,14 +2754,18 @@ impl WorkflowGovernanceProjectAdapter {
                 "cooperative host observation cannot be in the future".to_owned(),
             ));
         }
-        let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
-        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(
+        let snapshot = RetainedWorkflowProjectSnapshot::capture_for_cooperative_journey(
             &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire_with_project_snapshot(
+            snapshot.project_tree_arc(),
             &self.binding.state_root,
         )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
+        snapshot.validate_profile(projection.readiness_profile())?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
         let effective = domain.admit_effective(admitted)?;
         if projection.readiness_profile() != Some(WorkflowReadinessProfile::SoloCooperative) {
@@ -2899,7 +3001,10 @@ impl WorkflowGovernanceProjectAdapter {
         &self,
         now: u64,
     ) -> Result<WorkflowAuthorizationActionPacketSet, WorkflowGovernanceAdapterError> {
-        let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
+        let snapshot = RetainedWorkflowProjectSnapshot::capture_for_cooperative_journey(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         self.action_packets_at_with_snapshot(now, &snapshot)
     }
 
@@ -2909,12 +3014,13 @@ impl WorkflowGovernanceProjectAdapter {
         snapshot: &RetainedWorkflowProjectSnapshot,
     ) -> Result<WorkflowAuthorizationActionPacketSet, WorkflowGovernanceAdapterError> {
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(
-            &self.binding.project_root,
+        let domain = LockedWorkflowDomainPackContext::acquire_with_project_snapshot(
+            snapshot.project_tree_arc(),
             &self.binding.state_root,
         )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let mut projection = ledger.recover()?;
+        snapshot.validate_profile(projection.readiness_profile())?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
         let effective = domain.admit_effective(admitted)?;
         projection =
@@ -3358,14 +3464,17 @@ impl WorkflowGovernanceProjectAdapter {
     pub fn resume(&self) -> Result<WorkflowGovernanceGuidance, WorkflowGovernanceAdapterError> {
         let now = unix_time()?;
         let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let snapshot =
-            RetainedWorkflowProjectSnapshot::capture_for_resume(&self.binding.project_root)?;
+        let snapshot = RetainedWorkflowProjectSnapshot::capture_for_cooperative_journey(
+            &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
         let domain = LockedWorkflowDomainPackContext::acquire_existing_with_project_snapshot(
             snapshot.project_tree_arc(),
             &self.binding.state_root,
         )?;
         let ledger = observe_existing_workflow_governance_ledger(&self.binding.state_root)?;
         let projection = ledger.recover()?;
+        snapshot.validate_profile(projection.readiness_profile())?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
         domain.with_effective_project_observation(admitted, |effective| {
             self.require_effective_epoch_current(admitted, &effective, &projection)
@@ -3436,8 +3545,12 @@ impl WorkflowGovernanceProjectAdapter {
                 "Work Focus requires an active cooperative objective".to_owned(),
             ));
         }
-        let project_snapshot =
-            RetainedWorkflowProjectSnapshot::capture_for_resume(&self.binding.project_root)?;
+        let project_snapshot = RetainedWorkflowProjectSnapshot::capture_for_profile(
+            &self.binding.project_root,
+            projection
+                .readiness_profile()
+                .ok_or(WorkflowGovernanceAdapterError::LedgerUninitialized)?,
+        )?;
         let snapshot_digest = project_snapshot.digest().to_owned();
         let ledger_head_digest = projection
             .head_digest
@@ -3873,14 +3986,18 @@ impl WorkflowGovernanceProjectAdapter {
                 "Work Focus host observation cannot be in the future".to_owned(),
             ));
         }
-        let snapshot = RetainedWorkflowProjectSnapshot::capture(&self.binding.project_root)?;
-        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
-        let domain = LockedWorkflowDomainPackContext::acquire(
+        let snapshot = RetainedWorkflowProjectSnapshot::capture_for_cooperative_journey(
             &self.binding.project_root,
+            &self.binding.state_root,
+        )?;
+        let registry = load_admitted_workflow_governance_universal_assurance_release_registry()?;
+        let domain = LockedWorkflowDomainPackContext::acquire_with_project_snapshot(
+            snapshot.project_tree_arc(),
             &self.binding.state_root,
         )?;
         let mut ledger = lock_workflow_governance_ledger_tcb(&self.binding.state_root)?;
         let projection = ledger.recover()?;
+        snapshot.validate_profile(projection.readiness_profile())?;
         let admitted = self.resolve_active_release(&registry, &projection)?;
         let effective = domain.admit_effective(admitted)?;
         self.require_effective_epoch_current(admitted, &effective, &projection)?;
@@ -18313,7 +18430,8 @@ mod tests {
         }
         assert!(resume
             .contains("LockedWorkflowDomainPackContext::acquire_existing_with_project_snapshot"));
-        assert!(resume.contains("RetainedWorkflowProjectSnapshot::capture_for_resume"));
+        assert!(resume.contains("RetainedWorkflowProjectSnapshot::capture_for_cooperative_journey"));
+        assert!(resume.contains("snapshot.validate_profile(projection.readiness_profile())"));
         let capture_start = source
             .find("    fn capture_for_resume(")
             .expect("resume capture source");
@@ -18525,6 +18643,84 @@ mod tests {
                 observed_at_unix: 1,
             },
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn cooperative_junction_journey_preserves_strict_effect_boundary() {
+        let (root, state) = temp_project("cooperative-junction-journey");
+        let outside = root.parent().unwrap().join("outside");
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(outside.join("private.txt"), b"outside stays untouched").unwrap();
+        let link = root.join("external");
+        let output = std::process::Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command",
+                "New-Item -ItemType Junction -Path $env:FORGE_TEST_LINK -Target $env:FORGE_TEST_TARGET | Out-Null"])
+            .env("FORGE_TEST_LINK", &link).env("FORGE_TEST_TARGET", &outside).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let adapter = WorkflowGovernanceProjectAdapter::new(
+            StableId("project.cooperative-junction".to_owned()),
+            &root,
+            &state,
+        )
+        .unwrap();
+        assert!(adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .is_err());
+        let initialized = adapter.initialize().unwrap();
+        assert_eq!(
+            initialized.readiness_profile,
+            WorkflowReadinessProfile::SoloCooperative
+        );
+        adapter.initialize().unwrap();
+        let before_resume = state_file_bytes(&state);
+        let guidance = adapter.resume().unwrap();
+        assert_eq!(
+            before_resume,
+            state_file_bytes(&state),
+            "resume remains read-only"
+        );
+        let packet = guidance.authorization.action_packets[0].clone();
+        adapter.action_packets().unwrap();
+        adapter
+            .accept_cooperative_objective(&packet.packet_digest, cooperative_objective_input())
+            .unwrap();
+        let resumed = adapter.resume().unwrap();
+        assert!(resumed.active_cooperative_objective.is_some());
+        adapter.prepare_work_focus().unwrap();
+        let rejected = adapter.record_cooperative_evidence(b"{not-json").unwrap();
+        let WorkflowGovernanceEvent::CooperativeEvidenceObserved(event) = rejected.event else {
+            panic!("dedicated rejection event");
+        };
+        assert_eq!(
+            event.disposition,
+            WorkflowCooperativeEvidenceDisposition::Rejected
+        );
+        assert!(adapter
+            .initialize_with_readiness_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .is_err());
+        assert!(
+            RetainedWorkflowProjectSnapshot::capture(&root).is_err(),
+            "promotion/effect capture still rejects external links"
+        );
+        let retained =
+            RetainedWorkflowProjectSnapshot::capture_for_cooperative_journey(&root, &state)
+                .unwrap();
+        assert!(retained
+            .validate_profile(Some(WorkflowReadinessProfile::StrictExternal))
+            .is_err());
+        assert!(retained.tree.exact_mutation_capability_digest().is_err());
+        assert_eq!(
+            fs::read(outside.join("private.txt")).unwrap(),
+            b"outside stays untouched"
+        );
+        drop(retained);
+        fs::remove_dir(&link).unwrap();
+        fs::remove_dir_all(root.parent().unwrap()).unwrap();
     }
 
     fn cooperative_material_supersession_input() -> WorkflowCooperativeObjectiveInput {

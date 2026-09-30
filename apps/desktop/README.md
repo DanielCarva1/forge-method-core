@@ -11166,3 +11166,77 @@ Anonymous installer/sidecar downloads to
 candidate hash, 123,237,708-byte size and exact sidecar contents. No redundant
 reinstall of the byte-identical download, no manual CI. Installed 0.1.77 is
 available for the maintainer to use; product gaps remain in PRODUCT_STATUS.
+
+## Session checkpoint — 2026-09-30 — cooperative Windows project opening (0.1.78)
+
+Accepted outcome: open an ordinary Windows project containing an external
+junction without following its target or disabling protected effects checks.
+Store adds an explicit cooperative read constructor: bounded opaque reparse
+witnesses, namespace/reparse-data drift checks, and no mutation/completion
+capability even for a link-free tree. Original strict constructors remain.
+Kernel selects this only from recovered Solo Cooperative profile for common
+initialization/next/resume/objective/evidence/autonomy/work-focus/packet reads.
+The profile probe drops its ledger lock before project/Domain Pack capture;
+final authoritative operation lock rechecks profile before reconciliation.
+Explicit initialization may create its ledger lock before capture; recovery
+errors are not treated as a pristine project. Preparation packets retain CAS.
+No UI workaround, ignore edits, target traversal, dependency or new process gate.
+
+Focused store/kernel cargo checks passed. Store retained-tree module: 22 passed
+(including existing strict mutation/completion tests). Kernel: 14 targeted tests
+passed across cooperative behavior (8), initialization (3), read-only resume,
+work-focus projection and Strict External autonomy. New Windows journey covers
+strict rejection, cooperative initialization/reinitialization, read-only resume,
+objective acceptance, action packets, work-focus preparation, malformed offer
+rejection and profile mismatch. Valid admitted evidence on a junction-bearing
+project was not tested; existing link-free admission regression passed.
+An initial new test had an invalid packet field; fixed before passing run.
+No full workspace suite, full crate suite, Clippy or manual CI.
+
+Core 0.13.4/Desktop 0.1.78 version authorities updated; package preparation keeps
+the unchanged reviewed Start Forge skill hash. Extended existing native-results
+fixture places the junction BEFORE project start and retains it through the
+journey. At this checkpoint the final candidate/native test/install/publication
+are pending; installed versions are still Desktop 0.1.77/Core 0.13.3.
+Next: native isolated-desktop run against final candidate, then install/publish
+one coherent package if it passes. Do not repeat proven chat/history work.
+
+One bounded read-only kernel seam investigator requested Sol medium; parent
+owns implementation/integration/verification. Observed token/model attribution
+and per-delivery BRL unavailable; no cost or productivity improvement claimed.
+Other-platform symlinks remain fail-closed. Protected completion/promotion may
+still reject relevant links. In-place retargeting was not exercised separately;
+removal, target-content independence and strict rejection were exercised.
+Implementation references: Windows SDK winioctl.h FSCTL_GET_REPARSE_POINT;
+[Microsoft reparse operations](https://learn.microsoft.com/en-us/windows/win32/fileio/reparse-point-operations)
+and [FSCTL reference](https://learn.microsoft.com/en-au/windows/win32/api/winioctl/ni-winioctl-fsctl_get_reparse_point).
+Final private create-entry guard added after review found that the internal
+Windows create path does not call public preflight. Direct create on a link-free
+cooperative tree is now rejected before any filesystem effect; new file absent.
+Core prebuild interrupted before any installer was produced, then final focused
+store check/module rerun passed (22). No kernel behavior changed in that repair;
+the 14 kernel regression cases were not repeated merely for reassurance.
+Final Core release build took 13m40s; Desktop 2m39s, then NSIS compression.
+These were package builds, not repeated full test suites or CI.
+
+One final installer: `D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.78_x64-setup.exe`,
+123,139,612 bytes, SHA-256
+`3C22948D7FF11C12AC3E8D269393326F75628C332E659446E31D69CCA482A0E6`.
+Silent upgrade over 0.1.77 passed; installed ProductVersion 0.1.78;
+exe SHA-256 `2F8E4C809C8A6F8BCA4F5323498279FB5FC8197252190D14C0C6A557A40290B9`.
+Staged and PATH-installed Core 0.13.4 both SHA-256
+`D383A05D1D14921908874D1DBB3DDE1DF385E5CF774E4FBEF027BE537F2B479D`.
+Previous PATH Core preserved at
+`C:/Users/User/AppData/Local/Programs/forge-core/bin/forge-core.exe.0.13.3-before-0.13.4.bak`.
+Start Forge skill unchanged. No live app/Core process interrupted for installation.
+
+Installed `native-results.cjs` passed on an isolated Windows desktop: external
+junction present BEFORE real start/init, simulated Codex reply through actual
+IPC/stdio, project inspection, Andamento refresh with honest empty record,
+discovery excluding external/dependency files, file preview/change draft, local
+app cancellation, interactive headless endpoint and refreshed deletion. The
+junction and external file remained unchanged; no human files touched. Owned
+fixture cleaned. Screenshot inspected: `C:/ForgeFast/forge-078-junction.png`.
+Native selection dialog, a real model reply, in-place retarget and valid evidence
+admission with a junction were not separately tested this round. Public release
+readback follows; do not confuse installed candidate with published installer.

@@ -29,12 +29,13 @@ const RETAINED_PROJECT_ANCHOR_SCHEMA_VERSION: &str = "forge-retained-project-anc
 const MAX_GIT_IGNORED_PATH_OUTPUT_BYTES: usize = 16 * 1024 * 1024;
 const MAX_GIT_DIAGNOSTIC_OUTPUT_BYTES: usize = 64 * 1024;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RetainedProjectCapturePolicy {
     Generic,
     ProjectSnapshot,
     WorkflowLocalRootExcluded,
     StoreOwnedProjectSnapshot,
+    CooperativeReadSnapshot,
 }
 
 impl RetainedProjectCapturePolicy {
@@ -49,6 +50,7 @@ impl RetainedProjectCapturePolicy {
             Self::ProjectSnapshot
                 | Self::WorkflowLocalRootExcluded
                 | Self::StoreOwnedProjectSnapshot
+                | Self::CooperativeReadSnapshot
         )
     }
 }
@@ -92,6 +94,7 @@ pub struct RetainedProjectTree {
     capture_policy: RetainedProjectCapturePolicy,
     file_alias_policy: RetainedFileAliasPolicy,
     git_ignored_paths: BTreeSet<String>,
+    opaque_entries: Vec<RetainedTreeOpaqueEntry>,
 }
 
 /// Same-process ownership of an exclusively created file. Not serializable or
@@ -363,6 +366,15 @@ struct RetainedTreeFile {
     exact_bytes: Vec<u8>,
 }
 
+#[derive(Debug)]
+struct RetainedTreeOpaqueEntry {
+    handle: File,
+    metadata: RetainedMetadata,
+    relative_path: String,
+    reparse_bytes: Vec<u8>,
+    digest: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RetainedTreeEntry {
     name: OsString,
@@ -375,6 +387,7 @@ struct RetainedTreeEntry {
 enum RetainedTreeEntryKind {
     Directory,
     File,
+    Opaque,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -576,6 +589,37 @@ impl RetainedProjectTree {
         )
     }
 
+    /// Read-only cooperative observation. Windows reparse objects are retained
+    /// as opaque namespace witnesses, never followed or offered as file bytes.
+    /// Their bounded reparse data participates in the observation digest. Other
+    /// platforms keep the existing fail-closed link behavior. This constructor
+    /// cannot mint mutation/completion authority, even for a link-free tree.
+    pub fn capture_cooperative_read_snapshot(
+        project_root: impl AsRef<Path>,
+        maximum_entries: usize,
+        maximum_files: usize,
+        maximum_bytes: u64,
+    ) -> Result<Self, RetainedProjectTreeError> {
+        Self::capture_with_file_alias_policy(
+            project_root.as_ref(),
+            maximum_entries,
+            Some(maximum_files),
+            maximum_bytes,
+            RetainedProjectCapturePolicy::CooperativeReadSnapshot,
+            RetainedFileAliasPolicy::StableAliases,
+        )
+    }
+
+    fn require_effect_snapshot(&self) -> Result<(), RetainedProjectTreeError> {
+        if self.capture_policy == RetainedProjectCapturePolicy::CooperativeReadSnapshot {
+            return Err(identity_error(
+                &self.display_root,
+                "cooperative read observation cannot confer mutation or completion authority",
+            ));
+        }
+        Ok(())
+    }
+
     /// Capture a Domain Pack Project Snapshot that may already carry Store-owned
     /// lifetime anchor links from an earlier committed completion.
     ///
@@ -663,6 +707,7 @@ impl RetainedProjectTree {
             capture_policy,
             file_alias_policy,
             git_ignored_paths,
+            opaque_entries: Vec::new(),
         };
         let mut digest_entries = Vec::new();
         let mut accepted_entries = 0usize;
@@ -755,6 +800,12 @@ impl RetainedProjectTree {
             .filter(|file| !is_top_level_workflow_local_path(&file.relative_path))
             .map(|file| (file.relative_path.as_str(), file.content_digest.as_str()))
             .collect::<Vec<_>>();
+        entries.extend(
+            self.opaque_entries
+                .iter()
+                .filter(|entry| !is_top_level_workflow_local_path(&entry.relative_path))
+                .map(|entry| (entry.relative_path.as_str(), entry.digest.as_str())),
+        );
         entries.sort_unstable_by(|left, right| left.0.cmp(right.0));
         validate_regular_file_projection_order(&entries)?;
         digest_entries_digest(&entries)
@@ -799,6 +850,7 @@ impl RetainedProjectTree {
     /// ambient pathname reopen cannot recreate this binding even if it points
     /// at byte-identical content.
     pub fn exact_mutation_capability_digest(&self) -> Result<String, RetainedProjectTreeError> {
+        self.require_effect_snapshot()?;
         self.revalidate()?;
         let root =
             self.directories
@@ -827,6 +879,7 @@ impl RetainedProjectTree {
         relative_path: &str,
         expected: &[u8],
     ) -> Result<(), RetainedProjectTreeError> {
+        self.require_effect_snapshot()?;
         self.revalidate()?;
         let file_index = self.exact_regular_file_index(relative_path)?;
         let retained = &self.files[file_index];
@@ -949,6 +1002,7 @@ impl RetainedProjectTree {
         &self,
         relative_path: &str,
     ) -> Result<(), RetainedProjectTreeError> {
+        self.require_effect_snapshot()?;
         #[cfg(windows)]
         {
             self.exact_regular_file_create_parent(relative_path)
@@ -1150,6 +1204,7 @@ impl RetainedProjectTree {
         &mut self,
         relative_path: &str,
     ) -> Result<RetainedCreatedProjectFile, RetainedProjectTreeError> {
+        self.require_effect_snapshot()?;
         #[cfg(not(windows))]
         {
             let _ = relative_path;
@@ -1482,6 +1537,7 @@ impl RetainedProjectTree {
     pub(crate) fn completion_binding(
         &self,
     ) -> Result<RetainedProjectCompletionBinding, RetainedProjectTreeError> {
+        self.require_effect_snapshot()?;
         self.revalidate()?;
 
         let ancestry = self
@@ -1581,6 +1637,7 @@ impl RetainedProjectTree {
         authority_root: &RetainedDirectory,
         anchor_directory: &Path,
     ) -> Result<RetainedProjectLifetimeAnchors, RetainedProjectTreeError> {
+        self.require_effect_snapshot()?;
         self.revalidate()?;
         if self.files.is_empty() {
             return Err(identity_error(
@@ -1649,6 +1706,7 @@ impl RetainedProjectTree {
         authority_root: &RetainedDirectory,
         binding: &RetainedProjectAnchorBinding,
     ) -> Result<RetainedProjectLifetimeAnchors, RetainedProjectTreeError> {
+        self.require_effect_snapshot()?;
         self.revalidate()?;
         if binding.schema_version != RETAINED_PROJECT_ANCHOR_SCHEMA_VERSION
             || binding.project_root_path_digest != os_path_digest(&self.display_root)
@@ -1761,6 +1819,11 @@ impl RetainedProjectTree {
                 DIRECTORY_DIGEST_MARKER.to_owned(),
             ));
         }
+        digest_entries.extend(
+            self.opaque_entries
+                .iter()
+                .map(|entry| (entry.relative_path.clone(), entry.digest.clone())),
+        );
         digest_entries.sort();
         let actual_digest = digest_entries_digest(&digest_entries)?;
         if actual_digest != self.snapshot_digest {
@@ -1907,7 +1970,38 @@ impl RetainedProjectTree {
                     "directory entry changed before its handle was retained",
                 ));
             }
-            if is_directory(&metadata) {
+            if is_reparse(&metadata)
+                && self.capture_policy == RetainedProjectCapturePolicy::CooperativeReadSnapshot
+            {
+                let reparse_bytes =
+                    read_reparse_bytes(&handle).map_err(|error| io_error(&display_path, error))?;
+                *accepted_bytes = (*accepted_bytes).saturating_add(reparse_bytes.len() as u64);
+                if *accepted_bytes > maximum_bytes {
+                    return Err(RetainedProjectTreeError::ResourceLimit {
+                        resource: "snapshot bytes",
+                        maximum: maximum_bytes,
+                    });
+                }
+                let digest = format!(
+                    "opaque-reparse:{}",
+                    crate::sha256_content_hash(&reparse_bytes)
+                );
+                let witness_index = self.opaque_entries.len();
+                retained_entries.push(RetainedTreeEntry {
+                    name: entry.name.clone(),
+                    object_id: entry.object_id,
+                    kind: RetainedTreeEntryKind::Opaque,
+                    witness_index,
+                });
+                digest_entries.push((relative_path.clone(), digest.clone()));
+                self.opaque_entries.push(RetainedTreeOpaqueEntry {
+                    handle,
+                    metadata,
+                    relative_path,
+                    reparse_bytes,
+                    digest,
+                });
+            } else if is_directory(&metadata) {
                 validate_directory_metadata(&metadata, &display_path)?;
                 if relative_path.split('/').count() > MAX_RETAINED_PROJECT_DEPTH {
                     return Err(RetainedProjectTreeError::ResourceLimit {
@@ -2117,6 +2211,26 @@ impl RetainedProjectTree {
                     ));
                 }
                 match entry.kind {
+                    RetainedTreeEntryKind::Opaque => {
+                        let retained = &self.opaque_entries[entry.witness_index];
+                        let retained_metadata =
+                            RetainedMetadata::capture(&retained.handle, &child_display)?;
+                        if !is_reparse(&metadata)
+                            || !same_stable_opaque_metadata(&retained.metadata, &metadata)
+                            || !same_stable_opaque_metadata(&retained.metadata, &retained_metadata)
+                            || read_reparse_bytes(&rebound)
+                                .map_err(|error| io_error(&child_display, error))?
+                                != retained.reparse_bytes
+                            || read_reparse_bytes(&retained.handle)
+                                .map_err(|error| io_error(&child_display, error))?
+                                != retained.reparse_bytes
+                        {
+                            return Err(identity_error(
+                                &child_display,
+                                "opaque reparse object changed",
+                            ));
+                        }
+                    }
                     RetainedTreeEntryKind::Directory => {
                         validate_directory_metadata(&metadata, &child_display)?;
                         if !same_stable_metadata(
@@ -2948,6 +3062,11 @@ fn same_stable_metadata(left: &RetainedMetadata, right: &RetainedMetadata) -> bo
 
 #[cfg(windows)]
 fn same_stable_metadata(left: &RetainedMetadata, right: &RetainedMetadata) -> bool {
+    same_stable_opaque_metadata(left, right) && !is_reparse(left) && !is_reparse(right)
+}
+
+#[cfg(windows)]
+fn same_stable_opaque_metadata(left: &RetainedMetadata, right: &RetainedMetadata) -> bool {
     left.file_information.volume_serial_number == right.file_information.volume_serial_number
         && left.file_information.file_index == right.file_information.file_index
         && left.file_information.file_attributes == right.file_information.file_attributes
@@ -2955,8 +3074,67 @@ fn same_stable_metadata(left: &RetainedMetadata, right: &RetainedMetadata) -> bo
         && left.file_information.number_of_links == right.file_information.number_of_links
         && left.file_information.file_size == right.file_information.file_size
         && left.file_information.last_write_time == right.file_information.last_write_time
-        && !is_reparse(left)
-        && !is_reparse(right)
+}
+
+#[cfg(not(windows))]
+fn same_stable_opaque_metadata(_left: &RetainedMetadata, _right: &RetainedMetadata) -> bool {
+    false
+}
+
+#[cfg(windows)]
+fn read_reparse_bytes(file: &File) -> io::Result<Vec<u8>> {
+    use std::os::windows::io::AsRawHandle;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn DeviceIoControl(
+            handle: *mut std::ffi::c_void,
+            code: u32,
+            input: *const std::ffi::c_void,
+            input_size: u32,
+            output: *mut std::ffi::c_void,
+            output_size: u32,
+            returned: *mut u32,
+            overlapped: *mut std::ffi::c_void,
+        ) -> i32;
+    }
+    // Windows SDK winioctl.h: CTL_CODE(FILE_DEVICE_FILE_SYSTEM, 42,
+    // METHOD_BUFFERED, FILE_ANY_ACCESS). Read only the retained reparse object.
+    const FSCTL_GET_REPARSE_POINT: u32 = 0x0009_00a8;
+    let mut bytes = vec![0u8; 16_384];
+    let mut returned = 0;
+    // SAFETY: live no-follow file handle and valid bounded output/length pointers;
+    // synchronous call, no input, no overlapped storage, no target resolution.
+    let ok = unsafe {
+        DeviceIoControl(
+            file.as_raw_handle(),
+            FSCTL_GET_REPARSE_POINT,
+            std::ptr::null(),
+            0,
+            bytes.as_mut_ptr().cast(),
+            bytes.len() as u32,
+            &mut returned,
+            std::ptr::null_mut(),
+        )
+    };
+    if ok == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if returned < 8 || returned as usize > bytes.len() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "invalid reparse data size",
+        ));
+    }
+    bytes.truncate(returned as usize);
+    Ok(bytes)
+}
+
+#[cfg(not(windows))]
+fn read_reparse_bytes(_file: &File) -> io::Result<Vec<u8>> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "opaque reparse observation requires Windows",
+    ))
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -3558,6 +3736,71 @@ mod tests {
     use super::*;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[cfg(windows)]
+    #[test]
+    fn cooperative_read_observes_junction_without_target_or_effect_authority() {
+        let root = project_root("cooperative-junction");
+        let outside = project_root("cooperative-junction-outside");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(root.join("idea.txt"), b"idea").unwrap();
+        fs::write(outside.join("large.bin"), vec![7u8; 8192]).unwrap();
+        let link = root.join("external");
+        let output = Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command",
+                "New-Item -ItemType Junction -Path $env:FORGE_TEST_LINK -Target $env:FORGE_TEST_TARGET | Out-Null"])
+            .env("FORGE_TEST_LINK", &link).env("FORGE_TEST_TARGET", &outside)
+            .output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(RetainedProjectTree::capture(&root, 16, 1024).is_err());
+        assert!(
+            RetainedProjectTree::capture_workflow_snapshot_allowing_stable_file_aliases(
+                &root, 16, 8, 1024
+            )
+            .is_err()
+        );
+        let tree =
+            RetainedProjectTree::capture_cooperative_read_snapshot(&root, 16, 8, 1024).unwrap();
+        assert_eq!(tree.regular_file_observations().len(), 1);
+        assert_eq!(tree.opaque_entries.len(), 1);
+        tree.revalidate().unwrap();
+        assert!(tree.exact_mutation_capability_digest().is_err());
+        assert!(tree
+            .preflight_exact_regular_file_write("idea.txt", b"idea")
+            .is_err());
+        assert!(tree.preflight_exact_regular_file_create("new.txt").is_err());
+        assert!(tree.completion_binding().is_err());
+        fs::write(outside.join("large.bin"), vec![8u8; 16384]).unwrap();
+        tree.revalidate().unwrap(); // Target contents were never part of this observation.
+        let before = tree.workflow_regular_file_snapshot_digest().unwrap();
+        fs::remove_dir(&link).unwrap();
+        assert!(tree.revalidate().is_err());
+        drop(tree);
+        let mut without =
+            RetainedProjectTree::capture_cooperative_read_snapshot(&root, 16, 8, 1024).unwrap();
+        assert_ne!(
+            before,
+            without.workflow_regular_file_snapshot_digest().unwrap()
+        );
+        assert!(without.exact_mutation_capability_digest().is_err());
+        assert!(without.preflight_exact_regular_file_create("new.txt").is_err());
+        assert!(without.completion_binding().is_err());
+        assert!(without.create_exact_regular_file("new.txt").is_err());
+        assert!(!root.join("new.txt").exists());
+        drop(without);
+        assert_eq!(fs::read(root.join("idea.txt")).unwrap(), b"idea");
+        assert_eq!(
+            fs::metadata(outside.join("large.bin")).unwrap().len(),
+            16384
+        );
+        fs::remove_dir_all(&root).unwrap();
+        fs::remove_dir_all(&outside).unwrap();
+    }
 
     fn project_root(label: &str) -> PathBuf {
         let nonce = SystemTime::now()

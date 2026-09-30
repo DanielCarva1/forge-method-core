@@ -12,7 +12,7 @@ The Desktop README checkpoints own detailed test/release receipts.
 | --- | --- | --- | --- |
 | Turn an idea into work | Início/Explorar → main → native project → Codex | Installed real idea/reply and first result, 0.1.66/67 | Not a guarantee of agent output quality |
 | Start without choosing a folder | Default Documents/Projetos Forge, unique name | Installed native default creation and first-result checkpoints | Clean-device completed sign-in not verified |
-| Use an existing folder | Native chooser → Core start/init | Real folder selection and existing-file preservation | External junction can block workflow initialization |
+| Use an existing folder | Native chooser → Core start/init | Real folder selection; installed 0.1.78 opening/record/results with pre-existing external junction | Windows cooperative observation only; protected effects/completion remain strict |
 | Return to work | Meus projetos → inspect → saved conversation | Native saved reopening, no message replay | Device-local shortcuts (50), not global discovery |
 | Converse and answer questions | Minha conversa → Codex stdio adapter | Real text turns/history; native simulated question protocol | Real-model invocation of question tool not verified |
 | Understand progress | Andamento → read-only Core record | Installed record/navigation checks | Record is not a complete automatic transcript of agent activity |
@@ -24,11 +24,12 @@ The Desktop README checkpoints own detailed test/release receipts.
 
 ## Work that remains, without inventing new scope
 
-1. Remove the external-junction onboarding bottleneck with an explicit
-   cooperative-observation design. Current retained-tree capture fails closed
-   on relevant links. Do not follow links, rewrite the user's ignore rules,
-   silently omit security evidence, or weaken strict promotion snapshots.
-   Core `start` succeeding is not proof that `workflow init` succeeded.
+1. Keep the 0.1.78 external-junction fix within its verified boundary: Windows
+   cooperative initialization and common observations, no target traversal or
+   external files. Protected promotion/completion and other-platform symlinks
+   retain strict capture. Do not infer those paths are supported from onboarding
+   success. Native project start, record consultation and results passed with
+   the junction present; Codex simulated, external file unchanged.
 2. Complete clean-device sign-in with a real human account, and physical
    accessibility checks. Existing authenticated-host and simulated-provider
    evidence cannot close those checks.

@@ -1,7 +1,7 @@
 # Forge Core — Development Plan
 
 **Status:** ACTIVE — the single development entry document for this repository.
-**Last updated:** 2026-09-09 (current Solo scope and later-stage routing aligned)
+**Last updated:** 2026-09-30 (Windows cooperative observation and desktop delivery)
 **Kind:** navigation and sequencing only. **Not runtime authority.**
 
 ---
@@ -93,12 +93,13 @@ guarantee that an LLM always follows guidance.
 
 ---
 
-## 2. Current state snapshot (2026-09-09)
+## 2. Current state snapshot (2026-09-30)
 
 | Fact | State |
 |---|---|
 | Stable release | **v0.12.0** published (tag = commit `4fc9bd80`), Release + CI green |
-| Main machine install | `forge-core 0.12.0` at `C:\Users\User\AppData\Local\Programs\forge-core\bin` (upgraded from alpha.49 on 2026-09-07; rollback: `forge-core.exe.alpha49.bak`) |
+| Main machine install | `forge-core 0.13.4` at `C:\Users\User\AppData\Local\Programs\forge-core\bin`; SHA-256 and 0.13.3 rollback recorded in the latest desktop README checkpoint. This checkout build is not a new stable Core release. |
+| Desktop delivery | Installed 0.1.78 with Core 0.13.4: native Windows cooperative project opening/record/results passed with an external junction present. Detailed receipts and remaining product acceptance are in `apps/desktop/README.md` and `apps/desktop/PRODUCT_STATUS.md`; do not rerun proven chat journeys or infer mobile/clean-device acceptance. |
 | Host skill | `start-forge` identical to the packaged canonical skill |
 | Milestone | **Solo Dogfood Ready — QUALIFIED** (`milestone_qualified: true`, authority revision 5, flipped 2026-09-08 through governed promotion) |
 | SD items (solo milestone) | SD-00 through SD-08 completed; qualification recorded (WS10) |

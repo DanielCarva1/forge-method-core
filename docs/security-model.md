@@ -43,6 +43,22 @@ WAL/recovery, and receipt cover it. Direct editor/shell/host writes remain
 ungoverned. Same-principal access can bypass Forge, so mediation is a protocol
 property, not filesystem-wide enforcement.
 
+### Cooperative Windows project observation
+
+Solo Cooperative initialization and common observations use a read-only
+retained tree. A Windows reparse object is an opaque, no-follow witness: its
+object identity and bounded reparse data are checked, but its target is not
+traversed or represented as project-file evidence. Link removal, replacement
+or changed reparse data invalidates the observation. Existing ignore rules are
+unchanged; no ignore file is written automatically.
+
+This observation cannot mint mutation capabilities, completion bindings or
+Store-owned completion anchors, even if the captured tree contains no links.
+Strict External, promotion and formal completion keep the strict constructors
+and may reject a project containing relevant reparse objects. Other platforms
+retain their existing fail-closed link behavior. This is not a sandbox for a
+host agent's direct filesystem access.
+
 ## Local Markdown scan exclusions
 
 An optional `.forgeignore` beside the Project Link lets an operator exclude

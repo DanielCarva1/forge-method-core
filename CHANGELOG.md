@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.4] - 2026-09-30
+
+### Changed
+- Windows Solo Cooperative onboarding and common project observations retain
+  reparse objects as bounded opaque witnesses instead of following their
+  targets or rejecting the entire project. The link identity and reparse data
+  participate in drift checks; external contents are not read or modified.
+- Cooperative read snapshots cannot mint mutation or completion authority.
+  Strict External, promotion and completion retain their strict capture path.
+  Profile probes release the ledger before project/Domain Pack acquisition and
+  the operation rechecks the selected profile under its authoritative lock.
+
 ## [0.13.3] - 2026-09-14
 
 ### Changed

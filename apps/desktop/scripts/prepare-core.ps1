@@ -33,11 +33,11 @@ try {
 } finally { Pop-Location }
 if (-not (Test-Path -LiteralPath $binary)) { throw 'The built Forge Core executable is missing.' }
 $version = & $binary --version
-if ($LASTEXITCODE -ne 0 -or $version -ne 'forge-core 0.13.3') {
-  throw "The built Forge Core version is not 0.13.3: $version"
+if ($LASTEXITCODE -ne 0 -or $version -ne 'forge-core 0.13.4') {
+  throw "The built Forge Core version is not 0.13.4: $version"
 }
 $destination = Join-Path $desktop 'src-tauri\bundled-core\forge-core.exe'
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
 Copy-Item -LiteralPath $binary -Destination $destination -Force
 $sourceRevision = (git -C $root rev-parse --short=12 HEAD).Trim()
-Write-Output "Staged Forge Core 0.13.3 from checkout ${sourceRevision}: $(Get-Sha256 $destination)"
+Write-Output "Staged Forge Core 0.13.4 from checkout ${sourceRevision}: $(Get-Sha256 $destination)"

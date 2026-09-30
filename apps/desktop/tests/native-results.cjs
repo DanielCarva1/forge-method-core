@@ -14,6 +14,7 @@ const assert = require('node:assert/strict');
  await fs.writeFile(path.join(project,'ideias.md'),'# Meu jardim\nUm resultado para experimentar.');
  await fs.mkdir(path.join(project,'node_modules'));await fs.writeFile(path.join(project,'node_modules/oculto.md'),'excluded');
  const outside=path.join(profile,'outside');await fs.mkdir(outside);await fs.writeFile(path.join(outside,'fora.md'),'outside');
+ await fs.symlink(outside,path.join(project,'atalho'),'junction');
 
  await fs.copyFile(path.join(__dirname,'fixtures/fake-results-server.cjs'),path.join(project,'app-server'));
  const server=createServer((req,res)=>res.writeHead(200,{'Content-Type':'text/html'}).end(html));
@@ -28,10 +29,15 @@ const assert = require('node:assert/strict');
  await page.locator('nav a[data-route="workspace"]').click();await page.locator('#custom-folder-option summary').click();await page.locator('#project-root').fill(project);
  await page.locator('#message-text').fill('Vamos criar');await page.locator('#send-message').click();
  const apps=page.locator('#preview-local-apps');await apps.waitFor({state:'visible',timeout:60000});
- await fs.symlink(outside,path.join(project,'atalho'),'junction');
  const listing=await page.evaluate(projectRoot=>window.__TAURI__.core.invoke('list_project_files',{projectRoot}),project);
  assert.deepEqual(listing.files.map(f=>f.relative_path).sort(),['ideias.md','site/index.html']);
- await fs.unlink(path.join(project,'atalho'));
+ const inspected=await page.evaluate(projectRoot=>window.__TAURI__.core.invoke('inspect_project',{projectRoot}),project);
+ assert.ok(inspected.project_id, 'existing project remains readable with junction present');
+ await page.locator('[data-mobile-pane-button="progress"]').click();
+ await page.locator('#refresh-progress').click();
+ await page.locator('#progress-result').waitFor({state:'visible',timeout:60000});
+ assert.match(await page.locator('#progress-status').innerText(),/Consultado às/);
+ await page.locator('[data-mobile-pane-button="preview"]').click();
  await page.locator('#result-files-search').fill('ideias');await page.locator('[data-result-path="ideias.md"]').click();
  await page.locator('#preview-path').filter({hasText:'ideias.md'}).waitFor();
  await page.locator('#message-text').fill('Meu rascunho');await page.locator('#request-preview-change').click();
@@ -45,7 +51,9 @@ const assert = require('node:assert/strict');
  if(process.env.FORGE_RESULTS_SCREENSHOT)await page.screenshot({path:process.env.FORGE_RESULTS_SCREENSHOT,fullPage:true});
  await fs.unlink(path.join(project,'ideias.md'));await page.locator('#refresh-result-files').click();await page.waitForFunction(()=>!document.querySelector('[data-result-path="ideias.md"]'));
  assert.equal(await fs.readFile(path.join(project,'site/index.html'),'utf8'),html);
- console.log('PASS: native discovery excludes junction/dependencies, file → preview → draft, local app confirmation/cancel + real headless interactive endpoint, refreshed deletion. Codex simulated; OS browser acceptance covered by browser double, not dispatched in this final native run.');
+ assert.equal(await fs.readFile(path.join(outside,'fora.md'),'utf8'),'outside');
+ assert.equal((await fs.lstat(path.join(project,'atalho'))).isSymbolicLink(),true);
+ console.log('PASS: native onboarding and subsequent project read with pre-existing external junction; discovery excludes target/dependencies, file → preview → draft, local app confirmation/cancel + real headless interactive endpoint, refreshed deletion; external file and junction unchanged. Codex simulated; OS browser acceptance covered by browser double, not dispatched in this final native run.');
  }catch(error){
  if(browser){const p=browser.contexts()[0].pages()[0];console.log(await p.locator('body').innerText());await p.screenshot({path:'C:/ForgeFast/forge-075-failure.png',fullPage:true});}throw error;
  }finally{
