@@ -10972,3 +10972,10 @@ introduce a remote server, hosting cost or permission system to close mobile.
 Existing real chat/history/first-result evidence is recorded above; do not restart
 those investigations without a demonstrated regression.
 Local installation verified; public readback will be recorded below.
+
+Source commit `ca5b3aae` was pushed and published as
+[desktop-v0.1.74-alpha.1](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.74-alpha.1).
+Anonymous downloads to `D:/forge-method-core-build-cache/public-check/desktop-074/`
+matched the tested installer exactly: 123,117,872 bytes, SHA-256 above, and the
+exact 93-byte sidecar. The release target used the full source commit SHA.
+No second build, redundant reinstall of the identical download or manual CI.
