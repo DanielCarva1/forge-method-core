@@ -1,8 +1,8 @@
 # Forge desktop shell
 
 Independent Tauri application. Desktop `0.1.73` is current source and locally
-installed. The latest verified [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.71-alpha.1)
-is `0.1.71`; `0.1.73` has not been published for download.
+installed. The latest verified [published alpha](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.73-alpha.1)
+is `0.1.73`; its downloaded installer matches the installed final candidate.
 It does not require Codex Desktop. A Codex CLI adapter supports
 conversation in an explicitly confirmed project. The native identity check alone
 is not an agent connection.
@@ -10911,3 +10911,14 @@ Local installation is verified; publication/readback is recorded below when
 complete. Two local builds were needed because the first visual check found a
 real layout defect, not to repeat passing engine tests. No new subagents or
 model-attributed BRL/subscription savings claims for this package.
+
+Source commit `a1fc4880` was pushed and published as
+[desktop-v0.1.73-alpha.1](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.73-alpha.1).
+The public prerelease contains the final 123,084,843-byte installer and its
+93-byte SHA-256 sidecar. Anonymous downloads to
+`D:/forge-method-core-build-cache/public-check/desktop-073/` matched the final
+candidate hash above and the exact sidecar contents. The installed ProductVersion
+and exe hash still match the native-tested final installation. Since the
+public download is byte-identical to that installed candidate, no redundant
+third installation or native-suite rerun was performed. No manual CI was
+triggered. The rejected first candidate was never published.
