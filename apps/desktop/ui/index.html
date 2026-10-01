@@ -149,7 +149,9 @@
         <button type="button" data-mobile-pane-button="preview" aria-controls="project-preview" aria-pressed="false">Resultado</button>
         <button type="button" data-mobile-pane-button="progress" aria-controls="project-record" aria-pressed="false">Andamento</button>
         <button type="button" data-mobile-pane-button="project" aria-controls="project-panel" aria-pressed="false">Projeto</button>
+        <button id="workspace-organize" type="button" hidden>Organizar espaço</button>
       </nav>
+      <p id="workspace-layout-status" class="visually-hidden" role="status" aria-live="polite"></p>
       <div class="workspace" data-mobile-pane="conversation">
       <section class="conversation panel" id="project-conversation" aria-labelledby="chat-title">
         <div class="conversation-heading"><div><p class="eyebrow" id="conversation-step">SUA CONVERSA</p><h2 id="chat-title" tabindex="-1">Vamos criar juntos</h2><span class="agent-badge">Agente · Codex</span></div><div class="conversation-tools"><button id="resume-last-conversation" type="button" hidden>Continuar conversa anterior</button><button id="reopen-conversation" type="button" hidden>Reabrir conversa</button><button id="confirm-reviewed-send" type="button" hidden>Já conferi o envio</button><button id="conversation-show-context" type="button" hidden>Mostrar resultado e projeto</button><details id="conversation-options" hidden><summary aria-label="Opções da conversa">Opções</summary><div><button id="conversation-focus" type="button" hidden>Ampliar conversa</button><button id="message-view" type="button" hidden>Ver texto original</button><button id="disconnect-agent" disabled hidden>Desconectar</button></div></details></div></div>

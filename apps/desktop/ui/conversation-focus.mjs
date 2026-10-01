@@ -8,6 +8,7 @@ export function setConversationFocus(focused) {
   showContext.hidden = !focused;
   expand.hidden = focused;
   if (focused) options.open = false;
+  workspace.dispatchEvent(new CustomEvent('forge:workspace-focus', { detail: focused }));
 }
 
 expand.addEventListener('click', () => setConversationFocus(true));

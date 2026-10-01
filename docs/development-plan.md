@@ -1,7 +1,7 @@
 # Forge Core — Development Plan
 
 **Status:** ACTIVE — the single development entry document for this repository.
-**Last updated:** 2026-09-30 (Windows cooperative observation and desktop delivery)
+**Last updated:** 2026-10-01 (accepted cinematic desktop UX roadmap)
 **Kind:** navigation and sequencing only. **Not runtime authority.**
 
 ---
@@ -93,13 +93,60 @@ guarantee that an LLM always follows guidance.
 
 ---
 
-## 2. Current state snapshot (2026-09-30)
+## 2. Current state snapshot (2026-10-01)
+
+### Desktop UX roadmap — accepted 2026-10-01
+
+The maintainer accepted cinematic immersive UI, restrained glassmorphism and
+real floating internal panels. Implement these in the existing Tauri 2 shell;
+no new backend, project registry, UI framework, OS-window-per-panel or remote
+decoration service. `apps/desktop/design/cinematic-design-system.md` owns visual
+specification; this document remains the only sequencing/roadmap owner.
+
+| Package | Accepted result | Status / acceptance |
+| --- | --- | --- |
+| UX-A: working space | Conversation/result/progress/project panels move, resize, minimize, reopen and snap. Useful initial arrangement; one-click organize. Existing focus mode expands the active panel. Save only local geometry; restore safely on smaller screens. | DELIVERED in installed 0.1.81, focused isolated native acceptance. Same DOM/data/native actions; keyboard alternative to drag/resize, draft preserved, no agent actions/automatic Send. Small screens keep simple panel navigation. |
+| UX-B: atmosphere and comfort | Cinematic local scenes, smoky glass with reading hierarchy, warm type, quiet icon dock with hover/focus names. Day/night, stronger contrast, opaque fallback, reduced motion. | PARTIAL in 0.1.81 workspace: shared local scene, warm reading surfaces/glass rail, compact window/reference icons; inspected native composition and worst-case panel-text contrast. Global shell/scene choice/icon dock remain next; no moving wallpapers or mandatory generation. |
+| UX-C: contextual tools | File/result tools live by the selected object; copying, explanation/change drafting exposed when useful. Primary actions keep short names, secondary icons remain discoverable by focus/menu. | PLANNED. Extend existing preview/message owners; keep explicit Send and trusted-browser boundaries. No hover-only essential action. |
+| UX-D: return without ceremony | Restore useful panel arrangement with existing saved conversation/result; meaningful content opens relevant panel, not five empty windows. | PLANNED beyond geometry. Reuse existing continuity owners; do not restart an agent, replay a message or invent recency/progress. |
+| UX-E: calm feedback | Brief status near the action, comfortable reading focus, softened scenery around focused content, no repeated boilerplate. | PLANNED. Preserve security/permission/unconfirmed-send warnings, live status and keyboard focus. |
+| UX-F: screen polish | Apply coherent shell to Início, Explorar, Meus projetos, Minha conversa/results/context; remove superseded visual code. | PLANNED. Real data/empty states, no fabricated result or progress to match a concept board. |
+
+Deliver coherent installed alpha packages, not an installer for every CSS edit.
+Focused UI/geometry checks first, isolated native acceptance at a meaningful
+integration point; no workspace Rust suite for UI-only edits. Mobile remote
+access remains deferred. Research adoption is not measured proof of UX gains.
+
+#### Stack research and technology choices — 2026-10-01
+
+- **Keep one WebView and the current JS modules.** Tauri uses the platform's
+  WebView; runtime versions vary. Additional native windows need separate setup/
+  permission/lifecycle. Internal panels need none of that. Checked via Context7
+  `/tauri-apps/tauri-docs` and official [WebView versions](https://v2.tauri.app/reference/webview-versions/),
+  [CSP](https://v2.tauri.app/security/csp/). Do not relax CSP for a decoration.
+- **Pointer Events + pointer capture** for bounded movement/resize, explicit
+  keyboard controls and click-to-snap choices: existing browser APIs, no docking
+  library. [MDN pointer capture](https://developer.mozilla.org/en-US/docs/Web/API/Element/setPointerCapture).
+- **CSS backdrop-filter** on a few top-level surfaces, with opaque fallback.
+  No nested full-screen blur or forced transparency for reading.
+  [MDN backdrop-filter](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/backdrop-filter).
+- **Popover / anchor positioning** are candidates for later contextual tools,
+  not dependencies for the first panel slice; feature-detect device support and
+  retain ordinary accessible controls. [MDN Popover](https://developer.mozilla.org/en-US/docs/Web/API/Popover_API),
+  [Chrome anchor positioning](https://developer.chrome.com/docs/css-ui/anchor-positioning-api).
+- **Successful-product references, not productivity benchmarks:** movable/docked
+  panels ([Photoshop](https://helpx.adobe.com/photoshop/desktop/get-started/learn-the-basics/move-panels.html));
+  distraction-free focus ([VS Code](https://code.visualstudio.com/docs/configure/custom-layout));
+  assisted arrangement ([Windows Snap](https://support.microsoft.com/en-us/windows/experience/snap-your-windows));
+  glass navigation separate from content ([Apple Liquid Glass](https://developer.apple.com/videos/play/wwdc2025/219/)).
+  Adopt their useful interaction principles, not a clone or unsupported claim of
+  better user outcomes. Acceptance is the actual Forge journey.
 
 | Fact | State |
 |---|---|
 | Stable release | **v0.12.0** published (tag = commit `4fc9bd80`), Release + CI green |
 | Main machine install | `forge-core 0.13.4` at `C:\Users\User\AppData\Local\Programs\forge-core\bin`; SHA-256 and 0.13.3 rollback recorded in the latest desktop README checkpoint. This checkout build is not a new stable Core release. |
-| Desktop delivery | Installed 0.1.80 with unchanged Core 0.13.4: visible single-button Codex connection, existing-account reuse and post-login connection without draft replay; focused installed native receipts. 0.1.79 objective comparison remains covered. 0.1.78 junction opening/record/results evidence remains valid within its scope. Detailed receipts and remaining product acceptance are in `apps/desktop/README.md` and `apps/desktop/PRODUCT_STATUS.md`; do not rerun proven chat journeys or infer mobile/clean-device acceptance. |
+| Desktop delivery | Installed 0.1.81 with unchanged Core 0.13.4: cinematic internal floating workspace, focused native gestures/keyboard/snap/compose fit and real Core-created project/local HTML preview. 0.1.80 connection, 0.1.79 comparison and 0.1.78 junction receipts remain valid within their scope. Detailed receipts and remaining product acceptance are in `apps/desktop/README.md` and `apps/desktop/PRODUCT_STATUS.md`; do not rerun proven chat journeys or infer mobile/clean-device acceptance. |
 | Host skill | `start-forge` identical to the packaged canonical skill |
 | Milestone | **Solo Dogfood Ready — QUALIFIED** (`milestone_qualified: true`, authority revision 5, flipped 2026-09-08 through governed promotion) |
 | SD items (solo milestone) | SD-00 through SD-08 completed; qualification recorded (WS10) |

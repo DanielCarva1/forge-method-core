@@ -1,5 +1,19 @@
 # Approved visual direction
 
+## Current direction — 2026-09-30
+
+The maintainer approved **cinematic, immersive UI with restrained glassmorphism**:
+floating translucent surfaces, quiet secondary icon controls with hover/focus
+names, thematic cinematic scenes and warm, comfortable long-session typography.
+The implementable specification is [cinematic-design-system.md](cinematic-design-system.md);
+the local visual component board is [cinematic-board.html](cinematic-board.html).
+Neither is a claim that the installed application already implements this design.
+The earlier references below remain the artwork/identity source; their opaque-card
+composition is historical guidance where it conflicts with the new specification.
+`../ui/styles.css` remains the single production token/component authority.
+
+## Previous implementation and retained references
+
 For the narrow confirmed-project workspace, Conversation, Preview, Progress
 and Project are four direct choices over the same existing panels. Progress
 does not append the technical folder/connection card; Project keeps switching
@@ -280,3 +294,27 @@ focus and bounded long-history scrolling. The native smoke confirms the same
 viewport after preserving an existing draft, plus real Forge project/record
 readback. These are targeted layout checks, not complete visual or accessibility
 acceptance. The prior `0.1.2` NSIS file predates this source and is superseded.
+
+### Cinematic reference-board check — 2026-09-30
+
+The local board was inspected in headless Chromium, day/night screenshots;
+720px layout, solid-surface toggle, keyboard-focus tooltip, Escape dismissal and
+visual-only Send passed. This is browser reference evidence, not native app
+acceptance or measured full accessibility compliance. No production UI/backend,
+installed binary, dependency, commit or release changed in this design-system step.
+
+### Cinematic study 02 — 2026-10-01
+
+Refined the same board into a scene-led workspace rather than a component
+dashboard. Full-resolution generated botanical twilight atelier replaces the
+upscaled category crop; smoky glass, conversation hierarchy, compact icon dock
+and on-demand information replace permanent explanatory cards. Original approved
+art/reference files are unchanged. New background is a proposal, not final approval.
+Asset provenance and generation prompt: `references/cinematic-atelier-v2.md`.
+
+Headless Chromium checks passed: day/night, solid fallback, 720/360px overflow,
+keyboard tooltip/Escape, info dismissal/focus restoration, inert Send preserving
+draft, no JavaScript errors. Final 1440x900 conversation does not overlap the dock;
+settled day icon colors verified. Final screenshots inspected. Browser design
+reference only; production/native UI, measured full contrast and installed app
+remain unchanged. No Rust suite, new dependencies, publication or background service.

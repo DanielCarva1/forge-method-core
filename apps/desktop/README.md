@@ -11360,3 +11360,64 @@ candidate SHA-256 and exact sidecar. No redundant reinstall of identical bytes.
 Installed/public/source connection flow is now delivered. Next visual priorities
 from the inspected native screenshot: reduce competing boxed sections and dense
 helper copy, improve conversation/composer hierarchy, and preserve approved artwork.
+
+### Session checkpoint — 2026-10-01 — cinematic floating workspace
+
+Accepted UX roadmap and primary-source stack research are in
+`docs/development-plan.md`, section 2. Visual specification/board are in
+`design/cinematic-design-system.md` and `design/cinematic-board.html`.
+The board and app now share `ui/assets/cinematic-atelier.png`; original approved
+art is untouched, and the redundant reference image was removed.
+
+Implemented the first connected package in the existing presentation owner
+`ui/mobile-workspace.mjs`: same four panels/data/actions, internal movement,
+resize, keyboard alternatives, snap, focus, minimize/reopen and organize.
+`ui/workspace-layout.mjs` contains only pure normalized device-local geometry.
+No framework, docking library, native permission, project store or Core change.
+
+PASS: 2 focused geometry tests and `tests/floating-browser.cjs` under the current
+CSP, including drag cancellation, no agent actions/Send, preserved draft,
+geometry reload, narrow navigation and enlarged-text fallback. Primary/supporting
+panel text worst-case contrast: day 5.51:1, night 6.82:1; not full accessibility
+compliance. Browser project setup is presentation-only, not native/Core proof.
+
+Desktop source bumped to 0.1.81; Core remains 0.13.4. Release compilation completed
+(2m59s); Codex closed during NSIS packaging. On resume, no installer/process was
+left and installed version remained 0.1.80. Restarted **bundling only** with
+`tauri bundle --bundles nsis --ci --config src-tauri/tauri.bundle.conf.json`,
+reusing the built 0.1.81 executable and staged unchanged Core. Do not repeat
+compilation or unrelated chat/auth tests. Next: finish bundle, silent upgrade,
+`native-hidden.ps1` with `native-visual-capture.cjs`, `FORGE_VISUAL_LOADED=1` and
+`FORGE_VISUAL_FLOATING=1`; inspect screenshots, close one coherent package.
+
+First native run had a stale harness expectation: project status is now in a
+collapsed panel. Opening Projeto before reading it fixed the test, without an
+app/backend change. Installed 0.1.81 then passed native gestures and Core-created
+project/local HTML preview. Visual inspection found a clipped half-width composer
+and decorative horizontal overflow; corrected source spacing, reference icon
+and scene bounds, and added focused acceptance assertions. The revised package
+passed installed native acceptance. **Superseded A2DDC674...381C66CA was not published.**
+
+Final candidate: `D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.81_x64-setup.exe`.
+Size 125463121 bytes; SHA-256:
+EE45B12BFD7D57E32662C91AAB81D5262072119489AB0552011AF5A4AC5D321B.
+Silent installed upgrade: 0.1.80 → initial 0.1.81 → corrected 0.1.81.
+Installed `C:/Users/User/AppData/Local/Forge/forge-desktop.exe`, version 0.1.81;
+SHA-256 AD55EF38FEF735F0551799B3F0E636F91AE885872B33461E3717CB56F2D4D139.
+Installed acceptance via isolated Windows desktop, temporary WebView profile
+and owned disposable project: actual Core initialization/local HTML preview;
+movement/resize (pointer and keyboard), drag cancellation, snap, focus,
+minimize/reopen, organize, narrow navigation and draft preservation. Snap Send
+fits inside its panel; no horizontal page overflow. Window controls did not call
+Send/connect/disconnect/interrupt/login. No model turn was sent or required.
+Final screenshots inspected: `D:/forge-method-core-build-cache/ux-081-final/loaded-project.png`
+and `floating-workspace.png`. Test profile/project were removed by the harness;
+the person's desktop was never selected or interrupted.
+
+Remaining UX-B through UX-F are sequenced in the roadmap, not claimed complete.
+Next connected package: cinematic global shell/quiet icon navigation and reading
+hierarchy across screens, contextual result tools and calmer existing feedback.
+Do not redo history/auth/installation testing as a substitute for visual work.
+No full Rust/workspace/browser suite or manual GH CI dispatch. Parent worked directly; no workers.
+Per-model tokens/accepted-delivery BRL UNKNOWN; no savings estimate substituted.
+Source commit/publication/download receipt: PENDING closeout.

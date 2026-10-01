@@ -26,6 +26,8 @@ const assets = new Map([
   ['/direction-changes.mjs', ['direction-changes.mjs', 'text/javascript']],
   ['/preview.mjs', ['preview.mjs', 'text/javascript']],
   ['/mobile-workspace.mjs', ['mobile-workspace.mjs', 'text/javascript']],
+  ['/workspace-layout.mjs', ['workspace-layout.mjs', 'text/javascript']],
+  ['/assets/cinematic-atelier.png', ['assets/cinematic-atelier.png', 'image/png']],
 ]);
 async function openProjectSetup(page) {
   if (!await page.locator('#project-setup').evaluate(node => node.open)) await page.locator('#project-setup > summary').click();

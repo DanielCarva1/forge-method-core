@@ -1,4 +1,4 @@
-# Product closeout — 2026-09-30
+# Product closeout — 2026-10-01
 
 This is the accepted journey map, not runtime authority or a claim that the
 product is complete. Scope comes from UI epics
@@ -7,6 +7,8 @@ product is complete. Scope comes from UI epics
 [#79](https://github.com/DanielCarva1/forge-method-core/issues/79) and
 [#80](https://github.com/DanielCarva1/forge-method-core/issues/80).
 The Desktop README checkpoints own detailed test/release receipts.
+The accepted cinematic/floating UX packages are sequenced in section 2 of
+`docs/development-plan.md`; this journey map does not introduce another roadmap.
 
 | Human journey | Existing entry and ownership | Observed evidence | Remaining boundary |
 | --- | --- | --- | --- |
@@ -19,7 +21,7 @@ The Desktop README checkpoints own detailed test/release receipts.
 | Review agreements and changes | Recorded objective history; 0.1.79 literal revision comparison | Focused comparison tests; native receipt in latest checkpoint | #92 partial: opaque legacy decision resolutions lack recoverable original wording |
 | Inspect and change a result | Resultado → bounded file list/preview → draft | Installed native discovery, preview and change-draft checks | Protected HTML is intentionally noninteractive |
 | Use a result outside Forge | Reveal/copy file; explicit trusted browser action | Native copy/cancel, exact bytes; browser dispatch partly simulated | Single-file copy is not complete website export or publishing |
-| Read and navigate comfortably | Appearance, responsive panes, keyboard controls | 360px/200% browser checks and native Windows resizing | Physical phone and screen-reader checks not performed |
+| Read and navigate comfortably | Appearance, responsive panes, keyboard controls; floating workspace | Installed 0.1.81 focused gestures/snap/focus/compose-fit with no Send; 360px/200% simple-layout evidence | Physical phone/screen reader and complete cinematic polish not performed |
 | Install and update | Published Windows NSIS, manual update instructions | Exact public download hashes and installed upgrades | No automatic update checker; unsigned alpha |
 | Access securely from a phone | #96 options assessed; alpha stays local-only | Pinned CLI/IPC/origin assessment; remote desktop disabled on this host | No phone connection tested; optional host-access choice remains explicit |
 

@@ -70,6 +70,10 @@ assert.ok(executable && output, 'Set FORGE_DESKTOP_EXE and FORGE_VISUAL_OUTPUT')
       await page.locator('#custom-folder-option summary').click();
       await page.locator('#project-root').fill(fixture);
       await page.getByRole('button', { name: 'Continuar nesta pasta' }).click();
+      // Project context now starts collapsed; open it as a person would before
+      // reading its status, rather than waiting for hidden text to be visible.
+      await page.locator('#mobile-workspace-nav').waitFor({ state: 'visible', timeout: 90000 });
+      await page.locator('[data-mobile-pane-button="project"]').click();
       await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 90000 });
       await page.evaluate(() => import('./preview.mjs').then(module => module.previewLinkedFile('site/index.html')));
       await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
@@ -82,6 +86,9 @@ assert.ok(executable && output, 'Set FORGE_DESKTOP_EXE and FORGE_VISUAL_OUTPUT')
         assert.ok(fit.form <= fit.panel, 'Native long draft and file actions remain inside their panel');
       }
       await page.screenshot({ path: path.join(output, 'loaded-project.png'), fullPage: false });
+      if (process.env.FORGE_VISUAL_FLOATING === '1') {
+        await require('./floating-workspace.cjs').checkFloatingWorkspace(page, path.join(output, 'floating-workspace.png'));
+      }
       if (process.env.FORGE_VISUAL_NAVIGATION === '1') {
         await checkWorkspaceNavigation(page);
         await page.locator('[data-mobile-pane-button="progress"]').click();
