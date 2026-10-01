@@ -11420,4 +11420,10 @@ hierarchy across screens, contextual result tools and calmer existing feedback.
 Do not redo history/auth/installation testing as a substitute for visual work.
 No full Rust/workspace/browser suite or manual GH CI dispatch. Parent worked directly; no workers.
 Per-model tokens/accepted-delivery BRL UNKNOWN; no savings estimate substituted.
-Source commit/publication/download receipt: PENDING closeout.
+Source `bc73179b` pushed to `codex/desktop-shell`; published
+[desktop-v0.1.81-alpha.1](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.81-alpha.1)
+with the final installer and sidecar. Anonymous public downloads to
+`D:/forge-method-core-build-cache/public-check/desktop-081/` matched the tested
+candidate SHA-256 above and exact sidecar. No redundant reinstall of identical
+downloaded bytes. The installed app is the corrected 0.1.81 candidate, not merely
+a design board or source checkout. No pending code changes at this closeout.

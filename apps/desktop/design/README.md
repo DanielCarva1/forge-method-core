@@ -318,3 +318,11 @@ draft, no JavaScript errors. Final 1440x900 conversation does not overlap the do
 settled day icon colors verified. Final screenshots inspected. Browser design
 reference only; production/native UI, measured full contrast and installed app
 remain unchanged. No Rust suite, new dependencies, publication or background service.
+
+### First production cinematic package — 2026-10-01
+
+Desktop 0.1.81 adopts the scene and internal floating workspace; the board is
+still only a reference, not the app. Both now use the single production image
+`../ui/assets/cinematic-atelier.png`. Installed native movement/resize/snap/focus,
+minimize/reopen and compose-fit acceptance is recorded in the Desktop README.
+Global screen polish/quiet icon navigation remain in the accepted roadmap.
