@@ -21,7 +21,7 @@ The accepted cinematic/floating UX packages are sequenced in section 2 of
 | Review agreements and changes | Recorded objective history; 0.1.79 literal revision comparison | Focused comparison tests; native receipt in latest checkpoint | #92 partial: opaque legacy decision resolutions lack recoverable original wording |
 | Inspect and change a result | Resultado → bounded file list/preview → draft | Installed native discovery, preview and change-draft checks | Protected HTML is intentionally noninteractive |
 | Use a result outside Forge | Reveal/copy file; explicit trusted browser action | Native copy/cancel, exact bytes; browser dispatch partly simulated | Single-file copy is not complete website export or publishing |
-| Read and navigate comfortably | Appearance, responsive panes, keyboard controls; floating workspace | Installed 0.1.81 focused gestures/snap/focus/compose-fit with no Send; 360px/200% simple-layout evidence | Physical phone/screen reader and complete cinematic polish not performed |
+| Read and navigate comfortably | Appearance, responsive panes, keyboard controls; floating workspace | Installed 0.1.82 four-route cinematic shell/comfort/icon names; native gestures and selected-file change draft without Send; narrow/enlarged-text evidence | Physical phone/screen reader and remaining message/record/dialog polish not complete |
 | Install and update | Published Windows NSIS, manual update instructions | Exact public download hashes and installed upgrades | No automatic update checker; unsigned alpha |
 | Access securely from a phone | #96 options assessed; alpha stays local-only | Pinned CLI/IPC/origin assessment; remote desktop disabled on this host | No phone connection tested; optional host-access choice remains explicit |
 

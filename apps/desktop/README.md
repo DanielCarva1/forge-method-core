@@ -11427,3 +11427,53 @@ with the final installer and sidecar. Anonymous public downloads to
 candidate SHA-256 above and exact sidecar. No redundant reinstall of identical
 downloaded bytes. The installed app is the corrected 0.1.81 candidate, not merely
 a design board or source checkout. No pending code changes at this closeout.
+
+## Session checkpoint — 2026-10-01 — cinematic four-screen package
+
+Resumed the accepted UX-B/C/F work as one connected 0.1.82 package: global
+cinematic atelier background/warm tokens, shared compact route rail, header
+comfort menu, home hierarchy, preserved explore artwork, recent/empty project
+cards and contextual selected-result tools. Existing routing, native handlers,
+project shortcuts, draft/history and permission/preview boundaries remain the
+owners; no Core change, dependency or parallel state store. Old decorative crop
+backgrounds and workspace-only palette were replaced rather than copied.
+
+PASS: `node --test apps/desktop/tests/workspace-layout.test.mjs` (2 tests),
+`tests/cinematic-browser.cjs` and `tests/floating-browser.cjs`, production CSP.
+Includes four route/focus states, hover/keyboard names and Escape, day/night,
+comfort outside-dismissal, contrast toggle, 360/700px and enlarged-text layout,
+category search/unsent draft, empty/recent/filter states, unchanged floating
+gestures and persisted geometry. Browser project data is explicitly presentation
+only. Day/night panel-text worst-case contrast remains 5.51:1/6.82:1, not full
+accessibility compliance. Inspected browser screenshots under
+`D:/forge-method-core-build-cache/ux-082-browser/`; corrected a low-contrast folder
+action before starting the candidate build.
+
+One candidate built with cached offline dependencies/two jobs; desktop release
+compilation 3m44s. Core remains 0.13.4, unchanged staged SHA-256:
+D383A05D1D14921908874D1DBB3DDE1DF385E5CF774E4FBEF027BE537F2B479D.
+Silent installed upgrade 0.1.81 → 0.1.82, no active Forge session overwritten.
+Candidate `D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.82_x64-setup.exe`,
+125573927 bytes; SHA-256:
+478F64AF45F47DBDE5C2FE997E6B6E59DB359730A4D8B42746D4FDDDF9D2F75C.
+Installed `C:/Users/User/AppData/Local/Forge/forge-desktop.exe`, version 0.1.82;
+SHA-256 278CB343DB6577E9A9E65E0E0E165AE79DC4904DA2A28EEE34F83DA5C848D64D.
+
+PASS: installed acceptance on an isolated Windows desktop/temp WebView profile:
+four routes/focus, day/night, comfort/contrast and narrow layouts, actual Core
+project initialization, actual UI file discovery/selection, protected local HTML
+preview and contextual change drafting with no Send; floating gestures preserve
+the draft. One test initially assumed POSIX path separators; normalize the native
+Windows path in the assertion, without app/backend changes. The screenshot check
+now waits for the native page and packaged image decoding: an initial capture
+missed newly shown category art, and the first decoder attempt ran before page
+navigation completed. Corrected focused screen capture passed; no second installer
+or compilation. Inspected native home/day/night, explore and empty-project screens:
+`D:/forge-method-core-build-cache/ux-082-final/`. Loaded-project capture uses an
+owned disposable HTML file, not an actual person's product. Test profile/project
+cleanup completed; the person's desktop was never selected or interrupted.
+
+Full visual polish is not complete; remaining record/message/dialog feedback is
+in the sole roadmap. No full Rust/workspace/browser suite or manual GH CI dispatch.
+Parent worked directly, no workers. Per-model token/BRL cost UNKNOWN, no savings
+claim. Native installed package is verified; source publication closes next.

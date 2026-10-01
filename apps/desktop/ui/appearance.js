@@ -15,6 +15,15 @@
   apply();
   system.addEventListener('change', apply);
   document.addEventListener('DOMContentLoaded', () => {
+    const menu = document.querySelector('.appearance');
+    menu.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || !menu.open) return;
+      menu.open = false;
+      menu.querySelector('summary').focus({ preventScroll: true });
+    });
+    document.addEventListener('pointerdown', event => {
+      if (!menu.contains(event.target)) menu.open = false;
+    });
     const theme = document.getElementById('appearance-theme');
     const contrast = document.getElementById('appearance-contrast');
     const status = document.getElementById('appearance-status');

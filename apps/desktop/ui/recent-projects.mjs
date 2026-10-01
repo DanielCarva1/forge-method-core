@@ -1,6 +1,7 @@
 // Local shortcuts only. Forge remains the authority for project identity and state.
 import { prepareProjectSwitch } from './chat.mjs';
 import { projectDisplayName } from './project-display.mjs';
+import { decorateControl } from './control-icons.mjs';
 import { forgetPreviewProject } from './preview.mjs';
 const storageKey = 'forge.projects.v1';
 const maxRecent = 50;
@@ -152,6 +153,8 @@ function renderProjects() {
     remove.type = 'button';
     remove.textContent = 'Remover da lista';
     remove.setAttribute('aria-label', `Remover ${name} da lista de projetos`);
+    decorateControl(remove, 'remove', 'Remover da lista, sem apagar arquivos');
+    remove.classList.add('secondary-control');
     remove.addEventListener('click', () => {
       const remaining = projects.filter(item => item.project_root !== project.project_root);
       if (!saveProjects(remaining)) {

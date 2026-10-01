@@ -171,9 +171,9 @@ function clearResult() {
   text.textContent = '';
   fileNote.hidden = true;
   copyPath.hidden = true;
-  heading.textContent = 'Prévia do resultado';
+  heading.textContent = 'Confira o resultado';
   refresh.textContent = 'Atualizar prévia';
-  requestChange.textContent = 'Pedir mudança neste arquivo';
+  requestChange.textContent = 'Pedir mudança';
   markdown.replaceChildren();
   markdown.hidden = true;
   site.removeAttribute('src');

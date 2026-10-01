@@ -13,25 +13,25 @@
   <a class="skip" href="#main">Pular para o conteúdo</a>
   <header>
     <a class="brand" href="#home" aria-label="Forge, início"><img src="assets/forge.png" alt="" width="44" height="44">Forge</a>
-    <nav aria-label="Navegação principal"><a href="#home" data-route="home">Início</a><a href="#explore" data-route="explore">Explorar</a><a href="#projects" data-route="projects">Meus projetos</a><a href="#workspace" data-route="workspace" data-project-mode="new">Minha conversa</a><a href="#about">Como funciona</a></nav>
+    <nav class="primary-nav" aria-label="Navegação principal"><a href="#home" data-route="home">Início</a><a href="#explore" data-route="explore">Explorar</a><a href="#projects" data-route="projects">Meus projetos</a><a href="#workspace" data-route="workspace" data-project-mode="new">Minha conversa</a><a href="#about">Como funciona</a></nav>
     <span class="development">Alpha</span>
-  </header>
-  <main id="main" tabindex="-1">
     <details class="appearance">
-      <summary>Aparência e conforto</summary>
-      <div class="appearance-options">
+      <summary aria-label="Aparência e conforto">Aparência e conforto</summary>
+      <div class="appearance-popover"><div class="appearance-options">
         <label for="appearance-theme">Tema</label>
         <select id="appearance-theme"><option value="system">Acompanhar o sistema</option><option value="light">Claro</option><option value="dark">Escuro</option></select>
         <label class="check-label"><input id="appearance-contrast" type="checkbox">Reforçar contraste</label>
       </div>
-      <p id="appearance-status" role="status" aria-live="polite">A escolha vale para este aplicativo, não muda seu projeto.</p>
+      <p id="appearance-status" role="status" aria-live="polite">A escolha vale para este aplicativo, não muda seu projeto.</p></div>
     </details>
+  </header>
+  <main id="main" tabindex="-1">
+
     <section id="home" class="screen home-screen" data-screen="home" aria-labelledby="welcome">
       <div class="hero">
-        <div class="hero-garden" aria-hidden="true"></div>
         <p class="eyebrow">UM LUGAR PARA IDEIAS GANHAREM VIDA</p>
         <h1 id="welcome" tabindex="-1">O que vamos criar hoje?</h1>
-        <p class="intro">Uma ideia pequena já basta. Escolha um caminho, converse com seu agente e construa no seu ritmo.</p>
+        <p class="intro">Uma ideia, uma dúvida, uma vontade de fazer diferente. Vamos encontrar um caminho juntos.</p>
         <div class="home-actions">
           <a class="action-link primary" href="#workspace" data-project-mode="new" data-new-project>Começar com minha ideia <span aria-hidden="true">→</span></a>
           <a class="action-link" href="#explore">Explorar ideias</a>
@@ -132,7 +132,7 @@
         <div><h2>Seu espaço começa aqui.</h2><p>Você ainda não abriu projetos neste aplicativo. Comece com uma ideia ou escolha uma pasta para continuar um trabalho. Ela pode estar vazia ou já conter arquivos.</p></div>
         <a class="action-link" href="#explore">Explorar ideias <span aria-hidden="true">→</span></a>
       </div>
-      <p class="hint">Esta lista mostra até 50 atalhos recentes salvos neste dispositivo. Os arquivos e as conversas dos seus projetos não ficam aqui.</p>
+      <details class="projects-storage-note"><summary>Sobre esta lista</summary><p class="hint">Até 50 atalhos recentes neste dispositivo. Remover um atalho não apaga arquivos nem conversas.</p></details>
     </section>
     <section id="workspace" class="screen workspace-screen" data-screen="workspace" aria-labelledby="workspace-title" hidden>
       <div class="screen-heading">
@@ -236,7 +236,7 @@
         </details>
       </aside>
       <section class="preview panel" id="project-preview" aria-labelledby="preview-heading" hidden>
-        <div class="preview-heading-row"><div><p class="eyebrow">RESULTADO DO PROJETO</p><h2 id="preview-heading" tabindex="-1">Prévia do resultado</h2></div><button id="open-preview" type="button" hidden>Abrir prévia <span aria-hidden="true">↗</span></button></div>
+        <div class="preview-heading-row"><div><p class="eyebrow">RESULTADO DO PROJETO</p><h2 id="preview-heading" tabindex="-1">Confira o resultado</h2></div><button id="open-preview" type="button" hidden>Abrir prévia <span aria-hidden="true">↗</span></button></div>
         <div class="preview-empty">
           <p class="preview-intro" id="preview-intro">Confira arquivos citados na conversa ou escolha um da pasta do projeto.</p>
           <p class="hint">Prévia local; não publicada.</p>
@@ -254,13 +254,15 @@
           <div id="preview-markdown" class="preview-markdown message-content" hidden></div>
           <pre id="preview-text" hidden></pre>
           <p id="preview-file-note" class="preview-file-note" hidden>Este arquivo está na pasta do projeto, mas não pode ser mostrado aqui. Copie o caminho para encontrá-lo ou peça ao agente para explicar o resultado.</p>
-          <button id="copy-preview-path" type="button" hidden>Copiar caminho do arquivo</button>
-          <button id="request-preview-change" class="primary" type="button">Pedir mudança neste arquivo</button>
+          <div class="preview-context-tools" role="group" aria-label="Ações do arquivo selecionado">
+            <button id="request-preview-change" class="primary" type="button">Pedir mudança</button>
+            <button id="copy-preview-path" type="button" hidden>Copiar caminho do arquivo</button>
+            <button id="reveal-result-file" type="button">Mostrar na pasta</button>
+            <button id="save-result-copy" type="button">Salvar uma cópia</button>
+          </div>
           <details id="preview-site-note" class="preview-safety-note" hidden><summary>Prévia protegida: o site não é interativo</summary><p class="hint">Partes interativas, imagens da internet e arquivos chamados pela raiz do site (como /assets) podem não aparecer.</p></details>
           <p class="preview-origin">Arquivo da pasta do projeto: <strong id="preview-path"></strong>. Isso não confirma publicação na internet.</p>
           <div class="preview-file-actions">
-            <button id="reveal-result-file" type="button">Mostrar na pasta</button>
-            <button id="save-result-copy" type="button">Salvar uma cópia</button>
             <details><summary>O que será copiado?</summary><p class="hint">Só o arquivo selecionado, sem alterar o original nem publicar na internet. Imagens e outros arquivos usados por uma página não vão junto. Escolha um nome novo: arquivos existentes não são substituídos.</p></details>
           </div>
           <div id="preview-browser-action" class="preview-browser-action" hidden>

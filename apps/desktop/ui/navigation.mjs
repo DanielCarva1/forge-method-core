@@ -1,3 +1,12 @@
+import { decorateControl } from './control-icons.mjs';
+
+for (const link of document.querySelectorAll('.primary-nav a')) decorateControl(link, link.dataset.route || 'about');
+decorateControl(document.querySelector('.appearance summary'), 'appearance');
+for (const [id, icon] of Object.entries({ 'copy-preview-path': 'copy', 'reveal-result-file': 'folder', 'save-result-copy': 'save', 'refresh-result-files': 'refresh', 'open-preview': 'expand' })) {
+  const control = document.getElementById(id);
+  decorateControl(control, icon); control?.classList.add('secondary-control');
+}
+
 const screens = new Map(
   [...document.querySelectorAll('[data-screen]')].map(screen => [screen.dataset.screen, screen]),
 );

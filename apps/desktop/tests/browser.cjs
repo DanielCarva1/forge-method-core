@@ -11,6 +11,7 @@ const assets = new Map([
   ['/styles.css', ['styles.css', 'text/css']],
   ['/main.mjs', ['main.mjs', 'text/javascript']],
   ['/navigation.mjs', ['navigation.mjs', 'text/javascript']],
+  ['/control-icons.mjs', ['control-icons.mjs', 'text/javascript']],
   ['/explore.mjs', ['explore.mjs', 'text/javascript']],
   ['/recent-projects.mjs', ['recent-projects.mjs', 'text/javascript']],
   ['/project-display.mjs', ['project-display.mjs', 'text/javascript']],
@@ -385,7 +386,7 @@ async function openConversation(page) {
     assert.equal(await projectsPage.locator('#preview-dialog').isVisible(), false);
     assert.equal(await projectsPage.locator('#message-text').inputValue(), 'Mantenha a paleta atual.\nQuero mudar o arquivo result.txt: ');
     await projectsPage.locator('#message-text').fill('Mantenha a paleta atual.');
-    await projectsPage.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
+    await projectsPage.getByRole('button', { name: 'Pedir mudança' }).click();
     assert.equal(await projectsPage.locator('#message-text').inputValue(), 'Mantenha a paleta atual.\nQuero mudar o arquivo result.txt: ');
     assert.equal(await projectsPage.evaluate(() => document.activeElement?.id), 'message-text');
     assert.equal(await projectsPage.evaluate(() => window.previewRequestSubmits), 0);
@@ -432,7 +433,7 @@ async function openConversation(page) {
     await projectsPage.keyboard.press('Enter');
     assert.equal(await projectsPage.locator('#project-record').isVisible(), true, 'Keyboard activation switches panels');
     await projectsPage.locator('#mobile-workspace-nav').getByRole('button', { name: 'Resultado' }).click();
-    await projectsPage.getByRole('button', { name: 'Pedir mudança neste arquivo' }).click();
+    await projectsPage.getByRole('button', { name: 'Pedir mudança' }).click();
     assert.equal(await projectsPage.locator('#project-conversation').isVisible(), true, 'A change request must return to the same conversation');
     assert.equal(await projectsPage.evaluate(() => document.activeElement?.id), 'message-text');
     assert.match(await projectsPage.locator('#message-text').inputValue(), /Quero mudar o arquivo result\.txt: $/);
@@ -610,8 +611,8 @@ async function openConversation(page) {
       const ids = [...node.children].map(child => child.id);
       return ids.indexOf('preview-browser-action') < ids.indexOf('request-preview-change');
     }), true, 'HTML lets the user try the site before requesting another change');
-    assert.equal(await projectsPage.locator('#preview-heading').textContent(), 'Prévia do resultado');
-    assert.equal(await projectsPage.getByRole('button', { name: 'Pedir mudança neste arquivo' }).isVisible(), true);
+    assert.equal(await projectsPage.locator('#preview-heading').textContent(), 'Confira o resultado');
+    assert.equal(await projectsPage.getByRole('button', { name: 'Pedir mudança' }).isVisible(), true);
     await projectsPage.setViewportSize({ width: 390, height: 844 });
     assert.equal(await projectsPage.locator('#project-conversation').isVisible(), true);
     assert.equal(await projectsPage.locator('#project-preview').isVisible(), false);

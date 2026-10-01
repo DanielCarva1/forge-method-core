@@ -7,6 +7,7 @@ const { once } = require('node:events');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { checkWorkspaceNavigation } = require('./workspace-navigation.cjs');
+const { checkCinematicShell } = require('./cinematic-shell.cjs');
 
 const executable = process.env.FORGE_DESKTOP_EXE;
 const output = process.env.FORGE_VISUAL_OUTPUT;
@@ -36,7 +37,8 @@ assert.ok(executable && output, 'Set FORGE_DESKTOP_EXE and FORGE_VISUAL_OUTPUT')
     }
     if (!browser) throw new Error('Native WebView unavailable');
     const page = browser.contexts()[0].pages()[0] || await browser.contexts()[0].waitForEvent('page', { timeout: 5000 });
-    for (const [name, route] of [['home', 'home'], ['explore', 'explore'], ['projects', 'projects'], ['workspace', 'workspace']]) {
+    if (process.env.FORGE_VISUAL_CINEMATIC === '1') await checkCinematicShell(page, output);
+    else for (const [name, route] of [['home', 'home'], ['explore', 'explore'], ['projects', 'projects'], ['workspace', 'workspace']]) {
       await page.locator(`nav a[data-route="${route}"]`).click();
       await page.locator(`#${route}`).waitFor({ state: 'visible' });
       assert.equal(await page.evaluate(() => scrollY), 0, `${route} should open at the top with navigation visible`);
@@ -75,9 +77,26 @@ assert.ok(executable && output, 'Set FORGE_DESKTOP_EXE and FORGE_VISUAL_OUTPUT')
       await page.locator('#mobile-workspace-nav').waitFor({ state: 'visible', timeout: 90000 });
       await page.locator('[data-mobile-pane-button="project"]').click();
       await page.locator('#project-status').filter({ hasText: 'Projeto pronto' }).waitFor({ timeout: 90000 });
-      await page.evaluate(() => import('./preview.mjs').then(module => module.previewLinkedFile('site/index.html')));
+      if (process.env.FORGE_VISUAL_CINEMATIC === '1') {
+        await page.locator('[data-mobile-pane-button="preview"]').click();
+        await page.locator('[data-result-path="site/index.html"]').click();
+      } else await page.evaluate(() => import('./preview.mjs').then(module => module.previewLinkedFile('site/index.html')));
       await page.locator('#preview-status').filter({ hasText: 'Prévia local atualizada' }).waitFor({ timeout: 20000 });
       await page.frameLocator('#preview-site').getByRole('heading', { name: 'Jardim de ideias' }).waitFor({ timeout: 20000 });
+      if (process.env.FORGE_VISUAL_CINEMATIC === '1') {
+        await page.locator('#request-preview-change').click();
+        const draftedChange = await page.locator('#message-text').inputValue();
+        assert.ok(draftedChange.replaceAll('\\', '/').includes('site/index.html'), JSON.stringify({ draftedChange,
+          path: await page.locator('#preview-path').textContent(),
+          composerDisabled: await page.locator('#message-text').isDisabled(),
+          status: await page.locator('#preview-status').textContent(),
+        }));
+        assert.equal(await page.locator('#messages article').count(), 0, 'Result change action prepares a draft, not a Send');
+        await page.locator('#workspace-organize').click();
+        await page.evaluate(() => { document.querySelector('#project-preview').scrollTop = 0; });
+        await page.mouse.move(1150, 800);
+        console.log('PASS: real Core file discovery/selection and contextual change draft without Send.');
+      }
       if (process.env.FORGE_VISUAL_REFERENCE === '1') {
         const fit = await page.evaluate(() => ({
           form: document.querySelector('#message-form').getBoundingClientRect().bottom,

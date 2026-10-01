@@ -144,6 +144,17 @@ new scene settings screen is required for the first implementation.
 
 ## Implementation and acceptance
 
+The 0.1.82 presentation package extends the shared atelier scene and warm tokens
+to the four existing routes. A compact header rail keeps the active desktop
+destination named; all destinations retain accessible names and hover/focus
+tooltips. Narrow screens use the same route links, without a second router.
+Comfort controls live in one anchored, opaque menu with Escape/outside dismissal.
+Hero/project/category surfaces replace the legacy decorative crop backgrounds;
+original category artwork and project-list ownership are unchanged. Reading
+opacity stays deliberately higher than the reference study to protect long sessions.
+Secondary selected-file tools use small named-on-focus icons; the change request
+stays text-labeled and drafts into the existing conversation, never auto-sending.
+
 Apply a coherent shell + conversation/composer slice first, then projects/explore
 and result/context surfaces, through existing modules. Replace superseded CSS
 rules rather than piling permanent overrides on the legacy stylesheet. No backend
