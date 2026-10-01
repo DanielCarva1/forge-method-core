@@ -11476,4 +11476,17 @@ cleanup completed; the person's desktop was never selected or interrupted.
 Full visual polish is not complete; remaining record/message/dialog feedback is
 in the sole roadmap. No full Rust/workspace/browser suite or manual GH CI dispatch.
 Parent worked directly, no workers. Per-model token/BRL cost UNKNOWN, no savings
-claim. Native installed package is verified; source publication closes next.
+claim. Source `e90a1efb` pushed to `codex/desktop-shell`; published
+[desktop-v0.1.82-alpha.1](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.82-alpha.1)
+from that exact source commit. Anonymous public installer/sidecar downloads to
+`D:/forge-method-core-build-cache/public-check/desktop-082/` matched the tested
+candidate hash above and exact sidecar. No redundant reinstall of identical
+bytes. Installed app is the tested 0.1.82, not merely checkout/design reference.
+The final screenshot-only pass waited for native page readiness and decoded art;
+connected Core/file/draft/window acceptance had already passed on the same bytes.
+No new model turn, forced foreground app, or manual GitHub workflow run.
+
+Next substantial UX package: conversation/record detail hierarchy and calm
+contextual feedback, including questions/login/dialog surfaces; preserve current
+continuity owners rather than restarting chat/backend work. The roadmap remains
+in `docs/development-plan.md`; no new issue/state registry or mandatory process.
