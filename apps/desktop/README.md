@@ -11543,4 +11543,12 @@ across disconnected/active states, fewer redundant labels, then remaining screen
 feedback. The sole roadmap remains `docs/development-plan.md`. Native first login
 on a clean device, full accessibility and productivity savings remain unproven.
 Parent worked directly; per-model token/BRL metrics UNKNOWN, no savings claim.
-Publication receipt follows after exact candidate download verification.
+Source `ce253f584b1febb43b59e6d25aa2ba485512755a` pushed to
+`codex/desktop-shell`; published
+[desktop-v0.1.83-alpha.1](https://github.com/DanielCarva1/forge-method-core/releases/tag/desktop-v0.1.83-alpha.1)
+from that source. Anonymous public installer and SHA-256 sidecar downloaded to
+`D:/forge-method-core-build-cache/public-check/desktop-083/` matched the exact
+tested candidate bytes/hash and sidecar. GitHub asset digest also matches.
+No redundant reinstall of identical bytes. Installed app is the tested 0.1.83,
+not just checkout or a design board. No manual GitHub workflow dispatch; this
+receipt is documentation-only and uses `[skip ci]`.
