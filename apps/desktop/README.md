@@ -11490,3 +11490,57 @@ Next substantial UX package: conversation/record detail hierarchy and calm
 contextual feedback, including questions/login/dialog surfaces; preserve current
 continuity owners rather than restarting chat/backend work. The roadmap remains
 in `docs/development-plan.md`; no new issue/state registry or mandatory process.
+
+## Session checkpoint — 2026-10-01 — reading and context package
+
+Desktop 0.1.83, Core unchanged 0.13.4. One coherent presentation package extends
+existing message/focus/progress/questions/modal owners: open agent reading column,
+warmer long-form hierarchy, objective/next-step priority, quiet secondary refresh,
+anchored conversation options with Escape/outside/focus dismissal, selected question
+options and calmer modal backdrop. Light-theme nested content no longer uses the
+dark scenery canvas. Chat's existing autosize now also handles width changes; no
+new draft store, Core contract, history layer, dependency or permission.
+
+PASS: focused `reading-surfaces.cjs` through `cinematic-browser.cjs`, production
+CSP; menu does not steal reading height, keyboard/outside/action dismissal restores
+focus, draft preserved/reflowed at half width, day/night nested text >=4.5:1, question
+selection/free-text without submission, login/confirmation layout and Escape,
+360px/enlarged text. Sample messages/records/questions/login/confirmation are
+explicitly PRESENTATION fixtures, not Codex responses or accepted decisions.
+PASS: `floating-browser.cjs` unchanged floating gestures/storage/fallback and
+5.51:1 light / 6.82:1 dark worst-case panel text; two scoped geometry Node tests,
+syntax checks and diff review. No full browser/Rust workspace suite or manual CI.
+The first new fixture hid its menu when the real chat owner processed an input
+without a project; fixed fixture setup (completed-message menu), not product
+behavior. A bounded width assertion uses the CSS pixel cap, not parseFloat on a
+computed `min(...)` expression. Neither test repair required another installer.
+
+One cached/offline two-job installer build; desktop release compilation 4m12s.
+Staged Core SHA-256 remains
+D383A05D1D14921908874D1DBB3DDE1DF385E5CF774E4FBEF027BE537F2B479D.
+Candidate `D:/forge-method-core-build-cache/main-target/release/bundle/nsis/Forge_0.1.83_x64-setup.exe`,
+125557293 bytes; SHA-256:
+D50DC5906B967F3F93C7B12B6B5753E8E4EBDB44EB690DD44199335B0E02E77F.
+Silent upgrade from installed 0.1.82 to 0.1.83, no active Forge session overwritten.
+Installed `C:/Users/User/AppData/Local/Forge/forge-desktop.exe`, version 0.1.83;
+SHA-256 D65407BF9629E21C3E3CB64C177564E3B0D23D5C229A50CCC4E265BBC9248896.
+
+PASS: installed isolated Windows desktop/temp WebView milestone: four shell
+routes/appearance, real Core project initialization/file discovery/selection,
+protected HTML preview, contextual unsent change draft, expanded native preview
+and Escape, actual absent project record; then reading/menu/contrast/question/
+login/confirmation PRESENTATION fixtures in the native WebView. No Send, model
+turn, account/login change or foreground desktop switch. Owned disposable test
+profile/project cleaned by the harness. Native captures inspected under
+`D:/forge-method-core-build-cache/ux-083-final/`; fixture names explicitly end
+`presentation`. Real preview/record captures start `native-`.
+
+Visual inspection: disconnected conversation remains crowded by legitimate
+connection/history/permission/draft notices; this is not final reading-space
+polish. Do not hide warnings or restart backend/history work to address it.
+Next connected UX focus: project/workspace heading and reading-space composition
+across disconnected/active states, fewer redundant labels, then remaining screen
+feedback. The sole roadmap remains `docs/development-plan.md`. Native first login
+on a clean device, full accessibility and productivity savings remain unproven.
+Parent worked directly; per-model token/BRL metrics UNKNOWN, no savings claim.
+Publication receipt follows after exact candidate download verification.

@@ -12,6 +12,7 @@ const paths = {
   refresh: 'M20 8a8 8 0 1 0 0 8M20 3v5h-5',
   expand: 'M4 9V4h5m6 0h5v5M4 15v5h5m6 0h5v-5',
   remove: 'M5 12h14',
+  more: 'M4 12h1m6 0h1m6 0h1',
 };
 
 export function decorateControl(control, name, label = control?.textContent.trim()) {

@@ -105,6 +105,21 @@ assert.ok(executable && output, 'Set FORGE_DESKTOP_EXE and FORGE_VISUAL_OUTPUT')
         assert.ok(fit.form <= fit.panel, 'Native long draft and file actions remain inside their panel');
       }
       await page.screenshot({ path: path.join(output, 'loaded-project.png'), fullPage: false });
+      if (process.env.FORGE_VISUAL_READING === '1') {
+        // Real native file dialog first; sample text/questions below are explicitly
+        // presentation fixtures, not an authenticated Codex conversation.
+        await page.locator('[data-mobile-pane-button="preview"]').click();
+        await page.locator('#open-preview').click();
+        await page.locator('#preview-dialog').waitFor({ state: 'visible' });
+        await page.frameLocator('#preview-dialog-site').getByRole('heading', { name: 'Jardim de ideias' }).waitFor();
+        await page.screenshot({ path: path.join(output, 'native-preview-dialog.png') });
+        await page.keyboard.press('Escape');
+        assert.equal(await page.locator('#preview-dialog').isVisible(), false);
+        await page.locator('[data-mobile-pane-button="progress"]').click();
+        await page.locator('#progress-result').waitFor({ state: 'visible', timeout: 30000 });
+        await page.screenshot({ path: path.join(output, 'native-project-record.png') });
+        await require('./reading-surfaces.cjs').checkReadingSurfaces(page, output);
+      }
       if (process.env.FORGE_VISUAL_FLOATING === '1') {
         await require('./floating-workspace.cjs').checkFloatingWorkspace(page, path.join(output, 'floating-workspace.png'));
       }

@@ -64,3 +64,16 @@ draft. These are UI-only changes; Core snapshot restrictions remain unchanged.
 No requirement to expose every Core command, introduce another project
 registry, add process gates to ordinary agent work, or rebuild chat/history
 again is inferred from this map.
+
+## Reading and context presentation — 0.1.83
+
+Extends existing conversation, Andamento, questions/login and modal owners.
+Agent prose loses redundant card/shadow framing; record objective/next step get
+priority. Nested light-theme surfaces no longer use the dark scene canvas.
+Conversation options are anchored and dismissible; local drafts reflow on width
+changes without Send. No Core, provider, continuity or authority contract changed.
+Focused presentation fixtures exercise both themes, menu keyboard/outside close,
+width-preserved drafts, question selection/free text and enlarged narrow views.
+Installed native acceptance and exact installer receipts belong to the latest
+README checkpoint. Sample conversation/questions/login are not real Codex/login
+proof, and this entry does not close untested issue or accessibility criteria.

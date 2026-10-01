@@ -28,6 +28,11 @@ const server = createServer(async (req, res) => {
     const output = process.env.FORGE_VISUAL_OUTPUT;
     if (output) await mkdir(output, { recursive: true });
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    if (process.env.FORGE_VISUAL_READING === '1') {
+      await require('./reading-surfaces.cjs').checkReadingSurfaces(page, output);
+      assert.deepEqual(errors, []);
+      return;
+    }
     await checkCinematicShell(page, output);
     await page.locator('.primary-nav [data-route="explore"]').click();
     await page.locator('#category-query').fill('música');

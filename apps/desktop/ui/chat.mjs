@@ -182,6 +182,21 @@ function updateSendControl() {
     !input.value.trim() || (connected && unconfirmedSends.has(referenceKey()));
 }
 
+function resizeComposer() {
+  if (!input.getClientRects().length) return;
+  input.style.height = 'auto';
+  input.style.height = `${input.scrollHeight}px`;
+}
+// Width changes (window gestures, route visibility, larger fonts) also reflow a
+// saved draft. Observe width only, so changing its height cannot trigger a loop.
+let composerWidth = -1;
+new ResizeObserver(entries => {
+  const width = entries[0].contentRect.width;
+  if (Math.abs(width - composerWidth) < .5) return;
+  composerWidth = width;
+  resizeComposer();
+}).observe(input);
+
 function controls() {
   const focused = document.activeElement;
   connect.disabled = transitioning || connected || !project || !loginPanel.hidden;
@@ -191,10 +206,7 @@ function controls() {
   // A running turn or lost connection blocks Send, not the user's next local draft.
   input.disabled = transitioning;
   addReference.disabled = transitioning || referencePending;
-  if (input.getClientRects().length) {
-    input.style.height = 'auto';
-    input.style.height = `${input.scrollHeight}px`;
-  }
+  resizeComposer();
   stop.disabled = transitioning || !connected || !busy || broken;
   stop.hidden = !connected || !busy;
   startLoginButton.disabled = loginPending || loginActive || connected;

@@ -1,6 +1,9 @@
 import { showWorkspacePane } from './mobile-workspace.mjs';
 import { directionChanges } from './direction-changes.mjs';
+import { decorateControl } from './control-icons.mjs';
 const button = document.getElementById('refresh-progress');
+decorateControl(button, 'refresh');
+button.classList.add('secondary-control');
 const status = document.getElementById('progress-status');
 const result = document.getElementById('progress-result');
 const questionsShortcut = document.getElementById('record-questions-shortcut');

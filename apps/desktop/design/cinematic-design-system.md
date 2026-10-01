@@ -171,3 +171,23 @@ journeys to approve purely visual changes. No full Rust suite for CSS.
 Done means recognizable Forge art, comfortable long-form reading, clear start/
 send/resume, quiet secondary tools and no lost functionality—not a screenshot
 alone and not a generic set of translucent cards.
+
+### Reading and context package — 0.1.83
+
+Agent prose is an open reading column rather than another shadowed card; human
+messages retain a quiet inset surface. Warm text uses 1.75 line spacing, bounded
+measure and solid contrasting code/table/quote surfaces. The scene canvas must
+never be reused as the background of light-theme readable content.
+
+Conversation options use the existing details owner as a small anchored menu,
+with Escape, outside/focus dismissal and focus restoration after an action.
+Draft height is maintained by the chat owner for text and width changes; no
+second draft store or autosizing framework. Andamento gives objective and next
+step priority, leaving original records/phase/history behind existing disclosures.
+Refresh is secondary and named on hover/focus. No progress percentage is invented.
+
+Questions keep visible primary submission and interruption actions; selecting an
+option changes only the local form. Login and confirmation retain explicit prose,
+solid text surfaces and real authorization boundaries. Glass belongs around these
+surfaces, not over sensitive instructions. Presentation samples in acceptance
+captures do not imply a model turn, recorded decision or authenticated sign-in.
